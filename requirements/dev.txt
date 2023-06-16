@@ -1,0 +1,4 @@
+-r base.txt
+nox==2021.6.12
+pre-commit==2.13.0
+pylint

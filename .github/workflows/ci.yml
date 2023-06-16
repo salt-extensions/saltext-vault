@@ -1,0 +1,163 @@
+name: CI
+
+on:
+  workflow_call:
+    inputs:
+      release:
+        required: false
+        type: boolean
+        default: false
+      version:
+        required: false
+        type: string
+    secrets:
+      PYPI_API_TOKEN:
+        required: false
+      TEST_PYPI_API_TOKEN:
+        required: false
+
+
+jobs:
+  get-changed-files:
+    name: Get Changed Files
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read  # for dorny/paths-filter to fetch a list of changed files
+      pull-requests: read  # for dorny/paths-filter to read pull requests
+    outputs:
+      changed-files: ${{ toJSON(steps.changed-files.outputs) }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Get Changed Files
+        id: changed-files
+        uses: dorny/paths-filter@v2
+        with:
+          token: ${{ github.token }}
+          list-files: json
+          filters: |
+            repo:
+              - added|modified:
+                - '**'
+            deleted:
+              - deleted:
+                - '**'
+
+  pre-commit:
+    name: Pre-Commit
+    uses: ./.github/workflows/pre-commit-action.yml
+    needs:
+      - get-changed-files
+    with:
+      changed-files: ${{ needs.get-changed-files.outputs.changed-files }}
+
+  test:
+    name: Test
+    needs:
+      - get-changed-files
+    uses: ./.github/workflows/test-action.yml
+    with:
+      changed-files: ${{ needs.get-changed-files.outputs.changed-files }}
+
+  docs:
+    name: Docs
+    needs:
+      - get-changed-files
+    uses: ./.github/workflows/docs-action.yml
+    with:
+      changed-files: ${{ needs.get-changed-files.outputs.changed-files }}
+
+#  build-python-package:
+#    name: Python Package
+#    if: ${{ inputs.release && success() }}
+#    uses: ./.github/workflows/package-action.yml
+#    needs:
+#      - pre-commit
+#    with:
+#      version: "${{ inputs.version }}"
+#
+#  deploy-python-package-test-pypi:
+#    name: Deploy Python Package (Test PyPI)
+#    uses: ./.github/workflows/deploy-package-action.yml
+#    if: ${{ inputs.release && success() }}
+#    needs:
+#      - pre-commit
+#      - test
+#      - docs
+#      - build-python-package
+#    secrets:
+#      TEST_PYPI_API_TOKEN: "${{ secrets.TEST_PYPI_API_TOKEN }}"
+#    with:
+#      version: "${{ inputs.version }}"
+#
+#  deploy-python-package:
+#    name: Deploy Python Package (PyPI)
+#    uses: ./.github/workflows/deploy-package-action.yml
+#    if: ${{ inputs.release && success() }}
+#    needs:
+#      - pre-commit
+#      - test
+#      - docs
+#      - build-python-package
+#      - deploy-python-package-test-pypi
+#    secrets:
+#      PYPI_API_TOKEN: "${{ secrets.PYPI_API_TOKEN }}"
+#    with:
+#      test: false
+#      version: "${{ inputs.version }}"
+#
+#  push-tag:
+#    name: Push Version Tag
+#    runs-on: ubuntu-latest
+#    permissions:
+#      contents: write
+#    if: ${{ inputs.release && success() }}
+#    needs:
+#      - build-python-package
+#      - deploy-python-package
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v3
+#      - name: Push Tag
+#        uses: rickstaa/action-create-tag@v1
+#        with:
+#          tag: "v${{ inputs.version }}"
+#          message: "Version ${{ inputs.version }}"
+#
+  set-pipeline-exit-status:
+    # This step is just so we can make github require this step, to pass checks
+    # on a pull request instead of requiring all
+    name: Set the CI Pipeline Exit Status
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - pre-commit
+      - test
+      - docs
+#      - build-python-package
+#      - deploy-python-package-test-pypi
+#      - deploy-python-package
+#      - push-tag
+    steps:
+    - name: Download Exit Status Files
+      if: always()
+      uses: actions/download-artifact@v3
+      with:
+        name: exitstatus
+        path: exitstatus
+
+    - name: Delete Exit Status Artifacts
+      if: always()
+      uses: geekyeggo/delete-artifact@v2
+      with:
+        name: exitstatus
+        failOnError: false
+
+    - name: Set Pipeline Exit Status
+      run: |
+        tree exitstatus
+        grep -RE 'failure|cancelled' exitstatus/ && exit 1 || exit 0
+
+    - name: Done
+      if: always()
+      run:
+        echo "All workflows finished"

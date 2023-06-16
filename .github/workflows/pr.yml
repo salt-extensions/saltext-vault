@@ -1,0 +1,11 @@
+name: Pull Request or Push
+
+on: [push, pull_request]
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: write
+      pull-requests: read
