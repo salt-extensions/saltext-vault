@@ -1,9 +1,10 @@
-import pytest
+from unittest.mock import Mock
+from unittest.mock import patch
 
-import salt.utils.vault as vaultutil
-import salt.utils.vault.api as vapi
-import salt.utils.vault.client as vclient
-from tests.support.mock import Mock, patch
+import pytest
+import saltext.saltext_vault.utils.vault as vaultutil
+import saltext.saltext_vault.utils.vault.api as vapi
+import saltext.saltext_vault.utils.vault.client as vclient
 
 
 @pytest.fixture
@@ -203,9 +204,7 @@ def test_destroy_secret_id_by_secret_id(approle_api, client):
     """
     Ensure destroy_secret_id calls the API as expected.
     """
-    approle_api.destroy_secret_id(
-        "test-minion", secret_id="test-secret-id", mount="salt-minions"
-    )
+    approle_api.destroy_secret_id("test-minion", secret_id="test-secret-id", mount="salt-minions")
     client.post.assert_called_once_with(
         "auth/salt-minions/role/test-minion/secret-id/destroy",
         payload={"secret_id": "test-secret-id"},
@@ -216,9 +215,7 @@ def test_destroy_secret_id_by_accessor(approle_api, client):
     """
     Ensure destroy_secret_id calls the API as expected.
     """
-    approle_api.destroy_secret_id(
-        "test-minion", accessor="test-accessor", mount="salt-minions"
-    )
+    approle_api.destroy_secret_id("test-minion", accessor="test-accessor", mount="salt-minions")
     client.post.assert_called_once_with(
         "auth/salt-minions/role/test-minion/secret-id-accessor/destroy",
         payload={"secret_id_accessor": "test-accessor"},
@@ -274,9 +271,7 @@ def test_write_entity(client, identity_api):
     metadata = {"foo": "bar"}
     identity_api.write_entity("salt_minion_test-minion", metadata=metadata)
     payload = {"metadata": metadata}
-    client.post.assert_called_with(
-        "identity/entity/name/salt_minion_test-minion", payload=payload
-    )
+    client.post.assert_called_with("identity/entity/name/salt_minion_test-minion", payload=payload)
 
 
 def test_read_entity_by_alias_failed(client, identity_api):
@@ -289,9 +284,7 @@ def test_read_entity_by_alias_failed(client, identity_api):
     ):
         client.post.return_value = []
         with pytest.raises(vapi.VaultNotFoundError):
-            identity_api.read_entity_by_alias(
-                alias="test-role-id", mount="salt-minions"
-            )
+            identity_api.read_entity_by_alias(alias="test-role-id", mount="salt-minions")
 
 
 def test_read_entity_by_alias(client, entity_lookup_response, identity_api):
@@ -303,9 +296,7 @@ def test_read_entity_by_alias(client, entity_lookup_response, identity_api):
         return_value="test-accessor",
     ):
         client.post.return_value = entity_lookup_response
-        res = identity_api.read_entity_by_alias(
-            alias="test-role-id", mount="salt-minions"
-        )
+        res = identity_api.read_entity_by_alias(alias="test-role-id", mount="salt-minions")
         assert res == entity_lookup_response["data"]
         payload = {
             "alias_name": "test-role-id",
@@ -325,9 +316,7 @@ def test_lookup_mount_accessor(client, identity_api, lookup_mount_response):
 
 
 @pytest.mark.parametrize("wrap", ["30s", False])
-def test_generate_secret_id(
-    client, wrapped_response, secret_id_response, wrap, approle_api
-):
+def test_generate_secret_id(client, wrapped_response, secret_id_response, wrap, approle_api):
     """
     Ensure generate_secret_id calls the API as expected.
     """
@@ -370,9 +359,7 @@ def test_read_role_id(client, wrapped_response, wrap, approle_api):
         assert res == vaultutil.VaultWrappedResponse(**wrapped_response["wrap_info"])
     else:
         assert res == "test-role-id"
-    client.get.assert_called_once_with(
-        "auth/salt-minions/role/test-minion/role-id", wrap=wrap
-    )
+    client.get.assert_called_once_with("auth/salt-minions/role/test-minion/role-id", wrap=wrap)
 
 
 def test_read_approle(client, approle_api, approle_meta):
@@ -396,6 +383,4 @@ def test_write_approle(approle_api, client):
         "token_policies": policies,
     }
     approle_api.write_approle("test-minion", mount="salt-minions", **payload)
-    client.post.assert_called_once_with(
-        "auth/salt-minions/role/test-minion", payload=payload
-    )
+    client.post.assert_called_once_with("auth/salt-minions/role/test-minion", payload=payload)

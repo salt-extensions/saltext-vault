@@ -1,11 +1,14 @@
-import pytest
+from unittest.mock import MagicMock
+from unittest.mock import Mock
+from unittest.mock import patch
 
-import salt.utils.vault as vault
-import salt.utils.vault.cache as vcache
-import salt.utils.vault.client as vclient
-import salt.utils.vault.kv as vkv
-from tests.pytests.unit.utils.vault.conftest import _mock_json_response
-from tests.support.mock import MagicMock, Mock, patch
+import pytest
+import saltext.saltext_vault.utils.vault as vault
+import saltext.saltext_vault.utils.vault.cache as vcache
+import saltext.saltext_vault.utils.vault.client as vclient
+import saltext.saltext_vault.utils.vault.kv as vkv
+
+from tests.unit.utils.vault.conftest import _mock_json_response
 
 
 @pytest.fixture
@@ -237,9 +240,7 @@ def kvv2(kvv2_info, kvv2_response, metadata_nocache, kv_list_response):
     ],
 )
 @pytest.mark.parametrize("test_remote_config", ["token"], indirect=True)
-@pytest.mark.parametrize(
-    "clear_unauthd,token_valid", [(False, False), (True, False), (True, True)]
-)
+@pytest.mark.parametrize("clear_unauthd,token_valid", [(False, False), (True, False), (True, True)])
 def test_kv_wrapper_handles_perm_exceptions(
     wrapper, param, result, test_remote_config, clear_unauthd, token_valid
 ):
@@ -280,9 +281,7 @@ def test_kv_wrapper_handles_perm_exceptions(
     ],
 )
 @pytest.mark.parametrize("test_remote_config", ["token"], indirect=True)
-def test_kv_wrapper_raises_perm_exceptions_when_configured(
-    wrapper, param, test_remote_config
-):
+def test_kv_wrapper_raises_perm_exceptions_when_configured(wrapper, param, test_remote_config):
     """
     Test that *_kv wrappers do not retry with a new client when `cache:clear_on_unauthorized` is False.
     """
@@ -330,9 +329,7 @@ def test_vault_kv_is_v2_no_cache(kv_meta, expected, request):
     expected_val = request.getfixturevalue(expected)
     res = kv_meta.is_v2("secret/some/path")
     kv_meta.metadata_cache.get.assert_called_once()
-    kv_meta.client.get.assert_called_once_with(
-        "sys/internal/ui/mounts/secret/some/path"
-    )
+    kv_meta.client.get.assert_called_once_with("sys/internal/ui/mounts/secret/some/path")
     if expected != "no_kv_info":
         kv_meta.metadata_cache.store.assert_called_once()
     assert res == expected_val
@@ -425,9 +422,7 @@ class TestKVV1:
         """
         Ensure that VaultKV.delete with versions raises an exception for KV v1.
         """
-        with pytest.raises(
-            vault.VaultInvocationError, match="Versioning support requires kv-v2.*"
-        ):
+        with pytest.raises(vault.VaultInvocationError, match="Versioning support requires kv-v2.*"):
             kvv1.delete(path, versions=[1, 2, 3, 4])
 
     def test_vault_kv_destroy(self, kvv1, path):
@@ -477,9 +472,7 @@ class TestKVV2:
         with pytest.raises(vault.VaultInvocationError):
             kvv2._parse_versions("four")
 
-    def test_get_secret_path_metadata_lookup_unexpected_response(
-        self, kvv2, caplog, path
-    ):
+    def test_get_secret_path_metadata_lookup_unexpected_response(self, kvv2, caplog, path):
         """
         Ensure unexpected responses are treated as not KV
         """
@@ -537,13 +530,9 @@ class TestKVV2:
         Ensure that VaultKV.delete works for KV v2.
         """
         kvv2.delete(path)
-        kvv2.client.request.assert_called_once_with(
-            "DELETE", paths["data"], payload=None
-        )
+        kvv2.client.request.assert_called_once_with("DELETE", paths["data"], payload=None)
 
-    @pytest.mark.parametrize(
-        "versions", [[1, 2], [2], 2, ["1", "2"], ["2"], "2", [1, "2"]]
-    )
+    @pytest.mark.parametrize("versions", [[1, 2], [2], 2, ["1", "2"], ["2"], "2", [1, "2"]])
     def test_vault_kv_delete_versions(self, kvv2, versions, path, paths):
         """
         Ensure that VaultKV.delete with versions works for KV v2.
@@ -557,9 +546,7 @@ class TestKVV2:
             "POST", paths["delete_versions"], payload={"versions": expected}
         )
 
-    @pytest.mark.parametrize(
-        "versions", [[1, 2], [2], 2, ["1", "2"], ["2"], "2", [1, "2"]]
-    )
+    @pytest.mark.parametrize("versions", [[1, 2], [2], 2, ["1", "2"], ["2"], "2", [1, "2"]])
     def test_vault_kv_destroy(self, kvv2, versions, path, paths):
         """
         Ensure that VaultKV.destroy works for KV v2.
@@ -569,9 +556,7 @@ class TestKVV2:
         else:
             expected = [int(versions)]
         kvv2.destroy(path, versions)
-        kvv2.client.post.assert_called_once_with(
-            paths["destroy"], payload={"versions": expected}
-        )
+        kvv2.client.post.assert_called_once_with(paths["destroy"], payload={"versions": expected})
 
     def test_vault_kv_nuke(self, kvv2, path, paths):
         """

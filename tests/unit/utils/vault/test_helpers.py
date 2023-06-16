@@ -1,10 +1,9 @@
 # this needs to be from! see test_iso_to_timestamp_polyfill
 from datetime import datetime
+from unittest.mock import patch
 
 import pytest
-
-import salt.utils.vault.helpers as hlp
-from tests.support.mock import patch
+import saltext.saltext_vault.utils.vault.helpers as hlp
 
 
 @pytest.mark.parametrize(

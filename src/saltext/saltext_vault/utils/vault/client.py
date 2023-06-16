@@ -2,21 +2,18 @@ import logging
 import re
 
 import requests
-from requests.packages.urllib3.util.ssl_ import create_urllib3_context
-
 import salt.exceptions
-import salt.utils.vault.leases as leases
-from salt.utils.vault.exceptions import (
-    VaultAuthExpired,
-    VaultInvocationError,
-    VaultNotFoundError,
-    VaultPermissionDeniedError,
-    VaultPreconditionFailedError,
-    VaultServerError,
-    VaultUnavailableError,
-    VaultUnsupportedOperationError,
-    VaultUnwrapException,
-)
+import saltext.saltext_vault.utils.vault.leases as leases
+from requests.packages.urllib3.util.ssl_ import create_urllib3_context
+from saltext.saltext_vault.utils.vault.exceptions import VaultAuthExpired
+from saltext.saltext_vault.utils.vault.exceptions import VaultInvocationError
+from saltext.saltext_vault.utils.vault.exceptions import VaultNotFoundError
+from saltext.saltext_vault.utils.vault.exceptions import VaultPermissionDeniedError
+from saltext.saltext_vault.utils.vault.exceptions import VaultPreconditionFailedError
+from saltext.saltext_vault.utils.vault.exceptions import VaultServerError
+from saltext.saltext_vault.utils.vault.exceptions import VaultUnavailableError
+from saltext.saltext_vault.utils.vault.exceptions import VaultUnsupportedOperationError
+from saltext.saltext_vault.utils.vault.exceptions import VaultUnwrapException
 
 log = logging.getLogger(__name__)
 logging.getLogger("requests").setLevel(logging.WARNING)
@@ -119,9 +116,7 @@ class VaultClient:
             add_headers=add_headers,
         )
 
-    def post(
-        self, endpoint, payload=None, wrap=False, raise_error=True, add_headers=None
-    ):
+    def post(self, endpoint, payload=None, wrap=False, raise_error=True, add_headers=None):
         """
         Wrapper for client.request("POST", ...)
         Vault considers POST and PUT to be synonymous.
@@ -182,9 +177,7 @@ class VaultClient:
             return leases.VaultWrappedResponse(**data["wrap_info"])
         return data
 
-    def request_raw(
-        self, method, endpoint, payload=None, wrap=False, add_headers=None, **kwargs
-    ):
+    def request_raw(self, method, endpoint, payload=None, wrap=False, add_headers=None, **kwargs):
         """
         Issue a request against the Vault API. Returns the raw response object.
         """
@@ -229,10 +222,7 @@ class VaultClient:
             wrap_info = self.wrap_info(wrapped)
             if not isinstance(expected_creation_path, list):
                 expected_creation_path = [expected_creation_path]
-            if not any(
-                re.fullmatch(p, wrap_info["creation_path"])
-                for p in expected_creation_path
-            ):
+            if not any(re.fullmatch(p, wrap_info["creation_path"]) for p in expected_creation_path):
                 raise VaultUnwrapException(
                     actual=wrap_info["creation_path"],
                     expected=expected_creation_path,
@@ -279,9 +269,7 @@ class VaultClient:
         method = "GET"
         payload = {}
         if token is None:
-            raise VaultInvocationError(
-                "Unauthenticated VaultClient needs a token to lookup."
-            )
+            raise VaultInvocationError("Unauthenticated VaultClient needs a token to lookup.")
         add_headers = {"X-Vault-Token": token}
 
         if accessor is not None:
@@ -524,6 +512,4 @@ class CACertHTTPSAdapter(requests.sessions.HTTPAdapter):
         ssl_context = create_urllib3_context()
         ssl_context.load_verify_locations(cadata=self.ca_cert_data)
         pool_kwargs["ssl_context"] = ssl_context
-        return super().init_poolmanager(
-            connections, maxsize, block=block, **pool_kwargs
-        )
+        return super().init_poolmanager(connections, maxsize, block=block, **pool_kwargs)

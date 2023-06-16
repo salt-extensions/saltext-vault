@@ -1,7 +1,7 @@
 import logging
 
-import salt.utils.vault.leases as leases
-from salt.utils.vault.exceptions import VaultAuthExpired
+import saltext.saltext_vault.utils.vault.leases as leases
+from saltext.saltext_vault.utils.vault.exceptions import VaultAuthExpired
 
 log = logging.getLogger(__name__)
 

@@ -3,13 +3,12 @@ import fnmatch
 import logging
 import time
 
-from salt.utils.vault.exceptions import (
-    VaultException,
-    VaultInvocationError,
-    VaultNotFoundError,
-    VaultPermissionDeniedError,
-)
-from salt.utils.vault.helpers import iso_to_timestamp, timestring_map
+from saltext.saltext_vault.utils.vault.exceptions import VaultException
+from saltext.saltext_vault.utils.vault.exceptions import VaultInvocationError
+from saltext.saltext_vault.utils.vault.exceptions import VaultNotFoundError
+from saltext.saltext_vault.utils.vault.exceptions import VaultPermissionDeniedError
+from saltext.saltext_vault.utils.vault.helpers import iso_to_timestamp
+from saltext.saltext_vault.utils.vault.helpers import timestring_map
 
 log = logging.getLogger(__name__)
 
@@ -31,18 +30,14 @@ class DurationMixin:
             duration = kwargs.pop("lease_duration")
         self.renewable = renewable
         self.duration = duration
-        creation_time = (
-            creation_time if creation_time is not None else round(time.time())
-        )
+        creation_time = creation_time if creation_time is not None else round(time.time())
         try:
             creation_time = int(creation_time)
         except ValueError:
             creation_time = iso_to_timestamp(creation_time)
         self.creation_time = creation_time
 
-        expire_time = (
-            expire_time if expire_time is not None else round(time.time()) + duration
-        )
+        expire_time = expire_time if expire_time is not None else round(time.time()) + duration
         try:
             expire_time = int(expire_time)
         except ValueError:

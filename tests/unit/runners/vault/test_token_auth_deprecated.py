@@ -4,16 +4,15 @@ Unit tests for the Vault runner
 This module only tests a deprecated function, see
 tests/pytests/unit/runners/test_vault.py for the current tests.
 """
-
-
 import logging
+from unittest.mock import ANY
+from unittest.mock import Mock
+from unittest.mock import patch
 
 import pytest
-
-import salt.runners.vault as vault
-import salt.utils.vault as vaultutil
-import salt.utils.vault.client as vclient
-from tests.support.mock import ANY, Mock, patch
+import saltext.saltext_vault.runners.vault as vault
+import saltext.saltext_vault.utils.vault as vaultutil
+import saltext.saltext_vault.utils.vault.client as vclient
 
 pytestmark = [
     pytest.mark.usefixtures("validate_sig", "policies"),
@@ -61,9 +60,7 @@ def client(auth):
 
 @pytest.fixture
 def validate_sig():
-    with patch(
-        "salt.runners.vault._validate_signature", autospec=True, return_value=None
-    ):
+    with patch("salt.runners.vault._validate_signature", autospec=True, return_value=None):
         yield
 
 
@@ -102,9 +99,7 @@ def test_generate_token_uses(client):
             "saltstack-user": "<no user set>",
         },
     }
-    client.post.assert_called_with(
-        "auth/token/create", payload=json_request, wrap=False
-    )
+    client.post.assert_called_with("auth/token/create", payload=json_request, wrap=False)
 
 
 def test_generate_token_ttl(client):
@@ -122,9 +117,7 @@ def test_generate_token_ttl(client):
             "saltstack-user": "<no user set>",
         },
     }
-    client.post.assert_called_with(
-        "auth/token/create", payload=json_request, wrap=False
-    )
+    client.post.assert_called_with("auth/token/create", payload=json_request, wrap=False)
 
 
 def test_generate_token_permission_denied(client):

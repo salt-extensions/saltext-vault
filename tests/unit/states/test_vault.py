@@ -1,8 +1,9 @@
-import pytest
+from unittest.mock import Mock
+from unittest.mock import patch
 
-import salt.modules.vault as vaultexe
-import salt.states.vault as vault
-from tests.support.mock import Mock, patch
+import pytest
+import saltext.saltext_vault.modules.vault as vaultexe
+import saltext.saltext_vault.states.vault as vault
 
 
 @pytest.fixture

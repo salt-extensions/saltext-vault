@@ -1,12 +1,14 @@
+from unittest.mock import MagicMock
+from unittest.mock import Mock
+from unittest.mock import patch
+
 import pytest
 import requests
-
 import salt.modules.event
-import salt.utils.vault as vault
-import salt.utils.vault.auth as vauth
-import salt.utils.vault.client as vclient
-import salt.utils.vault.helpers as hlp
-from tests.support.mock import MagicMock, Mock, patch
+import saltext.saltext_vault.utils.vault as vault
+import saltext.saltext_vault.utils.vault.auth as vauth
+import saltext.saltext_vault.utils.vault.client as vclient
+import saltext.saltext_vault.utils.vault.helpers as hlp
 
 
 def _mock_json_response(data, status_code=200, reason=""):
@@ -463,9 +465,7 @@ def req_any(req, request):
 @pytest.fixture
 def req_unwrapping(wrapped_role_id_lookup_response, role_id_response, req):
     req.side_effect = (
-        lambda method, url, **kwargs: _mock_json_response(
-            wrapped_role_id_lookup_response
-        )
+        lambda method, url, **kwargs: _mock_json_response(wrapped_role_id_lookup_response)
         if url.endswith("sys/wrapping/lookup")
         else _mock_json_response(role_id_response)
     )
@@ -529,9 +529,7 @@ def events():
     return Mock(spec=salt.modules.event.send)
 
 
-@pytest.fixture(
-    params=["MASTER", "MASTER_IMPERSONATING", "MINION_LOCAL", "MINION_REMOTE"]
-)
+@pytest.fixture(params=["MASTER", "MASTER_IMPERSONATING", "MINION_LOCAL", "MINION_REMOTE"])
 def salt_runtype(request):
     runtype = Mock(spec=hlp._get_salt_run_type)
     runtype.return_value = getattr(hlp, f"SALT_RUNTYPE_{request.param}")

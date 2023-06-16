@@ -1,13 +1,13 @@
 """
 Test case for the vault SDB module
 """
+from unittest.mock import ANY
+from unittest.mock import patch
 
 import pytest
-
 import salt.exceptions
-import salt.sdb.vault as vault
-import salt.utils.vault as vaultutil
-from tests.support.mock import ANY, patch
+import saltext.saltext_vault.sdb.vault as vault
+import saltext.saltext_vault.utils.vault as vaultutil
 
 
 @pytest.fixture
@@ -69,9 +69,7 @@ def test_set(write_kv, key, exp_path, data):
     KV v1/2 distinction is unnecessary, since that is handled in the utils module.
     """
     vault.set_(key, "super awesome")
-    write_kv.assert_called_once_with(
-        f"sdb://myvault/{exp_path}", data, opts=ANY, context=ANY
-    )
+    write_kv.assert_called_once_with(f"sdb://myvault/{exp_path}", data, opts=ANY, context=ANY)
 
 
 @pytest.mark.usefixtures("write_kv_err")
@@ -126,9 +124,7 @@ def test_get_whole_dataset(read_kv_not_found_once, data):
     """
     res = vault.get("sdb://myvault/path/to/foo")
     assert res == data
-    read_kv_not_found_once.assert_called_with(
-        "sdb://myvault/path/to/foo", opts=ANY, context=ANY
-    )
+    read_kv_not_found_once.assert_called_with("sdb://myvault/path/to/foo", opts=ANY, context=ANY)
     assert read_kv_not_found_once.call_count == 2
 
 

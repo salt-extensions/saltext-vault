@@ -150,13 +150,11 @@ You can override the merging behavior per defined ext_pillar:
            merge_strategy: smart
            merge_lists: false
 """
-
-
 import logging
 
 import salt.utils.dictupdate
-import salt.utils.vault as vault
-import salt.utils.vault.helpers as vhelpers
+import saltext.saltext_vault.utils.vault as vault
+import saltext.saltext_vault.utils.vault.helpers as vhelpers
 from salt.exceptions import SaltException
 
 log = logging.getLogger(__name__)
@@ -185,9 +183,7 @@ def ext_pillar(
         log.error('"%s" is not a valid Vault ext_pillar config', conf)
         return {}
 
-    merge_strategy = merge_strategy or __opts__.get(
-        "pillar_source_merging_strategy", "smart"
-    )
+    merge_strategy = merge_strategy or __opts__.get("pillar_source_merging_strategy", "smart")
     merge_lists = merge_lists or __opts__.get("pillar_merge_lists", False)
 
     vault_pillar = {}

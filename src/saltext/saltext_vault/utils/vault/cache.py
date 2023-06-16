@@ -3,9 +3,10 @@ import logging
 import time
 
 import salt.cache
-import salt.utils.vault.helpers as hlp
-import salt.utils.vault.leases as leases
-from salt.utils.vault.exceptions import VaultConfigExpired, VaultLeaseExpired
+import saltext.saltext_vault.utils.vault.helpers as hlp
+import saltext.saltext_vault.utils.vault.leases as leases
+from saltext.saltext_vault.utils.vault.exceptions import VaultConfigExpired
+from saltext.saltext_vault.utils.vault.exceptions import VaultLeaseExpired
 
 log = logging.getLogger(__name__)
 
@@ -76,9 +77,7 @@ class CommonCache:
     Base class that unifies context and other cache backends.
     """
 
-    def __init__(
-        self, context, cbank, cache_backend=None, ttl=None, flush_exception=None
-    ):
+    def __init__(self, context, cbank, cache_backend=None, ttl=None, flush_exception=None):
         self.context = context
         self.cbank = cbank
         self.cache = cache_backend
@@ -95,9 +94,7 @@ class CommonCache:
                 updated = self.cache.updated(self.cbank, ckey)
                 if int(time.time()) - updated >= self.ttl:
                     if flush:
-                        log.debug(
-                            f"Cached data in {self.cbank}/{ckey} outdated, flushing."
-                        )
+                        log.debug(f"Cached data in {self.cbank}/{ckey} outdated, flushing.")
                         self.flush()
                     return False
             return True
@@ -109,9 +106,7 @@ class CommonCache:
         if self.cbank in self.context and ckey in self.context[self.cbank]:
             return self.context[self.cbank][ckey]
         if self.cache is not None:
-            return (
-                self.cache.fetch(self.cbank, ckey) or None
-            )  # account for race conditions
+            return self.cache.fetch(self.cbank, ckey) or None  # account for race conditions
         raise RuntimeError("This code path should not have been hit.")
 
     def _store_ckey(self, ckey, value):
@@ -154,9 +149,7 @@ class VaultCache(CommonCache):
     like secret path metadata. Uses a single cache key.
     """
 
-    def __init__(
-        self, context, cbank, ckey, cache_backend=None, ttl=None, flush_exception=None
-    ):
+    def __init__(self, context, cbank, ckey, cache_backend=None, ttl=None, flush_exception=None):
         super().__init__(
             context,
             cbank,
@@ -239,9 +232,7 @@ class VaultConfigCache(VaultCache):
         Flush all connection-scoped data
         """
         if self.config is None:
-            log.warning(
-                "Tried to flush uninitialized configuration cache. Skipping flush."
-            )
+            log.warning("Tried to flush uninitialized configuration cache. Skipping flush.")
             return
         # flush the whole connection-scoped cache by default
         super().flush(cbank=cbank)
@@ -313,9 +304,7 @@ class VaultLeaseCache(LeaseCacheMixin, CommonCache):
         try:
             ret = self._check_validity(data, valid_for=valid_for)
         except VaultLeaseExpired:
-            self.expire_events(
-                tag=f"vault/lease/{ckey}/expire", data={"valid_for_less": valid_for}
-            )
+            self.expire_events(tag=f"vault/lease/{ckey}/expire", data={"valid_for_less": valid_for})
             ret = None
         if ret is None and flush:
             log.debug("Cached lease not valid anymore. Flushing cache.")

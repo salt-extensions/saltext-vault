@@ -6,7 +6,6 @@ documented in the :ref:`execution module docs <vault-setup>`.
 :maturity:      new
 :platform:      all
 """
-
 import base64
 import copy
 import logging
@@ -20,13 +19,14 @@ import salt.pillar
 import salt.utils.data
 import salt.utils.immutabletypes as immutabletypes
 import salt.utils.json
-import salt.utils.vault as vault
-import salt.utils.vault.cache as vcache
-import salt.utils.vault.factory as vfactory
-import salt.utils.vault.helpers as vhelpers
 import salt.utils.versions
+import saltext.saltext_vault.utils.vault as vault
+import saltext.saltext_vault.utils.vault.cache as vcache
+import saltext.saltext_vault.utils.vault.factory as vfactory
+import saltext.saltext_vault.utils.vault.helpers as vhelpers
 from salt.defaults import NOT_SET
-from salt.exceptions import SaltInvocationError, SaltRunnerError
+from salt.exceptions import SaltInvocationError
+from salt.exceptions import SaltRunnerError
 
 log = logging.getLogger(__name__)
 
@@ -113,9 +113,7 @@ def generate_token(
             "Please update your master peer_run configuration."
         )
         issue_params = {"explicit_max_ttl": ttl, "num_uses": uses}
-        return get_config(
-            minion_id, signature, impersonated_by_master, issue_params=issue_params
-        )
+        return get_config(minion_id, signature, impersonated_by_master, issue_params=issue_params)
 
     log.debug(
         "Token generation request for %s (impersonated by master: %s)",
@@ -141,9 +139,7 @@ def generate_token(
         if uses is not None:
             issue_params["num_uses"] = uses
 
-        token, _ = _generate_token(
-            minion_id, issue_params=issue_params or None, wrap=False
-        )
+        token, _ = _generate_token(minion_id, issue_params=issue_params or None, wrap=False)
         ret = {
             "token": token["client_token"],
             "lease_duration": token["lease_duration"],
@@ -162,9 +158,7 @@ def generate_token(
         return {"error": f"{type(err).__name__}: {str(err)}"}
 
 
-def generate_new_token(
-    minion_id, signature, impersonated_by_master=False, issue_params=None
-):
+def generate_new_token(minion_id, signature, impersonated_by_master=False, issue_params=None):
     """
     .. versionadded:: 3007.0
 
@@ -203,9 +197,7 @@ def generate_new_token(
         }
 
         wrap = _config("issue:wrap")
-        token, num_uses = _generate_token(
-            minion_id, issue_params=issue_params, wrap=wrap
-        )
+        token, num_uses = _generate_token(minion_id, issue_params=issue_params, wrap=wrap)
 
         if wrap:
             ret.update(token)
@@ -310,9 +302,7 @@ def get_config(
         if _config("issue:type") == "approle":
             minion_config["auth"]["approle_mount"] = _config("issue:approle:mount")
             minion_config["auth"]["approle_name"] = minion_id
-            minion_config["auth"]["secret_id"] = _config(
-                "issue:approle:params:bind_secret_id"
-            )
+            minion_config["auth"]["secret_id"] = _config("issue:approle:params:bind_secret_id")
             minion_config["auth"]["role_id"] = _get_role_id(
                 minion_id, issue_params=issue_params, wrap=wrap
             )
@@ -380,8 +370,7 @@ def _get_role_id(minion_id, issue_params, wrap):
     issue_params_parsed = _parse_issue_params(issue_params)
 
     if approle is False or (
-        vhelpers._get_salt_run_type(__opts__)
-        != vhelpers.SALT_RUNTYPE_MASTER_IMPERSONATING
+        vhelpers._get_salt_run_type(__opts__) != vhelpers.SALT_RUNTYPE_MASTER_IMPERSONATING
         and not _approle_params_match(approle, issue_params_parsed)
     ):
         # This means the role has to be created/updated first
@@ -422,9 +411,7 @@ def _approle_params_match(current, issue_params):
     return True
 
 
-def generate_secret_id(
-    minion_id, signature, impersonated_by_master=False, issue_params=None
-):
+def generate_secret_id(minion_id, signature, impersonated_by_master=False, issue_params=None):
     """
     .. versionadded:: 3007.0
 
@@ -531,9 +518,7 @@ def unseal():
         salt-run vault.unseal
     """
     for key in __opts__["vault"]["keys"]:
-        ret = vault.query(
-            "POST", "sys/unseal", __opts__, __context__, payload={"key": key}
-        )
+        ret = vault.query("POST", "sys/unseal", __opts__, __context__, payload={"key": key})
         if ret["sealed"] is False:
             return True
     return False
@@ -723,9 +708,7 @@ def sync_entities(minions=None, up=False, down=False):
         __opts__.pop("_vault_runner_is_compiling_pillar_templates", None)
         entity = _lookup_entity_by_alias(minion)
         if not entity or entity["name"] != f"salt_minion_{minion}":
-            log.info(
-                "Fixing association of minion AppRole to minion entity for %s.", minion
-            )
+            log.info("Fixing association of minion AppRole to minion entity for %s.", minion)
             _manage_entity_alias(minion)
     return True
 
@@ -858,15 +841,11 @@ def clear_cache(master=True, minions=True):
         Defaults to true. Set this to a list of minion IDs to only clear
         cached data pertaining to thse minions.
     """
-    config, _, _ = vault._get_connection_config(
-        "vault", __opts__, __context__, force_local=True
-    )
+    config, _, _ = vault._get_connection_config("vault", __opts__, __context__, force_local=True)
     cache = vcache._get_cache_backend(config, __opts__)
 
     if cache is None:
-        log.info(
-            "Vault cache clearance was requested, but no persistent cache is configured"
-        )
+        log.info("Vault cache clearance was requested, but no persistent cache is configured")
         return True
 
     if master:
@@ -889,9 +868,7 @@ def _config(key=None, default=vault.VaultException):
         return __context__[ckey]
     val = salt.utils.data.traverse_dict(__context__[ckey], key, default)
     if val is vault.VaultException:
-        raise vault.VaultException(
-            f"Requested configuration value {key} does not exist."
-        )
+        raise vault.VaultException(f"Requested configuration value {key} does not exist.")
     return val
 
 
@@ -920,9 +897,7 @@ def _validate_signature(minion_id, signature, impersonated_by_master):
 
 
 # **kwargs because salt.cache.Cache does not pop "expire" from kwargs
-def _get_policies(
-    minion_id, refresh_pillar=None, **kwargs
-):  # pylint: disable=unused-argument
+def _get_policies(minion_id, refresh_pillar=None, **kwargs):  # pylint: disable=unused-argument
     """
     Get the policies that should be applied to a token for <minion_id>
     """
@@ -933,13 +908,9 @@ def _get_policies(
     for pattern in _config("policies:assign"):
         try:
             for expanded_pattern in vhelpers.expand_pattern_lists(pattern, **mappings):
-                policies.append(
-                    expanded_pattern.format(**mappings).lower()  # Vault requirement
-                )
+                policies.append(expanded_pattern.format(**mappings).lower())  # Vault requirement
         except KeyError:
-            log.warning(
-                "Could not resolve policy pattern %s for minion %s", pattern, minion_id
-            )
+            log.warning("Could not resolve policy pattern %s for minion %s", pattern, minion_id)
 
     log.debug("%s policies: %s", minion_id, policies)
     return policies
@@ -1005,9 +976,7 @@ def _get_minion_data(minion_id, refresh_pillar=None):
         # correctly).
         extra_minion_data = {"_vault_runner_is_compiling_pillar_templates": True}
         local_opts.update(extra_minion_data)
-        pillar = LazyPillar(
-            local_opts, grains, minion_id, extra_minion_data=extra_minion_data
-        )
+        pillar = LazyPillar(local_opts, grains, minion_id, extra_minion_data=extra_minion_data)
     elif pillar is None:
         # Make sure pillar is a dict. Necessary because a check on LazyPillar would
         # refresh it unconditionally (even when no pillar values are used)
@@ -1046,9 +1015,7 @@ def _get_metadata(minion_id, metadata_patterns, refresh_pillar=None):
 
 
 def _parse_issue_params(params, issue_type=None):
-    if not _config("issue:allow_minion_override_params") or not isinstance(
-        params, dict
-    ):
+    if not _config("issue:allow_minion_override_params") or not isinstance(params, dict):
         params = {}
 
     # issue_type is used to override the configured type for minions using the old endpoint
@@ -1056,18 +1023,13 @@ def _parse_issue_params(params, issue_type=None):
     issue_type = issue_type or _config("issue:type")
 
     if issue_type not in VALID_PARAMS:
-        raise SaltRunnerError(
-            "Invalid configuration for minion Vault authentication issuance."
-        )
+        raise SaltRunnerError("Invalid configuration for minion Vault authentication issuance.")
 
     configured_params = _config(f"issue:{issue_type}:params")
     ret = {}
 
     for valid_param in VALID_PARAMS[issue_type]:
-        if (
-            valid_param in configured_params
-            and configured_params[valid_param] is not None
-        ):
+        if valid_param in configured_params and configured_params[valid_param] is not None:
             ret[valid_param] = configured_params[valid_param]
         if (
             valid_param in params
@@ -1139,9 +1101,7 @@ def _lookup_approle_cached(minion_id, expire=3600, refresh=False):
 def _lookup_role_id(minion_id, wrap):
     api = _get_approle_api()
     try:
-        return api.read_role_id(
-            minion_id, mount=_config("issue:approle:mount"), wrap=wrap
-        )
+        return api.read_role_id(minion_id, mount=_config("issue:approle:mount"), wrap=wrap)
     except vault.VaultNotFoundError:
         return False
 
@@ -1164,9 +1124,7 @@ def _lookup_entity_by_alias(minion_id):
     role_id = _lookup_role_id(minion_id, wrap=False)
     api = _get_identity_api()
     try:
-        return api.read_entity_by_alias(
-            alias=role_id, mount=_config("issue:approle:mount")
-        )
+        return api.read_entity_by_alias(alias=role_id, mount=_config("issue:approle:mount"))
     except vault.VaultNotFoundError:
         return False
 
@@ -1203,9 +1161,7 @@ def _manage_entity_alias(minion_id):
             mount=_config("issue:approle:mount"),
         )
     except vault.VaultNotFoundError:
-        raise SaltRunnerError(
-            f"Cannot create alias for minion {minion_id}: no entity found."
-        )
+        raise SaltRunnerError(f"Cannot create alias for minion {minion_id}: no entity found.")
 
 
 def _get_approle_api():

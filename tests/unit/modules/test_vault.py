@@ -1,11 +1,11 @@
 import logging
+from unittest.mock import ANY
+from unittest.mock import patch
 
 import pytest
-
 import salt.exceptions
-import salt.modules.vault as vault
-import salt.utils.vault as vaultutil
-from tests.support.mock import ANY, patch
+import saltext.saltext_vault.modules.vault as vault
+import saltext.saltext_vault.utils.vault as vaultutil
 
 
 @pytest.fixture
@@ -152,9 +152,7 @@ def test_read_list_secret_without_default(func):
     a CommandExecutionError when the path is not found.
     """
     tgt = getattr(vault, func)
-    with pytest.raises(
-        salt.exceptions.CommandExecutionError, match=".*VaultNotFoundError.*"
-    ):
+    with pytest.raises(salt.exceptions.CommandExecutionError, match=".*VaultNotFoundError.*"):
         tgt("some/path")
 
 
@@ -194,10 +192,7 @@ def test_write_secret_err(data, caplog):
     with caplog.at_level(logging.ERROR):
         res = vault.write_secret("secret/some/path", **data)
         assert not res
-        assert (
-            "Failed to write secret! VaultPermissionDeniedError: damn"
-            in caplog.messages
-        )
+        assert "Failed to write secret! VaultPermissionDeniedError: damn" in caplog.messages
 
 
 def test_write_raw(data, write_kv):
@@ -218,10 +213,7 @@ def test_write_raw_err(data, caplog):
     with caplog.at_level(logging.ERROR):
         res = vault.write_raw("secret/some/path", data)
         assert not res
-        assert (
-            "Failed to write secret! VaultPermissionDeniedError: damn"
-            in caplog.messages
-        )
+        assert "Failed to write secret! VaultPermissionDeniedError: damn" in caplog.messages
 
 
 def test_patch_secret(data, patch_kv):
@@ -242,10 +234,7 @@ def test_patch_secret_err(data, caplog):
     with caplog.at_level(logging.ERROR):
         res = vault.patch_secret("secret/some/path", **data)
         assert not res
-        assert (
-            "Failed to patch secret! VaultPermissionDeniedError: damn"
-            in caplog.messages
-        )
+        assert "Failed to patch secret! VaultPermissionDeniedError: damn" in caplog.messages
 
 
 @pytest.mark.parametrize("args", [[], [1, 2]])
@@ -256,9 +245,7 @@ def test_delete_secret(delete_kv, args):
     path = "secret/some/path"
     res = vault.delete_secret(path, *args)
     assert res
-    delete_kv.assert_called_once_with(
-        path, opts=ANY, context=ANY, versions=args or None
-    )
+    delete_kv.assert_called_once_with(path, opts=ANY, context=ANY, versions=args or None)
 
 
 @pytest.mark.usefixtures("delete_kv_err")
@@ -270,10 +257,7 @@ def test_delete_secret_err(args, caplog):
     with caplog.at_level(logging.ERROR):
         res = vault.delete_secret("secret/some/path", *args)
         assert not res
-        assert (
-            "Failed to delete secret! VaultPermissionDeniedError: damn"
-            in caplog.messages
-        )
+        assert "Failed to delete secret! VaultPermissionDeniedError: damn" in caplog.messages
 
 
 @pytest.mark.parametrize("args", [[1], [1, 2]])
@@ -292,9 +276,7 @@ def test_destroy_secret_requires_version():
     """
     Ensure destroy_secret requires at least one version
     """
-    with pytest.raises(
-        salt.exceptions.SaltInvocationError, match=".*at least one version.*"
-    ):
+    with pytest.raises(salt.exceptions.SaltInvocationError, match=".*at least one version.*"):
         vault.destroy_secret("secret/some/path")
 
 
@@ -307,10 +289,7 @@ def test_destroy_secret_err(caplog, args):
     with caplog.at_level(logging.ERROR):
         res = vault.destroy_secret("secret/some/path", *args)
         assert not res
-        assert (
-            "Failed to destroy secret! VaultPermissionDeniedError: damn"
-            in caplog.messages
-        )
+        assert "Failed to destroy secret! VaultPermissionDeniedError: damn" in caplog.messages
 
 
 def test_clear_token_cache():
@@ -329,9 +308,7 @@ def test_policy_fetch(query, policy_response):
     query.return_value = policy_response
     res = vault.policy_fetch("test-policy")
     assert res == policy_response["rules"]
-    query.assert_called_once_with(
-        "GET", "sys/policy/test-policy", opts=ANY, context=ANY
-    )
+    query.assert_called_once_with("GET", "sys/policy/test-policy", opts=ANY, context=ANY)
 
 
 def test_policy_fetch_not_found(query):
@@ -390,9 +367,7 @@ def test_policy_delete(query):
     query.return_value = True
     res = vault.policy_delete("test-policy")
     assert res
-    query.assert_called_once_with(
-        "DELETE", "sys/policy/test-policy", opts=ANY, context=ANY
-    )
+    query.assert_called_once_with("DELETE", "sys/policy/test-policy", opts=ANY, context=ANY)
 
 
 def test_policy_delete_handles_not_found(query):
@@ -425,9 +400,7 @@ def test_query(query, method, payload):
     endpoint = "test/endpoint"
     res = vault.query(method, endpoint, payload=payload)
     assert res
-    query.assert_called_once_with(
-        method, endpoint, opts=ANY, context=ANY, payload=payload
-    )
+    query.assert_called_once_with(method, endpoint, opts=ANY, context=ANY, payload=payload)
 
 
 def test_query_raises_errors(query):

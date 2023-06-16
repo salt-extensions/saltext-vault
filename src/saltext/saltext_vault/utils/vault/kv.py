@@ -1,11 +1,9 @@
 import logging
 
-from salt.utils.vault.exceptions import (
-    VaultException,
-    VaultInvocationError,
-    VaultPermissionDeniedError,
-    VaultUnsupportedOperationError,
-)
+from saltext.saltext_vault.utils.vault.exceptions import VaultException
+from saltext.saltext_vault.utils.vault.exceptions import VaultInvocationError
+from saltext.saltext_vault.utils.vault.exceptions import VaultPermissionDeniedError
+from saltext.saltext_vault.utils.vault.exceptions import VaultUnsupportedOperationError
 
 log = logging.getLogger(__name__)
 
@@ -143,9 +141,7 @@ class VaultKV:
         try:
             versions = [int(x) for x in versions]
         except ValueError as err:
-            raise VaultInvocationError(
-                "Versions have to be specified as integers."
-            ) from err
+            raise VaultInvocationError("Versions have to be specified as integers.") from err
         return versions
 
     def nuke(self, path):
@@ -192,16 +188,12 @@ class VaultKV:
         ):
             ret["v2"] = True
             ret["data"] = self._v2_the_path(path, path_metadata.get("path", path))
-            ret["metadata"] = self._v2_the_path(
-                path, path_metadata.get("path", path), "metadata"
-            )
+            ret["metadata"] = self._v2_the_path(path, path_metadata.get("path", path), "metadata")
             ret["delete"] = ret["data"]
             ret["delete_versions"] = self._v2_the_path(
                 path, path_metadata.get("path", path), "delete"
             )
-            ret["destroy"] = self._v2_the_path(
-                path, path_metadata.get("path", path), "destroy"
-            )
+            ret["destroy"] = self._v2_the_path(path, path_metadata.get("path", path), "destroy")
         return ret
 
     def _v2_the_path(self, path, pfilter, ptype="data"):
@@ -253,7 +245,5 @@ class VaultKV:
                 else:
                     raise VaultException("Unexpected response to metadata query.")
             except Exception as err:  # pylint: disable=broad-except
-                log.error(
-                    "Failed to get secret metadata %s: %s", type(err).__name__, err
-                )
+                log.error("Failed to get secret metadata %s: %s", type(err).__name__, err)
         return ret

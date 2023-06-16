@@ -1,12 +1,13 @@
 import copy
 import time
+from unittest.mock import ANY
+from unittest.mock import Mock
+from unittest.mock import patch
 
 import pytest
-
 import salt.cache
-import salt.utils.vault as vault
-import salt.utils.vault.cache as vcache
-from tests.support.mock import ANY, Mock, patch
+import saltext.saltext_vault.utils.vault as vault
+import saltext.saltext_vault.utils.vault.cache as vcache
 
 
 @pytest.fixture
@@ -61,9 +62,7 @@ def uncached(cache_factory):
 
 @pytest.fixture(autouse=True, params=[0])
 def time_stopped(request):
-    with patch(
-        "salt.utils.vault.cache.time.time", autospec=True, return_value=request.param
-    ):
+    with patch("salt.utils.vault.cache.time.time", autospec=True, return_value=request.param):
         yield
 
 
@@ -583,6 +582,4 @@ class TestVaultLeaseCache:
         cache = vcache.VaultLeaseCache({}, "cbank", expire_events=events)
         ret = cache.get("ckey", 10)
         assert ret is None
-        events.assert_called_once_with(
-            tag="vault/lease/ckey/expire", data={"valid_for_less": 10}
-        )
+        events.assert_called_once_with(tag="vault/lease/ckey/expire", data={"valid_for_less": 10})

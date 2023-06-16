@@ -1,10 +1,11 @@
 import logging
+from unittest.mock import ANY
+from unittest.mock import Mock
+from unittest.mock import patch
 
 import pytest
-
-import salt.pillar.vault as vault
-import salt.utils.vault as vaultutil
-from tests.support.mock import ANY, Mock, patch
+import saltext.saltext_vault.pillar.vault as vault
+import saltext.saltext_vault.utils.vault as vaultutil
 
 
 @pytest.fixture
@@ -12,9 +13,7 @@ def configure_loader_modules():
     return {
         vault: {
             "__utils__": {
-                "vault.expand_pattern_lists": Mock(
-                    side_effect=lambda x, *args, **kwargs: [x]
-                )
+                "vault.expand_pattern_lists": Mock(side_effect=lambda x, *args, **kwargs: [x])
             }
         }
     }
@@ -80,9 +79,7 @@ def test_ext_pillar_nesting_key(data):
     """
     Test that nesting_key is honored as expected
     """
-    ext_pillar = vault.ext_pillar(
-        "testminion", {}, "path=secret/path", nesting_key="baz"
-    )
+    ext_pillar = vault.ext_pillar("testminion", {}, "path=secret/path", nesting_key="baz")
     assert ext_pillar == {"baz": data}
 
 
@@ -145,9 +142,7 @@ def test_ext_pillar_disabled_during_pillar_rendering(read_kv):
     template rendering to prevent a cyclic dependency.
     """
     extra = {"_vault_runner_is_compiling_pillar_templates": True}
-    res = vault.ext_pillar(
-        "test-minion", {}, conf="path=secret/path", extra_minion_data=extra
-    )
+    res = vault.ext_pillar("test-minion", {}, conf="path=secret/path", extra_minion_data=extra)
     assert res == {}
     read_kv.assert_not_called()
 

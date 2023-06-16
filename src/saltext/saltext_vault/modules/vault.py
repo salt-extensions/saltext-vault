@@ -708,9 +708,11 @@ Minion configuration (optional):
 """
 import logging
 
-import salt.utils.vault as vault
+import saltext.saltext_vault.utils.vault as vault
 from salt.defaults import NOT_SET
-from salt.exceptions import CommandExecutionError, SaltException, SaltInvocationError
+from salt.exceptions import CommandExecutionError
+from salt.exceptions import SaltException
+from salt.exceptions import SaltInvocationError
 
 log = logging.getLogger(__name__)
 
@@ -1066,9 +1068,7 @@ def clear_cache(connection=True, session=False):
         Setting this to true will keep the connection cache, regardless
         of ``connection``.
     """
-    return vault.clear_cache(
-        __opts__, __context__, connection=connection, session=session
-    )
+    return vault.clear_cache(__opts__, __context__, connection=connection, session=session)
 
 
 def clear_token_cache():

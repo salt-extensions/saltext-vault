@@ -1,11 +1,14 @@
-import pytest
+from unittest.mock import ANY
+from unittest.mock import MagicMock
+from unittest.mock import Mock
+from unittest.mock import patch
 
+import pytest
 import salt.exceptions
-import salt.runners.vault as vault
-import salt.utils.vault as vaultutil
-import salt.utils.vault.api as vapi
-import salt.utils.vault.client as vclient
-from tests.support.mock import ANY, MagicMock, Mock, patch
+import saltext.saltext_vault.runners.vault as vault
+import saltext.saltext_vault.utils.vault as vaultutil
+import saltext.saltext_vault.utils.vault.api as vapi
+import saltext.saltext_vault.utils.vault.client as vclient
 
 
 @pytest.fixture
@@ -306,9 +309,7 @@ def config(request, default_config):
 @pytest.fixture
 def policies(request, policies_default):
     policies_list = getattr(request, "param", policies_default)
-    with patch(
-        "salt.runners.vault._get_policies_cached", autospec=True
-    ) as get_policies_cached:
+    with patch("salt.runners.vault._get_policies_cached", autospec=True) as get_policies_cached:
         get_policies_cached.return_value = policies_list
         with patch("salt.runners.vault._get_policies", autospec=True) as get_policies:
             get_policies.return_value = policies_list
@@ -355,9 +356,7 @@ def test_generate_token(
     Ensure _generate_token calls the API as expected
     """
     wrap = config("issue:wrap")
-    res_token, res_num_uses = vault._generate_token(
-        "test-minion", issue_params=None, wrap=wrap
-    )
+    res_token, res_num_uses = vault._generate_token("test-minion", issue_params=None, wrap=wrap)
     endpoint = "auth/token/create"
     role_name = config("issue:token:role_name")
     payload = {}
@@ -386,18 +385,14 @@ def test_generate_token_no_policies_denied(policies):
     """
     Ensure generated tokens need at least one attached policy
     """
-    with pytest.raises(
-        salt.exceptions.SaltRunnerError, match=".*No policies matched minion.*"
-    ):
+    with pytest.raises(salt.exceptions.SaltRunnerError, match=".*No policies matched minion.*"):
         vault._generate_token("test-minion", issue_params=None, wrap=False)
 
 
 @pytest.mark.parametrize("ttl", [None, 1337])
 @pytest.mark.parametrize("uses", [None, 1, 30])
 @pytest.mark.parametrize("config", [{}, {"issue:type": "approle"}], indirect=True)
-def test_generate_token_deprecated(
-    ttl, uses, token_serialized, config, validate_signature, caplog
-):
+def test_generate_token_deprecated(ttl, uses, token_serialized, config, validate_signature, caplog):
     """
     Ensure the deprecated generate_token function returns data in the old format
     """
@@ -424,17 +419,13 @@ def test_generate_token_deprecated(
         res = vault.generate_token("test-minion", "sig", ttl=ttl, uses=uses)
         validate_signature.assert_called_once_with("test-minion", "sig", False)
         assert res == expected
-        gen.assert_called_once_with(
-            "test-minion", issue_params=issue_params or None, wrap=False
-        )
+        gen.assert_called_once_with("test-minion", issue_params=issue_params or None, wrap=False)
         if config("issue:type") != "token":
             assert "Master is not configured to issue tokens" in caplog.text
 
 
 @pytest.mark.parametrize("config", [{}, {"issue:wrap": False}], indirect=True)
-@pytest.mark.parametrize(
-    "issue_params", [None, {"explicit_max_ttl": 120, "num_uses": 3}]
-)
+@pytest.mark.parametrize("issue_params", [None, {"explicit_max_ttl": 120, "num_uses": 3}])
 def test_generate_new_token(
     issue_params, config, validate_signature, token_serialized, wrapped_serialized
 ):
@@ -481,9 +472,7 @@ def test_generate_new_token_refuses_if_not_configured(config):
 
 
 @pytest.mark.parametrize("config", [{}, {"issue:wrap": False}], indirect=True)
-@pytest.mark.parametrize(
-    "issue_params", [None, {"explicit_max_ttl": 120, "num_uses": 3}]
-)
+@pytest.mark.parametrize("issue_params", [None, {"explicit_max_ttl": 120, "num_uses": 3}])
 def test_get_config_token(
     config, validate_signature, token_serialized, wrapped_serialized, issue_params
 ):
@@ -556,9 +545,7 @@ def test_get_config_token(
         {"secret_id_num_uses": 2, "secret_id_ttl": 120},
     ],
 )
-def test_get_config_approle(
-    config, validate_signature, wrapped_serialized, issue_params
-):
+def test_get_config_approle(config, validate_signature, wrapped_serialized, issue_params):
     """
     Ensure get_config returns data in the expected format when configured for AppRole auth
     """
@@ -652,9 +639,7 @@ def test_get_role_id_refuses_if_not_configured(config):
 class TestGetRoleId:
     @pytest.fixture(autouse=True)
     def lookup_approle(self, approle_meta):
-        with patch(
-            "salt.runners.vault._lookup_approle_cached", autospec=True
-        ) as lookup_approle:
+        with patch("salt.runners.vault._lookup_approle_cached", autospec=True) as lookup_approle:
             lookup_approle.return_value = approle_meta
             yield lookup_approle
 
@@ -662,17 +647,13 @@ class TestGetRoleId:
     def lookup_roleid(self, wrapped_serialized):
         role_id = MagicMock(return_value="test-role-id")
         role_id.serialize_for_minion.return_value = wrapped_serialized
-        with patch(
-            "salt.runners.vault._lookup_role_id", autospec=True
-        ) as lookup_roleid:
+        with patch("salt.runners.vault._lookup_role_id", autospec=True) as lookup_roleid:
             lookup_roleid.return_value = role_id
             yield lookup_roleid
 
     @pytest.fixture(autouse=True)
     def manage_approle(self):
-        with patch(
-            "salt.runners.vault._manage_approle", autospec=True
-        ) as manage_approle:
+        with patch("salt.runners.vault._manage_approle", autospec=True) as manage_approle:
             yield manage_approle
 
     @pytest.fixture(autouse=True)
@@ -682,9 +663,7 @@ class TestGetRoleId:
 
     @pytest.fixture(autouse=True)
     def manage_entity_alias(self):
-        with patch(
-            "salt.runners.vault._manage_entity_alias", autospec=True
-        ) as manage_entity_alias:
+        with patch("salt.runners.vault._manage_entity_alias", autospec=True) as manage_entity_alias:
             yield manage_entity_alias
 
     @pytest.mark.parametrize(
@@ -823,9 +802,7 @@ def test_generate_secret_id_nonexistent_approle(config):
     Ensure generate_secret_id fails and prompts the minion to refresh cache if
     no associated AppRole could be found.
     """
-    with patch(
-        "salt.runners.vault._lookup_approle_cached", autospec=True
-    ) as lookup_approle:
+    with patch("salt.runners.vault._lookup_approle_cached", autospec=True) as lookup_approle:
         lookup_approle.return_value = False
         res = vault.generate_secret_id("test-minion", "sig", issue_params=None)
         assert "error" in res
@@ -881,9 +858,7 @@ def test_list_approles_raises_exception_if_not_configured(config):
     """
     Ensure test_list_approles returns an error if not configured to issue AppRoles
     """
-    with pytest.raises(
-        salt.exceptions.SaltRunnerError, match="Master does not issue AppRoles.*"
-    ):
+    with pytest.raises(salt.exceptions.SaltRunnerError, match="Master does not issue AppRoles.*"):
         vault.list_approles()
 
 
@@ -893,11 +868,7 @@ def test_list_approles_raises_exception_if_not_configured(config):
         ({"policies:assign": ["no-tokens-to-replace"]}, ["no-tokens-to-replace"]),
         ({"policies:assign": ["single-dict:{minion}"]}, ["single-dict:test-minion"]),
         (
-            {
-                "policies:assign": [
-                    "should-not-cause-an-exception,but-result-empty:{foo}"
-                ]
-            },
+            {"policies:assign": ["should-not-cause-an-exception,but-result-empty:{foo}"]},
             [],
         ),
         (
@@ -951,9 +922,7 @@ def test_get_policies_does_not_render_pillar_unnecessarily(config, grains, pilla
             with patch("salt.pillar.get_pillar", autospec=True) as get_pillar:
                 get_pillar.return_value.compile_pillar.return_value = pillar
                 vault._get_policies("test-minion", refresh_pillar=True)
-                assert get_pillar.call_count == int(
-                    "pillar" in config("policies:assign")[0]
-                )
+                assert get_pillar.call_count == int("pillar" in config("policies:assign")[0])
 
 
 @pytest.mark.parametrize(
@@ -995,9 +964,7 @@ def test_get_policies_for_nonexisting_minions(config, expected):
             {"should-not-cause-an-exception,but-result-empty:{foo}": ""},
         ),
         (
-            {
-                "Case-Should-Not-Be-Lowered": "Case-Should-Not-Be-Lowered:{pillar[mixedcase]}"
-            },
+            {"Case-Should-Not-Be-Lowered": "Case-Should-Not-Be-Lowered:{pillar[mixedcase]}"},
             {"Case-Should-Not-Be-Lowered": "Case-Should-Not-Be-Lowered:UP-low-UP"},
         ),
         (
@@ -1017,9 +984,7 @@ def test_get_metadata(metadata_patterns, expected, pillar):
             "salt.utils.vault.helpers.expand_pattern_lists",
             Mock(side_effect=lambda x, *args, **kwargs: [x]),
         ):
-            res = vault._get_metadata(
-                "test-minion", metadata_patterns, refresh_pillar=False
-            )
+            res = vault._get_metadata("test-minion", metadata_patterns, refresh_pillar=False)
             assert res == expected
 
 
@@ -1031,9 +996,7 @@ def test_get_metadata_list():
     """
     with patch("salt.utils.minions.get_minion_data", autospec=True) as get_minion_data:
         get_minion_data.return_value = (None, None, None)
-        with patch(
-            "salt.utils.vault.helpers.expand_pattern_lists", autospec=True
-        ) as expand:
+        with patch("salt.utils.vault.helpers.expand_pattern_lists", autospec=True) as expand:
             expand.return_value = ["salt_role_foo", "salt_role_bar"]
             res = vault._get_metadata(
                 "test-minion",
@@ -1279,9 +1242,7 @@ def test_parse_issue_params(config, issue_params, expected):
     ],
     indirect=["config"],
 )
-def test_parse_issue_params_does_not_allow_bind_secret_id_override(
-    config, issue_params, expected
-):
+def test_parse_issue_params_does_not_allow_bind_secret_id_override(config, issue_params, expected):
     """
     Ensure bind_secret_id can only be set on the master.
     """
@@ -1310,9 +1271,7 @@ def test_delete_approle(approle_api):
     Ensure _delete_approle calls the API as expected.
     """
     vault._delete_approle("test-minion")
-    approle_api.delete_approle.assert_called_once_with(
-        "test-minion", mount="salt-minions"
-    )
+    approle_api.delete_approle.assert_called_once_with("test-minion", mount="salt-minions")
 
 
 @pytest.mark.usefixtures("config")
@@ -1323,9 +1282,7 @@ def test_lookup_approle(approle_api, approle_meta):
     approle_api.read_approle.return_value = approle_meta
     res = vault._lookup_approle("test-minion")
     assert res == approle_meta
-    approle_api.read_approle.assert_called_once_with(
-        "test-minion", mount="salt-minions"
-    )
+    approle_api.read_approle.assert_called_once_with("test-minion", mount="salt-minions")
 
 
 @pytest.mark.usefixtures("config")
@@ -1345,9 +1302,7 @@ def test_lookup_role_id(approle_api, wrap):
     Ensure _lookup_role_id calls the API as expected.
     """
     vault._lookup_role_id("test-minion", wrap=wrap)
-    approle_api.read_role_id.assert_called_once_with(
-        "test-minion", mount="salt-minions", wrap=wrap
-    )
+    approle_api.read_role_id.assert_called_once_with("test-minion", mount="salt-minions", wrap=wrap)
 
 
 @pytest.mark.usefixtures("config")
@@ -1468,9 +1423,7 @@ def test_revoke_token_by_token(client):
     Ensure _revoke_token calls the API as expected.
     """
     vault._revoke_token(token="test-token")
-    client.post.assert_called_once_with(
-        "auth/token/revoke", payload={"token": "test-token"}
-    )
+    client.post.assert_called_once_with("auth/token/revoke", payload={"token": "test-token"})
 
 
 def test_revoke_token_by_accessor(client):

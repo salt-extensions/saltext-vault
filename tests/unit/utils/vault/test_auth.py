@@ -1,11 +1,12 @@
-import pytest
+from unittest.mock import Mock
+from unittest.mock import patch
 
-import salt.utils.vault as vault
-import salt.utils.vault.auth as vauth
-import salt.utils.vault.cache as vcache
-import salt.utils.vault.client as vclient
-import salt.utils.vault.leases as vleases
-from tests.support.mock import Mock, patch
+import pytest
+import saltext.saltext_vault.utils.vault as vault
+import saltext.saltext_vault.utils.vault.auth as vauth
+import saltext.saltext_vault.utils.vault.cache as vcache
+import saltext.saltext_vault.utils.vault.client as vclient
+import saltext.saltext_vault.utils.vault.leases as vleases
 
 
 @pytest.fixture
@@ -243,16 +244,12 @@ def test_approle_auth_get_token_invalid(token_store_empty, approle_invalid):
 
 @pytest.mark.parametrize("mount", ["approle", "salt_minions"])
 @pytest.mark.parametrize("approle", ["secret_id", None], indirect=True)
-def test_approle_auth_get_token_login(
-    approle, mount, client, token_store_empty_first, token
-):
+def test_approle_auth_get_token_login(approle, mount, client, token_store_empty_first, token):
     """
     Ensure that login with secret-id returns a token that is passed to the
     token store/cache as well
     """
-    auth = vauth.VaultAppRoleAuth(
-        approle, client, mount=mount, token_store=token_store_empty_first
-    )
+    auth = vauth.VaultAppRoleAuth(approle, client, mount=mount, token_store=token_store_empty_first)
     res = auth.get_token()
     assert res == token
     args, kwargs = client.post.call_args

@@ -1,11 +1,14 @@
+from unittest.mock import ANY
+from unittest.mock import Mock
+from unittest.mock import patch
+
 import pytest
 import requests
-
 import salt.exceptions
-import salt.utils.vault as vault
-import salt.utils.vault.client as vclient
-from tests.pytests.unit.utils.vault.conftest import _mock_json_response
-from tests.support.mock import ANY, Mock, patch
+import saltext.saltext_vault.utils.vault as vault
+import saltext.saltext_vault.utils.vault.client as vclient
+
+from tests.unit.utils.vault.conftest import _mock_json_response
 
 
 @pytest.mark.parametrize(
@@ -131,9 +134,7 @@ def test_vault_client_request_raw_does_not_raise_http_exception(client):
     indirect=["req_failed"],
 )
 @pytest.mark.parametrize("raise_error", [True, False])
-def test_vault_client_request_respects_raise_error(
-    raise_error, req_failed, expected, client
-):
+def test_vault_client_request_respects_raise_error(raise_error, req_failed, expected, client):
     """
     request should inspect the response object and raise appropriate errors
     or fall back to raise_for_status if raise_error is true
@@ -146,9 +147,7 @@ def test_vault_client_request_respects_raise_error(
         assert "errors" in res
 
 
-def test_vault_client_request_returns_whole_response_data(
-    role_id_response, req, client
-):
+def test_vault_client_request_returns_whole_response_data(role_id_response, req, client):
     """
     request should return the whole returned payload, not auth/data etc only
     """
@@ -157,9 +156,7 @@ def test_vault_client_request_returns_whole_response_data(
     assert res == role_id_response
 
 
-def test_vault_client_request_hydrates_wrapped_response(
-    wrapped_role_id_response, req, client
-):
+def test_vault_client_request_hydrates_wrapped_response(wrapped_role_id_response, req, client):
     """
     request should detect wrapped responses and return an instance of VaultWrappedResponse
     instead of raw data
@@ -242,9 +239,7 @@ def test_vault_client_wrap_info_only_data(wrapped_role_id_lookup_response, clien
 @pytest.mark.parametrize(
     "req_failed,expected", [(502, vault.VaultServerError)], indirect=["req_failed"]
 )
-def test_vault_client_wrap_info_should_fail_with_sensible_response(
-    req_failed, expected, client
-):
+def test_vault_client_wrap_info_should_fail_with_sensible_response(req_failed, expected, client):
     """
     wrap_info should return sensible Exceptions, not KeyError etc
     """
@@ -292,9 +287,7 @@ def test_vault_client_unwrap_should_default_to_token_header_before_payload(
     ],
     indirect=["req_failed"],
 )
-def test_vault_client_unwrap_should_raise_appropriate_errors(
-    func, req_failed, expected, client
-):
+def test_vault_client_unwrap_should_raise_appropriate_errors(func, req_failed, expected, client):
     """
     unwrap/token_lookup should raise exceptions the same way request does
     """
@@ -340,9 +333,7 @@ def test_vault_client_unwrap_should_fail_on_unexpected_creation_path(path, clien
         client.unwrap("test-wrapping-token", expected_creation_path=path)
 
 
-def test_vault_client_token_lookup_returns_data_only(
-    token_lookup_self_response, req, client
-):
+def test_vault_client_token_lookup_returns_data_only(token_lookup_self_response, req, client):
     """
     token_lookup should return "data" only, not the whole response payload
     """
@@ -481,9 +472,7 @@ def test_vault_client_token_lookup_supports_token_arg(client, req_any):
 
 @pytest.mark.parametrize("client", ["valid_token"], indirect=True)
 @pytest.mark.parametrize("renewable", [True, False])
-def test_vault_client_token_renew_self_possible(
-    token_renew_self_response, client, req, renewable
-):
+def test_vault_client_token_renew_self_possible(token_renew_self_response, client, req, renewable):
     """
     Ensure an authenticated client can renew its own token only when
     it is renewable and that the renewed data is passed along to the
@@ -498,18 +487,14 @@ def test_vault_client_token_renew_self_possible(
         assert headers.get("X-Vault-Token") == str(client.auth.get_token())
         assert url.endswith("renew-self")
         req.assert_called_once()
-        client.auth.update_token.assert_called_once_with(
-            token_renew_self_response["auth"]
-        )
+        client.auth.update_token.assert_called_once_with(token_renew_self_response["auth"])
         assert res == token_renew_self_response["auth"]
     else:
         assert res is False
 
 
 @pytest.mark.parametrize("client", ["valid_token"], indirect=True)
-def test_vault_client_token_renew_supports_token_arg(
-    token_renew_other_response, client, req
-):
+def test_vault_client_token_renew_supports_token_arg(token_renew_other_response, client, req):
     """
     Ensure an authenticated client can renew other tokens
     """
@@ -525,9 +510,7 @@ def test_vault_client_token_renew_supports_token_arg(
 
 
 @pytest.mark.parametrize("client", ["valid_token"], indirect=True)
-def test_vault_client_token_renew_uses_accessor(
-    token_renew_accessor_response, client, req
-):
+def test_vault_client_token_renew_uses_accessor(token_renew_accessor_response, client, req):
     """
     Ensure a client can renew tokens with provided accessor
     """
@@ -541,9 +524,7 @@ def test_vault_client_token_renew_uses_accessor(
 
 @pytest.mark.parametrize("client", ["valid_token"], indirect=True)
 @pytest.mark.parametrize("token", [None, "other-test-token"])
-def test_vault_client_token_renew_self_updates_token(
-    token_renew_self_response, client, token, req
-):
+def test_vault_client_token_renew_self_updates_token(token_renew_self_response, client, token, req):
     """
     Ensure the current client token is updated when it is renewed, but not
     when another token is renewed

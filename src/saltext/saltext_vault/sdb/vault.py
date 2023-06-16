@@ -51,12 +51,10 @@ patch
 
     .. versionadded:: 3007.0
 """
-
-
 import logging
 
 import salt.exceptions
-import salt.utils.vault as vault
+import saltext.saltext_vault.utils.vault as vault
 
 log = logging.getLogger(__name__)
 

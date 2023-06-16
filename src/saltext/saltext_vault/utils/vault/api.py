@@ -1,6 +1,7 @@
 import salt.utils.json
-import salt.utils.vault.leases as vleases
-from salt.utils.vault.exceptions import VaultInvocationError, VaultNotFoundError
+import saltext.saltext_vault.utils.vault.leases as vleases
+from saltext.saltext_vault.utils.vault.exceptions import VaultInvocationError
+from saltext.saltext_vault.utils.vault.exceptions import VaultNotFoundError
 
 
 class AppRoleApi:
@@ -280,9 +281,7 @@ class AppRoleApi:
             Defaults to ``approle``.
         """
         if not secret_id and not accessor:
-            raise VaultInvocationError(
-                "Need either secret_id or accessor to read secret ID."
-            )
+            raise VaultInvocationError("Need either secret_id or accessor to read secret ID.")
         if secret_id:
             endpoint = f"auth/{mount}/role/{name}/secret-id/lookup"
             payload = {"secret_id": str(secret_id)}
@@ -315,9 +314,7 @@ class AppRoleApi:
             Defaults to ``approle``.
         """
         if not secret_id and not accessor:
-            raise VaultInvocationError(
-                "Need either secret_id or accessor to destroy secret ID."
-            )
+            raise VaultInvocationError("Need either secret_id or accessor to destroy secret ID.")
         if secret_id:
             endpoint = f"auth/{mount}/role/{name}/secret-id/destroy"
             payload = {"secret_id": str(secret_id)}

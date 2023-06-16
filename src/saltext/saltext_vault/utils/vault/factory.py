@@ -2,8 +2,6 @@ import base64
 import copy
 import logging
 
-from requests.exceptions import ConnectionError
-
 import salt.cache
 import salt.crypt
 import salt.exceptions
@@ -13,22 +11,21 @@ import salt.utils.context
 import salt.utils.data
 import salt.utils.dictupdate
 import salt.utils.json
-import salt.utils.vault.api as vapi
-import salt.utils.vault.auth as vauth
-import salt.utils.vault.cache as vcache
-import salt.utils.vault.client as vclient
-import salt.utils.vault.helpers as hlp
-import salt.utils.vault.kv as vkv
-import salt.utils.vault.leases as vleases
 import salt.utils.versions
+import saltext.saltext_vault.utils.vault.api as vapi
+import saltext.saltext_vault.utils.vault.auth as vauth
+import saltext.saltext_vault.utils.vault.cache as vcache
+import saltext.saltext_vault.utils.vault.client as vclient
+import saltext.saltext_vault.utils.vault.helpers as hlp
+import saltext.saltext_vault.utils.vault.kv as vkv
+import saltext.saltext_vault.utils.vault.leases as vleases
+from requests.exceptions import ConnectionError
 from salt.defaults import NOT_SET
-from salt.utils.vault.exceptions import (
-    VaultAuthExpired,
-    VaultConfigExpired,
-    VaultException,
-    VaultPermissionDeniedError,
-    VaultUnwrapException,
-)
+from saltext.saltext_vault.utils.vault.exceptions import VaultAuthExpired
+from saltext.saltext_vault.utils.vault.exceptions import VaultConfigExpired
+from saltext.saltext_vault.utils.vault.exceptions import VaultException
+from saltext.saltext_vault.utils.vault.exceptions import VaultPermissionDeniedError
+from saltext.saltext_vault.utils.vault.exceptions import VaultUnwrapException
 
 log = logging.getLogger(__name__)
 logging.getLogger("requests").setLevel(logging.WARNING)
@@ -86,14 +83,10 @@ def get_authd_client(opts, context, force_local=False, get_config=False):
         not retry
         and config["auth"]["token_lifecycle"]["renew_increment"] is not False
         and client.auth.get_token().is_renewable()
-        and not client.auth.get_token().is_valid(
-            config["auth"]["token_lifecycle"]["minimum_ttl"]
-        )
+        and not client.auth.get_token().is_valid(config["auth"]["token_lifecycle"]["minimum_ttl"])
     ):
         log.debug("Renewing token")
-        client.token_renew(
-            increment=config["auth"]["token_lifecycle"]["renew_increment"]
-        )
+        client.token_renew(increment=config["auth"]["token_lifecycle"]["renew_increment"])
 
     # Check if the current token could not be renewed for a sufficient amount of time.
     if not retry and not client.token_valid(
@@ -113,9 +106,7 @@ def get_authd_client(opts, context, force_local=False, get_config=False):
             config["auth"]["token_lifecycle"]["minimum_ttl"] or 0, remote=False
         ):
             if not config["auth"]["token_lifecycle"]["minimum_ttl"]:
-                raise VaultException(
-                    "Could not build valid client. This is most likely a bug."
-                )
+                raise VaultException("Could not build valid client. This is most likely a bug.")
             log.warning(
                 "Configuration error: auth:token_lifecycle:minimum_ttl cannot be "
                 "honored because fresh tokens are issued with less ttl. Continuing anyways."
@@ -130,9 +121,7 @@ def get_authd_client(opts, context, force_local=False, get_config=False):
     return client
 
 
-def clear_cache(
-    opts, context, ckey=None, connection=True, session=False, force_local=False
-):
+def clear_cache(opts, context, ckey=None, connection=True, session=False, force_local=False):
     """
     Clears the Vault cache.
     Will ensure the current token and associated leases are revoked
@@ -186,9 +175,7 @@ def clear_cache(
         or (session and ckey == TOKEN_CKEY)
         or ((connection and not session) and ckey == "config")
     ):
-        client, config = _build_revocation_client(
-            opts, context, force_local=force_local
-        )
+        client, config = _build_revocation_client(opts, context, force_local=force_local)
         # config and client will both be None if the cached data is invalid
         if config:
             try:
@@ -290,9 +277,7 @@ def _build_authd_client(opts, context, force_local=False):
     )
     # Tokens are cached in a distinct scope to enable cache per session
     session_cbank = vcache._get_cache_bank(opts, force_local=force_local, session=True)
-    cache_ttl = (
-        config["cache"]["secret"] if config["cache"]["secret"] != "ttl" else None
-    )
+    cache_ttl = config["cache"]["secret"] if config["cache"]["secret"] != "ttl" else None
     token_cache = vcache.VaultAuthCache(
         context,
         session_cbank,
@@ -399,12 +384,9 @@ def _build_revocation_client(opts, context, force_local=False):
     return client, config
 
 
-def _get_connection_config(
-    cbank, opts, context, force_local=False, pre_flush=False, update=False
-):
+def _get_connection_config(cbank, opts, context, force_local=False, pre_flush=False, update=False):
     if (
-        hlp._get_salt_run_type(opts)
-        in [hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL]
+        hlp._get_salt_run_type(opts) in [hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL]
         or force_local
     ):
         # only cache config fetched from remote
@@ -432,9 +414,7 @@ def _get_connection_config(
 
     log.debug("Using new Vault server connection configuration.")
     try:
-        issue_params = parse_config(opts.get("vault", {}), validate=False)[
-            "issue_params"
-        ]
+        issue_params = parse_config(opts.get("vault", {}), validate=False)["issue_params"]
         new_config, unwrap_client = _query_master(
             "get_config",
             opts,
@@ -510,12 +490,8 @@ def _fetch_secret_id(config, opts, secret_id_cache, unwrap_client, force_local=F
             "generate_secret_id",
             opts,
             unwrap_client=unwrap_client,
-            unwrap_expected_creation_path=vclient._get_expected_creation_path(
-                "secret_id", config
-            ),
-            issue_params=parse_config(opts.get("vault", {}), validate=False)[
-                "issue_params"
-            ]
+            unwrap_expected_creation_path=vclient._get_expected_creation_path("secret_id", config),
+            issue_params=parse_config(opts.get("vault", {}), validate=False)["issue_params"]
             or None,
         )
         secret_id = vleases.VaultSecretId(**secret_id["data"])
@@ -525,8 +501,7 @@ def _fetch_secret_id(config, opts, secret_id_cache, unwrap_client, force_local=F
         return secret_id
 
     if (
-        hlp._get_salt_run_type(opts)
-        in [hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL]
+        hlp._get_salt_run_type(opts) in [hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL]
         or force_local
     ):
         secret_id = config["auth"]["secret_id"]
@@ -534,9 +509,7 @@ def _fetch_secret_id(config, opts, secret_id_cache, unwrap_client, force_local=F
             if secret_id.get("wrap_info"):
                 secret_id = unwrap_client.unwrap(
                     secret_id["wrap_info"]["token"],
-                    expected_creation_path=vclient._get_expected_creation_path(
-                        "secret_id", config
-                    ),
+                    expected_creation_path=vclient._get_expected_creation_path("secret_id", config),
                 )
                 secret_id = secret_id["data"]
             return vauth.LocalVaultSecretId(**secret_id)
@@ -555,9 +528,7 @@ def _fetch_secret_id(config, opts, secret_id_cache, unwrap_client, force_local=F
     return cache_or_fetch(config, opts, secret_id_cache, unwrap_client)
 
 
-def _fetch_token(
-    config, opts, token_cache, unwrap_client, force_local=False, embedded_token=None
-):
+def _fetch_token(config, opts, token_cache, unwrap_client, force_local=False, embedded_token=None):
     def cache_or_fetch(config, opts, token_cache, unwrap_client, embedded_token):
         token = token_cache.get(10)
         if token is not None:
@@ -573,12 +544,8 @@ def _fetch_token(
                 "generate_new_token",
                 opts,
                 unwrap_client=unwrap_client,
-                unwrap_expected_creation_path=vclient._get_expected_creation_path(
-                    "token", config
-                ),
-                issue_params=parse_config(opts.get("vault", {}), validate=False)[
-                    "issue_params"
-                ]
+                unwrap_expected_creation_path=vclient._get_expected_creation_path("token", config),
+                issue_params=parse_config(opts.get("vault", {}), validate=False)["issue_params"]
                 or None,
             )
             token = vleases.VaultToken(**token["auth"])
@@ -589,8 +556,7 @@ def _fetch_token(
         return token
 
     if (
-        hlp._get_salt_run_type(opts)
-        in [hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL]
+        hlp._get_salt_run_type(opts) in [hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL]
         or force_local
     ):
         token = None
@@ -598,17 +564,13 @@ def _fetch_token(
             if embedded_token.get("wrap_info"):
                 embedded_token = unwrap_client.unwrap(
                     embedded_token["wrap_info"]["token"],
-                    expected_creation_path=vclient._get_expected_creation_path(
-                        "token", config
-                    ),
+                    expected_creation_path=vclient._get_expected_creation_path("token", config),
                 )["auth"]
             token = vleases.VaultToken(**embedded_token)
         elif config["auth"]["method"] == "wrapped_token":
             embedded_token = unwrap_client.unwrap(
                 embedded_token,
-                expected_creation_path=vclient._get_expected_creation_path(
-                    "token", config
-                ),
+                expected_creation_path=vclient._get_expected_creation_path("token", config),
             )["auth"]
             token = vleases.VaultToken(**embedded_token)
         elif embedded_token is not None:
@@ -685,18 +647,14 @@ def _query_master(
         if "server" in result:
             # Ensure locally overridden verify parameter does not
             # always invalidate cache.
-            reported_server = parse_config(result["server"], validate=False, opts=opts)[
-                "server"
-            ]
+            reported_server = parse_config(result["server"], validate=False, opts=opts)["server"]
             result.update({"server": reported_server})
 
         if unwrap_client is not None:
             expected_server = unwrap_client.get_config()
 
         if expected_server is not None and result.get("server") != expected_server:
-            log.info(
-                "Mismatch of cached and reported server data detected. Invalidating cache."
-            )
+            log.info("Mismatch of cached and reported server data detected. Invalidating cache.")
             # make sure to fetch wrapped data anyways for security reasons
             config_expired = True
             unwrap_expected_creation_path = None
@@ -730,8 +688,7 @@ def _query_master(
                     salt.utils.dictupdate.set_dict_key_value(
                         result,
                         key,
-                        unwrapped_response.get("auth")
-                        or unwrapped_response.get("data"),
+                        unwrapped_response.get("auth") or unwrapped_response.get("data"),
                     )
                 else:
                     if unwrapped_response.get("auth"):
@@ -744,10 +701,7 @@ def _query_master(
 
         for key, val in misc_data.items():
             tgt = "data" if result.get("data") is not None else "auth"
-            if (
-                salt.utils.data.traverse_dict_and_list(result, f"{tgt}:{key}", NOT_SET)
-                == NOT_SET
-            ):
+            if salt.utils.data.traverse_dict_and_list(result, f"{tgt}:{key}", NOT_SET) == NOT_SET:
                 salt.utils.dictupdate.set_dict_key_value(
                     result,
                     f"{tgt}:{key}",
@@ -777,9 +731,7 @@ def _query_master(
             ("signature", signature),
             ("impersonated_by_master", False),
         ] + list(kwargs.items())
-        with salt.utils.context.func_globals_inject(
-            salt.modules.publish.runner, __opts__=opts
-        ):
+        with salt.utils.context.func_globals_inject(salt.modules.publish.runner, __opts__=opts):
             result = salt.modules.publish.runner(
                 f"vault.{func}", arg=[{"__kwarg__": True, k: v} for k, v in arg]
             )
@@ -792,9 +744,7 @@ def _query_master(
             private_key,
         )
         signature = base64.b64encode(salt.crypt.sign_message(private_key, minion_id))
-        with salt.utils.context.func_globals_inject(
-            salt.modules.saltutil.runner, __opts__=opts
-        ):
+        with salt.utils.context.func_globals_inject(salt.modules.saltutil.runner, __opts__=opts):
             result = salt.modules.saltutil.runner(
                 f"vault.{func}",
                 minion_id=minion_id,
@@ -871,9 +821,7 @@ def get_approle_api(opts, context, force_local=False, get_config=False):
     """
     Return an instance of AppRoleApi containing an AuthenticatedVaultClient.
     """
-    client, config = get_authd_client(
-        opts, context, force_local=force_local, get_config=True
-    )
+    client, config = get_authd_client(opts, context, force_local=force_local, get_config=True)
     api = vapi.AppRoleApi(client)
     if get_config:
         return api, config
@@ -884,9 +832,7 @@ def get_identity_api(opts, context, force_local=False, get_config=False):
     """
     Return an instance of IdentityApi containing an AuthenticatedVaultClient.
     """
-    client, config = get_authd_client(
-        opts, context, force_local=force_local, get_config=True
-    )
+    client, config = get_authd_client(opts, context, force_local=force_local, get_config=True)
     api = vapi.IdentityApi(client)
     if get_config:
         return api, config
@@ -981,9 +927,9 @@ def parse_config(config, validate=True, opts=None, require_token=True):
             ("uses", "num_uses"),
         ]:
             if old_token_conf in merged["auth"]:
-                merged["issue"]["token"]["params"][new_token_conf] = merged[
-                    "issue_params"
-                ][new_token_conf] = merged["auth"].pop(old_token_conf)
+                merged["issue"]["token"]["params"][new_token_conf] = merged["issue_params"][
+                    new_token_conf
+                ] = merged["auth"].pop(old_token_conf)
         # Those were found in the root namespace, but grouping them together
         # makes semantic and practical sense.
         for old_server_conf in ["namespace", "url", "verify"]:
@@ -1006,9 +952,7 @@ def parse_config(config, validate=True, opts=None, require_token=True):
                 merged["server"]["verify"] = local_config["server"]["verify"]
             # same for token_lifecycle
             if local_config.get("auth", {}).get("token_lifecycle"):
-                merged["auth"]["token_lifecycle"] = local_config["auth"][
-                    "token_lifecycle"
-                ]
+                merged["auth"]["token_lifecycle"] = local_config["auth"]["token_lifecycle"]
 
         if not validate:
             return merged
@@ -1020,14 +964,10 @@ def parse_config(config, validate=True, opts=None, require_token=True):
             if require_token and "token" not in merged["auth"]:
                 raise AssertionError("auth:token is required for token auth")
         else:
-            raise AssertionError(
-                f"`{merged['auth']['method']}` is not a valid auth method."
-            )
+            raise AssertionError(f"`{merged['auth']['method']}` is not a valid auth method.")
 
         if "url" not in merged["server"]:
             raise AssertionError("server:url is required")
     except AssertionError as err:
-        raise salt.exceptions.InvalidConfigError(
-            f"Invalid vault configuration: {err}"
-        ) from err
+        raise salt.exceptions.InvalidConfigError(f"Invalid vault configuration: {err}") from err
     return merged

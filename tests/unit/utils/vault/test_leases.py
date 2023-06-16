@@ -1,17 +1,17 @@
-import pytest
+from unittest.mock import call
+from unittest.mock import Mock
+from unittest.mock import patch
 
-import salt.utils.vault as vault
-import salt.utils.vault.cache as vcache
-import salt.utils.vault.client as vclient
-import salt.utils.vault.leases as leases
-from tests.support.mock import Mock, call, patch
+import pytest
+import saltext.saltext_vault.utils.vault as vault
+import saltext.saltext_vault.utils.vault.cache as vcache
+import saltext.saltext_vault.utils.vault.client as vclient
+import saltext.saltext_vault.utils.vault.leases as leases
 
 
 @pytest.fixture(autouse=True, params=[0])
 def time_stopped(request):
-    with patch(
-        "salt.utils.vault.leases.time.time", autospec=True, return_value=request.param
-    ):
+    with patch("salt.utils.vault.leases.time.time", autospec=True, return_value=request.param):
         yield
 
 
@@ -191,9 +191,7 @@ def test_vault_approle_secret_id_is_valid_accounts_for_time(duration, offset, ex
     "num_uses,uses,expected",
     [(0, 999999, True), (1, 0, True), (1, 1, False), (1, 2, False)],
 )
-def test_vault_approle_secret_id_is_valid_accounts_for_num_uses(
-    num_uses, uses, expected
-):
+def test_vault_approle_secret_id_is_valid_accounts_for_num_uses(num_uses, uses, expected):
     """
     Ensure secret ID uses validity is checked correctly
     """
@@ -235,9 +233,7 @@ class TestLeaseStore:
         store_valid.cache.flush.assert_not_called()
         store_valid.cache.store.assert_not_called()
 
-    @pytest.mark.parametrize(
-        "valid_for", [2000, pytest.param(2002, id="2002_renewal_leeway")]
-    )
+    @pytest.mark.parametrize("valid_for", [2000, pytest.param(2002, id="2002_renewal_leeway")])
     def test_get_valid_renew_default_period(self, store_valid, lease, valid_for):
         """
         Ensure renewals are attempted by default, cache is updated accordingly
@@ -294,9 +290,7 @@ class TestLeaseStore:
             tag="vault/lease/test/expire", data={"valid_for_less": 2100}
         )
 
-    @pytest.mark.parametrize(
-        "valid_for", [3000, pytest.param(3002, id="3002_renewal_leeway")]
-    )
+    @pytest.mark.parametrize("valid_for", [3000, pytest.param(3002, id="3002_renewal_leeway")])
     def test_get_valid_renew_valid_for(
         self,
         store_valid,

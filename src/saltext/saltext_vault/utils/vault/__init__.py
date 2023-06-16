@@ -6,51 +6,41 @@
 Utilities supporting modules for Hashicorp Vault. Configuration instructions are
 documented in the :ref:`execution module docs <vault-setup>`.
 """
-
 import logging
 
 import requests
-
 import salt.cache
 import salt.crypt
 import salt.exceptions
 import salt.utils.data
 import salt.utils.dictupdate
 import salt.utils.json
-import salt.utils.vault.helpers as hlp
 import salt.utils.versions
-from salt.utils.vault.auth import (
-    InvalidVaultSecretId,
-    InvalidVaultToken,
-    LocalVaultSecretId,
-    VaultAppRole,
-)
-from salt.utils.vault.exceptions import (
-    VaultAuthExpired,
-    VaultConfigExpired,
-    VaultException,
-    VaultInvocationError,
-    VaultNotFoundError,
-    VaultPermissionDeniedError,
-    VaultPreconditionFailedError,
-    VaultServerError,
-    VaultUnavailableError,
-    VaultUnsupportedOperationError,
-    VaultUnwrapException,
-)
-from salt.utils.vault.factory import (
-    clear_cache,
-    get_authd_client,
-    get_kv,
-    get_lease_store,
-    parse_config,
-)
-from salt.utils.vault.leases import (
-    VaultLease,
-    VaultSecretId,
-    VaultToken,
-    VaultWrappedResponse,
-)
+import saltext.saltext_vault.utils.vault.helpers as hlp
+from saltext.saltext_vault.utils.vault.auth import InvalidVaultSecretId
+from saltext.saltext_vault.utils.vault.auth import InvalidVaultToken
+from saltext.saltext_vault.utils.vault.auth import LocalVaultSecretId
+from saltext.saltext_vault.utils.vault.auth import VaultAppRole
+from saltext.saltext_vault.utils.vault.exceptions import VaultAuthExpired
+from saltext.saltext_vault.utils.vault.exceptions import VaultConfigExpired
+from saltext.saltext_vault.utils.vault.exceptions import VaultException
+from saltext.saltext_vault.utils.vault.exceptions import VaultInvocationError
+from saltext.saltext_vault.utils.vault.exceptions import VaultNotFoundError
+from saltext.saltext_vault.utils.vault.exceptions import VaultPermissionDeniedError
+from saltext.saltext_vault.utils.vault.exceptions import VaultPreconditionFailedError
+from saltext.saltext_vault.utils.vault.exceptions import VaultServerError
+from saltext.saltext_vault.utils.vault.exceptions import VaultUnavailableError
+from saltext.saltext_vault.utils.vault.exceptions import VaultUnsupportedOperationError
+from saltext.saltext_vault.utils.vault.exceptions import VaultUnwrapException
+from saltext.saltext_vault.utils.vault.factory import clear_cache
+from saltext.saltext_vault.utils.vault.factory import get_authd_client
+from saltext.saltext_vault.utils.vault.factory import get_kv
+from saltext.saltext_vault.utils.vault.factory import get_lease_store
+from saltext.saltext_vault.utils.vault.factory import parse_config
+from saltext.saltext_vault.utils.vault.leases import VaultLease
+from saltext.saltext_vault.utils.vault.leases import VaultSecretId
+from saltext.saltext_vault.utils.vault.leases import VaultToken
+from saltext.saltext_vault.utils.vault.leases import VaultWrappedResponse
 
 log = logging.getLogger(__name__)
 logging.getLogger("requests").setLevel(logging.WARNING)
