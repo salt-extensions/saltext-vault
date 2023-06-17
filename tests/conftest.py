@@ -3,6 +3,7 @@ import sys
 
 import pytest
 import salt.config
+from pytestshellutils.utils import ports
 from saltext.saltext_vault import PACKAGE_ROOT
 from saltfactories.utils import random_string  # pylint: disable=wrong-import-order
 
