@@ -533,7 +533,7 @@ def events():
 def salt_runtype(request):
     runtype = Mock(spec=hlp._get_salt_run_type)
     runtype.return_value = getattr(hlp, f"SALT_RUNTYPE_{request.param}")
-    with patch("salt.utils.vault.helpers._get_salt_run_type", runtype):
+    with patch("saltext.saltext_vault.utils.vault.helpers._get_salt_run_type", runtype):
         yield
 
 

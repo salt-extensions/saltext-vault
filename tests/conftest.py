@@ -109,3 +109,8 @@ def perm_denied_error_log():
             "Check that the salt user has the correct permissions."
         )
     return perm_denied_error_log
+
+
+@pytest.fixture(scope="session")
+def vault_port():
+    return ports.get_unused_localhost_port()

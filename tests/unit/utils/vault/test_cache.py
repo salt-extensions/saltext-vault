@@ -62,7 +62,11 @@ def uncached(cache_factory):
 
 @pytest.fixture(autouse=True, params=[0])
 def time_stopped(request):
-    with patch("salt.utils.vault.cache.time.time", autospec=True, return_value=request.param):
+    with patch(
+        "saltext.saltext_vault.utils.vault.cache.time.time",
+        autospec=True,
+        return_value=request.param,
+    ):
         yield
 
 
@@ -237,7 +241,7 @@ class TestVaultConfigCache:
         during instantiation. When the config backend changes and the
         previous was not session only, it should be flushed.
         """
-        with patch("salt.utils.vault.cache.VaultConfigCache.flush") as flush:
+        with patch("saltext.saltext_vault.utils.vault.cache.VaultConfigCache.flush") as flush:
             cache = vcache.VaultConfigCache({}, cbank, ckey, {}, init_config=config)
             assert cache.config == config
             if config is not None:
@@ -313,8 +317,8 @@ class TestVaultConfigCache:
         """
         cache = vcache.VaultConfigCache({}, {}, cbank, ckey)
         assert cache.config is None
-        with patch("salt.utils.vault.cache.VaultConfigCache._load") as rld:
-            with patch("salt.utils.vault.cache.VaultCache.store") as store:
+        with patch("saltext.saltext_vault.utils.vault.cache.VaultConfigCache._load") as rld:
+            with patch("saltext.saltext_vault.utils.vault.cache.VaultCache.store") as store:
                 cache.store(data)
                 rld.assert_called_once_with(data)
                 store.assert_called_once()
@@ -360,12 +364,12 @@ class TestVaultAuthCache:
     @pytest.fixture
     def uncached(self):
         with patch(
-            "salt.utils.vault.cache.CommonCache._ckey_exists",
+            "saltext.saltext_vault.utils.vault.cache.CommonCache._ckey_exists",
             return_value=False,
             autospec=True,
         ):
             with patch(
-                "salt.utils.vault.cache.CommonCache._get_ckey",
+                "saltext.saltext_vault.utils.vault.cache.CommonCache._get_ckey",
                 return_value=None,
                 autospec=True,
             ) as get:
@@ -374,12 +378,12 @@ class TestVaultAuthCache:
     @pytest.fixture
     def cached(self, token_auth):
         with patch(
-            "salt.utils.vault.cache.CommonCache._ckey_exists",
+            "saltext.saltext_vault.utils.vault.cache.CommonCache._ckey_exists",
             return_value=True,
             autospec=True,
         ):
             with patch(
-                "salt.utils.vault.cache.CommonCache._get_ckey",
+                "saltext.saltext_vault.utils.vault.cache.CommonCache._get_ckey",
                 return_value=token_auth["auth"],
                 autospec=True,
             ) as get:
@@ -388,14 +392,14 @@ class TestVaultAuthCache:
     @pytest.fixture
     def cached_outdated(self, token_auth):
         with patch(
-            "salt.utils.vault.cache.CommonCache._ckey_exists",
+            "saltext.saltext_vault.utils.vault.cache.CommonCache._ckey_exists",
             return_value=True,
             autospec=True,
         ):
             token_auth["auth"]["creation_time"] = 0
             token_auth["auth"]["lease_duration"] = 1
             with patch(
-                "salt.utils.vault.cache.CommonCache._get_ckey",
+                "saltext.saltext_vault.utils.vault.cache.CommonCache._get_ckey",
                 return_value=token_auth["auth"],
                 autospec=True,
             ) as get:
@@ -403,7 +407,9 @@ class TestVaultAuthCache:
 
     @pytest.fixture
     def cached_invalid_flush(self, token_auth, cached):
-        with patch("salt.utils.vault.cache.CommonCache._flush", autospec=True) as flush:
+        with patch(
+            "saltext.saltext_vault.utils.vault.cache.CommonCache._flush", autospec=True
+        ) as flush:
             token_auth["auth"]["num_uses"] = 1
             token_auth["auth"]["use_count"] = 1
             cached.return_value = token_auth["auth"]
@@ -445,7 +451,7 @@ class TestVaultAuthCache:
         """
         token = vault.VaultToken(**token_auth["auth"])
         cache = vcache.VaultAuthCache({}, "cbank", "ckey", vault.VaultToken)
-        with patch("salt.utils.vault.cache.CommonCache._store_ckey") as store:
+        with patch("saltext.saltext_vault.utils.vault.cache.CommonCache._store_ckey") as store:
             cache.store(token)
             store.assert_called_once_with("ckey", token.to_dict())
 
@@ -481,12 +487,12 @@ class TestVaultLeaseCache:
     @pytest.fixture
     def uncached(self):
         with patch(
-            "salt.utils.vault.cache.CommonCache._ckey_exists",
+            "saltext.saltext_vault.utils.vault.cache.CommonCache._ckey_exists",
             return_value=False,
             autospec=True,
         ):
             with patch(
-                "salt.utils.vault.cache.CommonCache._get_ckey",
+                "saltext.saltext_vault.utils.vault.cache.CommonCache._get_ckey",
                 return_value=None,
                 autospec=True,
             ) as get:
@@ -495,12 +501,12 @@ class TestVaultLeaseCache:
     @pytest.fixture
     def cached(self, lease):
         with patch(
-            "salt.utils.vault.cache.CommonCache._ckey_exists",
+            "saltext.saltext_vault.utils.vault.cache.CommonCache._ckey_exists",
             return_value=True,
             autospec=True,
         ):
             with patch(
-                "salt.utils.vault.cache.CommonCache._get_ckey",
+                "saltext.saltext_vault.utils.vault.cache.CommonCache._get_ckey",
                 return_value=lease,
                 autospec=True,
             ) as get:
@@ -509,14 +515,14 @@ class TestVaultLeaseCache:
     @pytest.fixture
     def cached_outdated(self, lease):
         with patch(
-            "salt.utils.vault.cache.CommonCache._ckey_exists",
+            "saltext.saltext_vault.utils.vault.cache.CommonCache._ckey_exists",
             return_value=True,
             autospec=True,
         ):
             lease["duration"] = 6
             lease["expire_time"] = 6
             with patch(
-                "salt.utils.vault.cache.CommonCache._get_ckey",
+                "saltext.saltext_vault.utils.vault.cache.CommonCache._get_ckey",
                 return_value=lease,
                 autospec=True,
             ) as get:
@@ -551,7 +557,7 @@ class TestVaultLeaseCache:
         """
         cache = vcache.VaultLeaseCache({}, "cbank")
         with patch(
-            "salt.utils.vault.cache.CommonCache._flush",
+            "saltext.saltext_vault.utils.vault.cache.CommonCache._flush",
             autospec=True,
         ) as flush:
             res = cache.get("testlease", valid_for=valid_for, flush=True)
@@ -570,7 +576,7 @@ class TestVaultLeaseCache:
         """
         lease_ = vault.VaultLease(**lease)
         cache = vcache.VaultLeaseCache({}, "cbank")
-        with patch("salt.utils.vault.cache.CommonCache._store_ckey") as store:
+        with patch("saltext.saltext_vault.utils.vault.cache.CommonCache._store_ckey") as store:
             cache.store("ckey", lease_)
             store.assert_called_once_with("ckey", lease_.to_dict())
 

@@ -107,7 +107,7 @@ def test_timestring_map(inpt, expected):
     ],
 )
 def test_iso_to_timestamp_polyfill(creation_time, expected):
-    with patch("salt.utils.vault.helpers.datetime.datetime") as d:
+    with patch("saltext.saltext_vault.utils.vault.helpers.datetime.datetime") as d:
         d.fromisoformat.side_effect = AttributeError
         # needs from datetime import datetime, otherwise results
         # in infinite recursion

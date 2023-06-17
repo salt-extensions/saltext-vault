@@ -26,7 +26,7 @@ def data():
 
 @pytest.fixture
 def read_kv(data):
-    with patch("salt.utils.vault.read_kv", autospec=True) as read:
+    with patch("saltext.saltext_vault.utils.vault.read_kv", autospec=True) as read:
         read.return_value = data
         yield read
 

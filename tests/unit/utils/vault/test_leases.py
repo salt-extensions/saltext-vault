@@ -11,7 +11,11 @@ import saltext.saltext_vault.utils.vault.leases as leases
 
 @pytest.fixture(autouse=True, params=[0])
 def time_stopped(request):
-    with patch("salt.utils.vault.leases.time.time", autospec=True, return_value=request.param):
+    with patch(
+        "saltext.saltext_vault.utils.vault.leases.time.time",
+        autospec=True,
+        return_value=request.param,
+    ):
         yield
 
 
@@ -153,7 +157,7 @@ def test_vault_token_is_valid_accounts_for_num_uses(num_uses, uses, expected):
         "use_count": uses,
     }
     with patch(
-        "salt.utils.vault.leases.BaseLease.is_valid_for",
+        "saltext.saltext_vault.utils.vault.leases.BaseLease.is_valid_for",
         autospec=True,
         return_value=True,
     ):
@@ -204,7 +208,7 @@ def test_vault_approle_secret_id_is_valid_accounts_for_num_uses(num_uses, uses, 
         "use_count": uses,
     }
     with patch(
-        "salt.utils.vault.leases.BaseLease.is_valid_for",
+        "saltext.saltext_vault.utils.vault.leases.BaseLease.is_valid_for",
         autospec=True,
         return_value=True,
     ):

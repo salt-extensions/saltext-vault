@@ -249,10 +249,10 @@ def test_write_entity_alias(client, aliases, entity_fetch_response, identity_api
             payload["id"] = aliases[0]["id"]
 
     with patch(
-        "salt.utils.vault.api.IdentityApi._lookup_mount_accessor",
+        "saltext.saltext_vault.utils.vault.api.IdentityApi._lookup_mount_accessor",
         return_value="test-accessor",
     ), patch(
-        "salt.utils.vault.api.IdentityApi.read_entity",
+        "saltext.saltext_vault.utils.vault.api.IdentityApi.read_entity",
         return_value=entity_fetch_response["data"],
     ):
         identity_api.write_entity_alias(
@@ -279,7 +279,7 @@ def test_read_entity_by_alias_failed(client, identity_api):
     Ensure read_entity_by_alias raises VaultNotFoundError if the lookup fails.
     """
     with patch(
-        "salt.utils.vault.api.IdentityApi._lookup_mount_accessor",
+        "saltext.saltext_vault.utils.vault.api.IdentityApi._lookup_mount_accessor",
         return_value="test-accessor",
     ):
         client.post.return_value = []
@@ -292,7 +292,7 @@ def test_read_entity_by_alias(client, entity_lookup_response, identity_api):
     Ensure read_entity_by_alias calls the API as expected.
     """
     with patch(
-        "salt.utils.vault.api.IdentityApi._lookup_mount_accessor",
+        "saltext.saltext_vault.utils.vault.api.IdentityApi._lookup_mount_accessor",
         return_value="test-accessor",
     ):
         client.post.return_value = entity_lookup_response

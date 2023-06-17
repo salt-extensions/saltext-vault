@@ -238,7 +238,9 @@ def pillar():
 
 @pytest.fixture
 def client():
-    with patch("salt.runners.vault._get_master_client", autospec=True) as get_client:
+    with patch(
+        "saltext.saltext_vault.runners.vault._get_master_client", autospec=True
+    ) as get_client:
         client = Mock(spec=vclient.AuthenticatedVaultClient)
         get_client.return_value = client
         yield client
@@ -246,7 +248,7 @@ def client():
 
 @pytest.fixture
 def approle_api():
-    with patch("salt.runners.vault._get_approle_api", autospec=True) as get_api:
+    with patch("saltext.saltext_vault.runners.vault._get_approle_api", autospec=True) as get_api:
         api = Mock(spec=vapi.AppRoleApi)
         get_api.return_value = api
         yield api
@@ -254,7 +256,7 @@ def approle_api():
 
 @pytest.fixture
 def identity_api():
-    with patch("salt.runners.vault._get_identity_api", autospec=True) as get_api:
+    with patch("saltext.saltext_vault.runners.vault._get_identity_api", autospec=True) as get_api:
         api = Mock(spec=vapi.IdentityApi)
         get_api.return_value = api
         yield api
@@ -301,7 +303,7 @@ def config(request, default_config):
             return overrides[key]
         return rec(default_config, key, default=default)
 
-    with patch("salt.runners.vault._config", autospec=True) as config:
+    with patch("saltext.saltext_vault.runners.vault._config", autospec=True) as config:
         config.side_effect = get_config
         yield config
 
@@ -309,9 +311,13 @@ def config(request, default_config):
 @pytest.fixture
 def policies(request, policies_default):
     policies_list = getattr(request, "param", policies_default)
-    with patch("salt.runners.vault._get_policies_cached", autospec=True) as get_policies_cached:
+    with patch(
+        "saltext.saltext_vault.runners.vault._get_policies_cached", autospec=True
+    ) as get_policies_cached:
         get_policies_cached.return_value = policies_list
-        with patch("salt.runners.vault._get_policies", autospec=True) as get_policies:
+        with patch(
+            "saltext.saltext_vault.runners.vault._get_policies", autospec=True
+        ) as get_policies:
             get_policies.return_value = policies_list
             yield
 
@@ -325,7 +331,7 @@ def metadata(request, metadata_entity_default, metadata_secret_default):
             return metadata_entity_default
         return metadata_secret_default
 
-    with patch("salt.runners.vault._get_metadata", autospec=True) as get_metadata:
+    with patch("saltext.saltext_vault.runners.vault._get_metadata", autospec=True) as get_metadata:
         get_metadata.side_effect = _get_metadata
         yield get_metadata
 
@@ -333,7 +339,7 @@ def metadata(request, metadata_entity_default, metadata_secret_default):
 @pytest.fixture
 def validate_signature():
     with patch(
-        "salt.runners.vault._validate_signature", autospec=True, return_value=None
+        "saltext.saltext_vault.runners.vault._validate_signature", autospec=True, return_value=None
     ) as validate:
         yield validate
 
@@ -414,7 +420,7 @@ def test_generate_token_deprecated(ttl, uses, token_serialized, config, validate
         "namespace": config("server:namespace"),
         "uses": token_serialized["num_uses"],
     }
-    with patch("salt.runners.vault._generate_token", autospec=True) as gen:
+    with patch("saltext.saltext_vault.runners.vault._generate_token", autospec=True) as gen:
         gen.return_value = (token_serialized, token_serialized["num_uses"])
         res = vault.generate_token("test-minion", "sig", ttl=ttl, uses=uses)
         validate_signature.assert_called_once_with("test-minion", "sig", False)
@@ -444,7 +450,7 @@ def test_generate_new_token(
     else:
         expected["auth"] = token_serialized
 
-    with patch("salt.runners.vault._generate_token", autospec=True) as gen:
+    with patch("saltext.saltext_vault.runners.vault._generate_token", autospec=True) as gen:
 
         def res_or_wrap(*args, **kwargs):
             if kwargs.get("wrap"):
@@ -508,7 +514,7 @@ def test_get_config_token(
     else:
         expected["auth"].update({"token": token_serialized})
 
-    with patch("salt.runners.vault._generate_token", autospec=True) as gen:
+    with patch("saltext.saltext_vault.runners.vault._generate_token", autospec=True) as gen:
 
         def res_or_wrap(*args, **kwargs):
             if kwargs.get("wrap"):
@@ -571,7 +577,7 @@ def test_get_config_approle(config, validate_signature, wrapped_serialized, issu
     else:
         expected["auth"].update({"role_id": "test-role-id"})
 
-    with patch("salt.runners.vault._get_role_id", autospec=True) as gen:
+    with patch("saltext.saltext_vault.runners.vault._get_role_id", autospec=True) as gen:
 
         def res_or_wrap(*args, **kwargs):
             if kwargs.get("wrap"):
@@ -609,7 +615,7 @@ def test_get_role_id(config, validate_signature, wrapped_serialized, issue_param
         expected.update(wrapped_serialized)
     else:
         expected["data"].update({"role_id": "test-role-id"})
-    with patch("salt.runners.vault._get_role_id", autospec=True) as gen:
+    with patch("saltext.saltext_vault.runners.vault._get_role_id", autospec=True) as gen:
 
         def res_or_wrap(*args, **kwargs):
             if kwargs.get("wrap"):
@@ -639,7 +645,9 @@ def test_get_role_id_refuses_if_not_configured(config):
 class TestGetRoleId:
     @pytest.fixture(autouse=True)
     def lookup_approle(self, approle_meta):
-        with patch("salt.runners.vault._lookup_approle_cached", autospec=True) as lookup_approle:
+        with patch(
+            "saltext.saltext_vault.runners.vault._lookup_approle_cached", autospec=True
+        ) as lookup_approle:
             lookup_approle.return_value = approle_meta
             yield lookup_approle
 
@@ -647,23 +655,31 @@ class TestGetRoleId:
     def lookup_roleid(self, wrapped_serialized):
         role_id = MagicMock(return_value="test-role-id")
         role_id.serialize_for_minion.return_value = wrapped_serialized
-        with patch("salt.runners.vault._lookup_role_id", autospec=True) as lookup_roleid:
+        with patch(
+            "saltext.saltext_vault.runners.vault._lookup_role_id", autospec=True
+        ) as lookup_roleid:
             lookup_roleid.return_value = role_id
             yield lookup_roleid
 
     @pytest.fixture(autouse=True)
     def manage_approle(self):
-        with patch("salt.runners.vault._manage_approle", autospec=True) as manage_approle:
+        with patch(
+            "saltext.saltext_vault.runners.vault._manage_approle", autospec=True
+        ) as manage_approle:
             yield manage_approle
 
     @pytest.fixture(autouse=True)
     def manage_entity(self):
-        with patch("salt.runners.vault._manage_entity", autospec=True) as manage_entity:
+        with patch(
+            "saltext.saltext_vault.runners.vault._manage_entity", autospec=True
+        ) as manage_entity:
             yield manage_entity
 
     @pytest.fixture(autouse=True)
     def manage_entity_alias(self):
-        with patch("salt.runners.vault._manage_entity_alias", autospec=True) as manage_entity_alias:
+        with patch(
+            "saltext.saltext_vault.runners.vault._manage_entity_alias", autospec=True
+        ) as manage_entity_alias:
             yield manage_entity_alias
 
     @pytest.mark.parametrize(
@@ -771,10 +787,12 @@ def test_generate_secret_id(
         expected.update(wrapped_serialized)
     else:
         expected["data"].update(secret_id_serialized)
-    with patch("salt.runners.vault._get_secret_id", autospec=True) as gen, patch(
-        "salt.runners.vault._approle_params_match", autospec=True, return_value=True
+    with patch("saltext.saltext_vault.runners.vault._get_secret_id", autospec=True) as gen, patch(
+        "saltext.saltext_vault.runners.vault._approle_params_match",
+        autospec=True,
+        return_value=True,
     ) as matcher, patch(
-        "salt.runners.vault._lookup_approle_cached", autospec=True
+        "saltext.saltext_vault.runners.vault._lookup_approle_cached", autospec=True
     ) as lookup_approle:
 
         def res_or_wrap(*args, **kwargs):
@@ -802,7 +820,9 @@ def test_generate_secret_id_nonexistent_approle(config):
     Ensure generate_secret_id fails and prompts the minion to refresh cache if
     no associated AppRole could be found.
     """
-    with patch("salt.runners.vault._lookup_approle_cached", autospec=True) as lookup_approle:
+    with patch(
+        "saltext.saltext_vault.runners.vault._lookup_approle_cached", autospec=True
+    ) as lookup_approle:
         lookup_approle.return_value = False
         res = vault.generate_secret_id("test-minion", "sig", issue_params=None)
         assert "error" in res
@@ -834,12 +854,14 @@ def test_generate_secret_id_updates_params(
         "misc_data": {"secret_id_num_uses": approle_meta["secret_id_num_uses"]},
         "wrap_info": wrapped_serialized["wrap_info"],
     }
-    with patch("salt.runners.vault._get_secret_id", autospec=True) as gen, patch(
-        "salt.runners.vault._approle_params_match", autospec=True, return_value=False
+    with patch("saltext.saltext_vault.runners.vault._get_secret_id", autospec=True) as gen, patch(
+        "saltext.saltext_vault.runners.vault._approle_params_match",
+        autospec=True,
+        return_value=False,
     ) as matcher, patch(
-        "salt.runners.vault._manage_approle", autospec=True
+        "saltext.saltext_vault.runners.vault._manage_approle", autospec=True
     ) as manage_approle, patch(
-        "salt.runners.vault._lookup_approle_cached", autospec=True
+        "saltext.saltext_vault.runners.vault._lookup_approle_cached", autospec=True
     ) as lookup_approle:
         res = Mock(spec=vaultutil.VaultWrappedResponse)
         res.serialize_for_minion.return_value = wrapped_serialized
@@ -892,7 +914,7 @@ def test_get_policies(config, expected, grains, pillar):
         MagicMock(return_value=(None, grains, pillar)),
     ):
         with patch(
-            "salt.utils.vault.helpers.expand_pattern_lists",
+            "saltext.saltext_vault.utils.vault.helpers.expand_pattern_lists",
             Mock(side_effect=lambda x, *args, **kwargs: [x]),
         ):
             res = vault._get_policies("test-minion", refresh_pillar=False)
@@ -916,7 +938,7 @@ def test_get_policies_does_not_render_pillar_unnecessarily(config, grains, pilla
     with patch("salt.utils.minions.get_minion_data", autospec=True) as get_minion_data:
         get_minion_data.return_value = (None, grains, None)
         with patch(
-            "salt.utils.vault.helpers.expand_pattern_lists",
+            "saltext.saltext_vault.utils.vault.helpers.expand_pattern_lists",
             Mock(side_effect=lambda x, *args, **kwargs: [x]),
         ):
             with patch("salt.pillar.get_pillar", autospec=True) as get_pillar:
@@ -941,7 +963,7 @@ def test_get_policies_for_nonexisting_minions(config, expected):
     with patch("salt.utils.minions.get_minion_data", autospec=True) as get_minion_data:
         get_minion_data.return_value = (None, None, None)
         with patch(
-            "salt.utils.vault.helpers.expand_pattern_lists",
+            "saltext.saltext_vault.utils.vault.helpers.expand_pattern_lists",
             Mock(side_effect=lambda x, *args, **kwargs: [x]),
         ):
             res = vault._get_policies("test-minion", refresh_pillar=False)
@@ -981,7 +1003,7 @@ def test_get_metadata(metadata_patterns, expected, pillar):
     with patch("salt.utils.minions.get_minion_data", autospec=True) as get_minion_data:
         get_minion_data.return_value = (None, None, pillar)
         with patch(
-            "salt.utils.vault.helpers.expand_pattern_lists",
+            "saltext.saltext_vault.utils.vault.helpers.expand_pattern_lists",
             Mock(side_effect=lambda x, *args, **kwargs: [x]),
         ):
             res = vault._get_metadata("test-minion", metadata_patterns, refresh_pillar=False)
@@ -996,7 +1018,9 @@ def test_get_metadata_list():
     """
     with patch("salt.utils.minions.get_minion_data", autospec=True) as get_minion_data:
         get_minion_data.return_value = (None, None, None)
-        with patch("salt.utils.vault.helpers.expand_pattern_lists", autospec=True) as expand:
+        with patch(
+            "saltext.saltext_vault.utils.vault.helpers.expand_pattern_lists", autospec=True
+        ) as expand:
             expand.return_value = ["salt_role_foo", "salt_role_bar"]
             res = vault._get_metadata(
                 "test-minion",
@@ -1335,7 +1359,7 @@ def test_lookup_entity_by_alias(identity_api):
     """
     Ensure _lookup_entity_by_alias calls the API as expected.
     """
-    with patch("salt.runners.vault._lookup_role_id", return_value="test-role-id"):
+    with patch("saltext.saltext_vault.runners.vault._lookup_role_id", return_value="test-role-id"):
         vault._lookup_entity_by_alias("test-minion")
         identity_api.read_entity_by_alias.assert_called_once_with(
             alias="test-role-id", mount="salt-minions"
@@ -1347,7 +1371,7 @@ def test_lookup_entity_by_alias_failed(identity_api):
     """
     Ensure _lookup_entity_by_alias returns False if the lookup fails.
     """
-    with patch("salt.runners.vault._lookup_role_id", return_value="test-role-id"):
+    with patch("saltext.saltext_vault.runners.vault._lookup_role_id", return_value="test-role-id"):
         identity_api.read_entity_by_alias.side_effect = vaultutil.VaultNotFoundError
         res = vault._lookup_entity_by_alias("test-minion")
         assert res is False
@@ -1397,7 +1421,7 @@ def test_manage_entity_alias(identity_api):
     """
     Ensure _manage_entity_alias calls the API as expected.
     """
-    with patch("salt.runners.vault._lookup_role_id", return_value="test-role-id"):
+    with patch("saltext.saltext_vault.runners.vault._lookup_role_id", return_value="test-role-id"):
         vault._manage_entity_alias("test-minion")
         identity_api.write_entity_alias.assert_called_with(
             "salt_minion_test-minion", alias_name="test-role-id", mount="salt-minions"
@@ -1410,7 +1434,7 @@ def test_manage_entity_alias_raises_errors(identity_api):
     Ensure _manage_entity_alias raises exceptions.
     """
     identity_api.write_entity_alias.side_effect = vaultutil.VaultNotFoundError
-    with patch("salt.runners.vault._lookup_role_id", return_value="test-role-id"):
+    with patch("saltext.saltext_vault.runners.vault._lookup_role_id", return_value="test-role-id"):
         with pytest.raises(
             salt.exceptions.SaltRunnerError,
             match="Cannot create alias.* no entity found.",

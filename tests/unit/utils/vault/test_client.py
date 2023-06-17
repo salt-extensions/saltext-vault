@@ -614,8 +614,10 @@ def test_vault_client_verify_pem(server_config):
     The ``verify`` parameter to ``Session.request`` should be None in that case since
     it requires a local file path.
     """
-    with patch("salt.utils.vault.client.CACertHTTPSAdapter", autospec=True) as adapter:
-        with patch("salt.utils.vault.requests.Session", autospec=True) as session:
+    with patch(
+        "saltext.saltext_vault.utils.vault.client.CACertHTTPSAdapter", autospec=True
+    ) as adapter:
+        with patch("saltext.saltext_vault.utils.vault.requests.Session", autospec=True) as session:
             client = vclient.VaultClient(**server_config)
             adapter.assert_called_once_with(server_config["verify"])
             session.return_value.mount.assert_called_once_with(
