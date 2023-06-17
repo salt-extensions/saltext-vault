@@ -5,10 +5,10 @@ from unittest.mock import patch
 import pytest
 import requests
 import salt.modules.event
-import saltext.saltext_vault.utils.vault as vault
-import saltext.saltext_vault.utils.vault.auth as vauth
-import saltext.saltext_vault.utils.vault.client as vclient
-import saltext.saltext_vault.utils.vault.helpers as hlp
+from saltext.saltext_vault.utils import vault
+from saltext.saltext_vault.utils.vault import auth as vauth
+from saltext.saltext_vault.utils.vault import client as vclient
+from saltext.saltext_vault.utils.vault import helpers as hlp
 
 
 def _mock_json_response(data, status_code=200, reason=""):
@@ -105,23 +105,20 @@ def test_config(server_config, request):
 
     if request.param == "token":
         defaults["auth"]["token"] = "test-token"
-        return defaults
 
     if request.param == "wrapped_token":
         defaults["auth"]["method"] = "wrapped_token"
         defaults["auth"]["token"] = "test-wrapped-token"
-        return defaults
 
     if request.param == "approle":
         defaults["auth"]["method"] = "approle"
         defaults["auth"]["role_id"] = "test-role-id"
         defaults["auth"]["secret_id"] = "test-secret-id"
-        return defaults
 
     if request.param == "approle_no_secretid":
         defaults["auth"]["method"] = "approle"
         defaults["auth"]["role_id"] = "test-role-id"
-        return defaults
+    return defaults
 
 
 @pytest.fixture(params=["token", "approle"])
@@ -151,16 +148,13 @@ def test_remote_config(server_config, request):
 
     if request.param == "token":
         defaults["auth"]["token"] = "test-token"
-        return defaults
 
     if request.param == "wrapped_token":
         defaults["auth"]["method"] = "wrapped_token"
         defaults["auth"]["token"] = "test-wrapped-token"
-        return defaults
 
     if request.param == "token_changed":
         defaults["auth"]["token"] = "test-token-changed"
-        return defaults
 
     if request.param == "approle":
         defaults["auth"]["method"] = "approle"
@@ -168,12 +162,10 @@ def test_remote_config(server_config, request):
         # actual remote config would not contain secret_id, but
         # this is used for testing both from local and from remote
         defaults["auth"]["secret_id"] = "test-secret-id"
-        return defaults
 
     if request.param == "approle_no_secretid":
         defaults["auth"]["method"] = "approle"
         defaults["auth"]["role_id"] = "test-role-id"
-        return defaults
 
     # this happens when wrapped role_ids are merged by _query_master
     if request.param == "approle_wrapped_roleid":
@@ -181,7 +173,7 @@ def test_remote_config(server_config, request):
         defaults["auth"]["role_id"] = {"role_id": "test-role-id"}
         # actual remote config does not contain secret_id
         defaults["auth"]["secret_id"] = True
-        return defaults
+    return defaults
 
 
 @pytest.fixture
@@ -474,7 +466,7 @@ def req_unwrapping(wrapped_role_id_lookup_response, role_id_response, req):
 
 @pytest.fixture(params=["data"])
 def unauthd_client_mock(server_config, request):
-    client = Mock(spec=vclient.VaultClient)
+    client = Mock()
     client.get_config.return_value = server_config
     client.unwrap.return_value = {request.param: {"bar": "baz"}}
     yield client
@@ -490,14 +482,13 @@ def client(server_config, request, session):
         auth.is_renewable.return_value = True
         auth.is_valid.return_value = True
         auth.get_token.return_value = token
-        return vclient.AuthenticatedVaultClient(auth, **server_config, session=session)
     if request.param == "invalid_token":
         token = request.getfixturevalue(request.param)
         auth = Mock(spec=vauth.VaultTokenAuth)
         auth.is_renewable.return_value = True
         auth.is_valid.return_value = False
         auth.get_token.side_effect = vault.VaultAuthExpired
-        return vclient.AuthenticatedVaultClient(auth, **server_config, session=session)
+    return vclient.AuthenticatedVaultClient(auth, **server_config, session=session)
 
 
 @pytest.fixture
@@ -531,9 +522,11 @@ def events():
 
 @pytest.fixture(params=["MASTER", "MASTER_IMPERSONATING", "MINION_LOCAL", "MINION_REMOTE"])
 def salt_runtype(request):
-    runtype = Mock(spec=hlp._get_salt_run_type)
+    runtype = Mock(spec=hlp._get_salt_run_type)  # pylint: disable=protected-access
     runtype.return_value = getattr(hlp, f"SALT_RUNTYPE_{request.param}")
-    with patch("saltext.saltext_vault.utils.vault.helpers._get_salt_run_type", runtype):
+    with patch(
+        "saltext.saltext_vault.utils.vault.helpers._get_salt_run_type", runtype
+    ):  # pylint: disable=protected-access
         yield
 
 
