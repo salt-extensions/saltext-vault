@@ -1,6 +1,10 @@
-from pygments.lexer import bygroups, inherit
+from pygments.lexer import bygroups
+from pygments.lexer import inherit
 from pygments.lexers.configs import TerraformLexer
-from pygments.token import Keyword, Name, Punctuation, Whitespace
+from pygments.token import Keyword
+from pygments.token import Name
+from pygments.token import Punctuation
+from pygments.token import Whitespace
 
 
 class VaultPolicyLexer(TerraformLexer):
@@ -13,9 +17,7 @@ class VaultPolicyLexer(TerraformLexer):
             inherit,
             (
                 r"(path)(\s+)(\".*\")(\s+)(\{)",
-                bygroups(
-                    Keyword.Reserved, Whitespace, Name.Variable, Whitespace, Punctuation
-                ),
+                bygroups(Keyword.Reserved, Whitespace, Name.Variable, Whitespace, Punctuation),
             ),
         ],
     }

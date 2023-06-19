@@ -10,7 +10,6 @@ Configuration instructions are documented in the :ref:`execution module docs <va
 .. versionadded:: 2017.7.0
 
 """
-
 import difflib
 import logging
 
@@ -58,25 +57,19 @@ def policy_present(name, rules):
         return ret
 
     diff = "".join(
-        difflib.unified_diff(
-            (existing_rules or "").splitlines(True), rules.splitlines(True)
-        )
+        difflib.unified_diff((existing_rules or "").splitlines(True), rules.splitlines(True))
     )
 
     ret["changes"] = {name: diff}
 
     if __opts__["test"]:
         ret["result"] = None
-        ret["comment"] = "Policy would be " + (
-            "created" if existing_rules is None else "updated"
-        )
+        ret["comment"] = "Policy would be " + ("created" if existing_rules is None else "updated")
         return ret
 
     try:
         __salt__["vault.policy_write"](name, rules)
-        ret["comment"] = "Policy has been " + (
-            "created" if existing_rules is None else "updated"
-        )
+        ret["comment"] = "Policy has been " + ("created" if existing_rules is None else "updated")
         return ret
     except CommandExecutionError as err:
         return {

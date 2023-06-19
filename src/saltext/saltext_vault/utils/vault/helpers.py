@@ -2,7 +2,8 @@ import datetime
 import re
 import string
 
-from salt.exceptions import InvalidConfigError, SaltInvocationError
+from salt.exceptions import InvalidConfigError
+from salt.exceptions import SaltInvocationError
 
 SALT_RUNTYPE_MASTER = 0
 SALT_RUNTYPE_MASTER_IMPERSONATING = 1
@@ -70,9 +71,7 @@ def iso_to_timestamp(iso_time):
             tz_sign = -1 if tstr[tz_pos] == "-" else 1
             td = datetime.timedelta(hours=tz_hour, minutes=tz_minute)
             tz = datetime.timezone(tz_sign * td)
-        return int(
-            datetime.datetime(year, month, day, hour, minute, second, 0, tz).timestamp()
-        )
+        return int(datetime.datetime(year, month, day, hour, minute, second, 0, tz).timestamp())
 
 
 def expand_pattern_lists(pattern, **mappings):

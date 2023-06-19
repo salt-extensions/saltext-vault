@@ -4,10 +4,10 @@ import subprocess
 import time
 
 import pytest
-from pytestshellutils.utils.processes import ProcessResult
-
 import salt.utils.files
 import salt.utils.path
+from pytestshellutils.utils.processes import ProcessResult
+
 from tests.support.helpers import PatchedEnviron
 from tests.support.runtests import RUNTIME_VARS
 
@@ -119,9 +119,7 @@ def vault_disable_secret_engine(name):
 def vault_enable_auth_method(name, options=None, **kwargs):
     if options is None:
         options = []
-    cmd = (
-        ["auth", "enable"] + options + [name] + [f"{k}={v}" for k, v in kwargs.items()]
-    )
+    cmd = ["auth", "enable"] + options + [name] + [f"{k}={v}" for k, v in kwargs.items()]
     try:
         ret = _vault_cmd(cmd)
     except RuntimeError:
@@ -214,10 +212,7 @@ def vault_delete_secret(path, metadata=False):
         return True
 
     ret = _vault_cmd(["kv", "metadata", "delete", path], raw=True)
-    if (
-        ret.returncode != 0
-        and "Metadata not supported on KV Version 1" not in ret.stderr
-    ):
+    if ret.returncode != 0 and "Metadata not supported on KV Version 1" not in ret.stderr:
         log.debug("Failed to delete secret metadata at `%s`:\n%s", path, ret)
         pytest.fail(f"Failed to delete secret metadata at `{path}`")
     return True

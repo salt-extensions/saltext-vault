@@ -6,14 +6,13 @@ import logging
 import pytest
 from saltfactories.utils import random_string
 
+from tests.support.pytest.vault import vault_container_version
+from tests.support.pytest.vault import vault_delete_secret
+from tests.support.pytest.vault import vault_environ
+from tests.support.pytest.vault import vault_list_secrets
+from tests.support.pytest.vault import vault_write_secret
+
 # pylint: disable=unused-import
-from tests.support.pytest.vault import (
-    vault_container_version,
-    vault_delete_secret,
-    vault_environ,
-    vault_list_secrets,
-    vault_write_secret,
-)
 
 log = logging.getLogger(__name__)
 
@@ -36,9 +35,7 @@ def pillar_tree(vault_salt_master, vault_salt_minion):
     test_vault_pillar_sdb: sdb://sdbvault/secret/test/test_pillar_sdb/foo
     """
     top_tempfile = vault_salt_master.pillar_tree.base.temp_file("top.sls", top_file)
-    sdb_tempfile = vault_salt_master.pillar_tree.base.temp_file(
-        "sdb.sls", sdb_pillar_file
-    )
+    sdb_tempfile = vault_salt_master.pillar_tree.base.temp_file("sdb.sls", sdb_pillar_file)
 
     with top_tempfile, sdb_tempfile:
         yield
@@ -80,9 +77,7 @@ def vault_master_config(vault_port):
 
 @pytest.fixture(scope="class")
 def vault_salt_master(salt_factories, vault_port, vault_master_config):
-    factory = salt_factories.salt_master_daemon(
-        "vault-sdbmaster", defaults=vault_master_config
-    )
+    factory = salt_factories.salt_master_daemon("vault-sdbmaster", defaults=vault_master_config)
     with factory.started():
         yield factory
 
@@ -140,9 +135,7 @@ def test_sdb_kv_kvv2_path_local(salt_call_cli, vault_container_version):
     )
     assert ret.returncode == 0
     assert ret.data is True
-    ret = salt_call_cli.run(
-        "--local", "sdb.get", "sdb://sdbvault/kv-v2/test/test_sdb_local/foo"
-    )
+    ret = salt_call_cli.run("--local", "sdb.get", "sdb://sdbvault/kv-v2/test/test_sdb_local/foo")
     assert ret.data
     assert ret.data == "local"
 
@@ -161,9 +154,7 @@ def test_sdb_runner(salt_run_cli):
     )
     assert ret.returncode == 0
     assert ret.data is True
-    ret = salt_run_cli.run(
-        "sdb.get", uri="sdb://sdbvault/secret/test/test_sdb_runner/foo"
-    )
+    ret = salt_run_cli.run("sdb.get", uri="sdb://sdbvault/secret/test/test_sdb_runner/foo")
     assert ret.returncode == 0
     assert ret.stdout
     assert ret.stdout == "runner"
@@ -177,9 +168,7 @@ class TestSDB:
         )
         assert ret.returncode == 0
         assert ret.data is True
-        ret = vault_salt_call_cli.run(
-            "sdb.get", uri="sdb://sdbvault/secret/test/test_sdb/foo"
-        )
+        ret = vault_salt_call_cli.run("sdb.get", uri="sdb://sdbvault/secret/test/test_sdb/foo")
         assert ret.returncode == 0
         assert ret.data
         assert ret.data == "bar"
@@ -249,9 +238,7 @@ class TestGetOrSetHashSingleUseToken:
                 vault_delete_secret(f"{secret_path}/{secret_name}")
 
     @pytest.mark.usefixtures("get_or_set_absent")
-    @pytest.mark.parametrize(
-        "vault_container_version", ["1.3.1", "latest"], indirect=True
-    )
+    @pytest.mark.parametrize("vault_container_version", ["1.3.1", "latest"], indirect=True)
     def test_sdb_get_or_set_hash_single_use_token(self, vault_salt_call_cli):
         """
         Test that sdb.get_or_set_hash works with uses=1.

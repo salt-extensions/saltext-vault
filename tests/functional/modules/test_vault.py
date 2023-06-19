@@ -2,17 +2,16 @@ import logging
 
 import pytest
 
+from tests.support.pytest.vault import vault_container_version
+from tests.support.pytest.vault import vault_delete_policy
+from tests.support.pytest.vault import vault_delete_secret
+from tests.support.pytest.vault import vault_environ
+from tests.support.pytest.vault import vault_list_policies
+from tests.support.pytest.vault import vault_list_secrets
+from tests.support.pytest.vault import vault_read_policy
+from tests.support.pytest.vault import vault_write_policy
+
 # pylint: disable=unused-import
-from tests.support.pytest.vault import (
-    vault_container_version,
-    vault_delete_policy,
-    vault_delete_secret,
-    vault_environ,
-    vault_list_policies,
-    vault_list_secrets,
-    vault_read_policy,
-    vault_write_policy,
-)
 
 pytestmark = [
     pytest.mark.slow_test,
@@ -125,9 +124,7 @@ def test_write_read_secret(vault, vault_container_version):
 
 
 def test_write_raw_read_secret(vault, vault_container_version):
-    ret = vault.write_raw(
-        "secret/my/secret2", raw={"user2": "foo2", "password2": "bar2"}
-    )
+    ret = vault.write_raw("secret/my/secret2", raw={"user2": "foo2", "password2": "bar2"})
     if vault_container_version == "0.9.6":
         assert ret is True
         ret = vault.read_secret("secret/my/secret2")
