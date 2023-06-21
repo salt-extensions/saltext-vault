@@ -1637,7 +1637,7 @@ def test_get_config_recognizes_old_config(old, new):
                     ptr[cur] = {}
                 elif not parts:
                     ptr[cur] = val
-                return
+                    return
             ptr = ptr[cur]
         return ptr
 

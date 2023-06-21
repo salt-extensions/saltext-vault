@@ -287,7 +287,7 @@ def config(request, default_config):
                     ptr[cur] = {}
                 elif not parts:
                     ptr[cur] = val
-                return
+                    return
             if cur not in ptr:
                 if isinstance(default, Exception):
                     raise default()
