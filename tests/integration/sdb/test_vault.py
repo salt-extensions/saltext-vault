@@ -6,9 +6,7 @@ import logging
 import pytest
 from saltfactories.utils import random_string
 
-from tests.support.pytest.vault import vault_container_version
 from tests.support.pytest.vault import vault_delete_secret
-from tests.support.pytest.vault import vault_environ
 from tests.support.pytest.vault import vault_list_secrets
 from tests.support.pytest.vault import vault_write_secret
 

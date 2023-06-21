@@ -3,13 +3,11 @@ import pytest
 
 @pytest.fixture(scope="module")
 def pillar_tree(salt_master, salt_minion):
-    top_file = """
+    top_file = f"""
     base:
-      '{}':
+      '{salt_minion.id}':
         - sdb
-    """.format(
-        salt_minion.id
-    )
+    """
     sdb_pillar_file = """
     test_etcd_pillar_sdb: sdb://sdbetcd/secret/test/test_pillar_sdb/foo
     """
