@@ -134,9 +134,7 @@ class RuntimeVars:
     def __setattr__(self, name, value):
         if getattr(self, "_locked", False) is True:
             raise RuntimeError(
-                "After {} is locked, no additional data can be added to it".format(
-                    self.__class__.__name__
-                )
+                f"After {self.__class__.__name__} is locked, no additional data can be added to it"
             )
         if name in object.__getattribute__(self, "__self_attributes__"):
             object.__setattr__(self, name, value)
