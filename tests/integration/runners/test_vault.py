@@ -10,9 +10,7 @@ import pytest
 import salt.utils.files
 from saltfactories.utils import random_string
 
-from tests.support.pytest.vault import vault_container_version
 from tests.support.pytest.vault import vault_delete_secret
-from tests.support.pytest.vault import vault_environ
 from tests.support.pytest.vault import vault_write_secret
 
 # pylint: disable=unused-import
