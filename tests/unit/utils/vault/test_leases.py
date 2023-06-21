@@ -3,10 +3,10 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
-import saltext.saltext_vault.utils.vault as vault
-import saltext.saltext_vault.utils.vault.cache as vcache
-import saltext.saltext_vault.utils.vault.client as vclient
-import saltext.saltext_vault.utils.vault.leases as leases
+from saltext.saltext_vault.utils import vault
+from saltext.saltext_vault.utils.vault import cache as vcache
+from saltext.saltext_vault.utils.vault import client as vclient
+from saltext.saltext_vault.utils.vault import leases as vleases
 
 
 @pytest.fixture(autouse=True, params=[0])
@@ -43,13 +43,13 @@ def store(events):
     cache = Mock(spec=vcache.VaultLeaseCache)
     cache.exists.return_value = False
     cache.get.return_value = None
-    return leases.LeaseStore(client, cache, expire_events=events)
+    return vleases.LeaseStore(client, cache, expire_events=events)
 
 
 @pytest.fixture
 def store_valid(store, lease, lease_renewed_response):
     store.cache.exists.return_value = True
-    store.cache.get.return_value = leases.VaultLease(**lease)
+    store.cache.get.return_value = vleases.VaultLease(**lease)
     store.client.post.return_value = lease_renewed_response
     return store
 
@@ -84,7 +84,7 @@ def test_vault_lease_creation_time_normalization(creation_time):
         "creation_time": creation_time,
         "data": None,
     }
-    res = leases.VaultLease(**data)
+    res = vleases.VaultLease(**data)
     assert res.creation_time == 1661188581
 
 
@@ -110,7 +110,7 @@ def test_vault_lease_is_valid_accounts_for_time(duration, offset, expected):
         "expire_time": duration,
         "data": None,
     }
-    res = leases.VaultLease(**data)
+    res = vleases.VaultLease(**data)
     assert res.is_valid_for(offset) is expected
 
 
@@ -217,6 +217,10 @@ def test_vault_approle_secret_id_is_valid_accounts_for_num_uses(num_uses, uses, 
 
 
 class TestLeaseStore:
+    """
+    Vault Lease Tests
+    """
+
     def test_get_uncached_or_invalid(self, store):
         """
         Ensure uncached or invalid leases are reported as None.
@@ -302,7 +306,7 @@ class TestLeaseStore:
         valid_for,
         lease_renewed_response,
         lease_renewed_extended_response,
-    ):
+    ):  # pylint: disable-msg=too-many-arguments
         """
         Ensure that, if renew_increment was not set and the default period
         does not yield valid_for, a second renewal is attempted by valid_for.

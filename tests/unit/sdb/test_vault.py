@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 import salt.exceptions
-import saltext.saltext_vault.sdb.vault as vault
 import saltext.saltext_vault.utils.vault as vaultutil
+from saltext.saltext_vault.sdb import vault
 
 
 @pytest.fixture
@@ -77,7 +77,7 @@ def test_set_err():
     """
     Test that salt.sdb.vault.set_ raises CommandExecutionError from other exceptions
     """
-    with pytest.raises(salt.exceptions.CommandExecutionError, match="damn") as exc:
+    with pytest.raises(salt.exceptions.CommandExecutionError, match="damn"):
         vault.set_("sdb://myvault/path/to/foo/bar", "foo")
 
 
@@ -133,5 +133,5 @@ def test_get_err():
     """
     Test that salt.sdb.vault.get raises CommandExecutionError from other exceptions
     """
-    with pytest.raises(salt.exceptions.CommandExecutionError, match="damn") as exc:
+    with pytest.raises(salt.exceptions.CommandExecutionError, match="damn"):
         vault.get("sdb://myvault/path/to/foo/bar")

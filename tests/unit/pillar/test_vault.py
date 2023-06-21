@@ -4,8 +4,8 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
-import saltext.saltext_vault.pillar.vault as vault
 import saltext.saltext_vault.utils.vault as vaultutil
+from saltext.saltext_vault.pillar import vault
 
 
 @pytest.fixture
@@ -100,7 +100,9 @@ def test_get_paths(pattern, expected):
     previous_pillar = {
         "role": "foo",
     }
-    result = vault._get_paths(pattern, "test-minion", previous_pillar)
+    result = vault._get_paths(  # pylint: disable=protected-access
+        pattern, "test-minion", previous_pillar
+    )
     assert result == expected
 
 

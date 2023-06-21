@@ -10,9 +10,9 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
-import saltext.saltext_vault.runners.vault as vault
 import saltext.saltext_vault.utils.vault as vaultutil
-import saltext.saltext_vault.utils.vault.client as vclient
+from saltext.saltext_vault.runners import vault
+from saltext.saltext_vault.utils.vault import client as vclient
 
 pytestmark = [
     pytest.mark.usefixtures("validate_sig", "policies"),
@@ -142,7 +142,7 @@ def test_generate_token_exception(client):
     assert result["error"] == "Exception: Test Exception Reason"
 
 
-def test_generate_token_no_matching_policies(client, policies):
+def test_generate_token_no_matching_policies(policies):
     policies.return_value = []
     result = vault.generate_token("test-minion", "signature")
     assert isinstance(result, dict)

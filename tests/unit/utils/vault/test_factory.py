@@ -6,15 +6,19 @@ from unittest.mock import patch
 
 import pytest
 import salt.exceptions
-import saltext.saltext_vault.utils.vault as vault
-import saltext.saltext_vault.utils.vault.cache as vcache
-import saltext.saltext_vault.utils.vault.client as vclient
-import saltext.saltext_vault.utils.vault.factory as factory
+from saltext.saltext_vault.utils import vault
+from saltext.saltext_vault.utils.vault import cache as vcache
+from saltext.saltext_vault.utils.vault import client as vclient
+from saltext.saltext_vault.utils.vault import factory as vfactory
 
-from tests.unit.utils.vault.conftest import _mock_json_response
+from tests.unit.utils.vault.conftest import _mock_json_response  # pylint: disable=import-error
 
 
 class TestGetAuthdClient:
+    """
+    Tests for Vault Get Authd Client
+    """
+
     @pytest.fixture
     def client_valid(self):
         client = Mock(spec=vclient.AuthenticatedVaultClient)
@@ -217,7 +221,7 @@ class TestGetAuthdClient:
         """
 
         def raise_unwrap(*args, **kwargs):
-            raise factory.VaultUnwrapException("foo", "bar", "vaulturl", "namespace", "verify")
+            raise vfactory.VaultUnwrapException("foo", "bar", "vaulturl", "namespace", "verify")
 
         with patch(
             "saltext.saltext_vault.utils.vault.factory._get_event",
@@ -228,7 +232,7 @@ class TestGetAuthdClient:
                 "saltext.saltext_vault.utils.vault.factory._build_authd_client", autospec=True
             ) as build:
                 build.side_effect = raise_unwrap
-                with pytest.raises(factory.VaultUnwrapException):
+                with pytest.raises(vfactory.VaultUnwrapException):
                     vault.get_authd_client({}, {})
             events.assert_called_once_with(
                 data={
@@ -270,7 +274,7 @@ class TestGetAuthdClient:
 
     @pytest.mark.usefixtures("build_renewable_max_ttl")
     def test_get_authd_client_renewable_token_max_ttl_insufficient(
-        self, build_renewable_max_ttl, clear_cache
+        self, build_renewable_max_ttl, clear_cache  # pylint: disable=unused-argument
     ):
         """
         Ensure minimum_ttl is respected when a token can be renewed, but the
@@ -282,6 +286,10 @@ class TestGetAuthdClient:
 
 
 class TestBuildAuthdClient:
+    """
+    Tests for Vault Build Authd Client
+    """
+
     @pytest.fixture(autouse=True)
     def cbank(self):
         with patch(
@@ -317,7 +325,7 @@ class TestBuildAuthdClient:
     def cached(self, token_auth, secret_id_response, request):
         cached_what = request.param
 
-        def _cache(context, cbank, ckey, *args, **kwargs):
+        def _cache(context, cbank, ckey, *args, **kwargs):  # pylint: disable=unused-argument
             token = Mock(spec=vcache.VaultAuthCache)
             token.get.return_value = None
             approle = Mock(spec=vcache.VaultAuthCache)
@@ -326,7 +334,7 @@ class TestBuildAuthdClient:
                 token.get.return_value = vault.VaultToken(**token_auth["auth"])
             if cached_what in ["secret_id", "both"]:
                 approle.get.return_value = vault.VaultSecretId(**secret_id_response["data"])
-            return token if ckey == factory.TOKEN_CKEY else approle
+            return token if ckey == vfactory.TOKEN_CKEY else approle
 
         cache = MagicMock(spec=vcache.VaultAuthCache)
         cache.side_effect = _cache
@@ -343,12 +351,17 @@ class TestBuildAuthdClient:
         Ensure credentials are only requested if necessary.
         """
         conn_config.return_value = (test_remote_config, None, Mock())
-        client, config = factory._build_authd_client({}, {})
+        (
+            client,
+            config,  # pylint: disable=unused-variable
+        ) = vfactory._build_authd_client(  # pylint: disable=protected-access, unused-variable
+            {}, {}
+        )
         assert client.token_valid(remote=False)
         if test_remote_config["auth"]["method"] == "approle":
             if (
                 not test_remote_config["auth"]["secret_id"]
-                or cached(None, None, factory.TOKEN_CKEY).get()
+                or cached(None, None, vfactory.TOKEN_CKEY).get()
                 or cached(None, None, "secret_id").get()
             ):
                 # In case a secret_id is not necessary or only a cached token is available,
@@ -359,6 +372,10 @@ class TestBuildAuthdClient:
 
 
 class TestGetConnectionConfig:
+    """
+    Tests for Vault GetConnectionConfig
+    """
+
     @pytest.fixture
     def cached(self, test_remote_config):
         cache = Mock(spec=vcache.VaultConfigCache)
@@ -403,21 +420,31 @@ class TestGetConnectionConfig:
         ],
         indirect=["salt_runtype"],
     )
-    def test_get_connection_config_local(self, salt_runtype, force_local, local):
+    def test_get_connection_config_local(
+        self, salt_runtype, force_local, local
+    ):  # pylint: disable=unused-argument
         """
         Ensure the local configuration is used when
         a) running on master
         b) running on master impersonating a minion when called from runner
         c) running on minion in local mode
         """
-        factory._get_connection_config("vault", {}, {}, force_local=force_local)
+        vfactory._get_connection_config(  # pylint: disable=protected-access
+            "vault", {}, {}, force_local=force_local
+        )  # pylint: disable=protected-access
         local.assert_called_once()
 
     def test_get_connection_config_cached(self, cached, remote, test_remote_config):
         """
         Ensure cache is respected
         """
-        res, embedded_token, _ = factory._get_connection_config("vault", {}, {})
+        (
+            res,
+            embedded_token,
+            _,
+        ) = vfactory._get_connection_config(  # pylint: disable=protected-access
+            "vault", {}, {}
+        )  # pylint: disable=protected-access
         assert res == test_remote_config
         assert embedded_token is None
         cached.store.assert_not_called()
@@ -428,7 +455,13 @@ class TestGetConnectionConfig:
         Ensure uncached configuration is treated as expected, especially
         that the embedded token is removed and returned separately.
         """
-        res, embedded_token, _ = factory._get_connection_config("vault", {}, {})
+        (
+            res,
+            embedded_token,
+            _,
+        ) = vfactory._get_connection_config(  # pylint: disable=protected-access
+            "vault", {}, {}
+        )
         uncached.store.assert_called_once()
         remote.assert_called_once()
         data, _ = remote()
@@ -453,9 +486,11 @@ class TestGetConnectionConfig:
                 salt.exceptions.InvalidConfigError,
                 match=".*config_location must be either local or master.*",
             ):
-                factory._get_connection_config("vault", opts, {})
+                vfactory._get_connection_config(  # pylint: disable=protected-access
+                    "vault", opts, {}
+                )
         else:
-            factory._get_connection_config("vault", opts, {})
+            vfactory._get_connection_config("vault", opts, {})  # pylint: disable=protected-access
             if called:
                 remote.assert_called()
             else:
@@ -468,7 +503,13 @@ class TestGetConnectionConfig:
         updated_remote_config = copy.deepcopy(test_remote_config)
         updated_remote_config["cache"]["clear_on_unauthorized"] = False
         remote.return_value = (updated_remote_config, remote.return_value[1])
-        res, embedded_token, _ = factory._get_connection_config("vault", {}, {}, update=True)
+        (
+            res,
+            embedded_token,
+            _,
+        ) = vfactory._get_connection_config(  # pylint: disable=protected-access
+            "vault", {}, {}, update=True
+        )
         assert res == updated_remote_config
         assert embedded_token is None
         remote.assert_called_once_with("get_config", {}, issue_params=None, config_only=True)
@@ -485,7 +526,13 @@ class TestGetConnectionConfig:
         updated_remote_config["server"]["url"] = "https://vault.new-url.com"
         remote.return_value = (updated_remote_config, remote.return_value[1])
         with pytest.raises(vault.VaultConfigExpired):
-            res, embedded_token, _ = factory._get_connection_config("vault", {}, {}, update=True)
+            (
+                res,  # pylint: disable=unused-variable
+                embedded_token,  # pylint: disable=unused-variable
+                _,
+            ) = vfactory._get_connection_config(  # pylint: disable=protected-access
+                "vault", {}, {}, update=True
+            )
         self._assert_not_updated(remote, cached)
 
     @pytest.mark.parametrize("test_remote_config", ["token"], indirect=True)
@@ -499,7 +546,13 @@ class TestGetConnectionConfig:
         updated_remote_config["auth"]["role_id"] = "test-role-id"
         remote.return_value = (updated_remote_config, remote.return_value[1])
         with pytest.raises(vault.VaultConfigExpired):
-            res, embedded_token, _ = factory._get_connection_config("vault", {}, {}, update=True)
+            (
+                res,  # pylint: disable=unused-variable
+                embedded_token,  # pylint: disable=unused-variable
+                _,
+            ) = vfactory._get_connection_config(  # pylint: disable=protected-access
+                "vault", {}, {}, update=True
+            )
         self._assert_not_updated(remote, cached)
 
     @pytest.mark.parametrize("test_remote_config", ["token"], indirect=True)
@@ -512,8 +565,14 @@ class TestGetConnectionConfig:
         updated_remote_config["cache"]["backend"] = "disk"
         remote.return_value = (updated_remote_config, remote.return_value[1])
         with pytest.raises(vault.VaultConfigExpired):
-            res, embedded_token, _ = factory._get_connection_config("vault", {}, {}, update=True)
-        self._assert_not_updated(remote, cached)
+            (
+                res,  # pylint: disable=unused-variable
+                embedded_token,  # pylint: disable=unused-variable
+                _,
+            ) = vfactory._get_connection_config(  # pylint: disable=protected-access
+                "vault", {}, {}, update=True
+            )
+            self._assert_not_updated(remote, cached)
 
     @pytest.mark.parametrize("test_remote_config", ["approle"], indirect=True)
     def test_get_connection_config_update_role_id(self, cached, remote, test_remote_config):
@@ -525,7 +584,13 @@ class TestGetConnectionConfig:
         updated_remote_config["auth"]["role_id"] = "new_role"
         remote.return_value = (updated_remote_config, remote.return_value[1])
         with pytest.raises(vault.VaultConfigExpired):
-            res, embedded_token, _ = factory._get_connection_config("vault", {}, {}, update=True)
+            (
+                res,  # pylint: disable=unused-variable
+                embedded_token,  # pylint: disable=unused-variable
+                _,
+            ) = vfactory._get_connection_config(  # pylint: disable=protected-access
+                "vault", {}, {}, update=True
+            )
         self._assert_not_updated(remote, cached)
 
     @pytest.mark.parametrize("test_remote_config", ["approle"], indirect=True)
@@ -539,7 +604,13 @@ class TestGetConnectionConfig:
         updated_remote_config["auth"]["secret_id"] = False
         remote.return_value = (updated_remote_config, remote.return_value[1])
         with pytest.raises(vault.VaultConfigExpired):
-            res, embedded_token, _ = factory._get_connection_config("vault", {}, {}, update=True)
+            (
+                res,  # pylint: disable=unused-variable
+                embedded_token,  # pylint: disable=unused-variable
+                _,
+            ) = vfactory._get_connection_config(  # pylint: disable=protected-access
+                "vault", {}, {}, update=True
+            )
         self._assert_not_updated(remote, cached)
 
     def _assert_not_updated(self, remote, cached):
@@ -549,6 +620,10 @@ class TestGetConnectionConfig:
 
 
 class TestFetchSecretId:
+    """
+    Tests for Vault Fetch Secret Id
+    """
+
     @pytest.fixture
     def cached(self, secret_id_response):
         cache = Mock(spec=vcache.VaultAuthCache)
@@ -597,7 +672,7 @@ class TestFetchSecretId:
     )
     def test_fetch_secret_id_local(
         self,
-        salt_runtype,
+        salt_runtype,  # pylint: disable=unused-argument
         force_local,
         uncached,
         test_remote_config,
@@ -614,7 +689,7 @@ class TestFetchSecretId:
         """
         test_remote_config["auth"]["secret_id"] = secret_id
         unauthd_client_mock.unwrap.return_value = secret_id_response
-        res = factory._fetch_secret_id(
+        res = vfactory._fetch_secret_id(  # pylint: disable=protected-access
             test_remote_config,
             {},
             uncached,
@@ -641,7 +716,9 @@ class TestFetchSecretId:
         """
         Ensure cache is respected
         """
-        res = factory._fetch_secret_id(test_remote_config, {}, cached, unauthd_client_mock)
+        res = vfactory._fetch_secret_id(  # pylint: disable=protected-access
+            test_remote_config, {}, cached, unauthd_client_mock
+        )
         assert res == cached.get()
         cached.store.assert_not_called()
         remote.assert_not_called()
@@ -653,7 +730,9 @@ class TestFetchSecretId:
         """
         Ensure requested credentials are cached and returned as data objects
         """
-        res = factory._fetch_secret_id(test_remote_config, {}, uncached, unauthd_client_mock)
+        res = vfactory._fetch_secret_id(  # pylint: disable=protected-access
+            test_remote_config, {}, uncached, unauthd_client_mock
+        )
         uncached.store.assert_called_once()
         remote.assert_called_once()
         data, _ = remote()
@@ -680,7 +759,9 @@ class TestFetchSecretId:
             },
             unauthd_client_mock,
         )
-        res = factory._fetch_secret_id(test_remote_config, {}, uncached, unauthd_client_mock)
+        res = vfactory._fetch_secret_id(  # pylint: disable=protected-access
+            test_remote_config, {}, uncached, unauthd_client_mock
+        )
         uncached.store.assert_not_called()
         remote.assert_called_once()
         data, _ = remote()
@@ -711,9 +792,13 @@ class TestFetchSecretId:
                 salt.exceptions.InvalidConfigError,
                 match=".*config_location must be either local or master.*",
             ):
-                factory._fetch_secret_id(test_remote_config, opts, uncached, unauthd_client_mock)
+                vfactory._fetch_secret_id(  # pylint: disable=protected-access
+                    test_remote_config, opts, uncached, unauthd_client_mock
+                )
         else:
-            factory._fetch_secret_id(test_remote_config, opts, uncached, unauthd_client_mock)
+            vfactory._fetch_secret_id(  # pylint: disable=protected-access
+                test_remote_config, opts, uncached, unauthd_client_mock
+            )
             if called:
                 remote.assert_called()
             else:
@@ -721,6 +806,10 @@ class TestFetchSecretId:
 
 
 class TestFetchToken:
+    """
+    Tests for Vault Fetch Token
+    """
+
     @pytest.fixture
     def cached(self, token_auth):
         cache = Mock(spec=vcache.VaultAuthCache)
@@ -771,7 +860,7 @@ class TestFetchToken:
     )
     def test_fetch_token_local(
         self,
-        salt_runtype,
+        salt_runtype,  # pylint: disable=unused-argument
         force_local,
         uncached,
         test_remote_config,
@@ -794,7 +883,7 @@ class TestFetchToken:
         unauthd_client_mock.token_lookup.return_value = _mock_json_response(
             token_lookup_self_response, status_code=200
         )
-        res = factory._fetch_token(
+        res = vfactory._fetch_token(  # pylint: disable=protected-access
             test_remote_config,
             {},
             uncached,
@@ -841,7 +930,7 @@ class TestFetchToken:
     )
     def test_fetch_token_local_cached_changed(
         self,
-        salt_runtype,
+        salt_runtype,  # pylint: disable=unused-argument
         force_local,
         cached,
         test_remote_config,
@@ -857,7 +946,7 @@ class TestFetchToken:
         unauthd_client_mock.token_lookup.return_value = _mock_json_response(
             token_lookup_self_response, status_code=200
         )
-        res = factory._fetch_token(
+        res = vfactory._fetch_token(  # pylint: disable=protected-access
             test_remote_config,
             {},
             cached,
@@ -881,7 +970,9 @@ class TestFetchToken:
         """
         Ensure that cache is respected
         """
-        res = factory._fetch_token(test_remote_config, {}, cached, unauthd_client_mock)
+        res = vfactory._fetch_token(  # pylint: disable=protected-access
+            test_remote_config, {}, cached, unauthd_client_mock
+        )
         assert res == cached.get()
         cached.store.assert_not_called()
         remote.assert_not_called()
@@ -895,7 +986,7 @@ class TestFetchToken:
         are used when no cached token is available
         """
         test_remote_config["auth"].pop("token", None)
-        res = factory._fetch_token(
+        res = vfactory._fetch_token(  # pylint: disable=protected-access
             test_remote_config,
             {},
             uncached,
@@ -913,7 +1004,9 @@ class TestFetchToken:
         are used when no cached token is available
         """
         test_remote_config["auth"].pop("token", None)
-        res = factory._fetch_token(test_remote_config, {}, uncached, unauthd_client_mock)
+        res = vfactory._fetch_token(  # pylint: disable=protected-access
+            test_remote_config, {}, uncached, unauthd_client_mock
+        )
         uncached.store.assert_called_once()
         remote.assert_called_once()
         assert res == vault.VaultToken(**remote.return_value[0]["auth"])
@@ -936,7 +1029,9 @@ class TestFetchToken:
             {"auth": token_auth["auth"], "server": server_config},
             unauthd_client_mock,
         )
-        res = factory._fetch_token(test_remote_config, {}, uncached, unauthd_client_mock)
+        res = vfactory._fetch_token(  # pylint: disable=protected-access
+            test_remote_config, {}, uncached, unauthd_client_mock
+        )
         uncached.store.assert_not_called()
         remote.assert_called_once()
         assert res == vault.VaultToken(**remote.return_value[0]["auth"])
@@ -968,7 +1063,7 @@ class TestFetchToken:
                 salt.exceptions.InvalidConfigError,
                 match=".*config_location must be either local or master.*",
             ):
-                factory._fetch_token(
+                vfactory._fetch_token(  # pylint: disable=protected-access
                     test_remote_config,
                     opts,
                     uncached,
@@ -976,7 +1071,7 @@ class TestFetchToken:
                     embedded_token=embedded_token,
                 )
         else:
-            factory._fetch_token(
+            vfactory._fetch_token(  # pylint: disable=protected-access
                 test_remote_config,
                 opts,
                 uncached,
@@ -990,6 +1085,10 @@ class TestFetchToken:
 
 
 class TestQueryMaster:
+    """
+    Tests for Vault Query Master
+    """
+
     @pytest.fixture(autouse=True)
     def publish_runner(self):
         with patch("salt.modules.publish.runner", autospec=True) as runner:
@@ -1053,7 +1152,7 @@ class TestQueryMaster:
         minion - publish.runner
         master impersonating - saltutil.runner
         """
-        out, _ = factory._query_master("func", opts)
+        out, _ = vfactory._query_master("func", opts)  # pylint: disable=protected-access
         assert out == {"success": True}
         if expected == "saltutil":
             publish_runner.assert_not_called()
@@ -1071,10 +1170,10 @@ class TestQueryMaster:
         publish_runner.return_value = saltutil_runner.return_value = response
         if not response:
             with pytest.raises(vault.VaultConfigExpired):
-                factory._query_master("func", opts)
+                vfactory._query_master("func", opts)  # pylint: disable=protected-access
         else:
             with pytest.raises(salt.exceptions.CommandExecutionError):
-                factory._query_master("func", opts)
+                vfactory._query_master("func", opts)  # pylint: disable=protected-access
 
     @pytest.mark.parametrize(
         "response", [{"expire_cache": True}, {"error": {"error"}, "expire_cache": True}]
@@ -1087,7 +1186,7 @@ class TestQueryMaster:
         """
         publish_runner.return_value = saltutil_runner.return_value = response
         with pytest.raises(vault.VaultConfigExpired):
-            factory._query_master("func", opts)
+            vfactory._query_master("func", opts)  # pylint: disable=protected-access
 
     @pytest.mark.parametrize(
         "url,verify,namespace",
@@ -1103,7 +1202,7 @@ class TestQueryMaster:
         url,
         verify,
         namespace,
-        server_config,
+        server_config,  # pylint: disable=unused-argument
         wrapped_role_id_response,
         unauthd_client_mock,
         unwrap_client,
@@ -1122,7 +1221,9 @@ class TestQueryMaster:
         }
         publish_runner.return_value = saltutil_runner.return_value = ret
         with pytest.raises(vault.VaultConfigExpired):
-            factory._query_master("func", opts, unwrap_client=unauthd_client_mock)
+            vfactory._query_master(  # pylint: disable=protected-access
+                "func", opts, unwrap_client=unauthd_client_mock
+            )
             assert "Mismatch of cached and reported server data detected" in caplog.text
             # this one gets discarded because it's outdated
             unauthd_client_mock.unwrap.assert_not_called()
@@ -1163,7 +1264,9 @@ class TestQueryMaster:
 
         unauthd_client_mock.get_config.return_value = expected_server
         unauthd_client_mock.unwrap.return_value = role_id_response
-        ret, _ = factory._query_master("func", opts, unwrap_client=unauthd_client_mock)
+        ret, _ = vfactory._query_master(  # pylint: disable=protected-access
+            "func", opts, unwrap_client=unauthd_client_mock
+        )
         assert "Mismatch of cached and reported server data detected" not in caplog.text
         # ensure the client was not replaced
         unwrap_client.assert_not_called()
@@ -1198,7 +1301,9 @@ class TestQueryMaster:
             "server": server_config,
             "wrap_info": wrapped_role_id_response["wrap_info"],
         }
-        out, _ = factory._query_master("func", opts, unwrap_client=unauthd_client_mock)
+        out, _ = vfactory._query_master(  # pylint: disable=protected-access
+            "func", opts, unwrap_client=unauthd_client_mock
+        )  # pylint: disable=protected-access
         assert "wrap_info" not in out
         assert key in out
         assert out[key] == {"bar": "baz"}
@@ -1222,7 +1327,9 @@ class TestQueryMaster:
             "wrap_info_nested": ["auth:role_id"],
             "auth": {"role_id": {"wrap_info": wrapped_role_id_response["wrap_info"]}},
         }
-        out, _ = factory._query_master("func", opts, unwrap_client=unauthd_client_mock)
+        out, _ = vfactory._query_master(  # pylint: disable=protected-access
+            "func", opts, unwrap_client=unauthd_client_mock
+        )  # pylint: disable=protected-access
         assert "wrap_info_nested" not in out
         assert "wrap_info" not in out["auth"]["role_id"]
         assert out["auth"]["role_id"] == {"bar": "baz"}
@@ -1245,7 +1352,7 @@ class TestQueryMaster:
             "misc_data": {misc_data: "merged"},
         }
         publish_runner.return_value = saltutil_runner.return_value = copy.deepcopy(response)
-        out, _ = factory._query_master("func", opts)
+        out, _ = vfactory._query_master("func", opts)  # pylint: disable=protected-access
         assert misc_data in out[key]
         assert "misc_data" not in out
         if misc_data in secret_id_response["data"]:
@@ -1271,7 +1378,7 @@ class TestQueryMaster:
             "misc_data": {misc_data: "merged"},
         }
         publish_runner.return_value = saltutil_runner.return_value = copy.deepcopy(response)
-        out, _ = factory._query_master("func", opts)
+        out, _ = vfactory._query_master("func", opts)  # pylint: disable=protected-access
         nested_key = misc_data.split(":")[1]
         assert nested_key in out[key]["nested"]
         assert "misc_data" not in out
@@ -1282,6 +1389,10 @@ class TestQueryMaster:
 
 
 class TestBuildRevocationClient:
+    """
+    Tests for Vault BVuild Revocation Client
+    """
+
     @pytest.fixture(params=[False, True], autouse=True)
     def config(self, test_remote_config, request):
         cache = Mock(spec=vcache.VaultConfigCache)
@@ -1308,13 +1419,13 @@ class TestBuildRevocationClient:
 
     def test_build_revocation_client_never_calls_master_for_config(self):
         with patch("saltext.saltext_vault.utils.vault.factory._query_master") as query:
-            factory._build_revocation_client({}, {})
+            vfactory._build_revocation_client({}, {})  # pylint: disable=protected-access
             query.assert_not_called()
 
     @pytest.mark.parametrize("config", [True], indirect=True)
     def test_build_revocation_client_never_calls_master_for_token(self, token, test_remote_config):
         with patch("saltext.saltext_vault.utils.vault.factory._query_master") as query:
-            res = factory._build_revocation_client({}, {})
+            res = vfactory._build_revocation_client({}, {})  # pylint: disable=protected-access
             query.assert_not_called()
             if token.return_value.get.return_value is not None:
                 assert isinstance(res[0], vclient.AuthenticatedVaultClient)
@@ -1353,21 +1464,23 @@ def test_clear_cache(ckey, connection, session, cache_factory):
 @pytest.mark.parametrize("ckey", ["token", None])
 @pytest.mark.parametrize("connection", [True, False])
 @pytest.mark.parametrize("session", [True, False])
-def test_clear_cache_clears_client_from_context(ckey, connection, session, cache_factory):
+def test_clear_cache_clears_client_from_context(
+    ckey, connection, session, cache_factory
+):  # pylint: disable=unused-argument
     """
     Ensure the cached client is removed when the connection cache is altered only
     """
     cbank = "vault/connection"
-    context = {cbank: {factory.CLIENT_CKEY: "foo"}}
+    context = {cbank: {vfactory.CLIENT_CKEY: "foo"}}
     with patch(
         "saltext.saltext_vault.utils.vault.factory._build_revocation_client", autospec=True
     ) as revoc:
         revoc.return_value = (None, None)
         vault.clear_cache({}, context, ckey=ckey, connection=connection, session=session)
     if session or (not connection and ckey):
-        assert factory.CLIENT_CKEY in context.get(cbank, {})
+        assert vfactory.CLIENT_CKEY in context.get(cbank, {})
     else:
-        assert factory.CLIENT_CKEY not in context.get(cbank, {})
+        assert vfactory.CLIENT_CKEY not in context.get(cbank, {})
 
 
 @pytest.mark.parametrize(
@@ -1443,7 +1556,7 @@ def test_use_local_config(test_config, expected_config, expected_token):
     with patch(
         "saltext.saltext_vault.utils.vault.factory.parse_config", Mock(return_value=test_config)
     ):
-        output, token, _ = factory._use_local_config({})
+        output, token, _ = vfactory._use_local_config({})  # pylint: disable=protected-access
         assert output == expected_config
         assert token == expected_token
 
@@ -1468,7 +1581,7 @@ def test_parse_config_ensures_necessary_values(config, expected):
     Ensure that parse_config validates the configuration
     """
     with pytest.raises(salt.exceptions.InvalidConfigError, match=f".*{expected}.*"):
-        factory.parse_config(config)
+        vfactory.parse_config(config)
 
 
 @pytest.mark.parametrize(
@@ -1483,7 +1596,7 @@ def test_parse_config_respects_local_verify(opts):
     Ensure locally configured verify values are respected.
     """
     testval = "/etc/ssl/certs/ca-certificates.crt"
-    ret = factory.parse_config({"server": {"verify": "default"}}, validate=False, opts=opts)
+    ret = vfactory.parse_config({"server": {"verify": "default"}}, validate=False, opts=opts)
     assert ret["server"]["verify"] == testval
 
 
@@ -1512,7 +1625,9 @@ def test_get_config_recognizes_old_config(old, new):
     and translates it to new equivalents correctly.
     """
 
-    def rec(config, path, val=None):
+    def rec(  # pylint: disable=inconsistent-return-statements
+        config, path, val=None
+    ):  # pylint: disable=too-many-arguments, duplicate-code, inconsistent-return-statements
         ptr = config
         parts = path.split(":")
         while parts:
@@ -1522,7 +1637,7 @@ def test_get_config_recognizes_old_config(old, new):
                     ptr[cur] = {}
                 elif not parts:
                     ptr[cur] = val
-                    return
+                return
             ptr = ptr[cur]
         return ptr
 
@@ -1537,5 +1652,5 @@ def test_get_config_recognizes_old_config(old, new):
 
     oldval = "oldval" if old != "policies" else ["oldval"]
     rec(config, old, oldval)
-    parsed = factory.parse_config(config)
+    parsed = vfactory.parse_config(config)
     assert rec(parsed, new) == oldval

@@ -2,8 +2,8 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
-import saltext.saltext_vault.modules.vault as vaultexe
-import saltext.saltext_vault.states.vault as vault
+from saltext.saltext_vault.modules import vault as vaultexe
+from saltext.saltext_vault.states import vault
 
 
 @pytest.fixture

@@ -2,11 +2,11 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
-import saltext.saltext_vault.utils.vault as vault
-import saltext.saltext_vault.utils.vault.auth as vauth
-import saltext.saltext_vault.utils.vault.cache as vcache
-import saltext.saltext_vault.utils.vault.client as vclient
-import saltext.saltext_vault.utils.vault.leases as vleases
+from saltext.saltext_vault.utils import vault
+from saltext.saltext_vault.utils.vault import auth as vauth
+from saltext.saltext_vault.utils.vault import cache as vcache
+from saltext.saltext_vault.utils.vault import client as vclient
+from saltext.saltext_vault.utils.vault import leases as vleases
 
 
 @pytest.fixture
@@ -265,7 +265,7 @@ def test_approle_auth_get_token_login(approle, mount, client, token_store_empty_
 @pytest.mark.parametrize("num_uses", [0, 1, 10])
 def test_approle_auth_used_num_uses(
     token_store_empty_first, approle, client, uncached, num_uses, token
-):
+):  # pylint: disable-msg=too-many-arguments
     """
     Ensure that cache writes for use count are only done when
     num_uses is not 0 (= unlimited)

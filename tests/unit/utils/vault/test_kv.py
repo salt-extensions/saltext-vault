@@ -3,12 +3,12 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
-import saltext.saltext_vault.utils.vault as vault
-import saltext.saltext_vault.utils.vault.cache as vcache
-import saltext.saltext_vault.utils.vault.client as vclient
-import saltext.saltext_vault.utils.vault.kv as vkv
+from saltext.saltext_vault.utils import vault
+from saltext.saltext_vault.utils.vault import cache as vcache
+from saltext.saltext_vault.utils.vault import client as vclient
+from saltext.saltext_vault.utils.vault import kv as vkv
 
-from tests.unit.utils.vault.conftest import _mock_json_response
+from tests.unit.utils.vault.conftest import _mock_json_response  # pylint: disable=import-error
 
 
 @pytest.fixture
@@ -243,7 +243,7 @@ def kvv2(kvv2_info, kvv2_response, metadata_nocache, kv_list_response):
 @pytest.mark.parametrize("clear_unauthd,token_valid", [(False, False), (True, False), (True, True)])
 def test_kv_wrapper_handles_perm_exceptions(
     wrapper, param, result, test_remote_config, clear_unauthd, token_valid
-):
+):  # pylint: disable-msg=too-many-arguments
     """
     Test that *_kv wrappers retry with a new client if
       a) the current configuration might be invalid
@@ -259,11 +259,11 @@ def test_kv_wrapper_handles_perm_exceptions(
     test_remote_config["cache"]["clear_on_unauthorized"] = clear_unauthd
     with patch("saltext.saltext_vault.utils.vault.get_kv", autospec=True) as getkv:
         with patch("saltext.saltext_vault.utils.vault.clear_cache", autospec=True) as cache:
-            kv = Mock(spec=vkv.VaultKV)
-            kv.client = Mock(spec=vclient.AuthenticatedVaultClient)
-            kv.client.token_valid.return_value = token_valid
-            getattr(kv, wrapper.rstrip("_kv")).side_effect = (exc, result)
-            getkv.side_effect = ((kv, test_remote_config), kv)
+            _kv = Mock(spec=vkv.VaultKV)
+            _kv.client = Mock(spec=vclient.AuthenticatedVaultClient)
+            _kv.client.token_valid.return_value = token_valid
+            getattr(_kv, wrapper.rstrip("_kv")).side_effect = (exc, result)
+            getkv.side_effect = ((_kv, test_remote_config), _kv)
             res = func(*args)
             assert res == result
             cache.assert_called_once()
@@ -283,7 +283,8 @@ def test_kv_wrapper_handles_perm_exceptions(
 @pytest.mark.parametrize("test_remote_config", ["token"], indirect=True)
 def test_kv_wrapper_raises_perm_exceptions_when_configured(wrapper, param, test_remote_config):
     """
-    Test that *_kv wrappers do not retry with a new client when `cache:clear_on_unauthorized` is False.
+    Test that *_kv wrappers do not retry with a
+    new client when `cache:clear_on_unauthorized` is False.
     """
     func = getattr(vault, wrapper)
     exc = vault.VaultPermissionDeniedError
@@ -294,11 +295,11 @@ def test_kv_wrapper_raises_perm_exceptions_when_configured(wrapper, param, test_
     test_remote_config["cache"]["clear_on_unauthorized"] = False
     with patch("saltext.saltext_vault.utils.vault.get_kv", autospec=True) as getkv:
         with patch("saltext.saltext_vault.utils.vault.clear_cache", autospec=True):
-            kv = Mock(spec=vkv.VaultKV)
-            kv.client = Mock(spec=vclient.AuthenticatedVaultClient)
-            kv.client.token_valid.return_value = True
-            getattr(kv, wrapper.rstrip("_kv")).side_effect = exc
-            getkv.return_value = (kv, test_remote_config)
+            _kv = Mock(spec=vkv.VaultKV)
+            _kv.client = Mock(spec=vclient.AuthenticatedVaultClient)
+            _kv.client.token_valid.return_value = True
+            getattr(_kv, wrapper.rstrip("_kv")).side_effect = exc
+            getkv.return_value = (_kv, test_remote_config)
             with pytest.raises(exc):
                 func(*args)
 
@@ -362,6 +363,10 @@ def test_vault_kv_is_v2_cached(kv_meta_cached, expected, request):
 
 
 class TestKVV1:
+    """
+    Tests version 1 Vault KV
+    """
+
     path = "secret/some/path"
 
     @pytest.mark.parametrize("include_metadata", [False, True])
@@ -399,7 +404,9 @@ class TestKVV1:
             ),
         ],
     )
-    def test_vault_kv_patch(self, kvv1, path, existing, data, expected):
+    def test_vault_kv_patch(
+        self, kvv1, path, existing, data, expected
+    ):  # pylint: disable-msg=too-many-arguments
         """
         Ensure that VaultKV.patch works for KV v1.
         This also tests the internal JSON merge patch implementation.
@@ -449,6 +456,10 @@ class TestKVV1:
 
 
 class TestKVV2:
+    """
+    Test version 2 Vault KV
+    """
+
     @pytest.mark.parametrize(
         "versions,expected",
         [
@@ -463,14 +474,14 @@ class TestKVV2:
         Ensure parsing versions works as expected:
         single integer/number string or list of those are allowed
         """
-        assert kvv2._parse_versions(versions) == expected
+        assert kvv2._parse_versions(versions) == expected  # pylint: disable=protected-access
 
     def test_parse_versions_raises_exception_when_unparsable(self, kvv2):
         """
         Ensure unparsable versions raise an exception
         """
         with pytest.raises(vault.VaultInvocationError):
-            kvv2._parse_versions("four")
+            kvv2._parse_versions("four")  # pylint: disable=protected-access
 
     def test_get_secret_path_metadata_lookup_unexpected_response(self, kvv2, caplog, path):
         """
@@ -479,7 +490,7 @@ class TestKVV2:
         kvv2.client.get.return_value = MagicMock(
             _mock_json_response({"wrap_info": {}}, status_code=200)
         )
-        res = kvv2._get_secret_path_metadata(path)
+        res = kvv2._get_secret_path_metadata(path)  # pylint: disable=protected-access
         assert res is None
         assert "Unexpected response to metadata query" in caplog.text
 
@@ -488,7 +499,7 @@ class TestKVV2:
         Ensure HTTP error status codes are treated as not KV
         """
         kvv2.client.get.side_effect = vault.VaultPermissionDeniedError
-        res = kvv2._get_secret_path_metadata(path)
+        res = kvv2._get_secret_path_metadata(path)  # pylint: disable=protected-access
         assert res is None
         assert "VaultPermissionDeniedError:" in caplog.text
 

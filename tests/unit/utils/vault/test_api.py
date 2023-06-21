@@ -3,8 +3,8 @@ from unittest.mock import patch
 
 import pytest
 import saltext.saltext_vault.utils.vault as vaultutil
-import saltext.saltext_vault.utils.vault.api as vapi
-import saltext.saltext_vault.utils.vault.client as vclient
+from saltext.saltext_vault.utils.vault import api as vapi
+from saltext.saltext_vault.utils.vault import client as vclient
 
 
 @pytest.fixture
@@ -310,7 +310,7 @@ def test_lookup_mount_accessor(client, identity_api, lookup_mount_response):
     Ensure _lookup_mount_accessor calls the API as expected.
     """
     client.get.return_value = lookup_mount_response
-    res = identity_api._lookup_mount_accessor("salt-minions")
+    res = identity_api._lookup_mount_accessor("salt-minions")  # pylint: disable=protected-access
     client.get.assert_called_once_with("sys/auth/salt-minions")
     assert res == "auth_approle_cafebabe"
 
@@ -321,7 +321,7 @@ def test_generate_secret_id(client, wrapped_response, secret_id_response, wrap, 
     Ensure generate_secret_id calls the API as expected.
     """
 
-    def res_or_wrap(*args, **kwargs):
+    def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
         if kwargs.get("wrap"):
             return vaultutil.VaultWrappedResponse(**wrapped_response["wrap_info"])
         return secret_id_response
@@ -348,7 +348,7 @@ def test_read_role_id(client, wrapped_response, wrap, approle_api):
     Ensure read_role_id calls the API as expected.
     """
 
-    def res_or_wrap(*args, **kwargs):
+    def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
         if kwargs.get("wrap"):
             return vaultutil.VaultWrappedResponse(**wrapped_response["wrap_info"])
         return {"data": {"role_id": "test-role-id"}}

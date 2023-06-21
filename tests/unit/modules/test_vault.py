@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 import pytest
 import salt.exceptions
-import saltext.saltext_vault.modules.vault as vault
 import saltext.saltext_vault.utils.vault as vaultutil
+from saltext.saltext_vault.modules import vault
 
 
 @pytest.fixture
@@ -51,9 +51,9 @@ def read_kv(data):
 
 @pytest.fixture
 def list_kv(data_list):
-    with patch("saltext.saltext_vault.utils.vault.list_kv", autospec=True) as list:
-        list.return_value = data_list
-        yield list
+    with patch("saltext.saltext_vault.utils.vault.list_kv", autospec=True) as _list:
+        _list.return_value = data_list
+        yield _list
 
 
 @pytest.fixture
@@ -123,7 +123,7 @@ def query():
 
 
 @pytest.mark.parametrize("key,expected", [(None, {"foo": "bar"}), ("foo", "bar")])
-def test_read_secret(read_kv, key, expected):
+def test_read_secret(read_kv, key, expected):  # pylint: disable=unused-argument
     """
     Ensure read_secret works as expected without and with specified key.
     KV v1/2 is handled in the utils module.

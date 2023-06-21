@@ -3,7 +3,7 @@ from datetime import datetime
 from unittest.mock import patch
 
 import pytest
-import saltext.saltext_vault.utils.vault.helpers as hlp
+from saltext.saltext_vault.utils.vault import helpers as hlp
 
 
 @pytest.mark.parametrize(
@@ -23,7 +23,7 @@ def test_get_salt_run_type(opts_runtype, expected):
     """
     Ensure run types are detected as expected
     """
-    assert hlp._get_salt_run_type(opts_runtype) == expected
+    assert hlp._get_salt_run_type(opts_runtype) == expected  # pylint: disable=protected-access
 
 
 @pytest.mark.parametrize(
@@ -107,12 +107,12 @@ def test_timestring_map(inpt, expected):
     ],
 )
 def test_iso_to_timestamp_polyfill(creation_time, expected):
-    with patch("saltext.saltext_vault.utils.vault.helpers.datetime.datetime") as d:
-        d.fromisoformat.side_effect = AttributeError
+    with patch("saltext.saltext_vault.utils.vault.helpers.datetime.datetime") as _d:
+        _d.fromisoformat.side_effect = AttributeError
         # needs from datetime import datetime, otherwise results
         # in infinite recursion
 
         # pylint: disable=unnecessary-lambda
-        d.side_effect = lambda *args: datetime(*args)
+        _d.side_effect = lambda *args: datetime(*args)
         res = hlp.iso_to_timestamp(creation_time)
         assert res == expected

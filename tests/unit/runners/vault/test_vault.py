@@ -5,10 +5,10 @@ from unittest.mock import patch
 
 import pytest
 import salt.exceptions
-import saltext.saltext_vault.runners.vault as vault
 import saltext.saltext_vault.utils.vault as vaultutil
-import saltext.saltext_vault.utils.vault.api as vapi
-import saltext.saltext_vault.utils.vault.client as vclient
+from saltext.saltext_vault.runners import vault
+from saltext.saltext_vault.utils.vault import api as vapi
+from saltext.saltext_vault.utils.vault import client as vclient
 
 
 @pytest.fixture
@@ -263,8 +263,8 @@ def identity_api():
 
 
 @pytest.fixture
-def client_token(client, token_response, wrapped_response):
-    def res_or_wrap(*args, **kwargs):
+def client_token(client, token_response, wrapped_response):  # pylint: disable=unused-argument
+    def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
         if kwargs.get("wrap"):
             return vaultutil.VaultWrappedResponse(**wrapped_response["wrap_info"])
         return token_response
@@ -275,7 +275,9 @@ def client_token(client, token_response, wrapped_response):
 
 @pytest.fixture
 def config(request, default_config):
-    def rec(config, path, val=None, default=vaultutil.VaultException):
+    def rec(  # pylint: disable=inconsistent-return-statements, duplicate-code
+        config, path, val=None, default=vaultutil.VaultException
+    ):
         ptr = config
         parts = path.split(":")
         while parts:
@@ -285,7 +287,7 @@ def config(request, default_config):
                     ptr[cur] = {}
                 elif not parts:
                     ptr[cur] = val
-                    return
+                return
             if cur not in ptr:
                 if isinstance(default, Exception):
                     raise default()
@@ -324,7 +326,9 @@ def policies(request, policies_default):
 
 @pytest.fixture
 def metadata(request, metadata_entity_default, metadata_secret_default):
-    def _get_metadata(minion_id, metadata_patterns, *args, **kwargs):
+    def _get_metadata(
+        minion_id, metadata_patterns, *args, **kwargs
+    ):  # pylint: disable=unused-argument
         if getattr(request, "param", None) is not None:
             return request.param
         if "saltstack-jid" not in metadata_patterns:
@@ -357,12 +361,14 @@ def test_generate_token(
     token_serialized,
     wrapped_serialized,
     metadata_secret_default,
-):
+):  # pylint: disable-msg=too-many-arguments
     """
     Ensure _generate_token calls the API as expected
     """
     wrap = config("issue:wrap")
-    res_token, res_num_uses = vault._generate_token("test-minion", issue_params=None, wrap=wrap)
+    res_token, res_num_uses = vault._generate_token(  # pylint: disable=protected-access
+        "test-minion", issue_params=None, wrap=wrap
+    )
     endpoint = "auth/token/create"
     role_name = config("issue:token:role_name")
     payload = {}
@@ -387,18 +393,22 @@ def test_generate_token(
 
 @pytest.mark.usefixtures("config")
 @pytest.mark.parametrize("policies", [[]], indirect=True)
-def test_generate_token_no_policies_denied(policies):
+def test_generate_token_no_policies_denied(policies):  # pylint: disable-msg=unused-argument
     """
     Ensure generated tokens need at least one attached policy
     """
     with pytest.raises(salt.exceptions.SaltRunnerError, match=".*No policies matched minion.*"):
-        vault._generate_token("test-minion", issue_params=None, wrap=False)
+        vault._generate_token(  # pylint: disable=protected-access
+            "test-minion", issue_params=None, wrap=False
+        )
 
 
 @pytest.mark.parametrize("ttl", [None, 1337])
 @pytest.mark.parametrize("uses", [None, 1, 30])
 @pytest.mark.parametrize("config", [{}, {"issue:type": "approle"}], indirect=True)
-def test_generate_token_deprecated(ttl, uses, token_serialized, config, validate_signature, caplog):
+def test_generate_token_deprecated(
+    ttl, uses, token_serialized, config, validate_signature, caplog
+):  # pylint: disable-msg=too-many-arguments
     """
     Ensure the deprecated generate_token function returns data in the old format
     """
@@ -452,7 +462,7 @@ def test_generate_new_token(
 
     with patch("saltext.saltext_vault.runners.vault._generate_token", autospec=True) as gen:
 
-        def res_or_wrap(*args, **kwargs):
+        def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
             if kwargs.get("wrap"):
                 return wrapped_serialized, token_serialized["num_uses"]
             return token_serialized, token_serialized["num_uses"]
@@ -468,7 +478,9 @@ def test_generate_new_token(
 
 @pytest.mark.usefixtures("validate_signature")
 @pytest.mark.parametrize("config", [{"issue:type": "approle"}], indirect=True)
-def test_generate_new_token_refuses_if_not_configured(config):
+def test_generate_new_token_refuses_if_not_configured(
+    config,  # pylint: disable-msg=unused-argument
+):
     """
     Ensure generate_new_token only issues tokens if configured to issue them
     """
@@ -516,7 +528,7 @@ def test_get_config_token(
 
     with patch("saltext.saltext_vault.runners.vault._generate_token", autospec=True) as gen:
 
-        def res_or_wrap(*args, **kwargs):
+        def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
             if kwargs.get("wrap"):
                 return wrapped_serialized, token_serialized["num_uses"]
             return token_serialized, token_serialized["num_uses"]
@@ -579,7 +591,7 @@ def test_get_config_approle(config, validate_signature, wrapped_serialized, issu
 
     with patch("saltext.saltext_vault.runners.vault._get_role_id", autospec=True) as gen:
 
-        def res_or_wrap(*args, **kwargs):
+        def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
             if kwargs.get("wrap"):
                 return wrapped_serialized
             return "test-role-id"
@@ -617,7 +629,7 @@ def test_get_role_id(config, validate_signature, wrapped_serialized, issue_param
         expected["data"].update({"role_id": "test-role-id"})
     with patch("saltext.saltext_vault.runners.vault._get_role_id", autospec=True) as gen:
 
-        def res_or_wrap(*args, **kwargs):
+        def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
             if kwargs.get("wrap"):
                 return wrapped_serialized
             return "test-role-id"
@@ -633,7 +645,7 @@ def test_get_role_id(config, validate_signature, wrapped_serialized, issue_param
 
 @pytest.mark.usefixtures("validate_signature")
 @pytest.mark.parametrize("config", [{"issue:type": "token"}], indirect=True)
-def test_get_role_id_refuses_if_not_configured(config):
+def test_get_role_id_refuses_if_not_configured(config):  # pylint: disable=unused-argument
     """
     Ensure get_role_id returns an error if not configured to issue AppRoles
     """
@@ -643,6 +655,10 @@ def test_get_role_id_refuses_if_not_configured(config):
 
 
 class TestGetRoleId:
+    """
+    Vault Testes Get RoleId
+    """
+
     @pytest.fixture(autouse=True)
     def lookup_approle(self, approle_meta):
         with patch(
@@ -689,20 +705,22 @@ class TestGetRoleId:
     )
     def test_get_role_id(
         self,
-        config,
+        config,  # pylint: disable=unused-argument
         lookup_approle,
         lookup_roleid,
         manage_approle,
         manage_entity,
         manage_entity_alias,
         wrapped_serialized,
-    ):
+    ):  # pylint: disable-msg=too-many-arguments
         """
         Ensure _get_role_id returns data in the expected format and does not
         try to generate a new AppRole if it exists and is configured correctly
         """
         wrap = config("issue:wrap")
-        res = vault._get_role_id("test-minion", issue_params=None, wrap=wrap)
+        res = vault._get_role_id(  # pylint: disable=protected-access
+            "test-minion", issue_params=None, wrap=wrap
+        )
         lookup_approle.assert_called_with("test-minion")
         lookup_roleid.assert_called_with("test-minion", wrap=wrap)
         manage_approle.assert_not_called()
@@ -729,7 +747,7 @@ class TestGetRoleId:
     )
     def test_get_role_id_generate_new(
         self,
-        config,
+        config,  # pylint: disable=unused-argument
         lookup_approle,
         lookup_roleid,
         manage_approle,
@@ -737,14 +755,16 @@ class TestGetRoleId:
         manage_entity_alias,
         wrapped_serialized,
         issue_params,
-    ):
+    ):  # pylint: disable-msg=too-many-arguments
         """
         Ensure _get_role_id returns data in the expected format and does not
         try to generate a new AppRole if it exists and is configured correctly
         """
         lookup_approle.return_value = False
         wrap = config("issue:wrap")
-        res = vault._get_role_id("test-minion", issue_params=issue_params, wrap=wrap)
+        res = vault._get_role_id(  # pylint: disable=protected-access
+            "test-minion", issue_params=issue_params, wrap=wrap
+        )
         assert res == wrapped_serialized
         lookup_roleid.assert_called_with("test-minion", wrap=wrap)
         manage_approle.assert_called_once_with("test-minion", issue_params)
@@ -753,7 +773,7 @@ class TestGetRoleId:
 
     @pytest.mark.parametrize("config", [{"issue:type": "approle"}], indirect=True)
     def test_get_role_id_generate_new_errors_on_generation_failure(
-        self, config, lookup_approle, lookup_roleid
+        self, config, lookup_approle, lookup_roleid  # pylint: disable=unused-argument
     ):
         """
         Ensure _get_role_id returns an error if the AppRole generation failed
@@ -764,7 +784,9 @@ class TestGetRoleId:
             salt.exceptions.SaltRunnerError,
             match="Failed to create AppRole for minion.*",
         ):
-            vault._get_role_id("test-minion", issue_params=None, wrap=False)
+            vault._get_role_id(  # pylint: disable=protected-access
+                "test-minion", issue_params=None, wrap=False
+            )
 
 
 @pytest.mark.parametrize(
@@ -795,7 +817,7 @@ def test_generate_secret_id(
         "saltext.saltext_vault.runners.vault._lookup_approle_cached", autospec=True
     ) as lookup_approle:
 
-        def res_or_wrap(*args, **kwargs):
+        def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
             if kwargs.get("wrap"):
                 res = Mock(spec=vaultutil.VaultWrappedResponse)
                 res.serialize_for_minion.return_value = wrapped_serialized
@@ -815,7 +837,7 @@ def test_generate_secret_id(
 
 @pytest.mark.usefixtures("validate_signature")
 @pytest.mark.parametrize("config", [{"issue:type": "approle"}], indirect=True)
-def test_generate_secret_id_nonexistent_approle(config):
+def test_generate_secret_id_nonexistent_approle(config):  # pylint: disable=unused-argument
     """
     Ensure generate_secret_id fails and prompts the minion to refresh cache if
     no associated AppRole could be found.
@@ -832,7 +854,7 @@ def test_generate_secret_id_nonexistent_approle(config):
 
 @pytest.mark.usefixtures("validate_signature")
 @pytest.mark.parametrize("config", [{"issue:type": "token"}], indirect=True)
-def test_get_secret_id_refuses_if_not_configured(config):
+def test_get_secret_id_refuses_if_not_configured(config):  # pylint: disable=unused-argument
     """
     Ensure get_secret_id returns an error if not configured to issue AppRoles
     """
@@ -876,7 +898,9 @@ def test_generate_secret_id_updates_params(
 
 
 @pytest.mark.parametrize("config", [{"issue:type": "token"}], indirect=True)
-def test_list_approles_raises_exception_if_not_configured(config):
+def test_list_approles_raises_exception_if_not_configured(
+    config,
+):  # pylint: disable=unused-argument
     """
     Ensure test_list_approles returns an error if not configured to issue AppRoles
     """
@@ -904,7 +928,7 @@ def test_list_approles_raises_exception_if_not_configured(config):
     ],
     indirect=["config"],
 )
-def test_get_policies(config, expected, grains, pillar):
+def test_get_policies(config, expected, grains, pillar):  # pylint: disable=unused-argument
     """
     Ensure _get_policies works as intended.
     The expansion of lists is tested in the vault utility module unit tests.
@@ -917,7 +941,9 @@ def test_get_policies(config, expected, grains, pillar):
             "saltext.saltext_vault.utils.vault.helpers.expand_pattern_lists",
             Mock(side_effect=lambda x, *args, **kwargs: [x]),
         ):
-            res = vault._get_policies("test-minion", refresh_pillar=False)
+            res = vault._get_policies(  # pylint: disable=protected-access
+                "test-minion", refresh_pillar=False
+            )
             assert res == expected
 
 
@@ -943,7 +969,9 @@ def test_get_policies_does_not_render_pillar_unnecessarily(config, grains, pilla
         ):
             with patch("salt.pillar.get_pillar", autospec=True) as get_pillar:
                 get_pillar.return_value.compile_pillar.return_value = pillar
-                vault._get_policies("test-minion", refresh_pillar=True)
+                vault._get_policies(  # pylint: disable=protected-access
+                    "test-minion", refresh_pillar=True
+                )
                 assert get_pillar.call_count == int("pillar" in config("policies:assign")[0])
 
 
@@ -956,7 +984,7 @@ def test_get_policies_does_not_render_pillar_unnecessarily(config, grains, pilla
     ],
     indirect=["config"],
 )
-def test_get_policies_for_nonexisting_minions(config, expected):
+def test_get_policies_for_nonexisting_minions(config, expected):  # pylint: disable=unused-argument
     """
     For non-existing minions, or the master-minion, grains will be None.
     """
@@ -966,7 +994,9 @@ def test_get_policies_for_nonexisting_minions(config, expected):
             "saltext.saltext_vault.utils.vault.helpers.expand_pattern_lists",
             Mock(side_effect=lambda x, *args, **kwargs: [x]),
         ):
-            res = vault._get_policies("test-minion", refresh_pillar=False)
+            res = vault._get_policies(  # pylint: disable=protected-access
+                "test-minion", refresh_pillar=False
+            )
             assert res == expected
 
 
@@ -1006,7 +1036,9 @@ def test_get_metadata(metadata_patterns, expected, pillar):
             "saltext.saltext_vault.utils.vault.helpers.expand_pattern_lists",
             Mock(side_effect=lambda x, *args, **kwargs: [x]),
         ):
-            res = vault._get_metadata("test-minion", metadata_patterns, refresh_pillar=False)
+            res = vault._get_metadata(  # pylint: disable=protected-access
+                "test-minion", metadata_patterns, refresh_pillar=False
+            )
             assert res == expected
 
 
@@ -1022,7 +1054,7 @@ def test_get_metadata_list():
             "saltext.saltext_vault.utils.vault.helpers.expand_pattern_lists", autospec=True
         ) as expand:
             expand.return_value = ["salt_role_foo", "salt_role_bar"]
-            res = vault._get_metadata(
+            res = vault._get_metadata(  # pylint: disable=protected-access
                 "test-minion",
                 {"salt_role": "salt_role_{pillar[roles]}"},
                 refresh_pillar=False,
@@ -1228,12 +1260,12 @@ def test_get_metadata_list():
     ],
     indirect=["config"],
 )
-def test_parse_issue_params(config, issue_params, expected):
+def test_parse_issue_params(config, issue_params, expected):  # pylint: disable=unused-argument
     """
     Ensure all known parameters can only be overridden if it was configured
     on the master. Also ensure the mapping to API requests is correct (for tokens).
     """
-    res = vault._parse_issue_params(issue_params)
+    res = vault._parse_issue_params(issue_params)  # pylint: disable=protected-access
     assert res == expected
 
 
@@ -1266,11 +1298,13 @@ def test_parse_issue_params(config, issue_params, expected):
     ],
     indirect=["config"],
 )
-def test_parse_issue_params_does_not_allow_bind_secret_id_override(config, issue_params, expected):
+def test_parse_issue_params_does_not_allow_bind_secret_id_override(
+    config, issue_params, expected
+):  # pylint: disable=unused-argument
     """
     Ensure bind_secret_id can only be set on the master.
     """
-    res = vault._parse_issue_params(issue_params)
+    res = vault._parse_issue_params(issue_params)  # pylint: disable=protected-access
     assert res.get("bind_secret_id", False) == expected
 
 
@@ -1279,7 +1313,7 @@ def test_manage_approle(approle_api, policies_default):
     """
     Ensure _manage_approle calls the API as expected.
     """
-    vault._manage_approle("test-minion", None)
+    vault._manage_approle("test-minion", None)  # pylint: disable=protected-access
     approle_api.write_approle.assert_called_once_with(
         "test-minion",
         mount="salt-minions",
@@ -1294,7 +1328,7 @@ def test_delete_approle(approle_api):
     """
     Ensure _delete_approle calls the API as expected.
     """
-    vault._delete_approle("test-minion")
+    vault._delete_approle("test-minion")  # pylint: disable=protected-access
     approle_api.delete_approle.assert_called_once_with("test-minion", mount="salt-minions")
 
 
@@ -1304,7 +1338,7 @@ def test_lookup_approle(approle_api, approle_meta):
     Ensure _lookup_approle calls the API as expected.
     """
     approle_api.read_approle.return_value = approle_meta
-    res = vault._lookup_approle("test-minion")
+    res = vault._lookup_approle("test-minion")  # pylint: disable=protected-access
     assert res == approle_meta
     approle_api.read_approle.assert_called_once_with("test-minion", mount="salt-minions")
 
@@ -1315,7 +1349,7 @@ def test_lookup_approle_nonexistent(approle_api):
     Ensure _lookup_approle catches VaultNotFoundErrors and returns False.
     """
     approle_api.read_approle.side_effect = vaultutil.VaultNotFoundError
-    res = vault._lookup_approle("test-minion")
+    res = vault._lookup_approle("test-minion")  # pylint: disable=protected-access
     assert res is False
 
 
@@ -1325,7 +1359,7 @@ def test_lookup_role_id(approle_api, wrap):
     """
     Ensure _lookup_role_id calls the API as expected.
     """
-    vault._lookup_role_id("test-minion", wrap=wrap)
+    vault._lookup_role_id("test-minion", wrap=wrap)  # pylint: disable=protected-access
     approle_api.read_role_id.assert_called_once_with("test-minion", mount="salt-minions", wrap=wrap)
 
 
@@ -1335,7 +1369,7 @@ def test_lookup_role_id_nonexistent(approle_api):
     Ensure _lookup_role_id catches VaultNotFoundErrors and returns False.
     """
     approle_api.read_role_id.side_effect = vaultutil.VaultNotFoundError
-    res = vault._lookup_role_id("test-minion", wrap=False)
+    res = vault._lookup_role_id("test-minion", wrap=False)  # pylint: disable=protected-access
     assert res is False
 
 
@@ -1345,7 +1379,7 @@ def test_get_secret_id(approle_api, wrap):
     """
     Ensure _get_secret_id calls the API as expected.
     """
-    vault._get_secret_id("test-minion", wrap=wrap)
+    vault._get_secret_id("test-minion", wrap=wrap)  # pylint: disable=protected-access
     approle_api.generate_secret_id.assert_called_once_with(
         "test-minion",
         metadata=ANY,
@@ -1360,7 +1394,7 @@ def test_lookup_entity_by_alias(identity_api):
     Ensure _lookup_entity_by_alias calls the API as expected.
     """
     with patch("saltext.saltext_vault.runners.vault._lookup_role_id", return_value="test-role-id"):
-        vault._lookup_entity_by_alias("test-minion")
+        vault._lookup_entity_by_alias("test-minion")  # pylint: disable=protected-access
         identity_api.read_entity_by_alias.assert_called_once_with(
             alias="test-role-id", mount="salt-minions"
         )
@@ -1373,7 +1407,7 @@ def test_lookup_entity_by_alias_failed(identity_api):
     """
     with patch("saltext.saltext_vault.runners.vault._lookup_role_id", return_value="test-role-id"):
         identity_api.read_entity_by_alias.side_effect = vaultutil.VaultNotFoundError
-        res = vault._lookup_entity_by_alias("test-minion")
+        res = vault._lookup_entity_by_alias("test-minion")  # pylint: disable=protected-access
         assert res is False
 
 
@@ -1382,7 +1416,7 @@ def test_fetch_entity_by_name(identity_api):
     """
     Ensure _fetch_entity_by_name calls the API as expected.
     """
-    vault._fetch_entity_by_name("test-minion")
+    vault._fetch_entity_by_name("test-minion")  # pylint: disable=protected-access
     identity_api.read_entity.assert_called_once_with(name="salt_minion_test-minion")
 
 
@@ -1392,16 +1426,18 @@ def test_fetch_entity_by_name_failed(identity_api):
     Ensure _fetch_entity_by_name returns False if the lookup fails.
     """
     identity_api.read_entity.side_effect = vaultutil.VaultNotFoundError
-    res = vault._fetch_entity_by_name("test-minion")
+    res = vault._fetch_entity_by_name("test-minion")  # pylint: disable=protected-access
     assert res is False
 
 
 @pytest.mark.usefixtures("config")
-def test_manage_entity(identity_api, metadata, metadata_entity_default):
+def test_manage_entity(
+    identity_api, metadata, metadata_entity_default
+):  # pylint: disable=unused-argument
     """
     Ensure _manage_entity calls the API as expected.
     """
-    vault._manage_entity("test-minion")
+    vault._manage_entity("test-minion")  # pylint: disable=protected-access
     identity_api.write_entity.assert_called_with(
         "salt_minion_test-minion", metadata=metadata_entity_default
     )
@@ -1412,7 +1448,7 @@ def test_delete_entity(identity_api):
     """
     Ensure _delete_entity calls the API as expected.
     """
-    vault._delete_entity("test-minion")
+    vault._delete_entity("test-minion")  # pylint: disable=protected-access
     identity_api.delete_entity.assert_called_with("salt_minion_test-minion")
 
 
@@ -1422,7 +1458,7 @@ def test_manage_entity_alias(identity_api):
     Ensure _manage_entity_alias calls the API as expected.
     """
     with patch("saltext.saltext_vault.runners.vault._lookup_role_id", return_value="test-role-id"):
-        vault._manage_entity_alias("test-minion")
+        vault._manage_entity_alias("test-minion")  # pylint: disable=protected-access
         identity_api.write_entity_alias.assert_called_with(
             "salt_minion_test-minion", alias_name="test-role-id", mount="salt-minions"
         )
@@ -1439,14 +1475,14 @@ def test_manage_entity_alias_raises_errors(identity_api):
             salt.exceptions.SaltRunnerError,
             match="Cannot create alias.* no entity found.",
         ):
-            vault._manage_entity_alias("test-minion")
+            vault._manage_entity_alias("test-minion")  # pylint: disable=protected-access
 
 
 def test_revoke_token_by_token(client):
     """
     Ensure _revoke_token calls the API as expected.
     """
-    vault._revoke_token(token="test-token")
+    vault._revoke_token(token="test-token")  # pylint: disable=protected-access
     client.post.assert_called_once_with("auth/token/revoke", payload={"token": "test-token"})
 
 
@@ -1454,7 +1490,7 @@ def test_revoke_token_by_accessor(client):
     """
     Ensure _revoke_token calls the API as expected.
     """
-    vault._revoke_token(accessor="test-accessor")
+    vault._revoke_token(accessor="test-accessor")  # pylint: disable=protected-access
     client.post.assert_called_once_with(
         "auth/token/revoke-accessor", payload={"accessor": "test-accessor"}
     )
