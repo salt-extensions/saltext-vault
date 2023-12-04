@@ -13,8 +13,16 @@ path "salt/+/minions/{{identity.entity.metadata.minion-id}}" {
     capabilities = ["create", "read", "update", "delete", "list", "patch"]
 }
 
+path "salt/+/minions/{{identity.entity.metadata.minion-id}}/*" {
+    capabilities = ["create", "read", "update", "delete", "list", "patch"]
+}
+
 # ACL policy templating tests with pillar values
-path "salt/data/roles/{{identity.entity.metadata.role}}" {
+path "salt/+/roles/{{identity.entity.metadata.role}}" {
+    capabilities = ["read"]
+}
+
+path "salt/+/roles/{{identity.entity.metadata.role}}/*" {
     capabilities = ["read"]
 }
 
