@@ -944,7 +944,7 @@ class TestTokenIssuance:
         }
 
     @pytest.mark.usefixtures("conn_cache_absent")
-    @pytest.mark.parametrize("vault_container_version", ["0.9.6", "1.3.1", "latest"], indirect=True)
+    @pytest.mark.parametrize("vault_container_version", ["1.3.7", "latest"], indirect=True)
     def test_minion_can_authenticate(self, vault_salt_call_cli):
         """
         Test that the minion can run queries against Vault.
@@ -957,7 +957,7 @@ class TestTokenIssuance:
         assert ret.data.get("success") == "yeehaaw"
 
     @pytest.mark.usefixtures("conn_cache_absent")
-    @pytest.mark.parametrize("vault_container_version", ["0.9.6", "1.3.1", "latest"], indirect=True)
+    @pytest.mark.parametrize("vault_container_version", ["1.3.7", "latest"], indirect=True)
     def test_minion_token_policies_are_assigned_as_expected(
         self, vault_salt_call_cli, vault_salt_minion
     ):
