@@ -38,15 +38,16 @@ def pillar_tree(vault_salt_master, vault_salt_minion):
     with top_tempfile, sdb_tempfile:
         yield
 
-
-@pytest.fixture(scope="class")
-def vault_master_config(vault_port):
+@pytest.fixture(scope="class", params=["token"])
+def vault_master_config(request, vault_port):
+    vault_issue_type = request.param
     return {
         "open_mode": True,
         "peer_run": {
             ".*": [
                 "vault.get_config",
                 "vault.generate_new_token",
+                "vault.generate_secret_id"
             ],
         },
         "vault": {
@@ -54,10 +55,30 @@ def vault_master_config(vault_port):
                 "token": "testsecret",
             },
             "issue": {
+                "type": f"{vault_issue_type}",
+                "approle": {
+                    "mount": "salt-minions",
+                    "params": {
+                            "secret_id_num_uses": 0,
+                            "secret_id_ttl": 1800,
+                            "token_explicit_max_ttl": 1800,
+                            "token_num_uses": 0,
+                    }
+                },
                 "token": {
                     "params": {
-                        "num_uses": 0,
+                        "num_uses": 0
                     }
+                }
+            },
+            "metadata": {
+                "entity": {
+                    "minion-id": "{minion}"
+                },
+                "secret": {
+                    "saltstack-jid": "{jid}",
+                    "saltstack-minion": "{minion}",
+                    "saltstack-user": "{user}"
                 }
             },
             "policies": {
@@ -72,6 +93,9 @@ def vault_master_config(vault_port):
         "minion_data_cache": True,
     }
 
+@pytest.fixture(scope="class")
+def vault_minion_config(vault_port):
+    return {}
 
 @pytest.fixture(scope="class")
 def vault_salt_master(salt_factories, vault_port, vault_master_config):
@@ -84,12 +108,12 @@ def vault_salt_master(salt_factories, vault_port, vault_master_config):
 def sdb_profile():
     return {}
 
-
 @pytest.fixture(scope="class")
-def vault_salt_minion(vault_salt_master, sdb_profile):
+def vault_salt_minion(vault_salt_master, sdb_profile, vault_minion_config):
     assert vault_salt_master.is_running()
-    config = {"open_mode": True, "grains": {}, "sdbvault": {"driver": "vault"}}
+    config = {"open_mode": True, "grains": {}, "sdbvault": {"driver": "vault"}, "vault":{} } 
     config["sdbvault"].update(sdb_profile)
+    config["vault"].update(vault_minion_config)
     factory = vault_salt_master.salt_minion_daemon(
         random_string("vault-sdbminion", uppercase=False),
         defaults=config,
@@ -113,49 +137,61 @@ def vault_salt_run_cli(vault_salt_master):
 
 
 @pytest.fixture
-def kv_root_dual_item(vault_container_version):
-    if vault_container_version == "latest":
-        vault_write_secret("salt/user1", password="p4ssw0rd", desc="test user")
-        vault_write_secret("salt/user/user1", password="p4ssw0rd", desc="test user")
+def kv_root_dual_item(vault_container_version, vault_salt_minion):
+   
+    vault_write_secret(f"salt/minions/{vault_salt_minion.id}/user1", password="p4ssw0rd", desc="test user")
+    vault_write_secret(f"salt/minions/{vault_salt_minion.id}/user/user1", password="p4ssw0rd", desc="test user")
     yield
-    if vault_container_version == "latest":
-        vault_delete_secret("salt/user1")
-        vault_delete_secret("salt/user/user1")
+    vault_delete_secret(f"salt/minions/{vault_salt_minion.id}/user1")
+    vault_delete_secret(f"salt/minions/{vault_salt_minion.id}/user/user1")
 
 
-@pytest.mark.parametrize("vault_container_version", ["1.3.1", "latest"], indirect=True)
-def test_sdb_kv_kvv2_path_local(salt_call_cli, vault_container_version):
-    ret = salt_call_cli.run(
-        "--local",
-        "sdb.set",
-        uri="sdb://sdbvault/kv-v2/test/test_sdb_local/foo",
-        value="local",
-    )
-    assert ret.returncode == 0
-    assert ret.data is True
-    ret = salt_call_cli.run("--local", "sdb.get", "sdb://sdbvault/kv-v2/test/test_sdb_local/foo")
-    assert ret.data
-    assert ret.data == "local"
+@pytest.mark.parametrize("vault_container_version", ["1.3.7", "latest"], indirect=True)
+class TestSDBKVLocal:
+    @pytest.fixture(scope="class")
+    def vault_minion_config(self, vault_port):
+        return {
+            "auth": {
+                "token": "testsecret",
+            },
+            "server": {
+                "url": f"http://127.0.0.1:{vault_port}",
+            },
+        }
+
+    def test_sdb_kv_kvv2_path_local(self, vault_salt_call_cli, vault_container_version):
+        ret = vault_salt_call_cli.run(
+            "--local",
+            "sdb.set",
+            uri="sdb://sdbvault/kv-v2/test/test_sdb_local/foo",
+            value="local",
+        )
+        assert ret.returncode == 0
+        assert ret.data is True
+        ret = vault_salt_call_cli.run("sdb.get", "sdb://sdbvault/kv-v2/test/test_sdb_local/foo")
+        assert ret.data
+        assert ret.data == "local"
 
 
 @pytest.mark.usefixtures("kv_root_dual_item")
-@pytest.mark.parametrize("vault_container_version", ["latest"], indirect=True)
-def test_sdb_kv_dual_item(salt_call_cli, vault_container_version):
-    ret = salt_call_cli.run("--local", "sdb.get", "sdb://sdbvault/salt/data/user1")
+@pytest.mark.parametrize("vault_master_config", ["approle"], indirect=True)
+@pytest.mark.parametrize("vault_container_version", ["1.14", "latest"], indirect=True)
+def test_sdb_kv_dual_item(vault_salt_call_cli, vault_container_version, vault_salt_minion, vault_master_config):
+    ret = vault_salt_call_cli.run("sdb.get", f"sdb://sdbvault/salt/data/minions/{vault_salt_minion.id}/user1")
     assert ret.data
     assert ret.data == {"desc": "test user", "password": "p4ssw0rd"}
 
 
-def test_sdb_runner(salt_run_cli):
-    ret = salt_run_cli.run(
+def test_sdb_runner(vault_salt_call_cli):
+    ret = vault_salt_call_cli.run(
         "sdb.set", uri="sdb://sdbvault/secret/test/test_sdb_runner/foo", value="runner"
     )
     assert ret.returncode == 0
     assert ret.data is True
-    ret = salt_run_cli.run("sdb.get", uri="sdb://sdbvault/secret/test/test_sdb_runner/foo")
+    ret = vault_salt_call_cli.run("sdb.get", uri="sdb://sdbvault/secret/test/test_sdb_runner/foo")
     assert ret.returncode == 0
     assert ret.stdout
-    assert ret.stdout == "runner"
+    assert ret.stdout == '{\n"local": "runner"\n}\n'
 
 
 @pytest.mark.usefixtures("pillar_tree")
@@ -236,7 +272,7 @@ class TestGetOrSetHashSingleUseToken:
                 vault_delete_secret(f"{secret_path}/{secret_name}")
 
     @pytest.mark.usefixtures("get_or_set_absent")
-    @pytest.mark.parametrize("vault_container_version", ["1.3.1", "latest"], indirect=True)
+    @pytest.mark.parametrize("vault_container_version", ["1.3.7", "latest"], indirect=True)
     def test_sdb_get_or_set_hash_single_use_token(self, vault_salt_call_cli):
         """
         Test that sdb.get_or_set_hash works with uses=1.
