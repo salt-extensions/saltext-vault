@@ -200,7 +200,7 @@ def clear_cache(opts, context, ckey=None, connection=True, session=False, force_
                         ]
                     ):
                         scope = cbank.split("/")[-1]
-                        _get_event(opts)(tag=f"vault/cache/{scope}/clear")
+                        _get_event(opts)(data={"scope": scope}, tag=f"vault/cache/{scope}/clear")
             except Exception as err:  # pylint: disable=broad-except
                 log.error(
                     "Failed to revoke token or send event before clearing cache:\n"

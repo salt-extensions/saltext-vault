@@ -290,9 +290,9 @@ class AppRoleApi:
             payload = {"secret_id_accessor": accessor}
         try:
             return self.client.post(endpoint, payload=payload)["data"]
-        except TypeError:
+        except TypeError as err:
             # lookup does not raise exceptions, only returns True
-            raise VaultNotFoundError()
+            raise VaultNotFoundError() from err
 
     def destroy_secret_id(self, name, secret_id=None, accessor=None, mount="approle"):
         """

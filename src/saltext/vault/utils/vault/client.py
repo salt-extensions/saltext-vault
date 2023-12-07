@@ -35,18 +35,18 @@ def _get_expected_creation_path(secret_type, config=None):
 
     if secret_type == "secret_id":
         if config is not None:
-            return r"auth/{}/role/{}/secret\-id".format(
-                re.escape(config["auth"]["approle_mount"]),
-                re.escape(config["auth"]["approle_name"]),
+            mount, approle = re.escape(config["auth"]["approle_mount"]), re.escape(
+                config["auth"]["approle_name"]
             )
+            return rf"auth/{mount}/role/{approle}/secret\-id"
         return r"auth/[^/]+/role/[^/]+/secret\-id"
 
     if secret_type == "role_id":
         if config is not None:
-            return r"auth/{}/role/{}/role\-id".format(
-                re.escape(config["auth"]["approle_mount"]),
-                re.escape(config["auth"]["approle_name"]),
+            mount, approle = re.escape(config["auth"]["approle_mount"]), re.escape(
+                config["auth"]["approle_name"]
             )
+            return rf"auth/{mount}/role/{approle}/role\-id"
         return r"auth/[^/]+/role/[^/]+/role\-id"
 
     raise salt.exceptions.SaltInvocationError(

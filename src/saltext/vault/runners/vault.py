@@ -1160,8 +1160,10 @@ def _manage_entity_alias(minion_id):
             alias_name=role_id,
             mount=_config("issue:approle:mount"),
         )
-    except vault.VaultNotFoundError:
-        raise SaltRunnerError(f"Cannot create alias for minion {minion_id}: no entity found.")
+    except vault.VaultNotFoundError as err:
+        raise SaltRunnerError(
+            f"Cannot create alias for minion {minion_id}: no entity found."
+        ) from err
 
 
 def _get_approle_api():
