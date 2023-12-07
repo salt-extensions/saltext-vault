@@ -43,13 +43,101 @@ def salt_factories_config():
 
 
 @pytest.fixture(scope="package")
-def master(salt_factories):
-    return salt_factories.salt_master_daemon(random_string("master-"))
+def master_config_defaults(vault_port):
+    """
+    This default configuration ensures the master issues authentication
+    credentials with the correct policies. By default, it will issue
+    tokens with an unlimited number of uses.
+    """
+    return {
+        "peer_run": {
+            ".*": [
+                "vault.get_config",
+                "vault.generate_new_token",
+                "vault.generate_secret_id",
+            ]
+        },
+        "sdbvault": {
+            "driver": "vault",
+        },
+        "vault": {
+            "auth": {
+                "method": "token",
+                "token": "testsecret",
+            },
+            "issue": {
+                "token": {
+                    "params": {
+                        "uses": 0,
+                    }
+                }
+            },
+            "policies": {
+                "assign": [
+                    "salt_minion",
+                ]
+            },
+            "server": {
+                "url": f"http://127.0.0.1:{vault_port}",
+            },
+        },
+    }
 
 
 @pytest.fixture(scope="package")
-def minion(master):
-    return master.salt_minion_daemon(random_string("minion-"))
+def master_config_overrides():
+    """
+    You can override the default configuration per package by overriding this
+    fixture in a conftest.py file.
+    """
+    return {}
+
+
+@pytest.fixture(scope="package")
+def master(salt_factories, master_config_defaults, master_config_overrides):
+    return salt_factories.salt_master_daemon(
+        random_string("master-"), defaults=master_config_defaults, overrides=master_config_overrides
+    )
+
+
+@pytest.fixture(scope="package")
+def minion_config_defaults(vault_port):
+    """
+    The default minion configuration ensures that the minion works in --local
+    mode and that the ``sdbvault`` SDB configuration is present.
+    The vault configuration will not be used when not in masterless mode
+    without overriding ``vault:config_location`` to ``local``.
+    """
+    return {
+        "sdbvault": {
+            "driver": "vault",
+        },
+        "vault": {
+            "auth": {
+                "method": "token",
+                "token": "testsecret",
+            },
+            "server": {
+                "url": f"http://127.0.0.1:{vault_port}",
+            },
+        },
+    }
+
+
+@pytest.fixture(scope="package")
+def minion_config_overrides():
+    """
+    You can override the default configuration per package by overriding this
+    fixture in a conftest.py file.
+    """
+    return {}
+
+
+@pytest.fixture(scope="package")
+def minion(master, minion_config_defaults, minion_config_overrides):
+    return master.salt_minion_daemon(
+        random_string("minion-"), defaults=minion_config_defaults, overrides=minion_config_overrides
+    )
 
 
 @pytest.fixture(scope="session")
