@@ -5,10 +5,10 @@ from unittest.mock import patch
 import pytest
 import requests
 import salt.modules.event
-from saltext.saltext_vault.utils import vault
-from saltext.saltext_vault.utils.vault import auth as vauth
-from saltext.saltext_vault.utils.vault import client as vclient
-from saltext.saltext_vault.utils.vault import helpers as hlp
+from saltext.vault.utils import vault
+from saltext.vault.utils.vault import auth as vauth
+from saltext.vault.utils.vault import client as vclient
+from saltext.vault.utils.vault import helpers as hlp
 
 
 def _mock_json_response(data, status_code=200, reason=""):
@@ -525,7 +525,7 @@ def salt_runtype(request):
     runtype = Mock(spec=hlp._get_salt_run_type)  # pylint: disable=protected-access
     runtype.return_value = getattr(hlp, f"SALT_RUNTYPE_{request.param}")
     with patch(
-        "saltext.saltext_vault.utils.vault.helpers._get_salt_run_type", runtype
+        "saltext.vault.utils.vault.helpers._get_salt_run_type", runtype
     ):  # pylint: disable=protected-access
         yield
 

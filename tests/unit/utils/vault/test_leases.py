@@ -3,16 +3,16 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
-from saltext.saltext_vault.utils import vault
-from saltext.saltext_vault.utils.vault import cache as vcache
-from saltext.saltext_vault.utils.vault import client as vclient
-from saltext.saltext_vault.utils.vault import leases as vleases
+from saltext.vault.utils import vault
+from saltext.vault.utils.vault import cache as vcache
+from saltext.vault.utils.vault import client as vclient
+from saltext.vault.utils.vault import leases as vleases
 
 
 @pytest.fixture(autouse=True, params=[0])
 def time_stopped(request):
     with patch(
-        "saltext.saltext_vault.utils.vault.leases.time.time",
+        "saltext.vault.utils.vault.leases.time.time",
         autospec=True,
         return_value=request.param,
     ):
@@ -157,7 +157,7 @@ def test_vault_token_is_valid_accounts_for_num_uses(num_uses, uses, expected):
         "use_count": uses,
     }
     with patch(
-        "saltext.saltext_vault.utils.vault.leases.BaseLease.is_valid_for",
+        "saltext.vault.utils.vault.leases.BaseLease.is_valid_for",
         autospec=True,
         return_value=True,
     ):
@@ -208,7 +208,7 @@ def test_vault_approle_secret_id_is_valid_accounts_for_num_uses(num_uses, uses, 
         "use_count": uses,
     }
     with patch(
-        "saltext.saltext_vault.utils.vault.leases.BaseLease.is_valid_for",
+        "saltext.vault.utils.vault.leases.BaseLease.is_valid_for",
         autospec=True,
         return_value=True,
     ):

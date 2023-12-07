@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 repo_path = Path(subprocess.check_output(["git", "rev-parse", "--show-toplevel"]).decode().strip())
-src_dir = repo_path / "src" / "saltext" / "saltext-vault"
+src_dir = repo_path / "src" / "saltext" / "vault"
 doc_dir = repo_path / "docs"
 
 docs_by_kind = {}
@@ -15,7 +15,7 @@ def make_import_path(path):
     return ".".join(path.with_suffix("").parts[-4:])
 
 
-for path in Path(__file__).parent.parent.joinpath("src/saltext/saltext-vault/").glob("*/*.py"):
+for path in Path(__file__).parent.parent.joinpath("src/saltext/vault/").glob("*/*.py"):
     if path.name != "__init__.py":
         kind = path.parent.name
         docs_by_kind.setdefault(kind, set()).add(path)
@@ -40,12 +40,14 @@ for kind in docs_by_kind:
 """
         )
 
-    header_text = "execution" if kind.lower() == "modules" else kind.rstrip("s") + " modules"
+    header_text = (
+        "execution modules" if kind.lower() == "modules" else kind.rstrip("s") + " modules"
+    )
     header = f"{'_'*len(header_text)}\n{header_text.title()}\n{'_'*len(header_text)}"
 
     all_rst.write_text(
         f"""
-.. all-saltext.saltext-vault.{kind}:
+.. all-saltext.vault.{kind}:
 
 {header}
 

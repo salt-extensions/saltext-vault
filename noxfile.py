@@ -19,7 +19,7 @@ nox.options.reuse_existing_virtualenvs = True
 nox.options.error_on_missing_interpreters = False
 
 # Python versions to test against
-PYTHON_VERSIONS = ("3", "3.5", "3.6", "3.7", "3.8", "3.9")
+PYTHON_VERSIONS = ("3", "3.5", "3.6", "3.7", "3.8", "3.9", "3.10")
 # Be verbose when running under a CI context
 CI_RUN = (
     os.environ.get("JENKINS_URL") or os.environ.get("CI") or os.environ.get("DRONE") is not None
@@ -29,7 +29,7 @@ SKIP_REQUIREMENTS_INSTALL = "SKIP_REQUIREMENTS_INSTALL" in os.environ
 EXTRA_REQUIREMENTS_INSTALL = os.environ.get("EXTRA_REQUIREMENTS_INSTALL")
 
 COVERAGE_VERSION_REQUIREMENT = "coverage==5.2"
-SALT_REQUIREMENT = os.environ.get("SALT_REQUIREMENT") or "salt>=3003rc1"
+SALT_REQUIREMENT = os.environ.get("SALT_REQUIREMENT") or "salt>=3003"
 if SALT_REQUIREMENT == "salt==master":
     SALT_REQUIREMENT = "git+https://github.com/saltstack/salt.git@master"
 
@@ -44,9 +44,8 @@ os.chdir(str(REPO_ROOT))
 ARTIFACTS_DIR = REPO_ROOT / "artifacts"
 # Make sure the artifacts directory exists
 ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
-RUNTESTS_LOGFILE = ARTIFACTS_DIR / "runtests-{}.log".format(
-    datetime.datetime.now().strftime("%Y%m%d%H%M%S.%f")
-)
+CUR_TIME = datetime.datetime.now().strftime("%Y%m%d%H%M%S.%f")
+RUNTESTS_LOGFILE = ARTIFACTS_DIR / f"runtests-{CUR_TIME}.log"
 COVERAGE_REPORT_DB = REPO_ROOT / ".coverage"
 COVERAGE_REPORT_PROJECT = ARTIFACTS_DIR.relative_to(REPO_ROOT) / "coverage-project.xml"
 COVERAGE_REPORT_TESTS = ARTIFACTS_DIR.relative_to(REPO_ROOT) / "coverage-tests.xml"
@@ -59,7 +58,8 @@ def _get_session_python_version_info(session):
     except AttributeError:
         session_py_version = session.run_always(
             "python",
-            "-c" 'import sys; sys.stdout.write("{}.{}.{}".format(*sys.version_info))',
+            "-c",
+            'import sys; sys.stdout.write("{}.{}.{}".format(*sys.version_info))',
             silent=True,
             log=False,
         )
@@ -72,12 +72,12 @@ def _get_pydir(session):
     version_info = _get_session_python_version_info(session)
     if version_info < (3, 5):
         session.error("Only Python >= 3.5 is supported")
-    return "py{}.{}".format(*version_info)
+    return f"py{version_info[0]}.{version_info[1]}"
 
 
 def _install_requirements(
     session,
-    *passed_requirements,
+    *passed_requirements,  # pylint: disable=unused-argument
     install_coverage_requirements=True,
     install_test_requirements=True,
     install_source=False,
@@ -108,7 +108,7 @@ def _install_requirements(
             )
             install_command = ["--progress-bar=off"]
             install_command += [req.strip() for req in EXTRA_REQUIREMENTS_INSTALL.split()]
-            session.install(*passed_requirements, silent=PIP_INSTALL_SILENT)
+            session.install(*install_command, silent=PIP_INSTALL_SILENT)
 
         if install_source:
             pkg = "."
@@ -195,7 +195,7 @@ def tests(session):
             "-o",
             str(COVERAGE_REPORT_PROJECT),
             "--omit=tests/*",
-            "--include=src/saltext/saltext_vault/*",
+            "--include=src/saltext/vault/*",
         )
         # Generate report for tests code coverage
         session.run(
@@ -203,18 +203,16 @@ def tests(session):
             "xml",
             "-o",
             str(COVERAGE_REPORT_TESTS),
-            "--omit=src/saltext/saltext_vault/*",
+            "--omit=src/saltext/vault/*",
             "--include=tests/*",
         )
         try:
-            session.run(
-                "coverage", "report", "--show-missing", "--include=src/saltext/saltext_vault/*"
-            )
+            session.run("coverage", "report", "--show-missing", "--include=src/saltext/vault/*")
             # If you also want to display the code coverage report on the CLI
             # for the tests, comment the call above and uncomment the line below
             # session.run(
             #    "coverage", "report", "--show-missing",
-            #    "--include=src/saltext/saltext_vault/*,tests/*"
+            #    "--include=src/saltext/vault/*,tests/*"
             # )
         finally:
             # Move the coverage DB to artifacts/coverage in order for it to be archived by CI
@@ -292,7 +290,7 @@ def _lint(session, rcfile, flags, paths, tee_output=True):
                 sys.stdout.flush()
                 if pylint_report_path:
                     # Write report
-                    with open(pylint_report_path, "w") as wfh:
+                    with open(pylint_report_path, "w", encoding="utf-8") as wfh:
                         wfh.write(contents)
                     session.log("Report file written to %r", pylint_report_path)
             stdout.close()
@@ -307,9 +305,7 @@ def _lint_pre_commit(session, rcfile, flags, paths):
     if "pre-commit" not in os.environ["VIRTUAL_ENV"]:
         session.error(
             "This should be running from within a pre-commit virtualenv and "
-            "'VIRTUAL_ENV'({}) does not appear to be a pre-commit virtualenv.".format(
-                os.environ["VIRTUAL_ENV"]
-            )
+            f"'VIRTUAL_ENV'({os.environ['VIRTUAL_ENV']}) does not appear to be a pre-commit virtualenv."
         )
 
     # Let's patch nox to make it run inside the pre-commit virtualenv
@@ -405,7 +401,7 @@ def docs(session):
     session.run("make", "coverage", "SPHINXOPTS=-W", external=True)
     docs_coverage_file = os.path.join("_build", "html", "python.txt")
     if os.path.exists(docs_coverage_file):
-        with open(docs_coverage_file) as rfh:
+        with open(docs_coverage_file) as rfh:  # pylint: disable=unspecified-encoding
             contents = rfh.readlines()[2:]
             if contents:
                 session.error("\n" + "".join(contents))
@@ -489,20 +485,15 @@ def docs_crosslink_info(session):
             log=False,
         )
     )
+    intersphinx_mapping_list = ", ".join(list(intersphinx_mapping))
     try:
         mapping_entry = intersphinx_mapping[session.posargs[0]]
     except IndexError:
         session.error(
-            "You need to pass at least one argument whose value must be one of: {}".format(
-                ", ".join(list(intersphinx_mapping))
-            )
+            f"You need to pass at least one argument whose value must be one of: {intersphinx_mapping_list}"
         )
     except KeyError:
-        session.error(
-            "Only acceptable values for first argument are: {}".format(
-                ", ".join(list(intersphinx_mapping))
-            )
-        )
+        session.error(f"Only acceptable values for first argument are: {intersphinx_mapping_list}")
     session.run(
         "python", "-m", "sphinx.ext.intersphinx", mapping_entry[0].rstrip("/") + "/objects.inv"
     )
@@ -521,7 +512,10 @@ def gen_api_docs(session):
         install_source=True,
         install_extras=["docs"],
     )
-    shutil.rmtree("docs/ref")
+    try:
+        shutil.rmtree("docs/ref")
+    except FileNotFoundError:
+        pass
     session.run(
         "sphinx-apidoc",
         "--implicit-namespaces",
@@ -529,5 +523,5 @@ def gen_api_docs(session):
         "-o",
         "docs/ref/",
         "src/saltext",
-        "src/saltext/saltext_vault/config/schemas",
+        "src/saltext/vault/config/schemas",
     )

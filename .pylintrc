@@ -632,7 +632,28 @@ signature-mutators=
 
 # List of additional names supposed to be defined in builtins. Remember that
 # you should avoid defining new builtins when possible.
-additional-builtins=
+additional-builtins=__opts__,
+  __salt__,
+  __pillar__,
+  __grains__,
+  __context__,
+  __runner__,
+  __ret__,
+  __env__,
+  __low__,
+  __states__,
+  __lowstate__,
+  __running__,
+  __active_provider_name__,
+  __master_opts__,
+  __jid_event__,
+  __instance_id__,
+  __salt_system_encoding__,
+  __proxy__,
+  __serializers__,
+  __reg__,
+  __executors__,
+  __events__
 
 # Tells whether unused global variables should be treated as a violation.
 allow-global-unused-variables=yes

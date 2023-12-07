@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 import salt.exceptions
-import saltext.saltext_vault.utils.vault as vaultutil
-from saltext.saltext_vault.sdb import vault
+import saltext.vault.utils.vault as vaultutil
+from saltext.vault.sdb import vault
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def data():
 
 @pytest.fixture
 def read_kv(data):
-    with patch("saltext.saltext_vault.utils.vault.read_kv", autospec=True) as read:
+    with patch("saltext.vault.utils.vault.read_kv", autospec=True) as read:
         read.return_value = data
         yield read
 
@@ -46,7 +46,7 @@ def read_kv_err(read_kv):
 
 @pytest.fixture
 def write_kv():
-    with patch("saltext.saltext_vault.utils.vault.write_kv", autospec=True) as write:
+    with patch("saltext.vault.utils.vault.write_kv", autospec=True) as write:
         yield write
 
 

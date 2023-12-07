@@ -4,8 +4,8 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
-import saltext.saltext_vault.utils.vault as vaultutil
-from saltext.saltext_vault.pillar import vault
+import saltext.vault.utils.vault as vaultutil
+from saltext.vault.pillar import vault
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def data():
 
 @pytest.fixture
 def read_kv(data):
-    with patch("saltext.saltext_vault.utils.vault.read_kv", autospec=True) as read:
+    with patch("saltext.vault.utils.vault.read_kv", autospec=True) as read:
         read.return_value = data
         yield read
 
