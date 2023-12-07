@@ -148,6 +148,10 @@ autodoc_mock_imports = ["salt"]
 
 
 def setup(app):
+    # Add vaultpolicy lexer
+    from vault.policylexer import VaultPolicyLexer
+    app.add_lexer("vaultpolicy", VaultPolicyLexer)
+
     app.add_crossref_type(
         directivename="fixture",
         rolename="fixture",
