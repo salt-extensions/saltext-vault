@@ -580,7 +580,7 @@ assign
 
     .. important::
 
-        See :ref:`Is Targeting using Grain Data Secure?
+        See :external+salt:ref:`Is Targeting using Grain Data Secure?
         <faq-grain-security>` for important security information. In short,
         everything except ``grains[id]`` is minion-controlled.
 
