@@ -6,24 +6,14 @@
 #
 alabaster==0.7.13
     # via sphinx
-apache-libcloud==3.8.0
-    # via salt
-autocommand==2.2.2
-    # via jaraco.text
 babel==2.13.1
     # via sphinx
 beautifulsoup4==4.12.2
     # via furo
 certifi==2023.11.17
     # via requests
-cffi==1.15.1
-    # via cryptography
 charset-normalizer==3.3.2
     # via requests
-cheroot==10.0.0
-    # via cherrypy
-cherrypy==18.8.0
-    # via salt
 click-default-group==1.2.4
     # via towncrier
 click==8.1.7
@@ -32,24 +22,14 @@ click==8.1.7
     #   towncrier
 contextvars==2.4
     # via salt
-cryptography==41.0.7
-    # via
-    #   pyopenssl
-    #   salt
 distro==1.8.0
     # via salt
 docutils==0.19
     # via sphinx
 furo==2023.3.27 ; python_version < "3.8"
     # via -r requirements/docs.in
-gitdb==4.0.11
-    # via gitpython
-gitpython==3.1.40
-    # via salt
 idna==3.6
-    # via
-    #   requests
-    #   salt
+    # via requests
 imagesize==1.4.1
     # via sphinx
 immutables==0.19
@@ -57,28 +37,11 @@ immutables==0.19
 importlib-metadata==6.7.0 ; python_version < "3.8"
     # via
     #   -r requirements/docs.in
-    #   cheroot
     #   click
-    #   salt
     #   sphinx
     #   sphinxcontrib-spelling
-importlib-resources==5.12.0
-    # via jaraco.text
 incremental==22.10.0
     # via towncrier
-inflect==6.0.5
-    # via jaraco.text
-jaraco.collections==4.2.0
-    # via cherrypy
-jaraco.context==4.3.0
-    # via jaraco.text
-jaraco.functools==3.7.0
-    # via
-    #   cheroot
-    #   jaraco.text
-    #   tempora
-jaraco.text==3.11.1
-    # via jaraco.collections
 jinja2==3.1.2
     # via
     #   salt
@@ -86,40 +49,22 @@ jinja2==3.1.2
     #   towncrier
 jmespath==1.0.1
     # via salt
-linode-python==1.1.1
-    # via salt
 looseversion==1.3.0
     # via salt
 markupsafe==2.1.3
     # via
     #   jinja2
     #   salt
-more-itertools==9.1.0
-    # via
-    #   cheroot
-    #   cherrypy
-    #   jaraco.functools
-    #   jaraco.text
 msgpack==1.0.5
     # via salt
 packaging==23.2
     # via
     #   salt
     #   sphinx
-portend==3.1.0
-    # via cherrypy
 psutil==5.9.6
     # via salt
-pyasn1==0.5.1
-    # via salt
-pycparser==2.21
-    # via
-    #   cffi
-    #   salt
 pycryptodomex==3.19.0
     # via salt
-pydantic==1.10.13
-    # via inflect
 pyenchant==3.2.2
     # via sphinxcontrib-spelling
 pygments==2.17.2
@@ -127,16 +72,8 @@ pygments==2.17.2
     #   furo
     #   sphinx
     #   sphinx-prompt
-pyopenssl==23.3.0
-    # via salt
-python-dateutil==2.8.2
-    # via salt
-python-gnupg==0.5.1
-    # via salt
 pytz==2023.3.post1
-    # via
-    #   babel
-    #   tempora
+    # via babel
 pyyaml==6.0.1
     # via
     #   -r requirements/docs.in
@@ -145,18 +82,10 @@ pyzmq==25.1.2
     # via salt
 requests==2.31.0
     # via
-    #   apache-libcloud
     #   salt
     #   sphinx
-    #   vultr
 salt==3006.4
     # via -r requirements/base.txt
-setproctitle==1.3.3
-    # via salt
-six==1.16.0
-    # via python-dateutil
-smmap==5.0.1
-    # via gitdb
 snowballstemmer==2.2.0
     # via sphinx
 soupsieve==2.4.1
@@ -189,30 +118,18 @@ sphinxcontrib-serializinghtml==1.1.5
     # via sphinx
 sphinxcontrib-spelling==8.0.0
     # via -r requirements/docs.in
-tempora==5.3.0
-    # via portend
-timelib==0.3.0
-    # via salt
 tomli==2.0.1
     # via towncrier
 towncrier==22.12.0
     # via -r requirements/changelog.txt
 typing-extensions==4.7.1
     # via
-    #   gitpython
     #   immutables
     #   importlib-metadata
-    #   pydantic
 urllib3==2.0.7
     # via requests
-vultr==1.0.1
-    # via salt
-zc.lockfile==3.0.post1
-    # via cherrypy
 zipp==3.15.0
-    # via
-    #   importlib-metadata
-    #   importlib-resources
+    # via importlib-metadata
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
