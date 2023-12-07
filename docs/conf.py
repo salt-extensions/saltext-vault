@@ -95,7 +95,7 @@ exclude_patterns = [
     "sitevars.rst",
 ]
 
-autosummary_generate = True
+autosummary_generate = False
 
 # -- Options for HTML output -------------------------------------------------
 
@@ -136,7 +136,7 @@ napoleon_use_rtype = True
 # ----- Intersphinx Config ---------------------------------------------------------------------------------------->
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
-    "pytest": ("https://pytest.readthedocs.io/en/stable", None),
+    "pytest": ("https://docs.pytest.org/en/stable", None),
     "salt": ("https://docs.saltproject.io/en/latest", None),
 }
 # <---- Intersphinx Config -----------------------------------------------------------------------------------------

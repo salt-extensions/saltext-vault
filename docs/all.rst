@@ -7,10 +7,28 @@ Complete List of saltext-vault
 .. toctree::
    :maxdepth: 2
 
-   ref/modules.rst
+   ref/modules/index
 
 
 .. toctree::
    :maxdepth: 2
 
-   ref/states.rst
+   ref/pillar/index
+
+
+.. toctree::
+   :maxdepth: 2
+
+   ref/runners/index
+
+
+.. toctree::
+   :maxdepth: 2
+
+   ref/sdb/index
+
+
+.. toctree::
+   :maxdepth: 2
+
+   ref/states/index

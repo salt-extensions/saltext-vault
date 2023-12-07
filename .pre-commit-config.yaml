@@ -2,7 +2,7 @@
 minimum_pre_commit_version: 2.4.0
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.0.1
+    rev: v4.4.0
     hooks:
       - id: check-merge-conflict  # Check for files that contain merge conflict strings.
       - id: trailing-whitespace   # Trims trailing whitespace.
@@ -37,7 +37,7 @@ repos:
 
   - repo: https://github.com/s0undt3ch/salt-rewrite
     # Automatically rewrite code with known rules
-    rev: 1.3.3
+    rev: 2.2.0
     hooks:
       - id: salt-rewrite
         alias: rewrite-docstrings
@@ -47,7 +47,7 @@ repos:
 
   - repo: https://github.com/s0undt3ch/salt-rewrite
     # Automatically rewrite code with known rules
-    rev: 1.3.3
+    rev: 2.2.0
     hooks:
       - id: salt-rewrite
         alias: rewrite-tests
@@ -59,18 +59,18 @@ repos:
     rev: v2.37.2
     hooks:
       - id: pyupgrade
-        name: Rewrite Code to be Py3.6+
+        name: Rewrite Code to be Py3.7+
         args: [
-          --py36-plus
+          --py37-plus
         ]
         exclude: src/saltext/vault/version.py
 
   - repo: https://github.com/asottile/reorder_python_imports
-    rev: v2.6.0
+    rev: v3.10.0
     hooks:
       - id: reorder-python-imports
         args: [
-          --py3-plus,
+          --py37-plus,
         ]
         exclude: src/saltext/vault/version.py
 
@@ -80,10 +80,8 @@ repos:
       - id: black
         args: [-l 100]
         exclude: src/saltext/vault/version.py
-        additional_dependencies:
-          - click<8.1.0
 
-  - repo: https://github.com/asottile/blacken-docs
+  - repo: https://github.com/adamchainz/blacken-docs
     rev: v1.12.1
     hooks:
       - id: blacken-docs
@@ -91,12 +89,11 @@ repos:
         files: ^(docs/.*\.rst|src/saltext/vault/.*\.py)$
         additional_dependencies:
           - black==22.6.0
-          - click<8.1.0
   # <---- Formatting -----------------------------------------------------------------------------
 
   # ----- Security ------------------------------------------------------------------------------>
   - repo: https://github.com/PyCQA/bandit
-    rev: "1.7.0"
+    rev: "1.7.4"
     hooks:
       - id: bandit
         alias: bandit-salt
@@ -104,7 +101,7 @@ repos:
         args: [--silent, -lll, --skip, B701]
         exclude: src/saltext/vault/version.py
   - repo: https://github.com/PyCQA/bandit
-    rev: "1.7.0"
+    rev: "1.7.4"
     hooks:
       - id: bandit
         alias: bandit-tests
@@ -114,17 +111,18 @@ repos:
   # <---- Security -------------------------------------------------------------------------------
 
   # ----- Code Analysis ------------------------------------------------------------------------->
-  #  - repo: https://github.com/saltstack/mirrors-nox
-  #  rev: v2021.6.12
-  #  hooks:
-  #    - id: nox
-  #      alias: lint-src
-  #      name: Lint Source Code
-  #      files: ^((setup|noxfile)|src/.*)\.py$
-  #      args:
-  #        - -e
-  #        - lint-code-pre-commit
-  #        - --
+  - repo: https://github.com/saltstack/mirrors-nox
+    rev: v2021.6.12
+    hooks:
+      - id: nox
+        alias: lint-src
+        name: Lint Source Code
+        files: ^((setup|noxfile)|src/.*)\.py$
+        require_serial: true
+        args:
+          - -e
+          - lint-code-pre-commit
+          - --
 
   - repo: https://github.com/saltstack/mirrors-nox
     rev: v2021.6.12
@@ -133,6 +131,7 @@ repos:
         alias: lint-tests
         name: Lint Tests
         files: ^tests/.*\.py$
+        require_serial: true
         args:
           - -e
           - lint-tests-pre-commit
@@ -175,9 +174,22 @@ repos:
           - --py-version=3.9
           - --platform=linux
           - requirements/tests.in
+
+      - id: pip-tools-compile
+        alias: compile-3.10-test-requirements
+        name: Py3.10 Test Requirements
+        files: ^requirements/tests.in$
+        pass_filenames: false
+        args:
+          - -v
+          - --py-version=3.10
+          - --platform=linux
+          - requirements/tests.in
+
   # <---- Static Test Requirements ---------------------------------------------------------------
 
   # ----- Static Lint Requirements -------------------------------------------------------------->
+
       - id: pip-tools-compile
         alias: compile-3.7-test-requirements
         name: Py3.7 Lint Requirements
@@ -210,9 +222,22 @@ repos:
           - --py-version=3.9
           - --platform=linux
           - requirements/lint.in
+
+      - id: pip-tools-compile
+        alias: compile-3.10-test-requirements
+        name: Py3.10 Lint Requirements
+        files: ^requirements/lint.in$
+        pass_filenames: false
+        args:
+          - -v
+          - --py-version=3.10
+          - --platform=linux
+          - requirements/lint.in
+
   # <---- Static Lint Requirements ---------------------------------------------------------------
 
   # ----- Static Docs Requirements -------------------------------------------------------------->
+
       - id: pip-tools-compile
         alias: compile-3.7-test-requirements
         name: Py3.7 Docs Requirements
@@ -245,4 +270,16 @@ repos:
           - --py-version=3.9
           - --platform=linux
           - requirements/docs.in
+
+      - id: pip-tools-compile
+        alias: compile-3.10-test-requirements
+        name: Py3.10 Docs Requirements
+        files: ^requirements/docs.in$
+        pass_filenames: false
+        args:
+          - -v
+          - --py-version=3.10
+          - --platform=linux
+          - requirements/docs.in
+
   # <---- Static Docs Requirements ---------------------------------------------------------------

@@ -1,1 +1,1 @@
-towncrier==21.9.0rc1
+towncrier==22.12.0
