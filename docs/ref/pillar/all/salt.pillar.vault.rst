@@ -1,5 +1,5 @@
-salt.pillar.vault
-=================
+saltext.saltext_vault.pillar.vault
+==================================
 
-.. automodule:: salt.pillar.vault
+.. automodule:: saltext.saltext_vault.pillar.vault
     :members:

@@ -1,6 +1,6 @@
-salt.runners.vault
-==================
+saltext.saltext_vault.runners.vault
+===================================
 
-.. automodule:: salt.runners.vault
+.. automodule:: saltext.saltext_vault.runners.vault
     :members:
     :undoc-members:

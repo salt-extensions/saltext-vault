@@ -1,5 +1,5 @@
-salt.sdb.vault
-==============
+saltext.saltext_vault.sdb.vault
+===============================
 
-.. automodule:: salt.sdb.vault
+.. automodule:: saltext.saltext_vault.sdb.vault
     :members:

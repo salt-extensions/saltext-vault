@@ -1,5 +1,5 @@
 Welcome to saltext-vault Documentation!
-======================================
+=======================================
 
 .. toctree::
   :maxdepth: 2

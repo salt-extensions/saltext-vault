@@ -376,7 +376,7 @@ backend
     ``disk``/``file``/``localfs`` will force using the localfs driver, regardless
     of configured minion data cache.
     Setting this to anything else will use the default configured cache for
-    minion data (:conf_master:`cache <cache>`), by default the local filesystem
+    minion data (`cache: <cache>`), by default the local filesystem
     as well.
 
 clear_attempt_revocation

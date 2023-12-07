@@ -130,12 +130,12 @@ This example takes the key value pairs returned from vault as follows:
 
 Using pillar values to template vault pillar paths requires them to be defined
 before the vault ext_pillar is called. Especially consider the significancy
-of :conf_master:`ext_pillar_first <ext_pillar_first>` master config setting.
+of `ext_pillar_first: <ext_pillar_first>` master config setting.
 You cannot use pillar values sourced from Vault in pillar-templated policies.
 
 If a pillar pattern matches multiple paths, the results are merged according to
-the master configuration values :conf_master:`pillar_source_merging_strategy <pillar_source_merging_strategy>`
-and :conf_master:`pillar_merge_lists <pillar_merge_lists>` by default.
+the master configuration values `pillar_source_merging_strategy: <pillar_source_merging_strategy>`
+and `pillar_merge_lists: <pillar_merge_lists>` by default.
 
 If the optional nesting_key was defined, the merged result will be nested below.
 There is currently no way to nest multiple results under different keys.

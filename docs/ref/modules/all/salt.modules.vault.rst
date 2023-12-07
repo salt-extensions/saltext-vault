@@ -1,6 +1,6 @@
-salt.modules.vault
-==================
+saltext.saltext_vault.modules.vault
+===================================
 
-.. automodule:: salt.modules.vault
+.. automodule:: saltext.saltext_vault.modules.vault
     :members:
     :undoc-members:
