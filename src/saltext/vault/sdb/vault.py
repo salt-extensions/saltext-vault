@@ -61,7 +61,7 @@ log = logging.getLogger(__name__)
 __func_alias__ = {"set_": "set"}
 
 
-def set_(key, value, profile=None):
+def set_(key, value, profile=None):  # pylint: disable=unused-argument
     """
     Set a key/value pair in the vault service
     """
@@ -94,7 +94,7 @@ def set_(key, value, profile=None):
         raise salt.exceptions.CommandExecutionError(err) from err
 
 
-def get(key, profile=None):
+def get(key, profile=None):  # pylint: disable=unused-argument
     """
     Get a value from the vault service
     """

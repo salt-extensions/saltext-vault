@@ -359,7 +359,7 @@ def _build_revocation_client(opts, context, force_local=False):
     # Disregard a possibly returned locally configured token since
     # it is cached with metadata if it has been used. Also, we do not want
     # to revoke statically configured tokens anyways.
-    config, _, unauthd_client = _get_connection_config(
+    config, _, _ = _get_connection_config(
         connection_cbank, opts, context, force_local=force_local, pre_flush=True
     )
     if config is None:

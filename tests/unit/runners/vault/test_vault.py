@@ -387,9 +387,9 @@ def test_generate_token(
     assert res_num_uses == 1
 
 
-@pytest.mark.usefixtures("config")
+@pytest.mark.usefixtures("config", "policies")
 @pytest.mark.parametrize("policies", [[]], indirect=True)
-def test_generate_token_no_policies_denied(policies):  # pylint: disable-msg=unused-argument
+def test_generate_token_no_policies_denied():
     """
     Ensure generated tokens need at least one attached policy
     """
@@ -472,11 +472,9 @@ def test_generate_new_token(
         )
 
 
-@pytest.mark.usefixtures("validate_signature")
+@pytest.mark.usefixtures("validate_signature", "config")
 @pytest.mark.parametrize("config", [{"issue:type": "approle"}], indirect=True)
-def test_generate_new_token_refuses_if_not_configured(
-    config,  # pylint: disable-msg=unused-argument
-):
+def test_generate_new_token_refuses_if_not_configured():
     """
     Ensure generate_new_token only issues tokens if configured to issue them
     """
@@ -639,9 +637,9 @@ def test_get_role_id(config, validate_signature, wrapped_serialized, issue_param
         )
 
 
-@pytest.mark.usefixtures("validate_signature")
+@pytest.mark.usefixtures("validate_signature", "config")
 @pytest.mark.parametrize("config", [{"issue:type": "token"}], indirect=True)
-def test_get_role_id_refuses_if_not_configured(config):  # pylint: disable=unused-argument
+def test_get_role_id_refuses_if_not_configured():
     """
     Ensure get_role_id returns an error if not configured to issue AppRoles
     """
@@ -695,7 +693,7 @@ class TestGetRoleId:
     )
     def test_get_role_id(
         self,
-        config,  # pylint: disable=unused-argument
+        config,
         lookup_approle,
         lookup_roleid,
         manage_approle,
@@ -825,9 +823,9 @@ def test_generate_secret_id(
         matcher.assert_called_once()
 
 
-@pytest.mark.usefixtures("validate_signature")
+@pytest.mark.usefixtures("validate_signature", "config")
 @pytest.mark.parametrize("config", [{"issue:type": "approle"}], indirect=True)
-def test_generate_secret_id_nonexistent_approle(config):  # pylint: disable=unused-argument
+def test_generate_secret_id_nonexistent_approle():
     """
     Ensure generate_secret_id fails and prompts the minion to refresh cache if
     no associated AppRole could be found.
@@ -842,9 +840,9 @@ def test_generate_secret_id_nonexistent_approle(config):  # pylint: disable=unus
         assert res["expire_cache"]
 
 
-@pytest.mark.usefixtures("validate_signature")
+@pytest.mark.usefixtures("validate_signature", "config")
 @pytest.mark.parametrize("config", [{"issue:type": "token"}], indirect=True)
-def test_get_secret_id_refuses_if_not_configured(config):  # pylint: disable=unused-argument
+def test_get_secret_id_refuses_if_not_configured():
     """
     Ensure get_secret_id returns an error if not configured to issue AppRoles
     """
@@ -887,10 +885,9 @@ def test_generate_secret_id_updates_params(
         manage_approle.assert_called_once()
 
 
+@pytest.mark.usefixtures("config")
 @pytest.mark.parametrize("config", [{"issue:type": "token"}], indirect=True)
-def test_list_approles_raises_exception_if_not_configured(
-    config,
-):  # pylint: disable=unused-argument
+def test_list_approles_raises_exception_if_not_configured():
     """
     Ensure test_list_approles returns an error if not configured to issue AppRoles
     """
@@ -898,6 +895,7 @@ def test_list_approles_raises_exception_if_not_configured(
         vault.list_approles()
 
 
+@pytest.mark.usefixtures("config")
 @pytest.mark.parametrize(
     "config,expected",
     [
@@ -918,7 +916,7 @@ def test_list_approles_raises_exception_if_not_configured(
     ],
     indirect=["config"],
 )
-def test_get_policies(config, expected, grains, pillar):  # pylint: disable=unused-argument
+def test_get_policies(expected, grains, pillar):
     """
     Ensure _get_policies works as intended.
     The expansion of lists is tested in the vault utility module unit tests.
@@ -965,6 +963,7 @@ def test_get_policies_does_not_render_pillar_unnecessarily(config, grains, pilla
                 assert get_pillar.call_count == int("pillar" in config("policies:assign")[0])
 
 
+@pytest.mark.usefixtures("config")
 @pytest.mark.parametrize(
     "config,expected",
     [
@@ -974,7 +973,7 @@ def test_get_policies_does_not_render_pillar_unnecessarily(config, grains, pilla
     ],
     indirect=["config"],
 )
-def test_get_policies_for_nonexisting_minions(config, expected):  # pylint: disable=unused-argument
+def test_get_policies_for_nonexisting_minions(expected):
     """
     For non-existing minions, or the master-minion, grains will be None.
     """
@@ -1052,6 +1051,7 @@ def test_get_metadata_list():
             assert res == {"salt_role": "salt_role_bar,salt_role_foo"}
 
 
+@pytest.mark.usefixtures("config")
 @pytest.mark.parametrize(
     "config,issue_params,expected",
     [
@@ -1250,7 +1250,7 @@ def test_get_metadata_list():
     ],
     indirect=["config"],
 )
-def test_parse_issue_params(config, issue_params, expected):  # pylint: disable=unused-argument
+def test_parse_issue_params(issue_params, expected):
     """
     Ensure all known parameters can only be overridden if it was configured
     on the master. Also ensure the mapping to API requests is correct (for tokens).
@@ -1259,6 +1259,7 @@ def test_parse_issue_params(config, issue_params, expected):  # pylint: disable=
     assert res == expected
 
 
+@pytest.mark.usefixtures("config")
 @pytest.mark.parametrize(
     "config,issue_params,expected",
     [
@@ -1288,9 +1289,7 @@ def test_parse_issue_params(config, issue_params, expected):  # pylint: disable=
     ],
     indirect=["config"],
 )
-def test_parse_issue_params_does_not_allow_bind_secret_id_override(
-    config, issue_params, expected
-):  # pylint: disable=unused-argument
+def test_parse_issue_params_does_not_allow_bind_secret_id_override(issue_params, expected):
     """
     Ensure bind_secret_id can only be set on the master.
     """

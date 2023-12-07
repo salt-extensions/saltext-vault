@@ -13,7 +13,6 @@ from saltfactories.utils import random_string
 from tests.support.vault import vault_delete_secret
 from tests.support.vault import vault_write_secret
 
-# pylint: disable=unused-import
 
 log = logging.getLogger(__name__)
 
@@ -171,7 +170,7 @@ def pillar_caching_salt_call_cli(pillar_caching_salt_minion):
 
 
 @pytest.fixture(scope="class")
-def vault_pillar_values_policy(vault_container_version):
+def vault_pillar_values_policy(vault_container_version):  # pylint: disable=unused-argument
     vault_write_secret("secret/path/foo", vault_sourced="fail")
     try:
         yield
@@ -353,7 +352,7 @@ class TestVaultPillarPolicyTemplatesWithCache:
     def minion_data_cache_present(
         self,
         pillar_caching_salt_call_cli,
-        pillar_caching_policy_tree,
+        pillar_caching_policy_tree,  # pylint: disable=unused-argument
     ):
         ret = pillar_caching_salt_call_cli.run("saltutil.refresh_pillar", wait=True)
         assert ret.returncode == 0
@@ -363,7 +362,7 @@ class TestVaultPillarPolicyTemplatesWithCache:
     @pytest.fixture(autouse=True)
     def minion_data_cache_outdated(
         self,
-        minion_data_cache_present,
+        minion_data_cache_present,  # pylint: disable=unused-argument
         pillar_caching_salt_run_cli,
         pillar_caching_salt_master,
         pillar_caching_salt_minion,
@@ -439,7 +438,9 @@ class TestVaultPillarPolicyTemplatesWithCache:
 
 
 @pytest.fixture(scope="class")
-def vault_salt_master(salt_factories, pillar_state_tree, vault_port, vault_master_config):
+def vault_salt_master(
+    salt_factories, pillar_state_tree, vault_port, vault_master_config
+):  # pylint: disable=unused-argument
     factory = salt_factories.salt_master_daemon("vault-master", defaults=vault_master_config)
     with factory.started():
         yield factory
@@ -522,7 +523,7 @@ def vault_pillar_values_approle(vault_salt_minion):
 
 
 @pytest.fixture(scope="class")
-def vault_testing_values(vault_container_version):
+def vault_testing_values(vault_container_version):  # pylint: disable=unused-argument
     vault_write_secret("secret/path/foo", success="yeehaaw")
     try:
         yield
@@ -555,7 +556,7 @@ def missing_auth_cache(minion_conn_cachedir):
 def minion_data_cache_present(
     vault_salt_call_cli,
     vault_salt_minion,
-    pillar_roles_tree,
+    pillar_roles_tree,  # pylint: disable=unused-argument
     vault_salt_run_cli,
 ):
     ret = vault_salt_run_cli.run("pillar.show_top", minion=vault_salt_minion.id)
@@ -582,7 +583,7 @@ def conn_cache_absent(minion_conn_cachedir):
 @pytest.fixture(scope="class")
 def approles_synced(
     vault_salt_run_cli,
-    minion_data_cache_present,
+    minion_data_cache_present,  # pylint: disable=unused-argument
     vault_salt_minion,
 ):
     ret = vault_salt_run_cli.run("vault.sync_approles", vault_salt_minion.id)
@@ -597,7 +598,7 @@ def approles_synced(
 @pytest.fixture(scope="class")
 def entities_synced(
     vault_salt_run_cli,
-    minion_data_cache_present,
+    minion_data_cache_present,  # pylint: disable=unused-argument
     vault_salt_minion,
 ):
     ret = vault_salt_run_cli.run("vault.sync_entities", vault_salt_minion.id)
@@ -687,7 +688,9 @@ class TestAppRoleIssuance:
         }
 
     @pytest.fixture
-    def cache_auth_outdated(self, missing_auth_cache, minion_conn_cachedir, vault_port):
+    def cache_auth_outdated(
+        self, missing_auth_cache, minion_conn_cachedir, vault_port
+    ):  # pylint: disable=unused-argument
         vault_url = f"http://127.0.0.1:{vault_port}"
         config_data = b"\xdf\x00\x00\x00\x03\xa4auth\xdf\x00\x00\x00\x04\xadapprole_mount\xa7approle\xacapprole_name\xbavault-approle-int-minion-1\xa6method\xa5token\xa9secret_id\xc0\xa5cache\xdf\x00\x00\x00\x03\xa7backend\xa4disk\xa6config\xcd\x0e\x10\xa6secret\xa3ttl\xa6server\xdf\x00\x00\x00\x03\xa9namespace\xc0\xa6verify\xc0\xa3url"
         config_data += (len(vault_url) + 160).to_bytes(1, "big") + vault_url.encode()
@@ -701,7 +704,9 @@ class TestAppRoleIssuance:
                 config_cachefile.unlink()
 
     @pytest.fixture
-    def cache_server_outdated(self, missing_auth_cache, minion_conn_cachedir):
+    def cache_server_outdated(
+        self, missing_auth_cache, minion_conn_cachedir
+    ):  # pylint: disable=unused-argument
         config_data = b"\xdf\x00\x00\x00\x03\xa4auth\xdf\x00\x00\x00\x05\xadapprole_mount\xa7approle\xacapprole_name\xbavault-approle-int-minion-1\xa6method\xa7approle\xa7role_id\xactest-role-id\xa9secret_id\xc3\xa5cache\xdf\x00\x00\x00\x03\xa7backend\xa4disk\xa6config\xcd\x0e\x10\xa6secret\xa3ttl\xa6server\xdf\x00\x00\x00\x03\xa9namespace\xc0\xa6verify\xc0\xa3url\xb2http://127.0.0.1:8"
         config_cachefile = minion_conn_cachedir / "config.p"
         with salt.utils.files.fopen(config_cachefile, "wb") as f:
@@ -919,7 +924,9 @@ class TestTokenIssuance:
         }
 
     @pytest.fixture
-    def cache_auth_outdated(self, missing_auth_cache, minion_conn_cachedir, vault_port):
+    def cache_auth_outdated(
+        self, missing_auth_cache, minion_conn_cachedir, vault_port
+    ):  # pylint: disable=unused-argument
         vault_url = f"http://127.0.0.1:{vault_port}"
         config_data = b"\xdf\x00\x00\x00\x03\xa4auth\xdf\x00\x00\x00\x05\xadapprole_mount\xa7approle\xacapprole_name\xbavault-approle-int-minion-1\xa6method\xa7approle\xa7role_id\xactest-role-id\xa9secret_id\xc3\xa5cache\xdf\x00\x00\x00\x03\xa7backend\xa4disk\xa6config\xcd\x0e\x10\xa6secret\xa3ttl\xa6server\xdf\x00\x00\x00\x03\xa9namespace\xc0\xa6verify\xc0\xa3url"
         config_data += (len(vault_url) + 160).to_bytes(1, "big") + vault_url.encode()

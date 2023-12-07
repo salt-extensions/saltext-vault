@@ -9,8 +9,6 @@ from tests.support.vault import vault_list_secrets
 from tests.support.vault import vault_read_policy
 from tests.support.vault import vault_write_policy
 
-# pylint: disable=unused-import
-
 pytestmark = [
     pytest.mark.slow_test,
     pytest.mark.skip_if_binaries_missing("dockerd", "vault", "getent"),
@@ -40,7 +38,7 @@ def sys_mod(modules):
 
 
 @pytest.fixture
-def vault(loaders, modules, vault_container_version):
+def vault(modules, vault_container_version):  # pylint: disable=unused-argument
     try:
         yield modules.vault
     finally:
@@ -166,7 +164,9 @@ def existing_secret(vault, vault_container_version):
 
 
 @pytest.fixture
-def existing_secret_version(existing_secret, vault, vault_container_version):
+def existing_secret_version(
+    existing_secret, vault, vault_container_version
+):  # pylint: disable=unused-argument
     ret = vault.write_secret("secret/my/secret", user="foo", password="hunter1")
     assert ret
     assert ret["version"] == 2
@@ -181,9 +181,9 @@ def test_delete_secret(vault):
     assert ret is True
 
 
-@pytest.mark.usefixtures("existing_secret_version")
+@pytest.mark.usefixtures("existing_secret_version", "vault_container_version")
 @pytest.mark.parametrize("vault_container_version", ["1.3.1", "latest"], indirect=True)
-def test_delete_secret_versions(vault, vault_container_version):
+def test_delete_secret_versions(vault):
     ret = vault.delete_secret("secret/my/secret", 1)
     assert ret is True
     ret = vault.read_secret("secret/my/secret")
@@ -203,16 +203,16 @@ def test_list_secrets(vault):
     assert ret["keys"] == ["secret"]
 
 
-@pytest.mark.usefixtures("existing_secret")
+@pytest.mark.usefixtures("existing_secret", "vault_container_version")
 @pytest.mark.parametrize("vault_container_version", ["1.3.1", "latest"], indirect=True)
-def test_destroy_secret_kv2(vault, vault_container_version):
+def test_destroy_secret_kv2(vault):
     ret = vault.destroy_secret("secret/my/secret", "1")
     assert ret is True
 
 
-@pytest.mark.usefixtures("existing_secret")
+@pytest.mark.usefixtures("existing_secret", "vault_container_version")
 @pytest.mark.parametrize("vault_container_version", ["latest"], indirect=True)
-def test_patch_secret(vault, vault_container_version):
+def test_patch_secret(vault):
     ret = vault.patch_secret("secret/my/secret", password="baz")
     assert ret
     expected_write = {"destroyed": False, "deletion_time": ""}
@@ -234,7 +234,7 @@ path "secret/some/thing" {
 
 
 @pytest.fixture
-def existing_policy(policy_rules, vault_container_version):
+def existing_policy(policy_rules, vault_container_version):  # pylint: disable=unused-argument
     vault_write_policy("functional_test_policy", policy_rules)
     try:
         yield

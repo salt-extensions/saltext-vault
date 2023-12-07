@@ -122,8 +122,9 @@ def query():
         yield query
 
 
+@pytest.mark.usefixtures("read_kv")
 @pytest.mark.parametrize("key,expected", [(None, {"foo": "bar"}), ("foo", "bar")])
-def test_read_secret(read_kv, key, expected):  # pylint: disable=unused-argument
+def test_read_secret(key, expected):
     """
     Ensure read_secret works as expected without and with specified key.
     KV v1/2 is handled in the utils module.

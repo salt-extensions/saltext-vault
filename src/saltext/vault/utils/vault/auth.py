@@ -220,7 +220,7 @@ class InvalidVaultToken(leases.VaultToken):
     Represents a missing token
     """
 
-    def __init__(self, *args, **kwargs):  # pylint: disable=super-init-not-called
+    def __init__(self, *args, **kwargs):  # pylint: disable=super-init-not-called,unused-argument
         self.renewable = False
         self.use_count = 0
         self.num_uses = 0

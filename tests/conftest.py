@@ -9,7 +9,7 @@ import salt.utils.path
 from pytestshellutils.utils import ports
 from pytestshellutils.utils.processes import ProcessResult
 from saltext.vault import PACKAGE_ROOT
-from saltfactories.utils import random_string  # pylint: disable=wrong-import-order
+from saltfactories.utils import random_string
 
 from tests.support.helpers import PatchedEnviron
 from tests.support.vault import vault_enable_auth_method
@@ -72,7 +72,9 @@ def _vault_container_version_id(value):
     params=["0.9.6", "1.3.1", "latest"],
     ids=_vault_container_version_id,
 )
-def vault_container_version(request, salt_factories, vault_port, vault_environ):
+def vault_container_version(
+    request, salt_factories, vault_port, vault_environ
+):  # pylint: disable=unused-argument
     vault_version = request.param
     vault_binary = salt.utils.path.which("vault")
     config = {

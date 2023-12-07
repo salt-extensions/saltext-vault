@@ -10,7 +10,6 @@ from tests.support.vault import vault_delete_secret
 from tests.support.vault import vault_list_secrets
 from tests.support.vault import vault_write_secret
 
-# pylint: disable=unused-import
 
 log = logging.getLogger(__name__)
 
@@ -74,7 +73,9 @@ def vault_master_config(vault_port):
 
 
 @pytest.fixture(scope="class")
-def vault_salt_master(salt_factories, vault_port, vault_master_config):
+def vault_salt_master(
+    salt_factories, vault_port, vault_master_config
+):  # pylint: disable=unused-argument
     factory = salt_factories.salt_master_daemon("vault-sdbmaster", defaults=vault_master_config)
     with factory.started():
         yield factory
@@ -123,8 +124,9 @@ def kv_root_dual_item(vault_container_version):
         vault_delete_secret("salt/user/user1")
 
 
+@pytest.mark.usefixtures("vault_container_version")
 @pytest.mark.parametrize("vault_container_version", ["1.3.1", "latest"], indirect=True)
-def test_sdb_kv_kvv2_path_local(salt_call_cli, vault_container_version):
+def test_sdb_kv_kvv2_path_local(salt_call_cli):
     ret = salt_call_cli.run(
         "--local",
         "sdb.set",
@@ -138,9 +140,9 @@ def test_sdb_kv_kvv2_path_local(salt_call_cli, vault_container_version):
     assert ret.data == "local"
 
 
-@pytest.mark.usefixtures("kv_root_dual_item")
+@pytest.mark.usefixtures("kv_root_dual_item", "vault_container_version")
 @pytest.mark.parametrize("vault_container_version", ["latest"], indirect=True)
-def test_sdb_kv_dual_item(salt_call_cli, vault_container_version):
+def test_sdb_kv_dual_item(salt_call_cli):
     ret = salt_call_cli.run("--local", "sdb.get", "sdb://sdbvault/salt/data/user1")
     assert ret.data
     assert ret.data == {"desc": "test user", "password": "p4ssw0rd"}

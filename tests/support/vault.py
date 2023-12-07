@@ -86,7 +86,7 @@ def vault_delete_policy(policy):
         pytest.fail(f"Unable to delete policy `{policy}`")
 
 
-def vault_enable_secret_engine(name, options=None, **kwargs):
+def vault_enable_secret_engine(name, options=None):
     if options is None:
         options = []
     try:
