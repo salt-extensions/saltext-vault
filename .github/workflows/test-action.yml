@@ -18,20 +18,24 @@ jobs:
       max-parallel: 4
       matrix:
         python-version:
-          - 3.8
-          - 3.9
+          - '3.8'
+          - '3.9'
         salt-version:
-          - 3005.1
-          - 3006.1
+          - '3005.4'
+          - '3006.4'
         include:
-          - python-version: 3.10.12
-            salt-version: 3006.1
+          - python-version: '3.10'
+            salt-version: '3006.4'
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
+
+    - uses: eLco/setup-vault@v1
+      with:
+        vault_version: 1.15.4
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v1
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -145,16 +149,16 @@ jobs:
       max-parallel: 3
       matrix:
         include:
-          - python-version: 3.8
-            salt-version: 3005.1
-          - python-version: 3.8
-            salt-version: 3006.1
+          - python-version: '3.8'
+            salt-version: '3005.4'
+          - python-version: '3.8'
+            salt-version: '3006.4'
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v1
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -283,16 +287,16 @@ jobs:
       max-parallel: 3
       matrix:
         include:
-          - python-version: 3.9
-            salt-version: 3005.1
-          - python-version: 3.10.12
-            salt-version: 3006.0rc1
+          - python-version: '3.9'
+            salt-version: '3005.4'
+          - python-version: '3.10'
+            salt-version: '3006.4'
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v1
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
 
