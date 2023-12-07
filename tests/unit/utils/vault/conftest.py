@@ -11,6 +11,16 @@ from saltext.vault.utils.vault import client as vclient
 from saltext.vault.utils.vault import helpers as hlp
 
 
+@pytest.fixture(params=[0])
+def time_stopped(request):
+    with patch(
+        "time.time",
+        autospec=True,
+        return_value=request.param,
+    ):
+        yield
+
+
 def _mock_json_response(data, status_code=200, reason=""):
     """
     Mock helper for http response

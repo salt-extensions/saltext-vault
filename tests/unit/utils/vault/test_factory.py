@@ -779,6 +779,7 @@ class TestFetchSecretId:
                 remote.assert_not_called()
 
 
+@pytest.mark.usefixtures("time_stopped")
 class TestFetchToken:
     """
     Tests for Vault Fetch Token

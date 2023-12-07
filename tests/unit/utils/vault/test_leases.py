@@ -8,15 +8,7 @@ from saltext.vault.utils.vault import cache as vcache
 from saltext.vault.utils.vault import client as vclient
 from saltext.vault.utils.vault import leases as vleases
 
-
-@pytest.fixture(autouse=True, params=[0])
-def time_stopped(request):
-    with patch(
-        "saltext.vault.utils.vault.leases.time.time",
-        autospec=True,
-        return_value=request.param,
-    ):
-        yield
+pytestmark = [pytest.mark.usefixtures("time_stopped")]
 
 
 @pytest.fixture
