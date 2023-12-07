@@ -6,9 +6,9 @@ import logging
 import pytest
 from saltfactories.utils import random_string
 
-from tests.support.pytest.vault import vault_delete_secret
-from tests.support.pytest.vault import vault_list_secrets
-from tests.support.pytest.vault import vault_write_secret
+from tests.support.vault import vault_delete_secret
+from tests.support.vault import vault_list_secrets
+from tests.support.vault import vault_write_secret
 
 # pylint: disable=unused-import
 

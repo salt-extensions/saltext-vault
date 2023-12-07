@@ -2,12 +2,12 @@ import logging
 
 import pytest
 
-from tests.support.pytest.vault import vault_delete_policy
-from tests.support.pytest.vault import vault_delete_secret
-from tests.support.pytest.vault import vault_list_policies
-from tests.support.pytest.vault import vault_list_secrets
-from tests.support.pytest.vault import vault_read_policy
-from tests.support.pytest.vault import vault_write_policy
+from tests.support.vault import vault_delete_policy
+from tests.support.vault import vault_delete_secret
+from tests.support.vault import vault_list_policies
+from tests.support.vault import vault_list_secrets
+from tests.support.vault import vault_read_policy
+from tests.support.vault import vault_write_policy
 
 # pylint: disable=unused-import
 
