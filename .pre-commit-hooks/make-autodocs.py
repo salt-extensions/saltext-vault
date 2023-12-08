@@ -53,7 +53,7 @@ def make_import_path(path):
     return ".".join(path.relative_to(repo_path / "src").with_suffix("").parts)
 
 
-for path in repo_path.joinpath("src/saltext/vault/").glob("*/*.py"):
+for path in src_dir.glob("*/*.py"):
     if path.name != "__init__.py":
         kind = path.parent.name
         docs_by_kind.setdefault(kind, set()).add(path)
