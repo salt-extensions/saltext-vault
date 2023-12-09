@@ -1,117 +1,227 @@
+import json
+import logging
 import os
-import sys
+import subprocess
+import time
 
 import pytest
-import salt.config
+import salt.utils.path
 from pytestshellutils.utils import ports
-from saltext.saltext_vault import PACKAGE_ROOT
-from saltfactories.utils import random_string  # pylint: disable=wrong-import-order
+from pytestshellutils.utils.processes import ProcessResult
+from saltext.vault import PACKAGE_ROOT
+from saltfactories.utils import random_string
+
+from tests.support.helpers import PatchedEnviron
+from tests.support.vault import vault_enable_auth_method
+from tests.support.vault import vault_enable_secret_engine
+from tests.support.vault import vault_write_policy_file
+
+
+# Reset the root logger to its default level(because salt changed it)
+logging.root.setLevel(logging.WARNING)
+
+
+# This swallows all logging to stdout.
+# To show select logs, set --log-cli-level=<level>
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+    handler.close()
+
+log = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="session")
 def salt_factories_config():
     """
-    Return a dictionary with the keyworkd arguments for FactoriesManager
+    Return a dictionary with the keyword arguments for FactoriesManager
     """
     return {
         "code_dir": str(PACKAGE_ROOT),
+        "inject_sitecustomize": "COVERAGE_PROCESS_START" in os.environ,
         "start_timeout": 120 if os.environ.get("CI") else 60,
     }
 
 
 @pytest.fixture(scope="package")
-def master(salt_factories):
-    return salt_factories.salt_master_daemon(random_string("master-"))
+def master_config_defaults(vault_port):
+    """
+    This default configuration ensures the master issues authentication
+    credentials with the correct policies. By default, it will issue
+    tokens with an unlimited number of uses.
+    """
+    return {
+        "peer_run": {
+            ".*": [
+                "vault.get_config",
+                "vault.generate_new_token",
+                "vault.generate_secret_id",
+            ]
+        },
+        "sdbvault": {
+            "driver": "vault",
+        },
+        "vault": {
+            "auth": {
+                "method": "token",
+                "token": "testsecret",
+            },
+            "issue": {
+                "token": {
+                    "params": {
+                        "uses": 0,
+                    }
+                }
+            },
+            "policies": {
+                "assign": [
+                    "salt_minion",
+                ]
+            },
+            "server": {
+                "url": f"http://127.0.0.1:{vault_port}",
+            },
+        },
+    }
 
 
 @pytest.fixture(scope="package")
-def minion(master):
-    return master.salt_minion_daemon(random_string("minion-"))
-
-
-@pytest.fixture(scope="session")
-def integration_files_dir(salt_factories):
+def master_config_overrides():
     """
-    Fixture which returns the salt integration files directory path.
-    Creates the directory if it does not yet exist.
+    You can override the default configuration per package by overriding this
+    fixture in a conftest.py file.
     """
-    dirname = salt_factories.root_dir / "integration-files"
-    dirname.mkdir(exist_ok=True)
-    return dirname
+    return {}
 
 
-@pytest.fixture(scope="session")
-def state_tree_root_dir(integration_files_dir):
+@pytest.fixture(scope="package")
+def master(salt_factories, master_config_defaults, master_config_overrides):
+    return salt_factories.salt_master_daemon(
+        random_string("master-"), defaults=master_config_defaults, overrides=master_config_overrides
+    )
+
+
+@pytest.fixture(scope="package")
+def minion_config_defaults(vault_port):
     """
-    Fixture which returns the salt state tree root directory path.
-    Creates the directory if it does not yet exist.
+    The default minion configuration ensures that the minion works in --local
+    mode and that the ``sdbvault`` SDB configuration is present.
+    The vault configuration will not be used when not in masterless mode
+    without overriding ``vault:config_location`` to ``local``.
     """
-    dirname = integration_files_dir / "state-tree"
-    dirname.mkdir(exist_ok=True)
-    return dirname
+    return {
+        "sdbvault": {
+            "driver": "vault",
+        },
+        "vault": {
+            "auth": {
+                "method": "token",
+                "token": "testsecret",
+            },
+            "server": {
+                "url": f"http://127.0.0.1:{vault_port}",
+            },
+        },
+    }
 
 
-@pytest.fixture(scope="session")
-def base_env_state_tree_root_dir(state_tree_root_dir):
+@pytest.fixture(scope="package")
+def minion_config_overrides():
     """
-    Fixture which returns the salt base environment state tree directory path.
-    Creates the directory if it does not yet exist.
+    You can override the default configuration per package by overriding this
+    fixture in a conftest.py file.
     """
-    dirname = state_tree_root_dir / "base"
-    dirname.mkdir(exist_ok=True)
-    return dirname
+    return {}
 
 
-@pytest.fixture
-def minion_opts(tmp_path):
-    """
-    Default minion configuration with relative temporary paths to not require root permissions.
-    """
-    root_dir = tmp_path / "minion"
-    opts = salt.config.DEFAULT_MINION_OPTS.copy()
-    opts["__role"] = "minion"
-    opts["root_dir"] = str(root_dir)
-    for name in ("cachedir", "pki_dir", "sock_dir", "conf_dir"):
-        dirpath = root_dir / name
-        dirpath.mkdir(parents=True)
-        opts[name] = str(dirpath)
-    opts["log_file"] = "logs/minion.log"
-    return opts
-
-
-@pytest.fixture
-def master_opts(tmp_path):
-    """
-    Default master configuration with relative temporary paths to not require root permissions.
-    """
-    root_dir = tmp_path / "master"
-    opts = salt.config.DEFAULT_MASTER_OPTS.copy()
-    opts["__role"] = "master"
-    opts["root_dir"] = str(root_dir)
-    for name in ("cachedir", "pki_dir", "sock_dir", "conf_dir"):
-        dirpath = root_dir / name
-        dirpath.mkdir(parents=True)
-        opts[name] = str(dirpath)
-    opts["log_file"] = "logs/master.log"
-    return opts
-
-
-@pytest.fixture
-def perm_denied_error_log():
-    if sys.platform.startswith("win32"):
-        perm_denied_error_log = (
-            "Unable to create directory "
-            "C:\\ProgramData\\Salt Project\\Salt\\srv\\salt\\minion.  "
-            "Check that the salt user has the correct permissions."
-        )
-    else:
-        perm_denied_error_log = (
-            "Unable to create directory /srv/salt/minion.  "
-            "Check that the salt user has the correct permissions."
-        )
-    return perm_denied_error_log
+@pytest.fixture(scope="package")
+def minion(master, minion_config_defaults, minion_config_overrides):
+    return master.salt_minion_daemon(
+        random_string("minion-"), defaults=minion_config_defaults, overrides=minion_config_overrides
+    )
 
 
 @pytest.fixture(scope="session")
 def vault_port():
     return ports.get_unused_localhost_port()
+
+
+@pytest.fixture(scope="module")
+def vault_environ(vault_port):
+    with PatchedEnviron(VAULT_ADDR=f"http://127.0.0.1:{vault_port}"):
+        yield
+
+
+def _vault_container_version_id(value):
+    return f"vault=={value}"
+
+
+@pytest.fixture(
+    scope="module",
+    params=["0.9.6", "1.3.1", "latest"],
+    ids=_vault_container_version_id,
+)
+def vault_container_version(
+    request, salt_factories, vault_port, vault_environ
+):  # pylint: disable=unused-argument
+    vault_version = request.param
+    vault_binary = salt.utils.path.which("vault")
+    config = {
+        "backend": {"file": {"path": "/vault/file"}},
+        "default_lease_ttl": "168h",
+        "max_lease_ttl": "720h",
+    }
+
+    factory = salt_factories.get_container(
+        "vault",
+        f"ghcr.io/saltstack/salt-ci-containers/vault:{vault_version}",
+        check_ports=[vault_port],
+        container_run_kwargs={
+            "ports": {"8200/tcp": vault_port},
+            "environment": {
+                "VAULT_DEV_ROOT_TOKEN_ID": "testsecret",
+                "VAULT_LOCAL_CONFIG": json.dumps(config),
+            },
+            "cap_add": "IPC_LOCK",
+        },
+        pull_before_start=True,
+        skip_on_pull_failure=True,
+        skip_if_docker_client_not_connectable=True,
+    )
+    with factory.started() as factory:
+        attempts = 0
+        while attempts < 3:
+            attempts += 1
+            time.sleep(1)
+            proc = subprocess.run(
+                [vault_binary, "login", "token=testsecret"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if proc.returncode == 0:
+                break
+            ret = ProcessResult(
+                returncode=proc.returncode,
+                stdout=proc.stdout,
+                stderr=proc.stderr,
+                cmdline=proc.args,
+            )
+            log.debug("Failed to authenticate against vault:\n%s", ret)
+            time.sleep(4)
+        else:
+            pytest.fail("Failed to login to vault")
+
+        vault_write_policy_file("salt_master")
+
+        if "latest" == vault_version:
+            vault_write_policy_file("salt_minion")
+        else:
+            vault_write_policy_file("salt_minion", "salt_minion_old")
+
+        if vault_version in ("1.3.1", "latest"):
+            vault_enable_secret_engine("kv-v2")
+            if vault_version == "latest":
+                vault_enable_auth_method("approle", ["-path=salt-minions"])
+                vault_enable_secret_engine("kv", ["-version=2", "-path=salt"])
+
+        yield vault_version

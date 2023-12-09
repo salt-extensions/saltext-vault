@@ -33,8 +33,8 @@ def state_tree_prod(tmp_path_factory):
 @pytest.fixture(scope="module")
 def minion_config_defaults():
     """
-    Functional test modules can provide this fixture to tweak the default configuration dictionary
-    passed to the minion factory
+    Functional test modules can provide this fixture to tweak the default
+    configuration dictionary passed to the minion factory
     """
     return {}
 
@@ -81,8 +81,8 @@ def minion_opts(
 @pytest.fixture(scope="module")
 def master_config_defaults():
     """
-    Functional test modules can provide this fixture to tweak the default configuration dictionary
-    passed to the master factory
+    Functional test modules can provide this fixture to tweak the default
+    configuration dictionary passed to the master factory
     """
     return {}
 
@@ -138,3 +138,13 @@ def reset_loaders_state(loaders):
     finally:
         # Reset the loaders state
         loaders.reset_state()
+
+
+@pytest.fixture(scope="module")
+def modules(loaders):
+    return loaders.modules
+
+
+@pytest.fixture(scope="module")
+def states(loaders):
+    return loaders.states

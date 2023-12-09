@@ -3,7 +3,7 @@ from datetime import datetime
 from unittest.mock import patch
 
 import pytest
-from saltext.saltext_vault.utils.vault import helpers as hlp
+from saltext.vault.utils.vault import helpers as hlp
 
 
 @pytest.mark.parametrize(
@@ -107,7 +107,7 @@ def test_timestring_map(inpt, expected):
     ],
 )
 def test_iso_to_timestamp_polyfill(creation_time, expected):
-    with patch("saltext.saltext_vault.utils.vault.helpers.datetime.datetime") as _d:
+    with patch("saltext.vault.utils.vault.helpers.datetime.datetime") as _d:
         _d.fromisoformat.side_effect = AttributeError
         # needs from datetime import datetime, otherwise results
         # in infinite recursion

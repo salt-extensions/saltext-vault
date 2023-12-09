@@ -3,7 +3,7 @@ requires = ["setuptools>=50.3.2", "wheel", "setuptools-declarative-requirements"
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-write_to = "src/saltext/saltext_vault/version.py"
+write_to = "src/saltext/vault/version.py"
 write_to_template = "__version__ = \"{version}\""
 
 [tool.black]

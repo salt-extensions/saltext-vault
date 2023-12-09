@@ -26,14 +26,14 @@ except NameError:
     docs_basepath = os.path.abspath(os.path.dirname("."))
 
 addtl_paths = (
-    os.path.join(os.pardir, "src"),  # saltext.ttp itself (for autodoc)
+    os.path.join(os.pardir, "src"),  # saltext.vault itself (for autodoc)
     "_ext",  # custom Sphinx extensions
 )
 
 for addtl_path in addtl_paths:
     sys.path.insert(0, os.path.abspath(os.path.join(docs_basepath, addtl_path)))
 
-dist = distribution("saltext.saltext-vault")
+dist = distribution("saltext.vault")
 
 
 # -- Project information -----------------------------------------------------
@@ -75,6 +75,8 @@ extensions = [
     "sphinx.ext.coverage",
     "sphinx_copybutton",
     "sphinxcontrib.spelling",
+    "saltdomain",
+    "vault.policylexer",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -95,7 +97,7 @@ exclude_patterns = [
     "sitevars.rst",
 ]
 
-autosummary_generate = True
+autosummary_generate = False
 
 # -- Options for HTML output -------------------------------------------------
 
@@ -136,7 +138,7 @@ napoleon_use_rtype = True
 # ----- Intersphinx Config ---------------------------------------------------------------------------------------->
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
-    "pytest": ("https://pytest.readthedocs.io/en/stable", None),
+    "pytest": ("https://docs.pytest.org/en/stable", None),
     "salt": ("https://docs.saltproject.io/en/latest", None),
 }
 # <---- Intersphinx Config -----------------------------------------------------------------------------------------

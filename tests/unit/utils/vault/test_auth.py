@@ -2,11 +2,11 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
-from saltext.saltext_vault.utils import vault
-from saltext.saltext_vault.utils.vault import auth as vauth
-from saltext.saltext_vault.utils.vault import cache as vcache
-from saltext.saltext_vault.utils.vault import client as vclient
-from saltext.saltext_vault.utils.vault import leases as vleases
+from saltext.vault.utils import vault
+from saltext.vault.utils.vault import auth as vauth
+from saltext.vault.utils.vault import cache as vcache
+from saltext.vault.utils.vault import client as vclient
+from saltext.vault.utils.vault import leases as vleases
 
 
 @pytest.fixture
@@ -214,18 +214,19 @@ def test_approle_auth_get_token_store_available(token_store, approle, token):
     Ensure no login attempt is made when a cached token is available
     """
     auth = vauth.VaultAppRoleAuth(approle, None, token_store=token_store)
-    with patch("saltext.saltext_vault.utils.vault.auth.VaultAppRoleAuth._login") as login:
+    with patch("saltext.vault.utils.vault.auth.VaultAppRoleAuth._login") as login:
         res = auth.get_token()
         login.assert_not_called()
         assert res == token
 
 
+@pytest.mark.usefixtures("time_stopped")
 def test_approle_auth_get_token_store_empty(token_store_empty, approle, token):
     """
     Ensure a token is returned if no cached token is available
     """
     auth = vauth.VaultAppRoleAuth(approle, None, token_store=token_store_empty)
-    with patch("saltext.saltext_vault.utils.vault.auth.VaultAppRoleAuth._login") as login:
+    with patch("saltext.vault.utils.vault.auth.VaultAppRoleAuth._login") as login:
         login.return_value = token
         res = auth.get_token()
         login.assert_called_once()
@@ -242,6 +243,7 @@ def test_approle_auth_get_token_invalid(token_store_empty, approle_invalid):
         auth.get_token()
 
 
+@pytest.mark.usefixtures("time_stopped")
 @pytest.mark.parametrize("mount", ["approle", "salt_minions"])
 @pytest.mark.parametrize("approle", ["secret_id", None], indirect=True)
 def test_approle_auth_get_token_login(approle, mount, client, token_store_empty_first, token):
@@ -262,6 +264,7 @@ def test_approle_auth_get_token_login(approle, mount, client, token_store_empty_
     token_store_empty_first.replace_token.assert_called_once_with(res)
 
 
+@pytest.mark.usefixtures("time_stopped")
 @pytest.mark.parametrize("num_uses", [0, 1, 10])
 def test_approle_auth_used_num_uses(
     token_store_empty_first, approle, client, uncached, num_uses, token
@@ -285,6 +288,7 @@ def test_approle_auth_used_num_uses(
         uncached.store.assert_not_called()
 
 
+@pytest.mark.usefixtures("time_stopped")
 def test_approle_auth_used_locally_configured(
     token_store_empty_first, approle, client, uncached, token
 ):

@@ -3,10 +3,10 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
-from saltext.saltext_vault.utils import vault
-from saltext.saltext_vault.utils.vault import cache as vcache
-from saltext.saltext_vault.utils.vault import client as vclient
-from saltext.saltext_vault.utils.vault import kv as vkv
+from saltext.vault.utils import vault
+from saltext.vault.utils.vault import cache as vcache
+from saltext.vault.utils.vault import client as vclient
+from saltext.vault.utils.vault import kv as vkv
 
 from tests.unit.utils.vault.conftest import _mock_json_response  # pylint: disable=import-error
 
@@ -212,7 +212,7 @@ def kvv1(kvv1_info, kvv1_response, metadata_nocache, kv_list_response):
     client.patch.side_effect = vclient.VaultPermissionDeniedError
     client.list.return_value = kv_list_response
     client.delete.return_value = True
-    with patch("saltext.saltext_vault.utils.vault.kv.VaultKV.is_v2", Mock(return_value=kvv1_info)):
+    with patch("saltext.vault.utils.vault.kv.VaultKV.is_v2", Mock(return_value=kvv1_info)):
         yield vkv.VaultKV(client, metadata_nocache)
 
 
@@ -224,7 +224,7 @@ def kvv2(kvv2_info, kvv2_response, metadata_nocache, kv_list_response):
     client.patch.return_value = True
     client.list.return_value = kv_list_response
     client.delete.return_value = True
-    with patch("saltext.saltext_vault.utils.vault.kv.VaultKV.is_v2", Mock(return_value=kvv2_info)):
+    with patch("saltext.vault.utils.vault.kv.VaultKV.is_v2", Mock(return_value=kvv2_info)):
         yield vkv.VaultKV(client, metadata_nocache)
 
 
@@ -257,8 +257,8 @@ def test_kv_wrapper_handles_perm_exceptions(
         args.append(param)
     args += [{}, {}]
     test_remote_config["cache"]["clear_on_unauthorized"] = clear_unauthd
-    with patch("saltext.saltext_vault.utils.vault.get_kv", autospec=True) as getkv:
-        with patch("saltext.saltext_vault.utils.vault.clear_cache", autospec=True) as cache:
+    with patch("saltext.vault.utils.vault.get_kv", autospec=True) as getkv:
+        with patch("saltext.vault.utils.vault.clear_cache", autospec=True) as cache:
             _kv = Mock(spec=vkv.VaultKV)
             _kv.client = Mock(spec=vclient.AuthenticatedVaultClient)
             _kv.client.token_valid.return_value = token_valid
@@ -293,8 +293,8 @@ def test_kv_wrapper_raises_perm_exceptions_when_configured(wrapper, param, test_
         args.append(param)
     args += [{}, {}]
     test_remote_config["cache"]["clear_on_unauthorized"] = False
-    with patch("saltext.saltext_vault.utils.vault.get_kv", autospec=True) as getkv:
-        with patch("saltext.saltext_vault.utils.vault.clear_cache", autospec=True):
+    with patch("saltext.vault.utils.vault.get_kv", autospec=True) as getkv:
+        with patch("saltext.vault.utils.vault.clear_cache", autospec=True):
             _kv = Mock(spec=vkv.VaultKV)
             _kv.client = Mock(spec=vclient.AuthenticatedVaultClient)
             _kv.client.token_valid.return_value = True

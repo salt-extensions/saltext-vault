@@ -10,9 +10,9 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
-import saltext.saltext_vault.utils.vault as vaultutil
-from saltext.saltext_vault.runners import vault
-from saltext.saltext_vault.utils.vault import client as vclient
+import saltext.vault.utils.vault as vaultutil
+from saltext.vault.runners import vault
+from saltext.vault.utils.vault import client as vclient
 
 pytestmark = [
     pytest.mark.usefixtures("validate_sig", "policies"),
@@ -54,25 +54,19 @@ def auth():
 def client(auth):
     client_mock = Mock(vclient.AuthenticatedVaultClient)
     client_mock.post.return_value = auth
-    with patch(
-        "saltext.saltext_vault.runners.vault._get_master_client", Mock(return_value=client_mock)
-    ):
+    with patch("saltext.vault.runners.vault._get_master_client", Mock(return_value=client_mock)):
         yield client_mock
 
 
 @pytest.fixture
 def validate_sig():
-    with patch(
-        "saltext.saltext_vault.runners.vault._validate_signature", autospec=True, return_value=None
-    ):
+    with patch("saltext.vault.runners.vault._validate_signature", autospec=True, return_value=None):
         yield
 
 
 @pytest.fixture
 def policies():
-    with patch(
-        "saltext.saltext_vault.runners.vault._get_policies_cached", autospec=True
-    ) as policies:
+    with patch("saltext.vault.runners.vault._get_policies_cached", autospec=True) as policies:
         policies.return_value = ["saltstack/minion/test-minion", "saltstack/minions"]
         yield policies
 

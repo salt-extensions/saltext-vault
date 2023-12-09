@@ -36,7 +36,7 @@ ignore_errors = True
 
 [paths]
 source =
-  saltext/saltext_vault
-  src/saltext/saltext_vault
+  saltext/vault
+  src/saltext/vault
 testsuite =
   tests/

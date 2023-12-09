@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 import pytest
 import salt.exceptions
-import saltext.saltext_vault.utils.vault as vaultutil
-from saltext.saltext_vault.modules import vault
+import saltext.vault.utils.vault as vaultutil
+from saltext.vault.modules import vault
 
 
 @pytest.fixture
@@ -44,14 +44,14 @@ def data_list():
 
 @pytest.fixture
 def read_kv(data):
-    with patch("saltext.saltext_vault.utils.vault.read_kv", autospec=True) as read:
+    with patch("saltext.vault.utils.vault.read_kv", autospec=True) as read:
         read.return_value = data
         yield read
 
 
 @pytest.fixture
 def list_kv(data_list):
-    with patch("saltext.saltext_vault.utils.vault.list_kv", autospec=True) as _list:
+    with patch("saltext.vault.utils.vault.list_kv", autospec=True) as _list:
         _list.return_value = data_list
         yield _list
 
@@ -70,7 +70,7 @@ def list_kv_not_found(list_kv):
 
 @pytest.fixture
 def write_kv():
-    with patch("saltext.saltext_vault.utils.vault.write_kv", autospec=True) as write:
+    with patch("saltext.vault.utils.vault.write_kv", autospec=True) as write:
         yield write
 
 
@@ -82,7 +82,7 @@ def write_kv_err(write_kv):
 
 @pytest.fixture
 def patch_kv():
-    with patch("saltext.saltext_vault.utils.vault.patch_kv", autospec=True) as patch_kv:
+    with patch("saltext.vault.utils.vault.patch_kv", autospec=True) as patch_kv:
         yield patch_kv
 
 
@@ -94,7 +94,7 @@ def patch_kv_err(patch_kv):
 
 @pytest.fixture
 def delete_kv():
-    with patch("saltext.saltext_vault.utils.vault.delete_kv", autospec=True) as delete_kv:
+    with patch("saltext.vault.utils.vault.delete_kv", autospec=True) as delete_kv:
         yield delete_kv
 
 
@@ -106,7 +106,7 @@ def delete_kv_err(delete_kv):
 
 @pytest.fixture
 def destroy_kv():
-    with patch("saltext.saltext_vault.utils.vault.destroy_kv", autospec=True) as destroy_kv:
+    with patch("saltext.vault.utils.vault.destroy_kv", autospec=True) as destroy_kv:
         yield destroy_kv
 
 
@@ -118,12 +118,13 @@ def destroy_kv_err(destroy_kv):
 
 @pytest.fixture
 def query():
-    with patch("saltext.saltext_vault.utils.vault.query", autospec=True) as query:
+    with patch("saltext.vault.utils.vault.query", autospec=True) as query:
         yield query
 
 
+@pytest.mark.usefixtures("read_kv")
 @pytest.mark.parametrize("key,expected", [(None, {"foo": "bar"}), ("foo", "bar")])
-def test_read_secret(read_kv, key, expected):  # pylint: disable=unused-argument
+def test_read_secret(key, expected):
     """
     Ensure read_secret works as expected without and with specified key.
     KV v1/2 is handled in the utils module.
@@ -296,7 +297,7 @@ def test_clear_token_cache():
     """
     Ensure clear_token_cache wraps the utility function properly
     """
-    with patch("saltext.saltext_vault.utils.vault.clear_cache") as cache:
+    with patch("saltext.vault.utils.vault.clear_cache") as cache:
         vault.clear_token_cache()
         cache.assert_called_once_with(ANY, ANY, connection=True, session=False)
 
