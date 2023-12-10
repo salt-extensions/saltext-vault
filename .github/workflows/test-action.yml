@@ -138,7 +138,7 @@ jobs:
       if: always()
       run: |
         mkdir exitstatus
-        echo "${{ job.status }}" > exitstatus/${{ github.job }}
+        echo "${{ job.status }}" > exitstatus/${{ github.job }}-Py{{ matrix.python-version }}-Salt{{ matrix.salt-version }}
 
     - name: Upload Exit Status
       if: always()
@@ -285,7 +285,7 @@ jobs:
       if: always()
       run: |
         mkdir exitstatus
-        echo "${{ job.status }}" > exitstatus/${{ github.job }}
+        echo "${{ job.status }}" > exitstatus/${{ github.job }}-Py{{ matrix.python-version }}-Salt{{ matrix.salt-version }}
 
     - name: Upload Exit Status
       if: always()
@@ -416,7 +416,7 @@ jobs:
       if: always()
       run: |
         mkdir exitstatus
-        echo "${{ job.status }}" > exitstatus/${{ github.job }}
+        echo "${{ job.status }}" > exitstatus/${{ github.job }}-Py{{ matrix.python-version }}-Salt{{ matrix.salt-version }}
 
     - name: Upload Exit Status
       if: always()
