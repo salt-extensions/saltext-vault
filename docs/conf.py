@@ -9,6 +9,7 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 import datetime
+import email.policy
 import os
 import sys
 
@@ -44,6 +45,19 @@ else:
     copyright_year = f"2021 - {this_year}"
 project = dist.metadata["Summary"]
 author = dist.metadata["Author"]
+
+if author is None:
+    # Core metadata is serialized differently with pyproject.toml:
+    # https://packaging.python.org/en/latest/specifications/pyproject-toml/#authors-maintainers
+    author_email = dist.metadata["Author-email"]
+    em = email.message_from_string(
+        f"To: {author_email}",
+        policy=email.policy.default,
+    )
+    if em["To"].addresses and em["To"].addresses[0]:
+        author = em["To"].addresses[0].display_name
+    author = author or ""
+
 copyright = f"{copyright_year}, {author}"
 
 # The full version, including alpha/beta/rc tags

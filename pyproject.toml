@@ -1,10 +1,115 @@
 [build-system]
-requires = ["setuptools>=50.3.2", "wheel", "setuptools-declarative-requirements", "setuptools_scm[toml]>=3.4"]
+requires = [
+    "wheel",
+    "setuptools>=50.3.2",
+    "setuptools_scm[toml]>=3.4",
+]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
 write_to = "src/saltext/vault/version.py"
 write_to_template = "__version__ = \"{version}\""
+
+[project]
+name = "saltext.vault"
+description = "Salt Extension for interacting with Vault"
+authors = [
+    {name = "Salt Core Team", email = "saltproject@vmware.com"},
+]
+keywords = [
+    "salt-extension",
+]
+license = {text = "Apache Software License"}
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Cython",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+]
+requires-python = ">= 3.7"
+dynamic = ["version"]
+dependencies = [
+    "salt>=3005",
+]
+
+[project.readme]
+file = "README.md"
+content-type = "text/markdown"
+
+[project.urls]
+Homepage = "https://github.com/salt-extensions/saltext-vault"
+Source = "https://github.com/salt-extensions/saltext-vault"
+Tracker = "https://github.com/salt-extensions/saltext-vault/issues"
+
+[project.optional-dependencies]
+changelog = ["towncrier==22.12.0"]
+dev = [
+    "nox",
+    "pre-commit>=2.4.0",
+    "pylint",
+    "saltpylint",
+]
+docs = [
+  "sphinx",
+  "sphinx-prompt",
+  "sphinxcontrib-spelling",
+  "sphinx-copybutton",
+  "furo",
+  "furo<=2023.03.27; python_version < '3.8'",
+  "importlib_metadata; python_version < '3.8'",
+  "pyyaml",
+]
+docsauto = ["sphinx-autobuild"]
+lint = [
+    "pylint",
+    "saltpylint",
+]
+tests = [
+    "mock >= 3.0.0",
+    "pytest >= 7.0.1; python_version <= '3.6'",
+    "pytest >= 7.2.0; python_version > '3.6'",
+    "pytest-salt-factories >= 1.0.0rc21; sys_platform == 'win32'",
+    "pytest-salt-factories[docker] >= 1.0.0rc21,<1.0.0rc27; sys_platform != 'win32' and python_version < '3.8'",
+    "pytest-salt-factories[docker] >= 1.0.0rc21; sys_platform != 'win32'",
+    "pytest-tempdir >= 2019.10.12",
+    "pytest-helpers-namespace >= 2019.1.8",
+    "pytest-subtests",
+    "pytest-timeout",
+    "pytest-httpserver",
+    "pytest-custom-exit-code >= 0.3",
+    "flaky",
+]
+
+[project.entry-points."salt.loader"]
+"saltext.vault" = "saltext.vault"
+
+[tool.setuptools]
+zip-safe = false
+include-package-data = true
+platforms = ["any"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["tests"]
+
+[tool.distutils.bdist_wheel]
+# Use this option if your package is pure-python
+universal = 1
+
+[tool.distutils.sdist]
+owner = "root"
+group = "root"
+
+[tool.build_sphinx]
+source_dir = "docs"
+build_dir = "build/sphinx"
 
 [tool.black]
 line-length = 100
