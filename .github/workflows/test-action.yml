@@ -30,7 +30,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - uses: eLco/setup-vault@v1
+    - uses: eLco/setup-vault@v1.0.2
       with:
         vault_version: 1.15.4
 
