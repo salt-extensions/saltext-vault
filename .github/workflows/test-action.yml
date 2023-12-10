@@ -140,6 +140,15 @@ jobs:
         mkdir exitstatus
         echo "${{ job.status }}" > exitstatus/${{ github.job }}
 
+    - name: Upload Exit Status
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: exitstatus
+        path: exitstatus
+        if-no-files-found: error
+
+
   Windows:
     runs-on: windows-latest
     timeout-minutes: 40
@@ -278,6 +287,14 @@ jobs:
         mkdir exitstatus
         echo "${{ job.status }}" > exitstatus/${{ github.job }}
 
+    - name: Upload Exit Status
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: exitstatus
+        path: exitstatus
+        if-no-files-found: error
+
   macOS:
     runs-on: macOS-latest
     timeout-minutes: 40
@@ -400,3 +417,11 @@ jobs:
       run: |
         mkdir exitstatus
         echo "${{ job.status }}" > exitstatus/${{ github.job }}
+
+    - name: Upload Exit Status
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: exitstatus
+        path: exitstatus
+        if-no-files-found: error
