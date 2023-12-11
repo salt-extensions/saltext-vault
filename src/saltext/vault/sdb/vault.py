@@ -5,8 +5,6 @@ Vault SDB Module
 :maturity:      New
 :platform:      all
 
-.. versionadded:: 2016.11.0
-
 This module allows access to Hashicorp Vault using an ``sdb://`` URI.
 
 Base configuration instructions are documented in the :ref:`execution module docs <vault-setup>`.
@@ -49,7 +47,7 @@ patch
     each secret path can only contain a single mapping key safely.
     Defaults to ``False`` for backwards-compatibility reasons.
 
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 """
 import logging
 

@@ -90,7 +90,7 @@ class VaultAppRoleAuth:
     def is_renewable(self):
         """
         Check whether the currently used token is renewable.
-        Secret IDs are not renewable anyways.
+        SecretIDs are not renewable anyways.
         """
         return self.token.is_renewable()
 
@@ -161,14 +161,14 @@ class VaultAppRole:
 
     def replace_secret_id(self, secret_id):
         """
-        Replace the contained secret ID with a new one
+        Replace the contained SecretID with a new one
         """
         self.secret_id = secret_id
 
     def is_valid(self, valid_for=0, uses=1):
         """
         Checks whether the contained data can be used to authenticate
-        to Vault. Secret IDs might not be required by the server when
+        to Vault. SecretIDs might not be required by the server when
         bind_secret_id is set to false.
 
         valid_for
@@ -187,7 +187,7 @@ class VaultAppRole:
 
     def used(self):
         """
-        Increment the secret ID use counter by one, if this AppRole uses one.
+        Increment the SecretID use counter by one, if this AppRole uses one.
         """
         if self.secret_id is not None:
             self.secret_id.used()
@@ -205,12 +205,12 @@ class VaultAppRole:
 
 class LocalVaultSecretId(leases.VaultSecretId):
     """
-    Represents a secret ID from local configuration and should not be cached.
+    Represents a SecretID from local configuration and should not be cached.
     """
 
     def is_valid(self, valid_for=0, uses=1):
         """
-        Local secret IDs are always assumed to be valid until proven otherwise
+        Local SecretIDs are always assumed to be valid until proven otherwise
         """
         return True
 
@@ -231,7 +231,7 @@ class InvalidVaultToken(leases.VaultToken):
 
 class InvalidVaultSecretId(leases.VaultSecretId):
     """
-    Represents a missing secret ID
+    Represents a missing SecretID
     """
 
     def __init__(self, *args, **kwargs):  # pylint: disable=super-init-not-called

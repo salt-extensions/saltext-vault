@@ -6,14 +6,12 @@ from saltext.vault.utils.vault.exceptions import VaultNotFoundError
 
 class AppRoleApi:
     """
-    Wraps the Vault AppRole API.
+    Wraps the `Vault AppRole API<https://developer.hashicorp.com/vault/api-docs/auth/approle>`_.
 
     .. note::
 
         All durations can be specified either as an integer time in seconds
         or a time string like ``1h``.
-
-    https://developer.hashicorp.com/vault/api-docs/auth/approle
     """
 
     def __init__(self, client):
@@ -326,9 +324,7 @@ class AppRoleApi:
 
 class IdentityApi:
     """
-    Wraps the Vault ``Identity`` secret engine API.
-
-    https://developer.hashicorp.com/vault/api-docs/secret/identity
+    Wraps the Vault `Identity secret engine API<https://developer.hashicorp.com/vault/api-docs/secret/identity>`_.
     """
 
     def __init__(self, client):

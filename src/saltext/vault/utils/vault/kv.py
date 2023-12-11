@@ -22,7 +22,7 @@ class VaultKV:
         Read secret data at path.
 
         include_metadata
-            For kv-v2, include metadata in the return value:
+            For KV v2, include metadata in the return value:
             ``{"data": {} ,"metadata": {}}``.
         """
         v2_info = self.is_v2(path)
@@ -50,9 +50,8 @@ class VaultKV:
         Tries to use a PATCH request, otherwise falls back to updating in memory
         and writing back the whole secret, thus might consume more than one token use.
 
-        Since this uses JSON Merge Patch format, values set to ``null`` (``None``)
-        will be dropped. For details, see
-        https://datatracker.ietf.org/doc/html/draft-ietf-appsawg-json-merge-patch-07
+        Since this uses the `JSON Merge Patch format<https://datatracker.ietf.org/doc/html/draft-ietf-appsawg-json-merge-patch-07>`_,
+        values set to ``null`` (``None``) will be dropped.
         """
 
         def apply_json_merge_patch(data, patch):
@@ -92,11 +91,11 @@ class VaultKV:
 
     def delete(self, path, versions=None):
         """
-        Delete secret path data. For kv-v1, this is permanent.
-        For kv-v2, this only soft-deletes the data.
+        Delete secret path data. For KV v1, this is permanent.
+        For KV v2, this only soft-deletes the data.
 
         versions
-            For kv-v2, specifies versions to soft-delete. Needs to be castable
+            For KV v2, specifies versions to soft-delete. Needs to be castable
             to a list of integers.
         """
         method = "DELETE"
@@ -113,13 +112,13 @@ class VaultKV:
                 # data and delete operations only differ by HTTP verb
                 path = v2_info["data"]
         elif versions is not None:
-            raise VaultInvocationError("Versioning support requires kv-v2.")
+            raise VaultInvocationError("Versioning support requires KV v2.")
 
         return self.client.request(method, path, payload=payload)
 
     def destroy(self, path, versions):
         """
-        Permanently remove version data. Requires kv-v2.
+        Permanently remove version data. Requires KV v2.
 
         versions
             Specifies versions to destroy. Needs to be castable
@@ -128,7 +127,7 @@ class VaultKV:
         versions = self._parse_versions(versions)
         v2_info = self.is_v2(path)
         if not v2_info["v2"]:
-            raise VaultInvocationError("Destroy operation requires kv-v2.")
+            raise VaultInvocationError("Destroy operation requires KV v2.")
         path = v2_info["destroy"]
         payload = {"versions": versions}
         return self.client.post(path, payload=payload)
@@ -147,11 +146,11 @@ class VaultKV:
     def nuke(self, path):
         """
         Delete path metadata and version data, including all version history.
-        Requires kv-v2.
+        Requires KV v2.
         """
         v2_info = self.is_v2(path)
         if not v2_info["v2"]:
-            raise VaultInvocationError("Nuke operation requires kv-v2.")
+            raise VaultInvocationError("Nuke operation requires KV v2.")
         path = v2_info["metadata"]
         return self.client.delete(path)
 
@@ -167,7 +166,7 @@ class VaultKV:
 
     def is_v2(self, path):
         """
-        Determines if a given secret path is kv version 1 or 2.
+        Determines if a given secret path is KV v1 or v2.
         """
         ret = {
             "v2": False,

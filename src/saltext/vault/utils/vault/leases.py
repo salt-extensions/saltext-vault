@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 class DurationMixin:
     """
-    Mixin that handles expiration with time
+    Mixin that handles expiration with time.
     """
 
     def __init__(
@@ -76,7 +76,7 @@ class DurationMixin:
 
 class UseCountMixin:
     """
-    Mixin that handles expiration with number of uses
+    Mixin that handles expiration with number of uses.
     """
 
     def __init__(self, num_uses=0, use_count=0, **kwargs):
@@ -108,7 +108,7 @@ class DropInitKwargsMixin:
 
 class AccessorMixin:
     """
-    Mixin that manages accessor information relevant for tokens/secret IDs
+    Mixin that manages accessor information relevant for tokens/SecretIDs.
     """
 
     def __init__(self, accessor=None, wrapping_accessor=None, **kwargs):
@@ -150,7 +150,7 @@ class BaseLease(DurationMixin, DropInitKwargsMixin):
 
     def with_renewed(self, **kwargs):
         """
-        Partially update the contained data after lease renewal
+        Partially update the contained data after lease renewal.
         """
         attrs = copy.copy(self.__dict__)
         # ensure expire_time is reset properly
@@ -160,7 +160,7 @@ class BaseLease(DurationMixin, DropInitKwargsMixin):
 
     def to_dict(self):
         """
-        Return a dict of all contained attributes
+        Return a dict of all contained attributes.
         """
         return self.__dict__
 
@@ -189,7 +189,7 @@ class VaultToken(UseCountMixin, AccessorMixin, BaseLease):
 
     def is_valid(self, valid_for=0, uses=1):
         """
-        Checks whether the token is valid for an amount of time and number of uses
+        Checks whether the token is valid for an amount of time and number of uses.
 
         valid_for
             Check whether the token will still be valid in the future.
@@ -206,7 +206,7 @@ class VaultToken(UseCountMixin, AccessorMixin, BaseLease):
     def is_renewable(self):
         """
         Check whether the token is renewable, which requires it
-        to be currently valid for at least two uses and renewable
+        to be currently valid for at least two uses and renewable.
         """
         # Renewing a token deducts a use, hence it does not make sense to
         # renew a token on the last use
@@ -214,7 +214,7 @@ class VaultToken(UseCountMixin, AccessorMixin, BaseLease):
 
     def payload(self):
         """
-        Return the payload to use for POST requests using this token
+        Return the payload to use for POST requests using this token.
         """
         return {"token": str(self)}
 
@@ -235,7 +235,7 @@ class VaultToken(UseCountMixin, AccessorMixin, BaseLease):
 
 class VaultSecretId(UseCountMixin, AccessorMixin, BaseLease):
     """
-    Data object representing an AppRole secret ID.
+    Data object representing an AppRole SecretID.
     """
 
     def __init__(self, **kwargs):
@@ -251,23 +251,24 @@ class VaultSecretId(UseCountMixin, AccessorMixin, BaseLease):
 
     def is_valid(self, valid_for=0, uses=1):
         """
-        Checks whether the secret ID is valid for an amount of time and number of uses
+        Checks whether the SecretID is valid for an amount of time and number of uses
 
         valid_for
-            Check whether the secret ID will still be valid in the future.
+            Check whether the SecretID will still be valid in the future.
             This can be an integer, which will be interpreted as seconds, or a
             time string using the same format as Vault does:
             Suffix ``s`` for seconds, ``m`` for minutes, ``h`` for hours, ``d`` for days.
             Defaults to 0.
 
         uses
-            Check whether the secret ID has at least this number of uses left. Defaults to 1.
+            Check whether the SecretID has at least this number of uses left.
+            Defaults to 1.
         """
         return self.is_valid_for(valid_for) and self.has_uses_left(uses)
 
     def payload(self):
         """
-        Return the payload to use for POST requests using this secret ID
+        Return the payload to use for POST requests using this SecretID.
         """
         return {"secret_id": str(self)}
 
@@ -287,7 +288,7 @@ class VaultSecretId(UseCountMixin, AccessorMixin, BaseLease):
 
 class VaultWrappedResponse(AccessorMixin, BaseLease):
     """
-    Data object representing a wrapped response
+    Data object representing a wrapped response.
     """
 
     def __init__(

@@ -78,7 +78,7 @@ def get_authd_client(opts, context, force_local=False, get_config=False):
 
     # Check if the token needs to be and can be renewed.
     # Since this needs to check the possibly active session and does not care
-    # about valid secret IDs etc, we need to inspect the actual token.
+    # about valid SecretIDs etc, we need to inspect the actual token.
     if (
         not retry
         and config["auth"]["token_lifecycle"]["renew_increment"] is not False
@@ -304,7 +304,7 @@ def _build_authd_client(opts, context, force_local=False):
                 ttl=cache_ttl,
             )
             secret_id = secret_id_cache.get()
-            # Only fetch secret ID if there is no cached valid token
+            # Only fetch SecretID if there is no cached valid token
             if cached_token is None and secret_id is None:
                 secret_id = _fetch_secret_id(
                     config,
@@ -315,7 +315,7 @@ def _build_authd_client(opts, context, force_local=False):
                 )
             if secret_id is None:
                 # If the auth config is sourced locally, ensure the
-                # secret ID is known regardless whether we have a valid token.
+                # SecretID is known regardless whether we have a valid token.
                 # For remote sources, we would needlessly request one, so don't.
                 if (
                     hlp._get_salt_run_type(opts)
@@ -507,7 +507,7 @@ def _fetch_secret_id(config, opts, secret_id_cache, unwrap_client, force_local=F
             or None,
         )
         secret_id = vleases.VaultSecretId(**secret_id["data"])
-        # Do not cache single-use secret IDs
+        # Do not cache single-use SecretIDs
         if secret_id.num_uses != 1:
             secret_id_cache.store(secret_id)
         return secret_id
@@ -532,7 +532,7 @@ def _fetch_secret_id(config, opts, secret_id_cache, unwrap_client, force_local=F
                 secret_id_ttl=0,
                 secret_id_num_uses=0,
             )
-        # When secret_id is falsey, the approle does not require secret IDs,
+        # When secret_id is falsey, the approle does not require SecretIDs,
         # hence a call to this function is superfluous
         raise salt.exceptions.SaltException("This code path should not be hit at all.")
 

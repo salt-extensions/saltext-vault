@@ -8,7 +8,6 @@ documented in the :ref:`execution module docs <vault-setup>`.
 """
 import logging
 
-import requests
 import salt.cache
 import salt.crypt
 import salt.exceptions
@@ -188,19 +187,10 @@ def query_raw(
     return res
 
 
-def is_v2(path, opts=None, context=None):
+def is_v2(path, opts, context):
     """
-    Determines if a given secret path is kv version 1 or 2.
+    Determines if a given secret path is KV v1 or v2.
     """
-    if opts is None or context is None:
-        opts = globals().get("__opts__", {}) if opts is None else opts
-        context = globals().get("__context__", {}) if context is None else context
-        salt.utils.versions.warn_until(
-            "Argon",
-            "The __utils__ loader functionality will be removed. This will "
-            "cause context/opts dunders to be unavailable in utility modules. "
-            "Please pass opts and context from importing Salt modules explicitly.",
-        )
     kv = get_kv(opts, context)
     return kv.is_v2(path)
 

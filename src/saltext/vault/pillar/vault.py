@@ -5,8 +5,6 @@ Vault Pillar Module
 :maturity:      New
 :platform:      all
 
-.. versionadded:: 2016.11.0
-
 This module allows pillar data to be stored in Hashicorp Vault.
 
 Base configuration instructions are documented in the :ref:`execution module docs <vault-setup>`.
@@ -123,10 +121,8 @@ This example takes the key value pairs returned from vault as follows:
                 minion-passwd:
                     minionbadpasswd1
 
-.. versionadded:: 3006.0
-
-    Pillar values from previously rendered pillars can be used to template
-    vault ext_pillar paths.
+Pillar values from previously rendered pillars can be used to template
+vault ext_pillar paths.
 
 Using pillar values to template vault pillar paths requires them to be defined
 before the vault ext_pillar is called. Especially consider the significancy
