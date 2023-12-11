@@ -72,6 +72,38 @@ NO_OVERRIDE_PARAMS = immutabletypes.freeze(
 )
 
 
+def auth_info():
+    """
+    Return information about the currently active Vault authentication.
+    This includes token information and, if AppRole authentication is
+    in use, information about the SecretID.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt-run vault.auth_info
+    """
+    client = _get_master_client()
+    info = {}
+    info["token"] = client.get("auth/token/lookup-self")["data"]
+    if _config("auth:method") == "approle":
+        try:
+            info["secret_id"] = _get_approle_api().read_secret_id(
+                _config("auth:approle_name"),
+                mount=_config("auth:approle_mount"),
+                secret_id=str(client.auth.approle.secret_id),
+            )
+        except vault.VaultPermissionDeniedError:
+            info["secret_id"] = (
+                "Permission denied, allow API `create`, `update` access to "
+                f"`auth/{_config('auth:approle_mount')}"
+                f"/role/{_config('auth:approle_name')}/secret-id/lookup` "
+                "to view info"
+            )
+    return info
+
+
 def generate_token(
     minion_id,
     signature,
