@@ -9,8 +9,8 @@ If you think you've found a security vulnerability, see
 
 ## User Documentation
 
-This README for people wanting to contribute to the project.
-If you just want to get started, check out the
+This README is for people aiming to contribute to the project.
+If you just want to get started with the extension, check out the
 module docstrings (for now, documentation is coming!).
 
 ## Contributing
