@@ -298,8 +298,7 @@ def destroy_kv(path, versions, opts, context):
 
 def list_kv(path, opts, context):
     """
-    List secrets at <path>. Returns ``{"keys": []}`` by default
-    for backwards-compatibility reasons, unless <keys_only> is True.
+    List secrets at <path>.
     """
     kv, config = get_kv(opts, context, get_config=True)
     try:

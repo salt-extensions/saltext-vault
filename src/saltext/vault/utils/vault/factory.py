@@ -910,53 +910,53 @@ def parse_config(config, validate=True, opts=None, require_token=True):
             "verify": None,
         },
     }
-    try:
-        # Policy generation has params, the new config groups them together.
-        if isinstance(config.get("policies", {}), list):
-            config["policies"] = {"assign": config.pop("policies")}
-        merged = salt.utils.dictupdate.merge(
-            default_config,
-            config,
-            strategy="smart",
-            merge_lists=False,
+    # Policy generation has params, the new config groups them together.
+    if isinstance(config.get("policies", {}), list):
+        config["policies"] = {"assign": config.pop("policies")}
+    merged = salt.utils.dictupdate.merge(
+        default_config,
+        config,
+        strategy="smart",
+        merge_lists=False,
+    )
+    # ttl, uses were used as configuration for issuance and minion overrides as well
+    # as token meta information. The new configuration splits those semantics.
+    for old_token_conf, new_token_conf in [
+        ("ttl", "explicit_max_ttl"),
+        ("uses", "num_uses"),
+    ]:
+        if old_token_conf in merged["auth"]:
+            merged["issue"]["token"]["params"][new_token_conf] = merged["issue_params"][
+                new_token_conf
+            ] = merged["auth"].pop(old_token_conf)
+    # Those were found in the root namespace, but grouping them together
+    # makes semantic and practical sense.
+    for old_server_conf in ["namespace", "url", "verify"]:
+        if old_server_conf in merged:
+            merged["server"][old_server_conf] = merged.pop(old_server_conf)
+    if "role_name" in merged:
+        merged["issue"]["token"]["role_name"] = merged.pop("role_name")
+    if "token_backend" in merged["auth"]:
+        merged["cache"]["backend"] = merged["auth"].pop("token_backend")
+    if "allow_minion_override" in merged["auth"]:
+        merged["issue"]["allow_minion_override_params"] = merged["auth"].pop(
+            "allow_minion_override"
         )
-        # ttl, uses were used as configuration for issuance and minion overrides as well
-        # as token meta information. The new configuration splits those semantics.
-        for old_token_conf, new_token_conf in [
-            ("ttl", "explicit_max_ttl"),
-            ("uses", "num_uses"),
-        ]:
-            if old_token_conf in merged["auth"]:
-                merged["issue"]["token"]["params"][new_token_conf] = merged["issue_params"][
-                    new_token_conf
-                ] = merged["auth"].pop(old_token_conf)
-        # Those were found in the root namespace, but grouping them together
-        # makes semantic and practical sense.
-        for old_server_conf in ["namespace", "url", "verify"]:
-            if old_server_conf in merged:
-                merged["server"][old_server_conf] = merged.pop(old_server_conf)
-        if "role_name" in merged:
-            merged["issue"]["token"]["role_name"] = merged.pop("role_name")
-        if "token_backend" in merged["auth"]:
-            merged["cache"]["backend"] = merged["auth"].pop("token_backend")
-        if "allow_minion_override" in merged["auth"]:
-            merged["issue"]["allow_minion_override_params"] = merged["auth"].pop(
-                "allow_minion_override"
-            )
-        if opts is not None and "vault" in opts:
-            local_config = opts["vault"]
-            # Respect locally configured verify parameter
-            if local_config.get("verify", NOT_SET) != NOT_SET:
-                merged["server"]["verify"] = local_config["verify"]
-            elif local_config.get("server", {}).get("verify", NOT_SET) != NOT_SET:
-                merged["server"]["verify"] = local_config["server"]["verify"]
-            # same for token_lifecycle
-            if local_config.get("auth", {}).get("token_lifecycle"):
-                merged["auth"]["token_lifecycle"] = local_config["auth"]["token_lifecycle"]
+    if opts is not None and "vault" in opts:
+        local_config = opts["vault"]
+        # Respect locally configured verify parameter
+        if local_config.get("verify", NOT_SET) != NOT_SET:
+            merged["server"]["verify"] = local_config["verify"]
+        elif local_config.get("server", {}).get("verify", NOT_SET) != NOT_SET:
+            merged["server"]["verify"] = local_config["server"]["verify"]
+        # same for token_lifecycle
+        if local_config.get("auth", {}).get("token_lifecycle"):
+            merged["auth"]["token_lifecycle"] = local_config["auth"]["token_lifecycle"]
 
-        if not validate:
-            return merged
+    if not validate:
+        return merged
 
+    try:
         if merged["auth"]["method"] == "approle":
             if "role_id" not in merged["auth"]:
                 raise AssertionError("auth:role_id is required for approle auth")
