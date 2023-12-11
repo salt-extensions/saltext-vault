@@ -41,3 +41,11 @@ jobs:
       run: |
         mkdir exitstatus
         echo "${{ job.status }}" > exitstatus/${{ github.job }}
+
+    - name: Upload Exit Status
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: exitstatus
+        path: exitstatus
+        if-no-files-found: error
