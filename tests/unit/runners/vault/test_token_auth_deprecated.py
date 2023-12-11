@@ -2,7 +2,7 @@
 Unit tests for the Vault runner
 
 This module only tests a deprecated function, see
-tests/pytests/unit/runners/test_vault.py for the current tests.
+tests/unit/runners/test_vault.py for the current tests.
 """
 import logging
 from unittest.mock import ANY

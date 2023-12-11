@@ -45,7 +45,8 @@ patch
     When writing data, partially update the secret instead of overwriting it completely.
     This is usually the expected behavior, since without this option,
     each secret path can only contain a single mapping key safely.
-    Defaults to ``False`` for backwards-compatibility reasons.
+    Currently defaults to ``False`` for backwards-compatibility reasons.
+    Beginning with version 2 of this extension, will default to ``True``.
 
     .. versionadded:: 1.0.0
 """
@@ -53,6 +54,7 @@ import logging
 
 import salt.exceptions
 import saltext.vault.utils.vault as vault
+from saltext.vault.utils.versions import warn_until
 
 log = logging.getLogger(__name__)
 
@@ -70,8 +72,24 @@ def set_(key, value, profile=None):  # pylint: disable=unused-argument
     data = {key: value}
     curr_data = {}
     profile = profile or {}
+    patch = profile.get("patch")
 
-    if profile.get("patch"):
+    if patch is None:
+        try:
+            warn_until(
+                2,
+                (
+                    "Beginning with version {version}, the Vault SDB module will "
+                    "partially update secrets instead of overwriting it completely. "
+                    "You can switch to the new behavior explicitly by specifying "
+                    "patch: true in your Vault SDB configuration."
+                ),
+            )
+            patch = False
+        except RuntimeError:
+            patch = True
+
+    if patch:
         try:
             # Patching only works on existing secrets.
             # Save the current data if patching is enabled

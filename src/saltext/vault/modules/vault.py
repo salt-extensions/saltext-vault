@@ -698,6 +698,7 @@ from salt.defaults import NOT_SET
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltException
 from salt.exceptions import SaltInvocationError
+from saltext.vault.utils.versions import warn_until
 
 log = logging.getLogger(__name__)
 
@@ -972,7 +973,7 @@ def destroy_secret(path, *args):
         return False
 
 
-def list_secrets(path, default=NOT_SET, keys_only=False):
+def list_secrets(path, default=NOT_SET, keys_only=None):
     """
     List secret keys at <path>. The vault policy used must allow this.
     The path should end with a trailing slash.
@@ -1008,10 +1009,25 @@ def list_secrets(path, default=NOT_SET, keys_only=False):
 
         This function used to return a dictionary like ``{"keys": ["some/", "some/key"]}``.
         Setting this to True will only return the list of keys.
-        For backwards-compatibility reasons, this defaults to False.
+        For backwards-compatibility reasons, this currently defaults to False.
+        Beginning with version 2 of this extension, the default will change to True.
     """
     if default == NOT_SET:
         default = CommandExecutionError
+    if keys_only is None:
+        try:
+            warn_until(
+                2,
+                (
+                    "In version {version}, this function will return the list of "
+                    "secret keys only. You can switch to the new behavior explicitly "
+                    "by specifying keys_only=True."
+                ),
+            )
+            keys_only = False
+        except RuntimeError:
+            keys_only = True
+
     log.debug("Listing vault secret keys for %s in %s", __grains__.get("id"), path)
     try:
         keys = vault.list_kv(path, __opts__, __context__)

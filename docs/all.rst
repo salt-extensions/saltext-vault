@@ -32,3 +32,9 @@ Complete List of saltext-vault
    :maxdepth: 2
 
    ref/states/index
+
+
+.. toctree::
+   :maxdepth: 2
+
+   ref/utils/index

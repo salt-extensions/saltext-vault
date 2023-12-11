@@ -27,6 +27,7 @@ import saltext.vault.utils.vault.helpers as vhelpers
 from salt.defaults import NOT_SET
 from salt.exceptions import SaltInvocationError
 from salt.exceptions import SaltRunnerError
+from saltext.vault.utils.versions import warn_until
 
 log = logging.getLogger(__name__)
 
@@ -156,9 +157,13 @@ def generate_token(
     )
     _validate_signature(minion_id, signature, impersonated_by_master)
     try:
-        salt.utils.versions.warn_until(
-            "Argon",
-            "vault.generate_token endpoint is deprecated. Please update your minions.",
+        warn_until(
+            2,
+            (
+                "The vault.generate_token endpoint is deprecated and will be removed "
+                "in version {version}. Please ensure your minions are running the "
+                "Vault Salt extension as well."
+            ),
         )
 
         if _config("issue:type") != "token":
