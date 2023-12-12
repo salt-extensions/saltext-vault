@@ -55,6 +55,13 @@ def test_get_salt_run_type(opts_runtype, expected):
                 "deeply-nested-list:world",
             ],
         ),
+        (
+            "dict-keys:{grains[dict][roles]}",
+            [
+                "dict-keys:role_a",
+                "dict-keys:role_b",
+            ],
+        ),
     ],
 )
 def test_expand_pattern_lists(pattern, expected):
@@ -68,6 +75,7 @@ def test_expand_pattern_lists(pattern, expected):
         "roles": ["web", "database"],
         "aux": ["foo", "bar"],
         "deep": {"foo": {"bar": {"baz": ["hello", "world"]}}},
+        "dict": {"roles": {"role_a": {"foo": "bar"}, "role_b": {"bar": "baz"}}},
     }
 
     mappings = {"minion": "test-minion", "grains": pattern_vars}

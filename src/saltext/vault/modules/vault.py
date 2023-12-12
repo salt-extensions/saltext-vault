@@ -561,6 +561,12 @@ assign
     For pillar and grain values, lists are expanded, so ``salt_role_{pillar[roles]}``
     with ``[a, b]`` results in ``salt_role_a`` and ``salt_role_b`` to be issued.
 
+    .. versionchanged:: 1.0.0
+
+        If the referenced pillar or grain value is a dictionary, its keys are
+        treated like a list - the above example is thus also valid for
+        ``{a: {some: conf}, b: {other: val}}`` now.
+
     Defaults to ``[saltstack/minions, saltstack/{minion}]``.
 
     Policies can be templated with pillar values as well: ``salt_role_{pillar[roles]}``.
