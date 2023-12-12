@@ -3,12 +3,11 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
+import requests.models
 from saltext.vault.utils import vault
 from saltext.vault.utils.vault import cache as vcache
 from saltext.vault.utils.vault import client as vclient
 from saltext.vault.utils.vault import kv as vkv
-
-from tests.unit.utils.vault.conftest import _mock_json_response  # pylint: disable=import-error
 
 
 @pytest.fixture
@@ -487,9 +486,12 @@ class TestKVV2:
         """
         Ensure unexpected responses are treated as not KV
         """
-        kvv2.client.get.return_value = MagicMock(
-            _mock_json_response({"wrap_info": {}}, status_code=200)
-        )
+        # _mock_json_response() returns a Mock, but we need MagicMock here
+        resp_mm = MagicMock(spec=requests.models.Response)
+        resp_mm.json.return_value = {"wrap_info": {}}
+        resp_mm.status_code = 200
+        resp_mm.reason = ""
+        kvv2.client.get.return_value = resp_mm
         res = kvv2._get_secret_path_metadata(path)  # pylint: disable=protected-access
         assert res is None
         assert "Unexpected response to metadata query" in caplog.text
