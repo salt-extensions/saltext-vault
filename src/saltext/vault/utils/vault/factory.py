@@ -78,7 +78,7 @@ def get_authd_client(opts, context, force_local=False, get_config=False):
 
     # Check if the token needs to be and can be renewed.
     # Since this needs to check the possibly active session and does not care
-    # about valid secret IDs etc, we need to inspect the actual token.
+    # about valid SecretIDs etc, we need to inspect the actual token.
     if (
         not retry
         and config["auth"]["token_lifecycle"]["renew_increment"] is not False
@@ -304,7 +304,7 @@ def _build_authd_client(opts, context, force_local=False):
                 ttl=cache_ttl,
             )
             secret_id = secret_id_cache.get()
-            # Only fetch secret ID if there is no cached valid token
+            # Only fetch SecretID if there is no cached valid token
             if cached_token is None and secret_id is None:
                 secret_id = _fetch_secret_id(
                     config,
@@ -314,7 +314,19 @@ def _build_authd_client(opts, context, force_local=False):
                     force_local=force_local,
                 )
             if secret_id is None:
-                secret_id = vauth.InvalidVaultSecretId()
+                # If the auth config is sourced locally, ensure the
+                # SecretID is known regardless whether we have a valid token.
+                # For remote sources, we would needlessly request one, so don't.
+                if (
+                    hlp._get_salt_run_type(opts)
+                    in [hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL]
+                    or force_local
+                ):
+                    secret_id = _fetch_secret_id(
+                        config, opts, secret_id_cache, unauthd_client, force_local=force_local
+                    )
+                else:
+                    secret_id = vauth.InvalidVaultSecretId()
         role_id = config["auth"]["role_id"]
         # this happens with wrapped response merging
         if isinstance(role_id, dict):
@@ -495,7 +507,7 @@ def _fetch_secret_id(config, opts, secret_id_cache, unwrap_client, force_local=F
             or None,
         )
         secret_id = vleases.VaultSecretId(**secret_id["data"])
-        # Do not cache single-use secret IDs
+        # Do not cache single-use SecretIDs
         if secret_id.num_uses != 1:
             secret_id_cache.store(secret_id)
         return secret_id
@@ -520,7 +532,7 @@ def _fetch_secret_id(config, opts, secret_id_cache, unwrap_client, force_local=F
                 secret_id_ttl=0,
                 secret_id_num_uses=0,
             )
-        # When secret_id is falsey, the approle does not require secret IDs,
+        # When secret_id is falsey, the approle does not require SecretIDs,
         # hence a call to this function is superfluous
         raise salt.exceptions.SaltException("This code path should not be hit at all.")
 
@@ -910,53 +922,53 @@ def parse_config(config, validate=True, opts=None, require_token=True):
             "verify": None,
         },
     }
-    try:
-        # Policy generation has params, the new config groups them together.
-        if isinstance(config.get("policies", {}), list):
-            config["policies"] = {"assign": config.pop("policies")}
-        merged = salt.utils.dictupdate.merge(
-            default_config,
-            config,
-            strategy="smart",
-            merge_lists=False,
+    # Policy generation has params, the new config groups them together.
+    if isinstance(config.get("policies", {}), list):
+        config["policies"] = {"assign": config.pop("policies")}
+    merged = salt.utils.dictupdate.merge(
+        default_config,
+        config,
+        strategy="smart",
+        merge_lists=False,
+    )
+    # ttl, uses were used as configuration for issuance and minion overrides as well
+    # as token meta information. The new configuration splits those semantics.
+    for old_token_conf, new_token_conf in [
+        ("ttl", "explicit_max_ttl"),
+        ("uses", "num_uses"),
+    ]:
+        if old_token_conf in merged["auth"]:
+            merged["issue"]["token"]["params"][new_token_conf] = merged["issue_params"][
+                new_token_conf
+            ] = merged["auth"].pop(old_token_conf)
+    # Those were found in the root namespace, but grouping them together
+    # makes semantic and practical sense.
+    for old_server_conf in ["namespace", "url", "verify"]:
+        if old_server_conf in merged:
+            merged["server"][old_server_conf] = merged.pop(old_server_conf)
+    if "role_name" in merged:
+        merged["issue"]["token"]["role_name"] = merged.pop("role_name")
+    if "token_backend" in merged["auth"]:
+        merged["cache"]["backend"] = merged["auth"].pop("token_backend")
+    if "allow_minion_override" in merged["auth"]:
+        merged["issue"]["allow_minion_override_params"] = merged["auth"].pop(
+            "allow_minion_override"
         )
-        # ttl, uses were used as configuration for issuance and minion overrides as well
-        # as token meta information. The new configuration splits those semantics.
-        for old_token_conf, new_token_conf in [
-            ("ttl", "explicit_max_ttl"),
-            ("uses", "num_uses"),
-        ]:
-            if old_token_conf in merged["auth"]:
-                merged["issue"]["token"]["params"][new_token_conf] = merged["issue_params"][
-                    new_token_conf
-                ] = merged["auth"].pop(old_token_conf)
-        # Those were found in the root namespace, but grouping them together
-        # makes semantic and practical sense.
-        for old_server_conf in ["namespace", "url", "verify"]:
-            if old_server_conf in merged:
-                merged["server"][old_server_conf] = merged.pop(old_server_conf)
-        if "role_name" in merged:
-            merged["issue"]["token"]["role_name"] = merged.pop("role_name")
-        if "token_backend" in merged["auth"]:
-            merged["cache"]["backend"] = merged["auth"].pop("token_backend")
-        if "allow_minion_override" in merged["auth"]:
-            merged["issue"]["allow_minion_override_params"] = merged["auth"].pop(
-                "allow_minion_override"
-            )
-        if opts is not None and "vault" in opts:
-            local_config = opts["vault"]
-            # Respect locally configured verify parameter
-            if local_config.get("verify", NOT_SET) != NOT_SET:
-                merged["server"]["verify"] = local_config["verify"]
-            elif local_config.get("server", {}).get("verify", NOT_SET) != NOT_SET:
-                merged["server"]["verify"] = local_config["server"]["verify"]
-            # same for token_lifecycle
-            if local_config.get("auth", {}).get("token_lifecycle"):
-                merged["auth"]["token_lifecycle"] = local_config["auth"]["token_lifecycle"]
+    if opts is not None and "vault" in opts:
+        local_config = opts["vault"]
+        # Respect locally configured verify parameter
+        if local_config.get("verify", NOT_SET) != NOT_SET:
+            merged["server"]["verify"] = local_config["verify"]
+        elif local_config.get("server", {}).get("verify", NOT_SET) != NOT_SET:
+            merged["server"]["verify"] = local_config["server"]["verify"]
+        # same for token_lifecycle
+        if local_config.get("auth", {}).get("token_lifecycle"):
+            merged["auth"]["token_lifecycle"] = local_config["auth"]["token_lifecycle"]
 
-        if not validate:
-            return merged
+    if not validate:
+        return merged
 
+    try:
         if merged["auth"]["method"] == "approle":
             if "role_id" not in merged["auth"]:
                 raise AssertionError("auth:role_id is required for approle auth")

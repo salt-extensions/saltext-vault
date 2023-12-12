@@ -5,8 +5,6 @@ Vault SDB Module
 :maturity:      New
 :platform:      all
 
-.. versionadded:: 2016.11.0
-
 This module allows access to Hashicorp Vault using an ``sdb://`` URI.
 
 Base configuration instructions are documented in the :ref:`execution module docs <vault-setup>`.
@@ -47,14 +45,16 @@ patch
     When writing data, partially update the secret instead of overwriting it completely.
     This is usually the expected behavior, since without this option,
     each secret path can only contain a single mapping key safely.
-    Defaults to ``False`` for backwards-compatibility reasons.
+    Currently defaults to ``False`` for backwards-compatibility reasons.
+    Beginning with version 2 of this extension, will default to ``True``.
 
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 """
 import logging
 
 import salt.exceptions
 import saltext.vault.utils.vault as vault
+from saltext.vault.utils.versions import warn_until
 
 log = logging.getLogger(__name__)
 
@@ -72,11 +72,27 @@ def set_(key, value, profile=None):  # pylint: disable=unused-argument
     data = {key: value}
     curr_data = {}
     profile = profile or {}
+    patch = profile.get("patch")
 
-    if profile.get("patch"):
+    if patch is None:
         try:
-            # Patching only works on existing secrets and requires the `patch`
-            # capability as well as KV v2. Save the current data if patching is enabled
+            warn_until(
+                2,
+                (
+                    "Beginning with version {version}, the Vault SDB module will "
+                    "partially update secrets instead of overwriting it completely. "
+                    "You can switch to the new behavior explicitly by specifying "
+                    "patch: true in your Vault SDB configuration."
+                ),
+            )
+            patch = False
+        except RuntimeError:
+            patch = True
+
+    if patch:
+        try:
+            # Patching only works on existing secrets.
+            # Save the current data if patching is enabled
             # to write it back later, if any errors happen in patch_kv.
             # This also checks that the path exists, otherwise patching fails as well.
             curr_data = vault.read_kv(path, __opts__, __context__)

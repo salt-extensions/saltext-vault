@@ -27,6 +27,7 @@ import saltext.vault.utils.vault.helpers as vhelpers
 from salt.defaults import NOT_SET
 from salt.exceptions import SaltInvocationError
 from salt.exceptions import SaltRunnerError
+from saltext.vault.utils.versions import warn_until
 
 log = logging.getLogger(__name__)
 
@@ -72,6 +73,40 @@ NO_OVERRIDE_PARAMS = immutabletypes.freeze(
 )
 
 
+def auth_info():
+    """
+    .. versionadded:: 1.0.0
+
+    Return information about the currently active Vault authentication.
+    This includes token information and, if AppRole authentication is
+    in use, information about the SecretID.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt-run vault.auth_info
+    """
+    client = _get_master_client()
+    info = {}
+    info["token"] = client.get("auth/token/lookup-self")["data"]
+    if _config("auth:method") == "approle":
+        try:
+            info["secret_id"] = _get_approle_api().read_secret_id(
+                _config("auth:approle_name"),
+                mount=_config("auth:approle_mount"),
+                secret_id=str(client.auth.approle.secret_id),
+            )
+        except vault.VaultPermissionDeniedError:
+            info["secret_id"] = (
+                "Permission denied, allow API `create`, `update` access to "
+                f"`auth/{_config('auth:approle_mount')}"
+                f"/role/{_config('auth:approle_name')}/secret-id/lookup` "
+                "to view info"
+            )
+    return info
+
+
 def generate_token(
     minion_id,
     signature,
@@ -81,7 +116,7 @@ def generate_token(
     upgrade_request=False,
 ):
     """
-    .. deprecated:: 3007.0
+    .. deprecated:: 1.0.0
 
     Generate a Vault token for minion <minion_id>.
 
@@ -122,9 +157,13 @@ def generate_token(
     )
     _validate_signature(minion_id, signature, impersonated_by_master)
     try:
-        salt.utils.versions.warn_until(
-            "Argon",
-            "vault.generate_token endpoint is deprecated. Please update your minions.",
+        warn_until(
+            2,
+            (
+                "The vault.generate_token endpoint is deprecated and will be removed "
+                "in version {version}. Please ensure your minions are running the "
+                "Vault Salt extension as well."
+            ),
         )
 
         if _config("issue:type") != "token":
@@ -160,7 +199,7 @@ def generate_token(
 
 def generate_new_token(minion_id, signature, impersonated_by_master=False, issue_params=None):
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Generate a Vault token for minion <minion_id>.
 
@@ -247,7 +286,7 @@ def get_config(
     config_only=False,
 ):
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Return Vault configuration for minion <minion_id>.
 
@@ -316,7 +355,7 @@ def get_config(
 
 def get_role_id(minion_id, signature, impersonated_by_master=False, issue_params=None):
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Return the Vault role-id for minion <minion_id>. Requires the master to be configured
     to generate AppRoles for minions (configuration: ``vault:issue:type``).
@@ -413,7 +452,7 @@ def _approle_params_match(current, issue_params):
 
 def generate_secret_id(minion_id, signature, impersonated_by_master=False, issue_params=None):
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Generate a Vault secret ID for minion <minion_id>. Requires the master to be configured
     to generate AppRoles for minions (configuration: ``vault:issue:type``).
@@ -567,7 +606,7 @@ def show_policies(minion_id, refresh_pillar=NOT_SET, expire=None):
 
 def sync_approles(minions=None, up=False, down=False):
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Sync minion AppRole parameters with current settings, including associated
     token policies.
@@ -628,7 +667,7 @@ def sync_approles(minions=None, up=False, down=False):
 
 def list_approles():
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     List all AppRoles that have been created by the Salt master.
     They are named after the minions.
@@ -655,7 +694,7 @@ def list_approles():
 
 def sync_entities(minions=None, up=False, down=False):
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Sync minion entities with current settings. Only updates entities for minions
     with existing AppRoles.
@@ -715,7 +754,7 @@ def sync_entities(minions=None, up=False, down=False):
 
 def list_entities():
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     List all entities that have been created by the Salt master.
     They are named `salt_minion_{minion_id}`.
@@ -743,7 +782,7 @@ def list_entities():
 
 def show_entity(minion_id):
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Show entity metadata for <minion_id>.
 
@@ -761,7 +800,7 @@ def show_entity(minion_id):
 
 def show_approle(minion_id):
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Show AppRole configuration for <minion_id>.
 
@@ -779,7 +818,7 @@ def show_approle(minion_id):
 
 def cleanup_auth():
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Removes AppRoles and entities associated with unknown minion IDs.
     Can only clean up entities if the AppRole still exists.
@@ -812,7 +851,7 @@ def cleanup_auth():
 
 def clear_cache(master=True, minions=True):
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Clears master cache of Vault-specific data. This can include:
     - AppRole metadata

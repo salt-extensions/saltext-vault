@@ -429,7 +429,7 @@ class TestKVV1:
         """
         Ensure that VaultKV.delete with versions raises an exception for KV v1.
         """
-        with pytest.raises(vault.VaultInvocationError, match="Versioning support requires kv-v2.*"):
+        with pytest.raises(vault.VaultInvocationError, match="Versioning support requires KV v2.*"):
             kvv1.delete(path, versions=[1, 2, 3, 4])
 
     def test_vault_kv_destroy(self, kvv1, path):

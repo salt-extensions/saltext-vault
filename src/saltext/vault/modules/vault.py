@@ -6,30 +6,23 @@ Functions to interact with Hashicorp Vault.
 :maturity:      new
 :platform:      all
 
-
-:note: If you see the following error, you'll need to upgrade ``requests`` to at least 2.4.2
-
-.. code-block:: text
-
-    <timestamp> [salt.pillar][CRITICAL][14337] Pillar render error: Failed to load ext_pillar vault: {'error': "request() got an unexpected keyword argument 'json'"}
-
-
 Configuration
 -------------
 
 In addition to the module configuration, it is required for the Salt master
 to be configured to allow peer runs in order to use the Vault integration.
 
-.. versionchanged:: 3007.0
+.. versionchanged:: 1.0.0
 
-    The ``vault`` configuration structure has changed significantly to account
-    for many new features. If found, the old structure will be automatically
-    translated to the new one.
+    Versus the Vault modules found in Salt, the ``vault`` configuration structure
+    has changed significantly to account for many new features.
+    If found, the old structure will be automatically translated to the new one.
 
     **Please update your peer_run configuration** to take full advantage of the
-    updated modules. The old endpoint (``vault.generate_token``) will continue
-    to work, but result in unnecessary roundtrips once your minions have been
-    updated.
+    Salt extension. The old endpoint
+    :py:func:`vault.generate_token<saltext.vault.runners.vault.generate_token>`
+    will continue to work, but result in unnecessary roundtrips once your
+    minions have been updated.
 
 To allow minions to pull configuration and credentials from the Salt master,
 add this segment to the master configuration file:
@@ -255,12 +248,12 @@ All possible master configuration options with defaults:
 Contains authentication information for the local machine.
 
 approle_mount
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     The name of the AppRole authentication mount point. Defaults to ``approle``.
 
 approle_name
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     The name of the AppRole. Defaults to ``salt-master``.
 
@@ -281,17 +274,17 @@ method
 role_id
     The role ID of the AppRole. Required if ``auth:method`` == ``approle``.
 
-    .. versionchanged:: 3007.0
+    .. versionchanged:: 1.0.0
 
         In addition to a plain string, this can also be specified as a
         dictionary that includes ``wrap_info``, i.e. the return payload
         of a wrapping request.
 
 secret_id
-    The secret ID of the AppRole.
+    The SecretID of the AppRole.
     Only required if the configured AppRole requires it.
 
-    .. versionchanged:: 3007.0
+    .. versionchanged:: 1.0.0
 
         In addition to a plain string, this can also be specified as a
         dictionary that includes ``wrap_info``, i.e. the return payload
@@ -323,7 +316,7 @@ token
 
        export VAULT_TOKEN=11111111-1111-1111-1111-1111111111111
 
-    .. versionchanged:: 3007.0
+    .. versionchanged:: 1.0.0
 
         In addition to a plain string, this can also be specified as a
         dictionary that includes ``wrap_info``, i.e. the return payload
@@ -367,7 +360,7 @@ Configures token/lease and metadata cache (for KV secrets) on all hosts
 as well as configuration cache on minions that receive issued credentials.
 
 backend
-    .. versionchanged:: 3007.0
+    .. versionchanged:: 1.0.0
 
         This used to be found in ``auth:token_backend``.
 
@@ -380,14 +373,14 @@ backend
     as well.
 
 clear_attempt_revocation
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     When flushing still valid cached tokens and leases, attempt to have them
     revoked after a (short) delay. Defaults to ``60``.
     Set this to false to disable revocation (not recommended).
 
 clear_on_unauthorized
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     When encountering an ``Unauthorized`` response with an otherwise valid token,
     flush the cache and request new credentials. Defaults to true.
@@ -396,7 +389,7 @@ clear_on_unauthorized
     you might have to clear the cache manually or wait for the token to expire.
 
 config
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     The time in seconds to cache queried configuration from the master.
     Defaults to ``3600`` (one hour). Set this to ``null`` to disable
@@ -411,7 +404,7 @@ config
         credentials and leases.
 
 expire_events
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Fire an event when the session cache containing leases is cleared
     (``vault/cache/<scope>/clear``) or cached leases have expired
@@ -420,7 +413,7 @@ expire_events
     Defaults to false.
 
 kv_metadata
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     The time in seconds to cache KV metadata used to determine if a path
     is using version 1/2 for. Defaults to ``connection``, which will clear
@@ -430,9 +423,9 @@ kv_metadata
     ``vault.clear_cache`` with ``connection=false``.
 
 secret
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
-    The time in seconds to cache tokens/secret IDs for. Defaults to ``ttl``,
+    The time in seconds to cache tokens/SecretIDs for. Defaults to ``ttl``,
     which caches the secret for as long as it is valid, unless a new configuration
     is requested from the master.
 
@@ -441,7 +434,7 @@ secret
 Configures authentication data issued by the master to minions.
 
 type
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     The type of authentication to issue to minions. Can be ``token`` or ``approle``.
     Defaults to ``token``.
@@ -451,7 +444,7 @@ type
     It is strongly encouraged to create a separate mount dedicated to minions.
 
 approle
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Configuration regarding issued AppRoles.
 
@@ -466,13 +459,13 @@ approle
     will be updated automatically during a request by a minion as well.
 
 token
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Configuration regarding issued tokens.
 
     ``role_name`` specifies the role name for minion tokens created. Optional.
 
-    .. versionchanged:: 3007.0
+    .. versionchanged:: 1.0.0
 
         This used to be found in ``role_name``.
 
@@ -484,7 +477,7 @@ token
 
     ``params`` configures the tokens the master issues to minions.
 
-    .. versionchanged:: 3007.0
+    .. versionchanged:: 1.0.0
 
         This used to be found in ``auth:ttl`` and ``auth:uses``.
         The possible parameters were synchronized with the Vault nomenclature:
@@ -503,7 +496,7 @@ token
 
 
 allow_minion_override_params
-    .. versionchanged:: 3007.0
+    .. versionchanged:: 1.0.0
 
         This used to be found in ``auth:allow_minion_override``.
 
@@ -511,7 +504,7 @@ allow_minion_override_params
     See ``issue_params`` below.
 
 wrap
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     The time a minion has to unwrap a wrapped secret issued by the master.
     Set this to false to disable wrapping, otherwise a time string like ``30s``
@@ -523,7 +516,7 @@ wrap
 
 ``metadata``
 ~~~~~~~~~~~~
-.. versionadded:: 3007.0
+.. versionadded:: 1.0.0
 
 Configures metadata for the issued entities/secrets. Values have to be strings
 and can be templated with the following variables:
@@ -545,12 +538,12 @@ entity
     Entities are only created when issuing AppRoles to minions.
 
 secret
-    Configures the metadata associated with issued tokens/secret IDs. They
+    Configures the metadata associated with issued tokens/SecretIDs. They
     are logged in plaintext to the Vault audit log.
 
 ``policies``
 ~~~~~~~~~~~~
-.. versionchanged:: 3007.0
+.. versionchanged:: 1.0.0
 
     This used to specify the list of policies associated with a minion token only.
     The equivalent is found in ``assign``.
@@ -570,13 +563,11 @@ assign
 
     Defaults to ``[saltstack/minions, saltstack/{minion}]``.
 
-    .. versionadded:: 3006.0
-
-        Policies can be templated with pillar values as well: ``salt_role_{pillar[roles]}``.
-        Make sure to only reference pillars that are not sourced from Vault since the latter
-        ones might be unavailable during policy rendering. If you use the Vault
-        integration in one of your pillar ``sls`` files, all values from that file
-        will be absent during policy rendering, even the ones that do not depend on Vault.
+    Policies can be templated with pillar values as well: ``salt_role_{pillar[roles]}``.
+    Make sure to only reference pillars that are not sourced from Vault since the latter
+    ones might be unavailable during policy rendering. If you use the Vault
+    integration in one of your pillar ``sls`` files, all values from that file
+    will be absent during policy rendering, even the ones that do not depend on Vault.
 
     .. important::
 
@@ -592,7 +583,7 @@ assign
         types which work well.
 
 cache_time
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Number of seconds compiled templated policies are cached on the master.
     This is important when using pillar values in templates, since compiling
@@ -611,7 +602,7 @@ cache_time
         (if allow_minion_override_params is True).
 
 refresh_pillar
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Whether to refresh the minion pillar when compiling templated policies
     that contain pillar variables.
@@ -640,7 +631,7 @@ refresh_pillar
 
 ``server``
 ~~~~~~~~~~
-.. versionchanged:: 3007.0
+.. versionchanged:: 1.0.0
 
     The values found in here were found in the ``vault`` root namespace previously.
 
@@ -655,9 +646,7 @@ verify
 
     For details, please see `the requests documentation <https://requests.readthedocs.io/en/master/user/advanced/#ssl-cert-verification>`_.
 
-    .. versionadded:: 2018.3.0
-
-    .. versionchanged:: 3007.0
+    .. versionchanged:: 1.0.0
 
         Minions again respect the master configuration value, which was changed
         implicitly in v3001. If this value is set in the minion configuration
@@ -672,33 +661,29 @@ namespace
     For details please see:
     https://www.vaultproject.io/docs/enterprise/namespaces
 
-    .. versionadded:: 3004
-
 
 Minion configuration (optional):
 
 ``config_location``
 ~~~~~~~~~~~~~~~~~~~
-    Where to get the connection details for calling vault. By default,
-    vault will try to determine if it needs to request the connection
-    details from the master or from the local config. This optional option
-    will force vault to use the connection details from the master or the
-    local config. Can only be either ``master`` or ``local``.
-
-  .. versionadded:: 3006.0
+Where to get the connection details for calling vault. By default,
+vault will try to determine if it needs to request the connection
+details from the master or from the local config. This optional option
+will force vault to use the connection details from the master or the
+local config. Can only be either ``master`` or ``local``.
 
 ``issue_params``
 ~~~~~~~~~~~~~~~~
-    Request overrides for token/AppRole issuance. This needs to be allowed
-    on the master by setting ``issue:allow_minion_override_params`` to true.
-    See the master configuration ``issue:token:params`` or ``issue:approle:params``
-    for reference.
+Request overrides for token/AppRole issuance. This needs to be allowed
+on the master by setting ``issue:allow_minion_override_params`` to true.
+See the master configuration ``issue:token:params`` or ``issue:approle:params``
+for reference.
 
-    .. versionchanged:: 3007.0
+.. versionchanged:: 1.0.0
 
-        For token issuance, this used to be found in ``auth:ttl`` and ``auth:uses``.
-        Mind that the parameter names have been synchronized with Vault, see notes
-        above (TLDR: ``ttl`` => ``explicit_max_ttl``, ``uses`` => ``num_uses``.
+    For token issuance, this used to be found in ``auth:ttl`` and ``auth:uses``.
+    Mind that the parameter names have been synchronized with Vault, see notes
+    above (TLDR: ``ttl`` => ``explicit_max_ttl``, ``uses`` => ``num_uses``.
 
 .. note::
 
@@ -713,6 +698,7 @@ from salt.defaults import NOT_SET
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltException
 from salt.exceptions import SaltInvocationError
+from saltext.vault.utils.versions import warn_until
 
 log = logging.getLogger(__name__)
 
@@ -720,11 +706,6 @@ log = logging.getLogger(__name__)
 def read_secret(path, key=None, metadata=False, default=NOT_SET):
     """
     Return the value of <key> at <path> in vault, or entire secret.
-
-    .. versionchanged:: 3001
-        The ``default`` argument has been added. When the path or path/key
-        combination is not found, an exception will be raised, unless a default
-        is provided.
 
     CLI Example:
 
@@ -753,14 +734,10 @@ def read_secret(path, key=None, metadata=False, default=NOT_SET):
         whole dataset.
 
     metadata
-        .. versionadded:: 3001
-
         If using KV v2 backend, display full results, including metadata.
         Defaults to False.
 
     default
-        .. versionadded:: 3001
-
         When the path or path/key combination is not found, an exception will
         be raised, unless a default is provided here.
     """
@@ -831,7 +808,7 @@ def write_raw(path, raw):
 
             salt '*' vault.write_raw "secret/my/secret" '{"user":"foo","password": "bar"}'
 
-    Required policy: see write_secret
+    Required policy: see :func:`write_secret`
 
     path
         The path to the secret, including mount.
@@ -853,7 +830,16 @@ def write_raw(path, raw):
 def patch_secret(path, **kwargs):
     """
     Patch secret dataset at <path>. Fields are specified as arbitrary keyword arguments.
-    Requires KV v2 and "patch" capability.
+
+    .. note::
+
+        This works even for older Vault versions, KV v1 and with missing
+        ``patch`` capability, but will use more than one request to simulate
+        the functionality by issuing a read and update request.
+
+        For proper, single-request patching, requires versions of KV v2 that
+        support the ``patch`` capability and the ``patch`` capability to be available
+        for the path.
 
     .. note::
 
@@ -870,8 +856,21 @@ def patch_secret(path, **kwargs):
 
     .. code-block:: vaultpolicy
 
+        # Proper patching
         path "<mount>/data/<secret>" {
             capabilities = ["patch"]
+        }
+
+        # OR (!), for older KV v2 setups:
+
+        path "<mount>/data/<secret>" {
+            capabilities = ["read", "update"]
+        }
+
+        # OR (!), for KV v1 setups:
+
+        path "<mount>/<secret>" {
+            capabilities = ["read", "update"]
         }
 
     path
@@ -922,12 +921,14 @@ def delete_secret(path, *args):
     path
         The path to the secret, including mount.
 
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
         For KV v2, you can specify versions to soft-delete as supplemental
         positional arguments.
     """
     log.debug("Deleting vault secrets for %s in %s", __grains__.get("id"), path)
+    if args:
+        log.debug(f"Affected versions: {' '.join(str(x) for x in args)}")
     try:
         return vault.delete_kv(path, __opts__, __context__, versions=list(args) or None)
     except Exception as err:  # pylint: disable=broad-except
@@ -937,9 +938,7 @@ def delete_secret(path, *args):
 
 def destroy_secret(path, *args):
     """
-    .. versionadded:: 3001
-
-    Destroy specified secret versions <path>. The vault policy
+    Destroy specified secret versions at <path>. The vault policy
     used must allow this. Only supported on Vault KV version 2.
 
     CLI Example:
@@ -965,6 +964,8 @@ def destroy_secret(path, *args):
     if not args:
         raise SaltInvocationError("Need at least one version to destroy.")
     log.debug("Destroying vault secrets for %s in %s", __grains__.get("id"), path)
+    if args:
+        log.debug(f"Affected versions: {' '.join(str(x) for x in args)}")
     try:
         return vault.destroy_kv(path, list(args), __opts__, __context__)
     except Exception as err:  # pylint: disable=broad-except
@@ -972,15 +973,10 @@ def destroy_secret(path, *args):
         return False
 
 
-def list_secrets(path, default=NOT_SET, keys_only=False):
+def list_secrets(path, default=NOT_SET, keys_only=None):
     """
     List secret keys at <path>. The vault policy used must allow this.
     The path should end with a trailing slash.
-
-    .. versionchanged:: 3001
-        The ``default`` argument has been added. When the path or path/key
-        combination is not found, an exception will be raised, unless a default
-        is provided.
 
     CLI Example:
 
@@ -1005,20 +1001,33 @@ def list_secrets(path, default=NOT_SET, keys_only=False):
         The path to the secret, including mount.
 
     default
-        .. versionadded:: 3001
-
         When the path is not found, an exception will be raised, unless a default
         is provided here.
 
     keys_only
-        .. versionadded:: 3007.0
+        .. versionadded:: 1.0.0
 
         This function used to return a dictionary like ``{"keys": ["some/", "some/key"]}``.
         Setting this to True will only return the list of keys.
-        For backwards-compatibility reasons, this defaults to False.
+        For backwards-compatibility reasons, this currently defaults to False.
+        Beginning with version 2 of this extension, the default will change to True.
     """
     if default == NOT_SET:
         default = CommandExecutionError
+    if keys_only is None:
+        try:
+            warn_until(
+                2,
+                (
+                    "In version {version}, this function will return the list of "
+                    "secret keys only. You can switch to the new behavior explicitly "
+                    "by specifying keys_only=True."
+                ),
+            )
+            keys_only = False
+        except RuntimeError:
+            keys_only = True
+
     log.debug("Listing vault secret keys for %s in %s", __grains__.get("id"), path)
     try:
         keys = vault.list_kv(path, __opts__, __context__)
@@ -1036,7 +1045,7 @@ def list_secrets(path, default=NOT_SET, keys_only=False):
 
 def clear_cache(connection=True, session=False):
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Delete Vault caches. Will ensure the current token and associated leases
     are revoked by default.
@@ -1073,10 +1082,11 @@ def clear_cache(connection=True, session=False):
 
 def clear_token_cache():
     """
-    .. versionchanged:: 3001
-    .. versionchanged:: 3007.0
+    .. deprecated:: 1.0.0
+    .. versionchanged:: 1.0.0
 
-        This is now an alias for ``vault.clear_cache`` with ``connection=True``.
+        This is now an alias for :func:`vault.clear_cache<clear_cache>` with ``connection=True``
+        and ``session=False`` (the defaults).
 
     Delete minion Vault token cache.
 
@@ -1092,9 +1102,9 @@ def clear_token_cache():
 
 def policy_fetch(policy):
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
-    Fetch the rules associated with an ACL policy. Returns None if the policy
+    Fetch the rules associated with an ACL policy. Returns ``None`` if the policy
     does not exist.
 
     CLI Example:
@@ -1129,7 +1139,7 @@ def policy_fetch(policy):
 
 def policy_write(policy, rules):
     r"""
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Create or update an ACL policy.
 
@@ -1163,9 +1173,9 @@ def policy_write(policy, rules):
 
 def policy_delete(policy):
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
-    Delete an ACL policy. Returns False if the policy did not exist.
+    Delete an ACL policy. Returns False if the policy does not exist.
 
     CLI Example:
 
@@ -1196,7 +1206,7 @@ def policy_delete(policy):
 
 def policies_list():
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     List all ACL policies.
 
@@ -1222,7 +1232,7 @@ def policies_list():
 
 def query(method, endpoint, payload=None):
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Issue arbitrary queries against the Vault API.
 
@@ -1257,7 +1267,7 @@ def query(method, endpoint, payload=None):
 
 def update_config(keep_session=False):
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Attempt to update the cached configuration without clearing the
     currently active Vault session.
@@ -1281,7 +1291,7 @@ def update_config(keep_session=False):
 
 def get_server_config():
     """
-    .. versionadded:: 3007.0
+    .. versionadded:: 1.0.0
 
     Return the server connection configuration that's currently in use by Salt.
     Contains ``url``, ``verify`` and ``namespace``.

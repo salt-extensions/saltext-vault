@@ -6,9 +6,6 @@ Configuration instructions are documented in the :ref:`execution module docs <va
 :maintainer:    SaltStack
 :maturity:      new
 :platform:      all
-
-.. versionadded:: 2017.7.0
-
 """
 import difflib
 import logging
