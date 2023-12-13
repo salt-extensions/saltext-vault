@@ -1,11 +1,27 @@
-Welcome to saltext-vault Documentation!
-=======================================
+``saltext-vault``: Integrate Salt with Vault
+============================================
+
+Salt Extension for interacting with Vault
 
 .. toctree::
   :maxdepth: 2
-  :caption: Contents:
+  :caption: Provided Modules
+  :hidden:
 
-  all.rst
+  ref/modules/index
+  ref/pillar/index
+  ref/runners/index
+  ref/sdb/index
+  ref/states/index
+  ref/utils/index
+
+.. toctree::
+  :maxdepth: 2
+  :caption: News
+  :hidden:
+
+  changelog
+
 
 Indices and tables
 ==================

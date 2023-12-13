@@ -1,3 +1,4 @@
+import ast
 import subprocess
 from pathlib import Path
 
@@ -10,12 +11,33 @@ docs_by_kind = {}
 changed_something = False
 
 
-def write_module(rst_path, import_path):
-    module_contents = f"""\
-{import_path}
-{'='*len(import_path)}
+def _find_virtualname(path):
+    tree = ast.parse(path.read_text())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "__virtualname__":
+                    if isinstance(node.value, ast.Str):
+                        virtualname = node.value.s
+                        break
+            else:
+                continue
+            break
+    else:
+        virtualname = path.with_suffix("").name
+    return virtualname
 
-.. automodule:: {import_path}
+
+def write_module(rst_path, path, use_virtualname=True):
+    if use_virtualname:
+        virtualname = "``" + _find_virtualname(path) + "``"
+    else:
+        virtualname = make_import_path(path)
+    module_contents = f"""\
+{virtualname}
+{'='*len(virtualname)}
+
+.. automodule:: {make_import_path(path)}
     :members:
 """
     if not rst_path.exists() or rst_path.read_text() != module_contents:
@@ -26,9 +48,12 @@ def write_module(rst_path, import_path):
 
 
 def write_index(index_rst, import_paths, kind):
-    header_text = (
-        "execution modules" if kind.lower() == "modules" else kind.rstrip("s") + " modules"
-    )
+    if kind.rstrip("s") == "util":
+        header_text = "Utilities"
+    else:
+        header_text = (
+            "execution modules" if kind.lower() == "modules" else kind.rstrip("s") + " modules"
+        )
     header = f"{'_'*len(header_text)}\n{header_text.title()}\n{'_'*len(header_text)}"
     index_contents = f"""\
 .. all-saltext.vault.{kind}:
@@ -67,7 +92,7 @@ for kind in docs_by_kind:
         import_paths.append(import_path)
         rst_path = kind_path / (import_path + ".rst")
         rst_path.parent.mkdir(parents=True, exist_ok=True)
-        change = write_module(rst_path, import_path)
+        change = write_module(rst_path, path, use_virtualname=kind != "utils")
         changed_something = changed_something or change
 
     write_index(index_rst, import_paths, kind)

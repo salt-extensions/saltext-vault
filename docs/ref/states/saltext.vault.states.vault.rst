@@ -1,5 +1,5 @@
-saltext.vault.states.vault
-==========================
+``vault``
+=========
 
 .. automodule:: saltext.vault.states.vault
     :members:

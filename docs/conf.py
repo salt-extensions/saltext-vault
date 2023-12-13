@@ -12,6 +12,7 @@ import datetime
 import email.policy
 import os
 import sys
+from pathlib import Path
 
 try:
     from importlib_metadata import distribution
@@ -25,6 +26,8 @@ except NameError:
     # sphinx-intl and six execute some code which will raise this NameError
     # assume we're in the doc/ directory
     docs_basepath = os.path.abspath(os.path.dirname("."))
+
+PROJECT_ROOT_DIR = Path(docs_basepath).parent
 
 addtl_paths = (
     os.path.join(os.pardir, "src"),  # saltext.vault itself (for autodoc)
@@ -91,6 +94,14 @@ extensions = [
     "sphinxcontrib.spelling",
     "saltdomain",
     "vault.policylexer",
+    "sphinxcontrib.towncrier.ext",
+    "myst_parser",
+]
+
+myst_extensions = [
+    "colon_fence",
+    "deflist",
+    "tasklist",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -161,6 +172,11 @@ intersphinx_mapping = {
 autodoc_default_options = {"member-order": "bysource"}
 autodoc_mock_imports = ["salt"]
 # <---- Autodoc Config -----------------------------------------------------------------------------------------------
+
+# Towncrier draft config
+towncrier_draft_autoversion_mode = "sphinx-release"
+towncrier_draft_include_empty = True
+towncrier_draft_working_directory = str(PROJECT_ROOT_DIR)
 
 
 def setup(app):
