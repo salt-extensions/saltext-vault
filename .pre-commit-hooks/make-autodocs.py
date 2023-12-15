@@ -1,4 +1,5 @@
 import ast
+import os.path
 import subprocess
 from pathlib import Path
 
@@ -48,24 +49,30 @@ def write_module(rst_path, path, use_virtualname=True):
 
 
 def write_index(index_rst, import_paths, kind):
-    if kind.rstrip("s") == "util":
+    if kind == "utils":
         header_text = "Utilities"
+        common_path = os.path.commonpath(tuple(x.replace(".", "/") for x in import_paths)).replace(
+            "/", "."
+        )
+        if any(x == common_path for x in import_paths):
+            common_path = common_path[: common_path.rfind(".")]
     else:
         header_text = (
             "execution modules" if kind.lower() == "modules" else kind.rstrip("s") + " modules"
         )
+        common_path = import_paths[0][: import_paths[0].rfind(".")]
     header = f"{'_'*len(header_text)}\n{header_text.title()}\n{'_'*len(header_text)}"
     index_contents = f"""\
 .. all-saltext.vault.{kind}:
 
 {header}
 
-.. currentmodule:: {import_paths[0][:import_paths[0].rfind(".")]}
+.. currentmodule:: {common_path}
 
 .. autosummary::
     :toctree:
 
-{chr(10).join(sorted('    '+p[p.rfind(".")+1:] for p in import_paths))}
+{chr(10).join(sorted('    '+p[len(common_path)+1:] for p in import_paths))}
 """
     if not index_rst.exists() or index_rst.read_text() != index_contents:
         print(index_rst)
@@ -75,13 +82,22 @@ def write_index(index_rst, import_paths, kind):
 
 
 def make_import_path(path):
+    if path.name == "__init__.py":
+        path = path.parent
     return ".".join(path.relative_to(repo_path / "src").with_suffix("").parts)
 
 
 for path in src_dir.glob("*/*.py"):
     if path.name != "__init__.py":
         kind = path.parent.name
-        docs_by_kind.setdefault(kind, set()).add(path)
+        if kind != "utils":
+            docs_by_kind.setdefault(kind, set()).add(path)
+
+# Utils can have subdirectories, treat them separately
+for path in (src_dir / "utils").rglob("*.py"):
+    if path.name == "__init__.py" and not path.read_text():
+        continue
+    docs_by_kind.setdefault("utils", set()).add(path)
 
 for kind in docs_by_kind:
     kind_path = doc_dir / "ref" / kind

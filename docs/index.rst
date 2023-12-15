@@ -5,6 +5,13 @@ Salt Extension for interacting with Vault
 
 .. toctree::
   :maxdepth: 2
+  :caption: Guides
+  :hidden:
+
+  topics/installation
+
+.. toctree::
+  :maxdepth: 2
   :caption: Provided Modules
   :hidden:
 
@@ -17,7 +24,7 @@ Salt Extension for interacting with Vault
 
 .. toctree::
   :maxdepth: 2
-  :caption: News
+  :caption: Reference
   :hidden:
 
   changelog
