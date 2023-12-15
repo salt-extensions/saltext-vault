@@ -74,7 +74,7 @@ def read_secret(path, key=None, metadata=False, default=NOT_SET):
 
 def write_secret(path, **kwargs):
     """
-    Set secret dataset at <path>. The vault policy used must allow this.
+    Set secret dataset at <path>.
     Fields are specified as arbitrary keyword arguments.
 
     CLI Example:
@@ -113,7 +113,7 @@ def write_secret(path, **kwargs):
 
 def write_raw(path, raw):
     """
-    Set raw data at <path>. The vault policy used must allow this.
+    Set raw data at <path>.
 
     CLI Example:
 

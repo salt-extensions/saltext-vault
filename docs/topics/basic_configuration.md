@@ -17,8 +17,8 @@ extension currently defaults to Token authentication/issuance though.
 
 :::{hint}
 You can explicitly choose to configure each minion manually instead of relying on
-the master. From here on, this guide assumes you are setting up a Salt master for
-credential orchestration.
+the master ({vconf}`config_location`). From here on, this guide assumes you are
+setting up a Salt master for credential orchestration.
 :::
 
 [AppRoles]: https://developer.hashicorp.com/vault/docs/auth/approle
@@ -231,7 +231,7 @@ You need to create these policies yourself. Missing policies do not cause errors
 are left with the default permissions only if none of the assigned policies exist.
 :::
 
-You can customize which policies are assigned to minions. They can be [templated](#templating).
+You can customize which policies are assigned to minions. They can be [templated](#vault-templating).
 
 ```yaml
 vault:
