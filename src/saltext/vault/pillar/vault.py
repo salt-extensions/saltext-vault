@@ -1,148 +1,64 @@
 """
-Vault Pillar Module
+Use secrets sourced from Vault in minion pillars.
 
-:maintainer:    SaltStack
-:maturity:      New
-:platform:      all
+.. important::
+    This module requires the general :ref:`Vault setup <vault-setup>`.
 
-This module allows pillar data to be stored in Hashicorp Vault.
-
-Base configuration instructions are documented in the :ref:`execution module docs <vault-setup>`.
-Below are noted extra configuration required for the pillar module, but the base
-configuration must also be completed.
-
-After the base Vault configuration is created, add the configuration below to
-the ext_pillar section in the Salt master configuration.
-
-.. code-block:: yaml
-
-    ext_pillar:
-      - vault: path=secret/salt
-
-Each key needs to have all the key-value pairs with the names you
-require. Avoid naming every key 'password' as they will collide.
-
-If you want to nest results under a nesting_key name use the following format:
+Setup
+-----
+Include this module in your :conf_master:`ext_pillar` configuration:
 
 .. code-block:: yaml
 
     ext_pillar:
       - vault:
           conf: path=secret/salt
-          nesting_key: vault_key_name
 
-.. code-block:: bash
+.. hint::
+    You can also include multiple instances of this module in your configuration.
 
-    $ vault write secret/salt auth=my_password master=127.0.0.1
+Now all keys of the Vault KV path ``secret/salt`` will be inserted into each
+minion's pillar, which is quite inflexible and usually not what is wanted.
+To work around that, you can :ref:`template the path <vault-templating>`.
 
-The above will result in two pillars being available, ``auth`` and ``master``.
+.. note::
+    If a pattern matches multiple paths, the results are merged according
+    to the master configuration values :conf_master:`pillar_source_merging_strategy <pillar_source_merging_strategy>`
+    and :conf_master:`pillar_merge_lists <pillar_merge_lists>` by default.
+    If the optional :vconf:`nesting_key <pillar.nesting_key>` was defined,
+    the merged result will be nested below.
+    There is currently no way to nest multiple results under different keys.
 
-You can then use normal pillar requests to get each key pair directly from
-pillar root. Example:
+Further configuration
+---------------------
+.. vconf:: pillar.nesting_key
 
-.. code-block:: bash
+``nesting_key``
+    The Vault-sourced pillar values are usually merged into the root
+    of the pillar. This option allows you to specify a parent key
+    under which all values will be nested. If the key contains previous
+    values, they will be merged.
 
-    $ salt-ssh '*' pillar.get auth
+.. vconf:: pillar.merge_strategy
 
-Multiple Vault sources may also be used:
+``merge_strategy``
+    When multiple paths are matched by a templated path, use this merge strategy
+    instead of :conf_master:`pillar_source_merging_strategy <pillar_source_merging_strategy>`.
 
-.. code-block:: yaml
+.. vconf:: pillar.merge_lists
 
-    ext_pillar:
-      - vault: path=secret/salt
-      - vault: path=secret/root
-      - vault: path=secret/minions/{minion}/pass
-      - vault: path=secret/roles/{pillar[roles]}/pass
-
-You can also use nesting here as well. Identical nesting keys will get merged.
-
-.. code-block:: yaml
-
-    ext_pillar:
-      - vault:
-           conf: path=secret/salt
-           nesting_key: keyname1
-      - vault:
-           conf: path=secret/root
-           nesting_key: keyname1
-      - vault:
-           conf: path=secret/minions/{minion}/pass
-           nesting_key: keyname2
-
-The difference between the return with and without the nesting key is shown below.
-This example takes the key value pairs returned from vault as follows:
-
-.. code-block:: text
-
-    path=secret/salt
-
-    Key             Value
-    ---             -----
-    salt-passwd     badpasswd1
-
-    path=secret/root
-
-    Key             Value
-    ---             -----
-    root-passwd     rootbadpasswd1
-
-    path=secret/minions/{minion}/pass
-
-    Key             Value
-    ---             -----
-    minion-passwd   minionbadpasswd1
+``merge_lists``
+    Override the default set by :conf_master:`pillar_merge_lists <pillar_merge_lists>`.
 
 
-.. code-block:: yaml
-
-    #Nesting Key not defined
-
-    local:
-        ----------
-        salt-passwd:
-            badpasswd1
-        root-passwd:
-            rootbadpasswd1
-        minion-passwd:
-            minionbadpasswd1
-
-    #Nesting Key defined
-
-    local:
-        ----------
-        keyname1:
-            ----------
-                salt-passwd:
-                    badpasswd1
-                root-passwd:
-                    rootbadpasswd1
-        keyname2:
-            ----------
-                minion-passwd:
-                    minionbadpasswd1
-
-Pillar values from previously rendered pillars can be used to template
-vault ext_pillar paths.
-
-Using pillar values to template vault pillar paths requires them to be defined
-before the vault ext_pillar is called. Especially consider the significancy
-of :conf_master:`ext_pillar_first <ext_pillar_first>` master config setting.
-You cannot use pillar values sourced from Vault in pillar-templated policies.
-
-If a pillar pattern matches multiple paths, the results are merged according to
-the master configuration values :conf_master:`pillar_source_merging_strategy <pillar_source_merging_strategy>`
-and :conf_master:`pillar_merge_lists <pillar_merge_lists>` by default.
-
-If the optional nesting_key was defined, the merged result will be nested below.
-There is currently no way to nest multiple results under different keys.
-
-You can override the merging behavior per defined ext_pillar:
-
+Complete configuration
+----------------------
 .. code-block:: yaml
 
     ext_pillar:
       - vault:
            conf: path=secret/roles/{pillar[roles]}
+           nesting_key: vault_sourced
            merge_strategy: smart
            merge_lists: false
 """

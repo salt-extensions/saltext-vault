@@ -1,3 +1,6 @@
+"""
+Several utility functions for the Vault modules
+"""
 import datetime
 import re
 import string

@@ -9,6 +9,9 @@ Salt Extension for interacting with Vault
   :hidden:
 
   topics/installation
+  topics/migration_from_core
+  topics/basic_configuration
+  topics/templating
 
 .. toctree::
   :maxdepth: 2
@@ -27,6 +30,7 @@ Salt Extension for interacting with Vault
   :caption: Reference
   :hidden:
 
+  ref/configuration
   changelog
 
 

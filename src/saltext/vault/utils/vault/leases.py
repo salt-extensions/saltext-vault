@@ -1,3 +1,6 @@
+"""
+Models for Vault leases
+"""
 import copy
 import fnmatch
 import logging

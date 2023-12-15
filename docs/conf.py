@@ -94,9 +94,11 @@ extensions = [
     "sphinxcontrib.spelling",
     "saltdomain",
     "vault.policylexer",
+    "vault.vaultdomain",
     "sphinxcontrib.towncrier.ext",
     "myst_parser",
     "sphinx_inline_tabs",
+    "sphinx_togglebutton",
 ]
 
 myst_enable_extensions = [

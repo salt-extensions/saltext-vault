@@ -66,6 +66,7 @@ docs = [
   "myst_parser",
   "furo",
   "sphinx-inline-tabs",
+  "sphinx-togglebutton",
   "furo<=2023.03.27; python_version < '3.8'",
   "importlib_metadata; python_version < '3.8'",
 ]

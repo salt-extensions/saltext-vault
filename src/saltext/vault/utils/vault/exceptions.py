@@ -1,3 +1,6 @@
+"""
+Exceptions that are raised by ``saltext.vault`` utilities
+"""
 import salt.exceptions
 
 

@@ -1,3 +1,6 @@
+"""
+Class wrappers for the Key/Value backend
+"""
 import logging
 
 from saltext.vault.utils.vault.exceptions import VaultException

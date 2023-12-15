@@ -1,26 +1,20 @@
 """
-Vault SDB Module
+Use secret values sourced from Vault in ``sdb://`` URIs.
 
-:maintainer:    SaltStack
-:maturity:      New
-:platform:      all
+.. important::
+    This module requires the general :ref:`Vault setup <vault-setup>`.
 
-This module allows access to Hashicorp Vault using an ``sdb://`` URI.
-
-Base configuration instructions are documented in the :ref:`execution module docs <vault-setup>`.
-Below are noted extra configuration required for the sdb module, but the base
-configuration must also be completed.
-
-Like all sdb modules, the vault module requires a configuration profile to
-be configured in either the minion configuration file or a pillar. This profile
-requires only setting the ``driver`` parameter to ``vault``:
+Setup
+-----
+Like all SDB modules, this module requires a configuration profile in either
+the minion configuration file or a pillar:
 
 .. code-block:: yaml
 
     myvault:
       driver: vault
 
-Once configured you can access data using a URL such as:
+Once configured, you can access data using a URL such as:
 
 .. code-block:: yaml
 
@@ -41,14 +35,14 @@ Further configuration
 ---------------------
 The following options can be set in the profile:
 
-patch
+.. vconf:: sdb.patch
+
+``patch``
     When writing data, partially update the secret instead of overwriting it completely.
     This is usually the expected behavior, since without this option,
     each secret path can only contain a single mapping key safely.
     Currently defaults to ``False`` for backwards-compatibility reasons.
     Beginning with version 2 of this extension, will default to ``True``.
-
-    .. versionadded:: 1.0.0
 """
 import logging
 

@@ -1,10 +1,5 @@
 """
-:maintainer:    SaltStack
-:maturity:      new
-:platform:      all
-
-Utilities supporting modules for Hashicorp Vault. Configuration instructions are
-documented in the :ref:`execution module docs <vault-setup>`.
+High-level utility functions for Vault interaction
 """
 import logging
 

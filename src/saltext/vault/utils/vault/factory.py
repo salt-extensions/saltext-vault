@@ -1,3 +1,6 @@
+"""
+Factory classes for building authenticated clients
+"""
 import base64
 import copy
 import logging

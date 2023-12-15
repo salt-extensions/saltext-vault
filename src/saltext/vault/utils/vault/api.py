@@ -1,3 +1,6 @@
+"""
+Class wrappers for several Vault API endpoints
+"""
 import salt.utils.json
 import saltext.vault.utils.vault.leases as vleases
 from saltext.vault.utils.vault.exceptions import VaultInvocationError

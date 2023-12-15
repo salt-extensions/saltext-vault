@@ -1,11 +1,9 @@
 """
 States for managing Hashicorp Vault.
 Currently handles policies.
-Configuration instructions are documented in the :ref:`execution module docs <vault-setup>`.
 
-:maintainer:    SaltStack
-:maturity:      new
-:platform:      all
+.. important::
+    This module requires the general :ref:`Vault setup <vault-setup>`.
 """
 import difflib
 import logging
