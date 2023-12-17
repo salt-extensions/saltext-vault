@@ -416,8 +416,8 @@ for reference.
 [Vault AppRole API docs]: https://www.vaultproject.io/api-docs/auth/approle#create-update-approle
 [Token Role]: https://developer.hashicorp.com/nomad/docs/integrations/vault/acl#vault-token-role-configuration
 [Vault Token API docs]: https://developer.hashicorp.com/vault/api-docs/auth/token#create-token
-[certificate verification]: https://requests.readthedocs.io/en/master/user/advanced/#ssl-cert-verification
-[Vault namespace]: https://www.vaultproject.io/docs/enterprise/namespaces
+[certificate verification]: https://requests.readthedocs.io/en/latest/user/advanced.html#ssl-cert-verification
+[Vault namespace]: https://developer.hashicorp.com/vault/docs/enterprise/namespaces
 
 
 ## All configuration parameters with defaults
