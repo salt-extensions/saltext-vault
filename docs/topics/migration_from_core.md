@@ -2,7 +2,7 @@
 :::{important}
 The `vault` modules found in Salt >=3007 have the same core, so migration from
 these versions is frictionless. There are some
-[default value deprecations](#3007-changes) you should be aware of though.
+[further deprecations](#3007-changes) you should be aware of though.
 :::
 
 This Salt Extension is based on a significant, but backwards-compatible
@@ -62,8 +62,8 @@ The compatibility layer will be removed in some future release.
 - [vault.generate_token](saltext.vault.runners.vault.generate_token)
 
 (3007-changes)=
-## Deprecated defaults
-There are some planned default value changes not found in any version of Salt core.
+## Deprecated defaults/configuration
+There are some planned changes not found in any version of Salt core.
 
 ### Execution module
 * [vault.list_secrets](saltext.vault.modules.vault.list_secrets) used to return
@@ -76,3 +76,21 @@ There are some planned default value changes not found in any version of Salt co
   This behavior can be configured now with the {vconf}`patch <sdb.patch>` profile value.
   This value defaults to `false` for now, but will be changed to `true` in the next
   major release since it is usually the desired behavior and in line with other SDB modules.
+
+### Pillar module
+* The `vault` pillar module was previously configured in two styles:
+  ```yaml
+  ext_pillar:
+    - vault: path=secret/salt
+    - vault:
+        conf: path=secret/salt2
+  ```
+  This has been simplified to:
+  ```yaml
+  ext_pillar:
+    - vault: secret/salt
+    - vault:
+        path: secret/salt2
+  ```
+  Please update your configuration, the previous method will stop working
+  in the next major release.

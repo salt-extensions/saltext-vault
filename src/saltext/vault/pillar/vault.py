@@ -4,6 +4,13 @@ Use secrets sourced from Vault in minion pillars.
 .. important::
     This module requires the general :ref:`Vault setup <vault-setup>`.
 
+.. versionchanged:: 1.0.0
+    Previous versions of this pillar module found in Salt core were configured
+    with a parameter named ``conf``, expecting a single value representing
+    the path to include in the pillar with the prefix ``path=``.
+    This parameter has been deprecated. Please configure this pillar module
+    either by just passing the path or declaring it as ``path: <path>``.
+
 Setup
 -----
 Include this module in your :conf_master:`ext_pillar` configuration:
@@ -11,33 +18,48 @@ Include this module in your :conf_master:`ext_pillar` configuration:
 .. code-block:: yaml
 
     ext_pillar:
-      - vault:
-          conf: path=secret/salt
+      - vault: salt/global
 
 .. hint::
     You can also include multiple instances of this module in your configuration.
 
-Now all keys of the Vault KV path ``secret/salt`` will be inserted into each
+Now all keys of the Vault KV path ``salt/global`` are inserted into each
 minion's pillar, which is quite inflexible and usually not what is wanted.
 To work around that, you can :ref:`template the path <vault-templating>`.
+
+.. code-block:: yaml
+
+    ext_pillar:
+      - vault: salt/minions/{minion}
+      - vault: salt/roles/{pillar[roles]}
+
+.. note::
+    There is currently no ``top.sls`` equivalent.
 
 .. note::
     If a pattern matches multiple paths, the results are merged according
     to the master configuration values :conf_master:`pillar_source_merging_strategy <pillar_source_merging_strategy>`
     and :conf_master:`pillar_merge_lists <pillar_merge_lists>` by default.
-    If the optional :vconf:`nesting_key <pillar.nesting_key>` was defined,
-    the merged result will be nested below.
+    If the optional :vconf:`nesting_key <pillar.nesting_key>` is defined,
+    the merged result is nested below.
     There is currently no way to nest multiple results under different keys.
 
-Further configuration
----------------------
+.. vconf:: pillar
+
+Configuration reference
+-----------------------
+.. vconf:: pillar.path
+
+``path``
+    The path to include in the minion pillars. Can be :ref:`templated <vault-templating>`.
+
 .. vconf:: pillar.nesting_key
 
 ``nesting_key``
     The Vault-sourced pillar values are usually merged into the root
     of the pillar. This option allows you to specify a parent key
-    under which all values will be nested. If the key contains previous
-    values, they will be merged.
+    under which all values are nested. If the key contains previous
+    values, they are merged.
 
 .. vconf:: pillar.merge_strategy
 
@@ -57,7 +79,7 @@ Complete configuration
 
     ext_pillar:
       - vault:
-           conf: path=secret/roles/{pillar[roles]}
+           path: salt/roles/{pillar[roles]}
            nesting_key: vault_sourced
            merge_strategy: smart
            merge_lists: false
@@ -67,7 +89,9 @@ import logging
 import salt.utils.dictupdate
 import saltext.vault.utils.vault as vault
 import saltext.vault.utils.vault.helpers as vhelpers
+from salt.exceptions import InvalidConfigError
 from salt.exceptions import SaltException
+from saltext.vault.utils.versions import warn_until
 
 log = logging.getLogger(__name__)
 
@@ -75,11 +99,12 @@ log = logging.getLogger(__name__)
 def ext_pillar(
     minion_id,  # pylint: disable=W0613
     pillar,  # pylint: disable=W0613
-    conf,
+    path=None,
     nesting_key=None,
     merge_strategy=None,
     merge_lists=None,
     extra_minion_data=None,
+    conf=None,
 ):
     """
     Get pillar data from Vault for the configuration ``conf``.
@@ -88,30 +113,57 @@ def ext_pillar(
     if extra_minion_data.get("_vault_runner_is_compiling_pillar_templates"):
         # Disable vault ext_pillar while compiling pillar for vault policy templates
         return {}
-    comps = conf.split()
-
-    paths = [comp for comp in comps if comp.startswith("path=")]
-    if not paths:
-        log.error('"%s" is not a valid Vault ext_pillar config', conf)
-        return {}
+    if conf is not None:
+        comps = conf.split()
+        paths = [comp for comp in comps if comp.startswith("path=")]
+        if not paths:
+            log.error('"%s" is not a valid Vault ext_pillar config', conf)
+            return {}
+        path_pattern = paths[0].replace("path=", "")
+        warn_until(
+            2,
+            (
+                "The `conf` parameter to the Vault pillar is deprecated. "
+                "Please migrate to the `path` parameter. It takes the path "
+                "as its parameters, without the `path=` prefix."
+            ),
+        )
+    elif path is not None:
+        if path.startswith("path="):
+            warn_until(
+                2,
+                (
+                    "The Vault pillar module should not be configured with "
+                    "the `path=` prefix anymore. Please remove it from your "
+                    "configuration."
+                ),
+            )
+            path = path[5:]
+        path_pattern = path
+    else:
+        raise InvalidConfigError("Need a Vault path to include in the pillar")
 
     merge_strategy = merge_strategy or __opts__.get("pillar_source_merging_strategy", "smart")
     merge_lists = merge_lists or __opts__.get("pillar_merge_lists", False)
 
     vault_pillar = {}
 
-    path_pattern = paths[0].replace("path=", "")
     for path in _get_paths(path_pattern, minion_id, pillar):
         try:
             vault_pillar_single = vault.read_kv(path, __opts__, __context__)
+        except vault.VaultNotFoundError:
+            log.info("Vault secret not found for: %s", path, exc_info_on_loglevel=logging.DEBUG)
+        except SaltException:
+            log.warning(
+                "Error fetching Vault secret at: %s", path, exc_info_on_loglevel=logging.DEBUG
+            )
+        else:
             vault_pillar = salt.utils.dictupdate.merge(
                 vault_pillar,
                 vault_pillar_single,
                 strategy=merge_strategy,
                 merge_lists=merge_lists,
             )
-        except SaltException:
-            log.info("Vault secret not found for: %s", path)
 
     if nesting_key:
         vault_pillar = {nesting_key: vault_pillar}
