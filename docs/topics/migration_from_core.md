@@ -1,6 +1,12 @@
 # Migration from Salt Core
+:::{important}
+The `vault` modules found in Salt >=3007 have the same core, so migration from
+these versions is frictionless. There are some
+[default value deprecations](#3007-changes) you should be aware of though.
+:::
+
 This Salt Extension is based on a significant, but backwards-compatible
-refactoring of the `vault` modules found in Salt core. If you're migrating
+refactoring of the `vault` modules found in Salt core <3007. If you're migrating
 from these older modules, there is a single necessary change to make:
 
 ## `peer_run`
@@ -25,7 +31,7 @@ peer_run:
 
 ## Notable changes
 The [changelog](#changelog-target) for version `1.0.0` gives an overview of notable
-improvements versus the previous Salt core modules.
+improvements versus the previous Salt core <3007 modules.
 
 ## Changed config structure
 Since there were many additions and changes, a new configuration structure
@@ -55,14 +61,18 @@ The compatibility layer will be removed in some future release.
 ### Runner
 - [vault.generate_token](saltext.vault.runners.vault.generate_token)
 
+(3007-changes)=
 ## Deprecated defaults
+There are some planned default value changes not found in any version of Salt core.
+
 ### Execution module
-* [vault.list_secrets](saltext.vault.modules.vault.list_secrets) used to return a single-key dict like `{keys: [a, b]}`.
-  This will be changed to returning the list only. Set `keys_only=true` when calling
-  it to migrate early and avoid warnings.
+* [vault.list_secrets](saltext.vault.modules.vault.list_secrets) used to return
+  a single-key dict like `{keys: [a, b]}`.
+  This will be changed to returning the list only in the next major release.
+  Set `keys_only=true` when calling it to migrate early and avoid warnings.
 
 ### SDB module
 * The SDB module used to overwrite the whole secret when writing a single key.
   This behavior can be configured now with the {vconf}`patch <sdb.patch>` profile value.
-  This value defaults to `false` for now, but will be changed to `true` since it is
-  usually the desired behavior and in line with other SDB modules.
+  This value defaults to `false` for now, but will be changed to `true` in the next
+  major release since it is usually the desired behavior and in line with other SDB modules.

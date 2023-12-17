@@ -1,5 +1,5 @@
 """
-Factory classes for building authenticated clients
+Salt-Vault integration core functions
 """
 import base64
 import copy

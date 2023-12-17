@@ -1,18 +1,18 @@
 (vault-setup)=
 # Basic Configuration
 For authenticating on a Vault server, each node needs credentials.
-Currently supported authentication methods are [AppRoles][] and [Tokens][].
+Currently supported authentication methods are [AppRoles][] and [tokens][].
 
 To ease the management overhead, this extension allows the Salt master to
 distribute configuration and credentials to minions on demand.
 Thus, you only need to configure the master for the general case.
 
-Issued credentials can either be Tokens or AppRoles again.
+Issued credentials can either be tokens or AppRoles again.
 
 :::{note}
 It's generally recommended to authenticate with and distribute AppRoles because
 this is more secure and allows for advanced behavior. For simplicity, this
-extension currently defaults to Token authentication/issuance though.
+extension currently defaults to token authentication/issuance though.
 :::
 
 :::{hint}
@@ -275,7 +275,7 @@ This allows you to create a single policy like:
 ```
 
 :::{important}
-Entities are only created when issuing AppRoles, not Tokens.
+Entities are only created when issuing AppRoles, not tokens.
 :::
 
 [Entities]: https://developer.hashicorp.com/vault/docs/concepts/identity
@@ -286,12 +286,15 @@ Entities are only created when issuing AppRoles, not Tokens.
 ```yaml
 vault:
   auth:
+    # This master authenticates with an AppRole, but
+    # issues tokens
     method: approle
     role_id: e5a7b66e-5d08-da9c-7075-71984634b882
     secret_id: 841771dc-11c9-bbc7-bcac-6a3945a69cd9
   cache:
-    backend: file
+    backend: disk
   issue:
+    type: token
     token:
       role_name: salt_minion
       params:
@@ -316,7 +319,7 @@ vault:
     role_id: e5a7b66e-5d08-da9c-7075-71984634b882
     secret_id: 841771dc-11c9-bbc7-bcac-6a3945a69cd9
   cache:
-    backend: file
+    backend: disk
   issue:
     type: approle
     approle:
