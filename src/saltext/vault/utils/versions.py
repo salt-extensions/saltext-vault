@@ -1,3 +1,6 @@
+"""
+Helper for warning about deprecations
+"""
 import inspect
 import os
 import sys

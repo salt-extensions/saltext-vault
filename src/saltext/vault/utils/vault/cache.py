@@ -1,3 +1,6 @@
+"""
+Vault-specific cache classes
+"""
 import copy
 import logging
 import time

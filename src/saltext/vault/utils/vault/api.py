@@ -1,3 +1,6 @@
+"""
+Class wrappers for several Vault API endpoints
+"""
 import salt.utils.json
 import saltext.vault.utils.vault.leases as vleases
 from saltext.vault.utils.vault.exceptions import VaultInvocationError
@@ -6,7 +9,7 @@ from saltext.vault.utils.vault.exceptions import VaultNotFoundError
 
 class AppRoleApi:
     """
-    Wraps the `Vault AppRole API<https://developer.hashicorp.com/vault/api-docs/auth/approle>`_.
+    Wraps the `Vault AppRole API <https://developer.hashicorp.com/vault/api-docs/auth/approle>`_.
 
     .. note::
 
@@ -324,7 +327,7 @@ class AppRoleApi:
 
 class IdentityApi:
     """
-    Wraps the Vault `Identity secret engine API<https://developer.hashicorp.com/vault/api-docs/secret/identity>`_.
+    Wraps the Vault `Identity secret engine API <https://developer.hashicorp.com/vault/api-docs/secret/identity>`_.
     """
 
     def __init__(self, client):

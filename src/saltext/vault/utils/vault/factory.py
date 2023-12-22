@@ -1,3 +1,6 @@
+"""
+Salt-Vault integration core functions
+"""
 import base64
 import copy
 import logging

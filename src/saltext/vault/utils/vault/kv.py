@@ -1,3 +1,6 @@
+"""
+Class wrappers for the Key/Value backend
+"""
 import logging
 
 from saltext.vault.utils.vault.exceptions import VaultException
@@ -50,7 +53,7 @@ class VaultKV:
         Tries to use a PATCH request, otherwise falls back to updating in memory
         and writing back the whole secret, thus might consume more than one token use.
 
-        Since this uses the `JSON Merge Patch format<https://datatracker.ietf.org/doc/html/draft-ietf-appsawg-json-merge-patch-07>`_,
+        Since this uses the `JSON Merge Patch format <https://datatracker.ietf.org/doc/html/draft-ietf-appsawg-json-merge-patch-07>`_,
         values set to ``null`` (``None``) will be dropped.
         """
 

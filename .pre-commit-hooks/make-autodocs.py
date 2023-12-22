@@ -1,3 +1,5 @@
+import ast
+import os.path
 import subprocess
 from pathlib import Path
 
@@ -10,12 +12,33 @@ docs_by_kind = {}
 changed_something = False
 
 
-def write_module(rst_path, import_path):
-    module_contents = f"""\
-{import_path}
-{'='*len(import_path)}
+def _find_virtualname(path):
+    tree = ast.parse(path.read_text())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "__virtualname__":
+                    if isinstance(node.value, ast.Str):
+                        virtualname = node.value.s
+                        break
+            else:
+                continue
+            break
+    else:
+        virtualname = path.with_suffix("").name
+    return virtualname
 
-.. automodule:: {import_path}
+
+def write_module(rst_path, path, use_virtualname=True):
+    if use_virtualname:
+        virtualname = "``" + _find_virtualname(path) + "``"
+    else:
+        virtualname = make_import_path(path)
+    module_contents = f"""\
+{virtualname}
+{'='*len(virtualname)}
+
+.. automodule:: {make_import_path(path)}
     :members:
 """
     if not rst_path.exists() or rst_path.read_text() != module_contents:
@@ -26,21 +49,30 @@ def write_module(rst_path, import_path):
 
 
 def write_index(index_rst, import_paths, kind):
-    header_text = (
-        "execution modules" if kind.lower() == "modules" else kind.rstrip("s") + " modules"
-    )
+    if kind == "utils":
+        header_text = "Utilities"
+        common_path = os.path.commonpath(tuple(x.replace(".", "/") for x in import_paths)).replace(
+            "/", "."
+        )
+        if any(x == common_path for x in import_paths):
+            common_path = common_path[: common_path.rfind(".")]
+    else:
+        header_text = (
+            "execution modules" if kind.lower() == "modules" else kind.rstrip("s") + " modules"
+        )
+        common_path = import_paths[0][: import_paths[0].rfind(".")]
     header = f"{'_'*len(header_text)}\n{header_text.title()}\n{'_'*len(header_text)}"
     index_contents = f"""\
 .. all-saltext.vault.{kind}:
 
 {header}
 
-.. currentmodule:: {import_paths[0][:import_paths[0].rfind(".")]}
+.. currentmodule:: {common_path}
 
 .. autosummary::
     :toctree:
 
-{chr(10).join(sorted('    '+p[p.rfind(".")+1:] for p in import_paths))}
+{chr(10).join(sorted('    '+p[len(common_path)+1:] for p in import_paths))}
 """
     if not index_rst.exists() or index_rst.read_text() != index_contents:
         print(index_rst)
@@ -50,13 +82,22 @@ def write_index(index_rst, import_paths, kind):
 
 
 def make_import_path(path):
+    if path.name == "__init__.py":
+        path = path.parent
     return ".".join(path.relative_to(repo_path / "src").with_suffix("").parts)
 
 
 for path in src_dir.glob("*/*.py"):
     if path.name != "__init__.py":
         kind = path.parent.name
-        docs_by_kind.setdefault(kind, set()).add(path)
+        if kind != "utils":
+            docs_by_kind.setdefault(kind, set()).add(path)
+
+# Utils can have subdirectories, treat them separately
+for path in (src_dir / "utils").rglob("*.py"):
+    if path.name == "__init__.py" and not path.read_text():
+        continue
+    docs_by_kind.setdefault("utils", set()).add(path)
 
 for kind in docs_by_kind:
     kind_path = doc_dir / "ref" / kind
@@ -67,7 +108,7 @@ for kind in docs_by_kind:
         import_paths.append(import_path)
         rst_path = kind_path / (import_path + ".rst")
         rst_path.parent.mkdir(parents=True, exist_ok=True)
-        change = write_module(rst_path, import_path)
+        change = write_module(rst_path, path, use_virtualname=kind != "utils")
         changed_something = changed_something or change
 
     write_index(index_rst, import_paths, kind)

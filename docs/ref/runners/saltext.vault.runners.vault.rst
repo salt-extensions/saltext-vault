@@ -1,5 +1,5 @@
-saltext.vault.runners.vault
-===========================
+``vault``
+=========
 
 .. automodule:: saltext.vault.runners.vault
     :members:

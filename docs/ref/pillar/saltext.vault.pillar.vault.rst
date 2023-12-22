@@ -1,5 +1,5 @@
-saltext.vault.pillar.vault
-==========================
+``vault``
+=========
 
 .. automodule:: saltext.vault.pillar.vault
     :members:

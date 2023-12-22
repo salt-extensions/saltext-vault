@@ -1,10 +1,8 @@
 """
-Runner functions supporting the Vault modules. Configuration instructions are
-documented in the :ref:`execution module docs <vault-setup>`.
+Runner functions supporting the Vault modules.
 
-:maintainer:    SaltStack
-:maturity:      new
-:platform:      all
+.. important::
+    This module requires the general :ref:`Vault setup <vault-setup>`.
 """
 import base64
 import copy
@@ -139,7 +137,7 @@ def generate_token(
 
     upgrade_request
         In case the new runner endpoints have not been whitelisted for peer running,
-        this endpoint serves as a gateway to ``vault.get_config``.
+        this endpoint serves as a gateway to :func:`vault.get_config <get_config>`.
         Defaults to False.
     """
     if upgrade_request:
@@ -208,7 +206,7 @@ def generate_new_token(minion_id, signature, impersonated_by_master=False, issue
 
     signature
         Cryptographic signature which validates that the request is indeed sent
-        by the minion (or the master, see impersonated_by_master).
+        by the minion (or the master, see ``impersonated_by_master``).
 
     impersonated_by_master
         If the master needs to create a token on behalf of the minion, this is
@@ -216,8 +214,8 @@ def generate_new_token(minion_id, signature, impersonated_by_master=False, issue
 
     issue_params
         Dictionary of parameters for the generated tokens.
-        See master configuration ``vault:issue:token:params`` for possible values.
-        Requires ``vault:issue:allow_minion_override_params`` master configuration
+        See master configuration :vconf:`issue:token:params` for possible values.
+        Requires :vconf:`issue:allow_minion_override_params` master configuration
         setting to be effective.
     """
     log.debug(
@@ -303,7 +301,7 @@ def get_config(
 
     issue_params
         Parameters for credential issuance.
-        Requires ``vault:issue:allow_minion_override_params`` master configuration
+        Requires :vconf:`issue:allow_minion_override_params` master configuration
         setting to be effective.
 
     config_only
@@ -358,7 +356,7 @@ def get_role_id(minion_id, signature, impersonated_by_master=False, issue_params
     .. versionadded:: 1.0.0
 
     Return the Vault role-id for minion <minion_id>. Requires the master to be configured
-    to generate AppRoles for minions (configuration: ``vault:issue:type``).
+    to generate AppRoles for minions (:vconf:`issue:type`).
 
     minion_id
         The ID of the minion that requests a role-id.
@@ -373,8 +371,8 @@ def get_role_id(minion_id, signature, impersonated_by_master=False, issue_params
 
     issue_params
         Dictionary of configuration values for the generated AppRole.
-        See master configuration vault:issue:approle:params for possible values.
-        Requires ``vault:issue:allow_minion_override_params`` master configuration
+        See master configuration :vconf:`issue:approle:params` for possible values.
+        Requires :vconf:`issue:allow_minion_override_params` master configuration
         setting to be effective.
     """
     log.debug(
@@ -454,15 +452,15 @@ def generate_secret_id(minion_id, signature, impersonated_by_master=False, issue
     """
     .. versionadded:: 1.0.0
 
-    Generate a Vault secret ID for minion <minion_id>. Requires the master to be configured
-    to generate AppRoles for minions (configuration: ``vault:issue:type``).
+    Generate a Vault secret ID for minion <minion_id>. Requires the master to be
+    configured to generate AppRoles for minions (:vconf:`issue:type`).
 
     minion_id
         The ID of the minion that requests a secret ID.
 
     signature
         Cryptographic signature which validates that the request is indeed sent
-        by the minion (or the master, see impersonated_by_master).
+        by the minion (or the master, see ``impersonated_by_master``).
 
     impersonated_by_master
         If the master needs to create a token on behalf of the minion, this is
@@ -470,8 +468,8 @@ def generate_secret_id(minion_id, signature, impersonated_by_master=False, issue
 
     issue_params
         Dictionary of configuration values for the generated AppRole.
-        See master configuration vault:issue:approle:params for possible values.
-        Requires ``vault:issue:allow_minion_override_params`` master configuration
+        See master configuration :vconf:`issue:approle:params` for possible values.
+        Requires :vconf:`issue:allow_minion_override_params` master configuration
         setting to be effective.
     """
     log.debug(
@@ -535,22 +533,12 @@ def generate_secret_id(minion_id, signature, impersonated_by_master=False, issue
 
 def unseal():
     """
-    Unseal Vault server
+    Unseal the Vault server. Uses keys from the master config :vconf:`keys` .
 
-    This function uses the 'keys' from the 'vault' configuration to unseal vault server
+    .. note::
+        This function will send unseal keys until the API returns success.
 
-    vault:
-      keys:
-        - n63/TbrQuL3xaIW7ZZpuXj/tIfnK1/MbVxO4vT3wYD2A
-        - S9OwCvMRhErEA4NVVELYBs6w/Me6+urgUr24xGK44Uy3
-        - F1j4b7JKq850NS6Kboiy5laJ0xY8dWJvB3fcwA+SraYl
-        - 1cYtvjKJNDVam9c7HNqJUfINk4PYyAXIpjkpN/sIuzPv
-        - 3pPK5X6vGtwLhNOFv1U2elahECz3HpRUfNXJFYLw6lid
-
-    .. note: This function will send unsealed keys until the api returns back
-             that the vault has been unsealed
-
-    CLI Examples:
+    CLI Example:
 
     .. code-block:: bash
 
@@ -574,13 +562,13 @@ def show_policies(minion_id, refresh_pillar=NOT_SET, expire=None):
         Whether to refresh the pillar data when rendering templated policies.
         None will only refresh when the cached data is unavailable, boolean values
         force one behavior always.
-        Defaults to config value ``vault:policies:refresh_pillar`` or None.
+        Defaults to :vconf:`policies:refresh_pillar` or None.
 
     expire
         Policy computation can be heavy in case pillar data is used in templated policies and
         it has not been cached. Therefore, a short-lived cache specifically for rendered policies
         is used. This specifies the expiration timeout in seconds.
-        Defaults to config value ``vault:policies:cache_time`` or 60.
+        Defaults to :vconf:`policies:cache_time` or 60.
 
     .. note::
 
@@ -701,7 +689,7 @@ def sync_entities(minions=None, up=False, down=False):
 
     .. note::
         This updates associated metadata only. Entities are created only
-        when issuing AppRoles to minions (``vault:issue:type`` == ``approle``).
+        when issuing AppRoles to minions (:vconf:`issue:type` == ``approle``).
 
     If no parameter is specified, will try to sync entities for all known minions.
 
@@ -757,7 +745,7 @@ def list_entities():
     .. versionadded:: 1.0.0
 
     List all entities that have been created by the Salt master.
-    They are named `salt_minion_{minion_id}`.
+    They are named ``salt_minion_{minion_id}``.
 
     CLI Example:
 
@@ -826,7 +814,7 @@ def cleanup_auth():
     .. warning::
         Make absolutely sure that the configured minion approle issue mount is
         exclusively dedicated to the Salt master, otherwise you might lose data
-        by using this function! (config: ``vault:issue:approle:mount``)
+        by using this function! (:vconf:`issue:approle:mount`)
 
         This detects unknown existing AppRoles by listing all roles on the
         configured minion AppRole mount and deducting known minions from the

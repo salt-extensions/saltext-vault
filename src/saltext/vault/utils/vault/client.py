@@ -1,3 +1,6 @@
+"""
+Vault API client implementation
+"""
 import logging
 import re
 
