@@ -150,15 +150,22 @@ def test_ext_pillar_disabled_during_pillar_rendering(read_kv):
 
 
 @pytest.mark.parametrize("kwarg", (True, False))
-def test_deprecated_config(read_kv, data, kwarg):
+@pytest.mark.parametrize(
+    "conf",
+    (
+        "path=secret/path",
+        "I have no idea why this was accepted before: path=secret/path",
+    ),
+)
+def test_deprecated_config(read_kv, data, kwarg, conf):
     """
     Ensure the previous config with the ``path=`` prefix is still recognized,
     but warned about.
     """
     with pytest.deprecated_call(match="`path=`"):
         if kwarg:
-            ext_pillar = vault.ext_pillar("testminion", {}, conf="path=secret/path")
+            ext_pillar = vault.ext_pillar("testminion", {}, conf=conf)
         else:
-            ext_pillar = vault.ext_pillar("testminion", {}, "path=secret/path")
+            ext_pillar = vault.ext_pillar("testminion", {}, conf)
         read_kv.assert_called_once_with("secret/path", opts=ANY, context=ANY)
         assert ext_pillar == data

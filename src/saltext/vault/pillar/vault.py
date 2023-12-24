@@ -125,10 +125,28 @@ def ext_pillar(
             (
                 "The `conf` parameter to the Vault pillar is deprecated. "
                 "Please migrate to the `path` parameter. It takes the path "
-                "as its parameters, without the `path=` prefix."
+                "as its parameter, without the `path=` prefix."
             ),
         )
     elif path is not None:
+        comps = path.split()
+        if not comps:
+            log.error('"%s" is not a valid Vault ext_pillar config', path)
+            return {}
+        if len(comps) > 1:
+            warn_until(
+                2,
+                (
+                    "The `conf` parameter to the Vault pillar is deprecated. "
+                    "Please migrate to the `path` parameter. It takes the path "
+                    "as its parameter, without the `path=` prefix."
+                ),
+            )
+            comps = [comp for comp in comps if comp.startswith("path=")]
+            if not comps:
+                log.error('"%s" is not a valid Vault ext_pillar config', path)
+                return {}
+        path = comps[0]
         if path.startswith("path="):
             warn_until(
                 2,
