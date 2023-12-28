@@ -38,7 +38,7 @@ def pillar_salt_master(salt_factories, pillar_state_tree, vault_port):
     config_defaults = {
         "pillar_roots": {"base": [str(pillar_state_tree)]},
         "open_mode": True,
-        "ext_pillar": [{"vault": "path=secret/path/foo"}],
+        "ext_pillar": [{"vault": "secret/path/foo"}],
         "sdbvault": {
             "driver": "vault",
         },
@@ -84,7 +84,7 @@ def pillar_caching_salt_master(salt_factories, pillar_state_tree, vault_port):
     config_defaults = {
         "pillar_roots": {"base": [str(pillar_state_tree)]},
         "open_mode": True,
-        "ext_pillar": [{"vault": "path=secret/path/foo"}],
+        "ext_pillar": [{"vault": "secret/path/foo"}],
         "vault": {
             "auth": {"token": "testsecret"},
             "issue": {
@@ -631,8 +631,8 @@ class TestAppRoleIssuance:
             "open_mode": True,
             # ensure approles/entities are generated during pillar rendering
             "ext_pillar": [
-                {"vault": "path=salt/minions/{minion}"},
-                {"vault": "path=salt/roles/{pillar[role]}"},
+                {"vault": "salt/minions/{minion}"},
+                {"vault": "salt/roles/{pillar[role]}"},
             ],
             "peer_run": {
                 ".*": [
@@ -886,7 +886,7 @@ class TestTokenIssuance:
         return {
             "pillar_roots": {"base": [str(pillar_state_tree)]},
             "open_mode": True,
-            "ext_pillar": [{"vault": "path=secret/path/foo"}],
+            "ext_pillar": [{"vault": "secret/path/foo"}],
             "peer_run": {
                 ".*": [
                     "vault.get_config",

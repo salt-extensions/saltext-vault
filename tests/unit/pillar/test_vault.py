@@ -58,7 +58,7 @@ def test_ext_pillar(read_kv, data):
     """
     Test ext_pillar functionality. KV v1/2 is handled by the utils module.
     """
-    ext_pillar = vault.ext_pillar("testminion", {}, "path=secret/path")
+    ext_pillar = vault.ext_pillar("testminion", {}, "secret/path")
     read_kv.assert_called_once_with("secret/path", opts=ANY, context=ANY)
     assert ext_pillar == data
 
@@ -69,7 +69,7 @@ def test_ext_pillar_not_found(caplog):
     Test that HTTP 404 is handled correctly
     """
     with caplog.at_level(logging.INFO):
-        ext_pillar = vault.ext_pillar("testminion", {}, "path=secret/path")
+        ext_pillar = vault.ext_pillar("testminion", {}, "secret/path")
         assert ext_pillar == {}
         assert "Vault secret not found for: secret/path" in caplog.messages
 
@@ -79,7 +79,7 @@ def test_ext_pillar_nesting_key(data):
     """
     Test that nesting_key is honored as expected
     """
-    ext_pillar = vault.ext_pillar("testminion", {}, "path=secret/path", nesting_key="baz")
+    ext_pillar = vault.ext_pillar("testminion", {}, "secret/path", nesting_key="baz")
     assert ext_pillar == {"baz": data}
 
 
@@ -131,7 +131,7 @@ def test_ext_pillar_merging(read_kv, first, second, expected, request):
     ext_pillar = vault.ext_pillar(
         "test-minion",
         {"roles": ["db", "web"]},
-        conf="path=salt/roles/{pillar[roles]}",
+        path="salt/roles/{pillar[roles]}",
         merge_strategy="smart",
         merge_lists=False,
     )
@@ -144,18 +144,28 @@ def test_ext_pillar_disabled_during_pillar_rendering(read_kv):
     template rendering to prevent a cyclic dependency.
     """
     extra = {"_vault_runner_is_compiling_pillar_templates": True}
-    res = vault.ext_pillar("test-minion", {}, conf="path=secret/path", extra_minion_data=extra)
+    res = vault.ext_pillar("test-minion", {}, path="secret/path", extra_minion_data=extra)
     assert res == {}
     read_kv.assert_not_called()
 
 
-@pytest.mark.usefixtures("read_kv")
-def test_invalid_config(caplog):
+@pytest.mark.parametrize("kwarg", (True, False))
+@pytest.mark.parametrize(
+    "conf",
+    (
+        "path=secret/path",
+        "I have no idea why this was accepted before: path=secret/path",
+    ),
+)
+def test_deprecated_config(read_kv, data, kwarg, conf):
     """
-    Ensure an empty dict is returned and an error is logged in case
-    the config does not contain path=<...>
+    Ensure the previous config with the ``path=`` prefix is still recognized,
+    but warned about.
     """
-    with caplog.at_level(logging.ERROR):
-        ext_pillar = vault.ext_pillar("testminion", {}, "secret/path")
-        assert ext_pillar == {}
-        assert "is not a valid Vault ext_pillar config" in caplog.text
+    with pytest.deprecated_call(match="`path=`"):
+        if kwarg:
+            ext_pillar = vault.ext_pillar("testminion", {}, conf=conf)
+        else:
+            ext_pillar = vault.ext_pillar("testminion", {}, conf)
+        read_kv.assert_called_once_with("secret/path", opts=ANY, context=ANY)
+        assert ext_pillar == data
