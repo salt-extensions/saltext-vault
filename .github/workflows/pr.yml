@@ -3,7 +3,7 @@ name: Pull Request or Push
 on:
   push:
     branches:
-      - '**'  # Run on pushes to any branch
+      - 'main'  # Run on pushes to main even though we shouldn't do this
     tags-ignore:
       - '*'   # Ignore pushes to tags
   pull_request:
