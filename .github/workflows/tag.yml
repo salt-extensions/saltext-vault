@@ -3,7 +3,7 @@ name: Tagged Releases
 on:
   push:
     tags:
-      - "v*"
+      - "v*"  # Only tags starting with "v" for "v1.0.0", etc.
 
 jobs:
   get_tag_version:
