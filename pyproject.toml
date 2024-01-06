@@ -77,9 +77,9 @@ lint = [
 ]
 tests = [
     "pytest >= 7.2.0",
-    "pytest-salt-factories >= 1.0.0rc21; sys_platform == 'win32'",
+    "pytest-salt-factories >= 1.0.0rc28; sys_platform == 'win32'",
     "pytest-salt-factories[docker] >= 1.0.0rc21,<1.0.0rc27; sys_platform != 'win32' and python_version < '3.8'",
-    "pytest-salt-factories[docker] >= 1.0.0rc21; sys_platform != 'win32'",
+    "pytest-salt-factories[docker] >= 1.0.0rc28; sys_platform != 'win32'",
     "pytest-timeout",
 ]
 
