@@ -240,7 +240,9 @@ class VaultClient:
             headers["X-Vault-Token"] = str(wrapped)
         else:
             payload["token"] = str(wrapped)
-        res = self.session.request("POST", url, headers=headers, json=payload)
+        res = self.session.request(
+            "POST", url, headers=headers, json=payload, verify=self._requests_verify
+        )
         if not res.ok:
             self._raise_status(res)
         return res.json()
