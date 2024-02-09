@@ -24,6 +24,20 @@ setting up a Salt master for credential orchestration.
 [AppRoles]: https://developer.hashicorp.com/vault/docs/auth/approle
 [Tokens]: https://developer.hashicorp.com/vault/docs/concepts/tokens
 
+## Security
+
+It is highly recommended that you have a general understanding of the Vault
+authentication and authorization mechanisms that you intend to use with this
+extension and how this usage fits into your security model.
+
+The following are some things to consider. Using [templating](#vault-templating) with
+grains might allow minions to access Vault policies they are not supposed to.
+Consider using pillars or hard coding policies instead.
+Using approle authentication will allow the Salt Master to create roles with
+arbitrary policies. This means that the Salt Master can in the event of a compromise
+escalate it's privileges within the Vault namespace.
+This may not be a problem if the Salt Master manages the Vault server already.
+
 ## Prerequisites
 
 :::{tab} Token
@@ -68,6 +82,7 @@ setting up a Salt master for credential orchestration.
    }
 
    # Manage AppRoles
+   # This enables the Salt Master to create roles with arbitrary policies.
    path "auth/salt-minions/role/*" {
      capabilities = ["read", "create", "update", "delete"]
    }
