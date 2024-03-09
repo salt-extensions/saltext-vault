@@ -4,6 +4,10 @@ Use secrets sourced from Vault in minion pillars.
 .. important::
     This module requires the general :ref:`Vault setup <vault-setup>`.
 
+.. warning::
+    A minion must not be able to write to its own pillar source path,
+    otherwise a core security assumption in Salt is violated.
+
 .. versionchanged:: 1.0.0
     Previous versions of this pillar module found in Salt core were configured
     with a parameter named ``conf``, expecting a single value representing

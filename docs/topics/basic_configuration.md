@@ -30,13 +30,20 @@ It is highly recommended that you have a general understanding of the Vault
 authentication and authorization mechanisms that you intend to use with this
 extension and how this usage fits into your security model.
 
-The following are some things to consider. Using [templating](#vault-templating) with
-grains might allow minions to access Vault policies they are not supposed to.
-Consider using pillars or hard coding policies instead.
-Using approle authentication will allow the Salt Master to create roles with
-arbitrary policies. This means that the Salt Master can in the event of a compromise
-escalate it's privileges within the Vault namespace.
-This may not be a problem if the Salt Master manages the Vault server already.
+The following is a non-exhaustive list of points to consider:
+
+* Using [templating](#vault-templating) with grains might allow minions to access Vault policies
+  they are not supposed to since they control the content themselves. Consider using
+  pillars or hard coding policies instead.
+* In general, minions should never be allowed to mutate their own pillar, otherwise
+  the pillar's trustworthiness degrades to the level of grains. Specifically, if you
+  employ the Vault pillar module, a minion must not have write access to its pillar's
+  source path.
+* Using AppRole authentication allows the Salt Master to create roles with arbitrary
+  policies. A compromised Salt Master can thus escalate its privileges within the
+  Vault namespace. In the present, this [cannot be worked around with parameter constraints](https://github.com/hashicorp/vault/issues/8789#issuecomment-1321983227)
+  in a sensible way. This may not be a problem if the Salt Master manages the Vault
+  server already or if it is dedicated to Salt.
 
 ## Prerequisites
 
