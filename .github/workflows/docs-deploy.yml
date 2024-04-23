@@ -46,7 +46,7 @@ jobs:
           nox --force-color -e docs
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@3
+        uses: actions/upload-pages-artifact@v3
         with:
           name: html-docs
           path: docs/_build/html
