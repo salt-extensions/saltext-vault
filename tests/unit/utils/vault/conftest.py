@@ -415,8 +415,9 @@ def lease_response():
 
 
 @pytest.fixture
-def lease():
-    return {
+def lease(request):
+    overrides = getattr(request, "param", {})
+    base = {
         "id": "database/creds/testrole/abcd",
         "lease_id": "database/creds/testrole/abcd",
         "renewable": True,
@@ -427,6 +428,33 @@ def lease():
             "username": "test",
             "password": "test",
         },
+        "meta": None,
+        "min_ttl": None,
+        "revoke_delay": None,
+        "renew_increment": None,
+    }
+    base.update(overrides)
+    return base
+
+
+@pytest.fixture
+def lease_lookup_response():
+    return {
+        "request_id": "852e6e12-7bf5-0f38-896d-4ced16c8c8f0",
+        "lease_id": "",
+        "renewable": False,
+        "lease_duration": 0,
+        "data": {
+            "expire_time": 2000,
+            "id": "database/creds/testrole/abcd",
+            "issue_time": 0,
+            "last_renewal": 0,
+            "renewable": True,
+            "ttl": 2000,
+        },
+        "wrap_info": None,
+        "warnings": None,
+        "auth": None,
     }
 
 
