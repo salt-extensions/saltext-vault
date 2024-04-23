@@ -4,7 +4,7 @@ _commit: 0.2.7
 _src_path: https://github.com/lkubb/salt-extension-copier
 author: Salt Core Team
 author_email: saltproject@vmware.com
-docs_url: ''
+docs_url: https://salt-extensions.github.io/saltext-vault/
 license: apache
 loaders:
   - module
