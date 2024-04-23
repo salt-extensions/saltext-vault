@@ -45,6 +45,7 @@ content-type = "text/markdown"
 
 [project.urls]
 Homepage = "https://github.com/salt-extensions/saltext-vault"
+Documentation = "https://salt-extensions.github.io/saltext-vault/"
 Source = "https://github.com/salt-extensions/saltext-vault"
 Tracker = "https://github.com/salt-extensions/saltext-vault/issues"
 

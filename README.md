@@ -11,7 +11,7 @@ If you think you've found a security vulnerability, see
 
 This README is for people aiming to contribute to the project.
 If you just want to get started with the extension, check out the
-module docstrings (for now, documentation is coming!).
+[User Documentation][docs].
 
 ## Contributing
 
@@ -84,3 +84,4 @@ that's where you'll find the rest of the documentation.
 [PRs]: https://github.com/salt-extensions/saltext-vault/pulls
 [discussions]: https://github.com/salt-extensions/saltext-vault/discussions
 [comments]: https://conventionalcomments.org/
+[docs]: https://salt-extensions.github.io/saltext-vault/
