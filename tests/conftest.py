@@ -217,3 +217,12 @@ def vault_container_version(
         vault_enable_secret_engine("kv", ["-version=1", "-path=secret-v1"])
         vault_enable_secret_engine("kv", ["-version=2", "-path=salt"])
         yield vault_version
+
+
+@pytest.fixture(scope="session")
+def container_host_ref():
+    # For Podman, there is `host.containers.internal`, which works even rootless.
+    # This env var is set by nox.
+    # `host.docker.internal` exists, but does not work in CI for some reason.
+    # There, return the default IP address of the host on the default network (hardcoded).
+    return os.environ.get("CONTAINER_HOST_REF", "172.17.0.1")
