@@ -151,6 +151,7 @@ def tests(session):
             podman_sock = runtime_dir / "podman" / "podman.sock"
             if podman_sock.exists():
                 env["DOCKER_HOST"] = f"unix:{podman_sock}"
+                env["CONTAINER_HOST_REF"] = "host.containers.internal"
 
     session.run("coverage", "erase")
     args = [

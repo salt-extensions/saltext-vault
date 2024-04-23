@@ -570,6 +570,9 @@ class LeaseStore:
         ret = {}
         for ckey, lease in self._list_cached_leases(match=match, flush=False):
             info = lease.to_dict()
+            ttl_left = lease.ttl_left
+            info["expires_in"] = ttl_left
+            info["expired"] = ttl_left == 0
             # do not leak auth data
             info.pop("data", None)
             ret[ckey] = info

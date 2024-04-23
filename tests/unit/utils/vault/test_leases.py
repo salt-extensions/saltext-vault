@@ -600,6 +600,8 @@ class TestLeaseStore:
         ret = store_multi.list_info()
         assert set(ret) == {"test_1", "test_12", "test_3"}
         lease.pop("data")
+        lease["expires_in"] = 1337
+        lease["expired"] = False
         assert ret["test_1"] == lease
         assert ret["test_12"]["lease_id"] == "foobar"
         assert ret["test_3"]["lease_id"] == "barbaz"
@@ -611,6 +613,8 @@ class TestLeaseStore:
         ret = store_multi.list_info(match="test_1*")
         assert set(ret) == {"test_1", "test_12"}
         lease.pop("data")
+        lease["expires_in"] = 1337
+        lease["expired"] = False
         assert ret["test_1"] == lease
         assert ret["test_12"]["lease_id"] == "foobar"
 
@@ -624,6 +628,8 @@ class TestLeaseStore:
         ret = store_multi.list_info(match="test_1*")
         assert set(ret) == {"test_1"}
         lease.pop("data")
+        lease["expires_in"] = 1337
+        lease["expired"] = False
         assert ret["test_1"] == lease
         store_multi.cache.get.assert_called_with("test_12", flush=False)
 

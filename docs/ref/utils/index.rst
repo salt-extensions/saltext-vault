@@ -14,6 +14,7 @@ _________
     vault.auth
     vault.cache
     vault.client
+    vault.db
     vault.exceptions
     vault.factory
     vault.helpers
