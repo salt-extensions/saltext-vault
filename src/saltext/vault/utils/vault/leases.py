@@ -165,7 +165,7 @@ class BaseLease(DurationMixin, DropInitKwargsMixin):
         """
         Return a dict of all contained attributes.
         """
-        return self.__dict__
+        return copy.deepcopy(self.__dict__)
 
 
 class VaultLease(BaseLease):
@@ -492,7 +492,7 @@ class LeaseStore:
             return new_lease
         return ret
 
-    def renew_cached(self, match, increment=None):
+    def renew_cached(self, match="*", increment=None):
         """
         Renew cached leases.
 

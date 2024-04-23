@@ -186,7 +186,7 @@ class VaultKV:
         if (
             ret["type"] == "kv"
             and path_metadata["options"] is not None
-            and path_metadata.get("options", {}).get("version", "1") in ["2"]
+            and path_metadata.get("options", {}).get("version", "1") == "2"
         ):
             ret["v2"] = True
             ret["data"] = self._v2_the_path(path, path_metadata.get("path", path))
@@ -203,7 +203,7 @@ class VaultKV:
         Given a path, a filter, and a path type, properly inject
         'data' or 'metadata' into the path.
         """
-        possible_types = ["data", "metadata", "delete", "destroy"]
+        possible_types = ("data", "metadata", "delete", "destroy")
         if ptype not in possible_types:
             raise AssertionError()
         msg = f"Path {path} already contains {ptype} in the right place - saltstack duct tape?"

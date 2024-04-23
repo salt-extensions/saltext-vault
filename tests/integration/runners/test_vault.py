@@ -547,7 +547,7 @@ def minion_conn_cachedir(vault_salt_call_cli):
 def missing_auth_cache(minion_conn_cachedir):
     token_cachefile = minion_conn_cachedir / "session" / "__token.p"
     secret_id_cachefile = minion_conn_cachedir / "secret_id.p"
-    for file in [secret_id_cachefile, token_cachefile]:
+    for file in (secret_id_cachefile, token_cachefile):
         if file.exists():
             file.unlink()
     yield
@@ -842,12 +842,12 @@ class TestAppRoleIssuance:
         ret = vault_salt_run_cli.run("vault.show_approle", overriding_vault_salt_minion.id)
         assert ret.returncode == 0
         assert ret.data
-        for val in [
+        for val in (
             "token_explicit_max_ttl",
             "token_num_uses",
             "secret_id_num_uses",
             "secret_id_ttl",
-        ]:
+        ):
             assert ret.data[val] == issue_overrides[val]
 
     def test_impersonating_master_does_not_override_issue_param_overrides(

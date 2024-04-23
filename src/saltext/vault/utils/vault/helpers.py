@@ -24,7 +24,7 @@ def _get_salt_run_type(opts):
         return SALT_RUNTYPE_MASTER
 
     config_location = opts.get("vault", {}).get("config_location")
-    if config_location and config_location not in ["local", "master"]:
+    if config_location and config_location not in ("local", "master"):
         raise InvalidConfigError(
             "Invalid vault configuration: config_location must be either local or master"
         )

@@ -48,7 +48,7 @@ def _get_config_cache(opts, context, cbank, ckey="config"):
 def _get_cache_backend(config, opts):
     if config["cache"]["backend"] == "session":
         return None
-    if config["cache"]["backend"] in ["localfs", "disk", "file"]:
+    if config["cache"]["backend"] in ("localfs", "disk", "file"):
         # cache.Cache does not allow setting the type of cache by param
         local_opts = copy.copy(opts)
         local_opts["cache"] = "localfs"
@@ -62,10 +62,10 @@ def _get_cache_bank(opts, force_local=False, connection=True, session=False):
     minion_id = None
     # force_local is necessary because pillar compilation would otherwise
     # leak tokens between master and minions
-    if not force_local and hlp._get_salt_run_type(opts) in [
+    if not force_local and hlp._get_salt_run_type(opts) in (
         hlp.SALT_RUNTYPE_MASTER_IMPERSONATING,
         hlp.SALT_RUNTYPE_MASTER_PEER_RUN,
-    ]:
+    ):
         minion_id = opts["grains"]["id"]
     prefix = "vault" if minion_id is None else f"minions/{minion_id}/vault"
     if session:

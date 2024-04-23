@@ -315,9 +315,9 @@ class TestBuildAuthdClient:
             token.get.return_value = None
             approle = Mock(spec=vauth_cache)
             approle.get.return_value = None
-            if cached_what in ["token", "both"]:
+            if cached_what in ("token", "both"):
                 token.get.return_value = vault.VaultToken(**token_auth["auth"])
-            if cached_what in ["secret_id", "both"]:
+            if cached_what in ("secret_id", "both"):
                 approle.get.return_value = vault.VaultSecretId(**secret_id_response["data"])
             return token if ckey == vfactory.TOKEN_CKEY else approle
 

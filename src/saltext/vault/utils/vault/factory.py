@@ -171,7 +171,6 @@ def clear_cache(opts, context, ckey=None, connection=True, session=False, force_
     cbank = vcache._get_cache_bank(
         opts, connection=connection, session=session, force_local=force_local
     )
-    client, config = _build_revocation_client(opts, context, force_local=force_local)
     if (
         not ckey
         or (not (connection or session) and ckey == "connection")
@@ -197,10 +196,10 @@ def clear_cache(opts, context, ckey=None, connection=True, session=False, force_
                         config["cache"]["expire_events"]
                         and not force_local
                         and hlp._get_salt_run_type(opts)
-                        not in [
+                        not in (
                             hlp.SALT_RUNTYPE_MASTER_IMPERSONATING,
                             hlp.SALT_RUNTYPE_MASTER_PEER_RUN,
-                        ]
+                        )
                     ):
                         scope = cbank.split("/")[-1]
                         _get_event(opts)(data={"scope": scope}, tag=f"vault/cache/{scope}/clear")
@@ -254,10 +253,10 @@ def update_config(opts, context, keep_session=False):
         significantly.
         Defaults to False.
     """
-    if hlp._get_salt_run_type(opts) in [
+    if hlp._get_salt_run_type(opts) in (
         hlp.SALT_RUNTYPE_MASTER,
         hlp.SALT_RUNTYPE_MINION_LOCAL,
-    ]:
+    ):
         # local configuration is not cached
         return True
     connection_cbank = vcache._get_cache_bank(opts)
@@ -322,7 +321,7 @@ def _build_authd_client(opts, context, force_local=False):
                 # For remote sources, we would needlessly request one, so don't.
                 if (
                     hlp._get_salt_run_type(opts)
-                    in [hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL]
+                    in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
                     or force_local
                 ):
                     secret_id = _fetch_secret_id(
@@ -346,7 +345,7 @@ def _build_authd_client(opts, context, force_local=False):
         client = vclient.AuthenticatedVaultClient(
             auth, session=unauthd_client.session, **config["server"]
         )
-    elif config["auth"]["method"] in ["token", "wrapped_token"]:
+    elif config["auth"]["method"] in ("token", "wrapped_token"):
         token = _fetch_token(
             config,
             opts,
@@ -374,7 +373,7 @@ def _build_revocation_client(opts, context, force_local=False):
     # Disregard a possibly returned locally configured token since
     # it is cached with metadata if it has been used. Also, we do not want
     # to revoke statically configured tokens anyways.
-    config, _, _ = _get_connection_config(
+    config, _, unauthd_client = _get_connection_config(
         connection_cbank, opts, context, force_local=force_local, pre_flush=True
     )
     if config is None:
@@ -395,13 +394,15 @@ def _build_revocation_client(opts, context, force_local=False):
     if token is None:
         return None, None
     auth = vauth.VaultTokenAuth(token=token, cache=token_cache)
-    client = vclient.AuthenticatedVaultClient(auth, **config["server"])
+    client = vclient.AuthenticatedVaultClient(
+        auth, session=unauthd_client.session, **config["server"]
+    )
     return client, config
 
 
 def _get_connection_config(cbank, opts, context, force_local=False, pre_flush=False, update=False):
     if (
-        hlp._get_salt_run_type(opts) in [hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL]
+        hlp._get_salt_run_type(opts) in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
         or force_local
     ):
         # only cache config fetched from remote
@@ -516,7 +517,7 @@ def _fetch_secret_id(config, opts, secret_id_cache, unwrap_client, force_local=F
         return secret_id
 
     if (
-        hlp._get_salt_run_type(opts) in [hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL]
+        hlp._get_salt_run_type(opts) in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
         or force_local
     ):
         secret_id = config["auth"]["secret_id"]
@@ -571,7 +572,7 @@ def _fetch_token(config, opts, token_cache, unwrap_client, force_local=False, em
         return token
 
     if (
-        hlp._get_salt_run_type(opts) in [hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL]
+        hlp._get_salt_run_type(opts) in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
         or force_local
     ):
         token = None
@@ -936,17 +937,17 @@ def parse_config(config, validate=True, opts=None, require_token=True):
     )
     # ttl, uses were used as configuration for issuance and minion overrides as well
     # as token meta information. The new configuration splits those semantics.
-    for old_token_conf, new_token_conf in [
+    for old_token_conf, new_token_conf in (
         ("ttl", "explicit_max_ttl"),
         ("uses", "num_uses"),
-    ]:
+    ):
         if old_token_conf in merged["auth"]:
             merged["issue"]["token"]["params"][new_token_conf] = merged["issue_params"][
                 new_token_conf
             ] = merged["auth"].pop(old_token_conf)
     # Those were found in the root namespace, but grouping them together
     # makes semantic and practical sense.
-    for old_server_conf in ["namespace", "url", "verify"]:
+    for old_server_conf in ("namespace", "url", "verify"):
         if old_server_conf in merged:
             merged["server"][old_server_conf] = merged.pop(old_server_conf)
     if "role_name" in merged:
