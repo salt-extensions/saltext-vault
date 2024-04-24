@@ -3,6 +3,11 @@ path "secret/*" {
   capabilities = ["read", "list", "create", "update", "delete", "patch"]
 }
 
+# General KV v1 testing
+path "secret-v1/*" {
+  capabilities = ["read", "list", "create", "update", "delete"]
+}
+
 # ACL policy templating tests
 path "salt/+/minions/{{identity.entity.metadata.minion-id}}" {
     capabilities = ["create", "read", "update", "delete", "list", "patch"]

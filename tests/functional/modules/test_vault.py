@@ -7,7 +7,9 @@ from tests.support.vault import vault_delete_secret
 from tests.support.vault import vault_list_policies
 from tests.support.vault import vault_list_secrets
 from tests.support.vault import vault_read_policy
+from tests.support.vault import vault_read_secret
 from tests.support.vault import vault_write_policy
+from tests.support.vault import vault_write_secret
 
 pytest.importorskip("docker")
 
@@ -45,9 +47,10 @@ def vault(modules, vault_container_version):  # pylint: disable=unused-argument
         yield modules.vault
     finally:
         # We're explicitly using the vault CLI and not the salt vault module
-        secret_path = "secret/my"
-        for secret in vault_list_secrets(secret_path):
-            vault_delete_secret(f"{secret_path}/{secret}", metadata=True)
+        for mount in ("secret", "secret-v1"):
+            secret_path = f"{mount}/my"
+            for secret in vault_list_secrets(secret_path):
+                vault_delete_secret(f"{secret_path}/{secret}", metadata=True)
         policies = vault_list_policies()
         for policy in ["functional_test_policy", "policy_write_test"]:
             if policy in policies:
@@ -76,6 +79,40 @@ def test_vault_list_secrets_issue_61084(sys_mod):
     result = sys_mod.argspec("vault.list_secrets")
     assert isinstance(result, dict)
     assert isinstance(result.get("vault.list_secrets"), dict)
+
+
+@pytest.fixture
+def existing_secret_v1(vault_container_version):  # pylint: disable=unused-argument
+    path = "secret-v1/my/secret"
+    vault_write_secret(path, user="foo", password="bar")
+    ret = vault_read_secret(path)
+    assert ret == {"user": "foo", "password": "bar"}
+    return path
+
+
+@pytest.mark.usefixtures("existing_secret_v1")
+def test_read_secret_v1(vault):
+    res = vault.read_secret("secret-v1/my/secret")
+    assert res == {"user": "foo", "password": "bar"}
+
+
+def test_write_secret_v1(vault):
+    data = {"user": "foo", "password": "bar"}
+    assert vault.write_secret("secret-v1/my/written_secret", **data) is True
+    assert vault_read_secret("secret-v1/my/written_secret") == data
+
+
+@pytest.mark.usefixtures("existing_secret_v1")
+def test_list_secrets_v1(vault):
+    ret = vault.list_secrets("secret-v1/my/")
+    assert ret
+    assert "keys" in ret
+    assert ret["keys"] == ["secret"]
+
+
+def test_delete_secret_v1(vault, existing_secret_v1):
+    assert vault.delete_secret(existing_secret_v1) is True
+    assert not vault_list_secrets("/".join(existing_secret_v1.split("/")[:-1]))
 
 
 def test_write_read_secret(vault):
