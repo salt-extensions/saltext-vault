@@ -9,9 +9,11 @@ from tests.support.vault import vault_list_secrets
 from tests.support.vault import vault_read_policy
 from tests.support.vault import vault_write_policy
 
+pytest.importorskip("docker")
+
 pytestmark = [
     pytest.mark.slow_test,
-    pytest.mark.skip_if_binaries_missing("dockerd", "vault", "getent"),
+    pytest.mark.skip_if_binaries_missing("vault", "getent"),
 ]
 
 log = logging.getLogger(__name__)

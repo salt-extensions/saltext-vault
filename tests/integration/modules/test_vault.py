@@ -12,13 +12,14 @@ from tests.support.vault import vault_delete_secret
 from tests.support.vault import vault_list_secrets
 from tests.support.vault import vault_write_secret
 
+pytest.importorskip("docker")
 
 log = logging.getLogger(__name__)
 
 
 pytestmark = [
     pytest.mark.slow_test,
-    pytest.mark.skip_if_binaries_missing("dockerd", "vault", "getent"),
+    pytest.mark.skip_if_binaries_missing("vault", "getent"),
     pytest.mark.usefixtures("vault_container_version"),
 ]
 
