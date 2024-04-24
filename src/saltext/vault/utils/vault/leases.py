@@ -76,6 +76,10 @@ class DurationMixin:
             return True
         return abs(delta) <= blur
 
+    @property
+    def ttl_left(self):
+        return max(self.expire_time - round(time.time()), 0)
+
 
 class UseCountMixin:
     """
@@ -171,6 +175,26 @@ class BaseLease(DurationMixin, DropInitKwargsMixin):
 class VaultLease(BaseLease):
     """
     Data object representing a Vault lease.
+
+    Optional parameters in addition to the required``lease_id`` and ``data``:
+
+    min_ttl
+        When requesting this lease from the LeaseStore, ensure it is
+        valid for at least this amount of time, even if the
+        passed ``valid_for`` parameter is less.
+
+    renew_increment
+        When renewing this lease, instead of the lease's default TTL,
+        default to this increment.
+
+    revoke_delay
+        When revoking this lease, instead of the default value of 60,
+        default to this amount of time before having the Vault server
+        revoke it.
+
+    meta
+        Cache arbitrary metadata together with the lease. It will
+        be included in expiry events.
     """
 
     def __init__(
@@ -185,10 +209,11 @@ class VaultLease(BaseLease):
     ):
         # save lease-associated data
         self.data = data
-        # save metadata used by the engine and beacon modules
+        # lifecycle default parameters
         self.min_ttl = min_ttl
         self.renew_increment = renew_increment
         self.revoke_delay = revoke_delay
+        # metadata that is included in expiry events
         self.meta = meta
         super().__init__(lease_id, **kwargs)
 
@@ -434,17 +459,14 @@ class LeaseStore:
                 "When renew_increment is set, it must be at least valid_for to make sense"
             )
 
-        def check_revoke(lease):
+        def check_revoke(lease, min_valid, validity_override=None):
             if self.expire_events is not None:
-                self.expire_events(
-                    tag=f"vault/lease/{ckey}/expire",
-                    data={
-                        "valid_for_less": valid_for
-                        if valid_for is not None
-                        else (lease.min_ttl or 0),
-                        "meta": lease.meta,
-                    },
-                )
+                event_data = {
+                    "valid_for_less": round(min_valid),
+                    "ttl": validity_override if validity_override is not None else lease.ttl_left,
+                    "meta": lease.meta,
+                }
+                self.expire_events(tag=f"vault/lease/{ckey}/expire", data=event_data)
             if revoke is None or revoke:
                 self.revoke(lease, delta=revoke)
             return None
@@ -473,29 +495,29 @@ class LeaseStore:
                     # TODO: Save the updated info?
                     self.lookup(lease)
                 except VaultNotFoundError:
-                    return check_revoke(lease)
+                    return check_revoke(lease, effective_min_validity, 0)
             return lease
 
         if not renew:
-            return check_revoke(lease)
+            return check_revoke(lease, effective_min_validity)
         try:
             lease = self.renew(lease, increment=renew_increment, raise_all_errors=False)
         except VaultNotFoundError:
             # The cached lease was already revoked
-            return check_revoke(lease)
+            return check_revoke(lease, effective_min_validity, 0)
         if not lease.is_valid_for(effective_min_validity, blur=renew_blur):
             if renew_increment is not None:
                 # valid_for cannot possibly be respected
-                return check_revoke(lease)
+                return check_revoke(lease, effective_min_validity)
             # Maybe valid_for is greater than the default validity period, so check if
             # the lease can be renewed by valid_for
             try:
                 lease = self.renew(lease, increment=effective_min_validity, raise_all_errors=False)
             except VaultNotFoundError:
                 # The cached lease was already revoked
-                return check_revoke(lease)
+                return check_revoke(lease, effective_min_validity, 0)
             if not lease.is_valid_for(effective_min_validity, blur=renew_blur):
-                return check_revoke(lease)
+                return check_revoke(lease, effective_min_validity)
         return lease
 
     def list(self):

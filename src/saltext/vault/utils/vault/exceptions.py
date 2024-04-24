@@ -15,6 +15,10 @@ class VaultLeaseExpired(VaultException):
     Raised when a cached lease is reported to be expired locally.
     """
 
+    def __init__(self, lease):
+        super().__init__()
+        self.lease = lease
+
 
 class VaultAuthExpired(VaultException):
     """

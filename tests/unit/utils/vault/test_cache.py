@@ -614,8 +614,10 @@ class TestVaultLeaseCache:
             cache.store("ckey", lease_)
             store.assert_called_once_with("ckey", lease_.to_dict())
 
+    @pytest.mark.parametrize("lease", ({}, {"meta": {"foo": "bar"}}), indirect=True)
+    @pytest.mark.usefixtures("cached_outdated")
     def test_expire_events_with_get(
-        self, events, cached_outdated, cbank, ckey, lease
+        self, events, lease
     ):  # pylint: disable=unused-argument, disable-msg=too-many-arguments
         """
         Ensure internal flushing is disabled when the object is initialized
@@ -624,4 +626,7 @@ class TestVaultLeaseCache:
         cache = vcache.VaultLeaseCache({}, "cbank", expire_events=events)
         ret = cache.get("ckey", 10)
         assert ret is None
-        events.assert_called_once_with(tag="vault/lease/ckey/expire", data={"valid_for_less": 10})
+        events.assert_called_once_with(
+            tag="vault/lease/ckey/expire",
+            data={"valid_for_less": 10, "ttl_left": 6, "meta": lease["meta"]},
+        )

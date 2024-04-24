@@ -307,7 +307,10 @@ class TestLeaseStore:
             )
         )
         store_valid.cache.flush.assert_called_once_with("test")
-        store_valid.expire_events.assert_called_once()
+        store_valid.expire_events.assert_called_once_with(
+            tag="vault/lease/test/expire",
+            data={"valid_for_less": 3000, "ttl": 2000, "meta": lease["meta"]},
+        )
 
     @pytest.mark.parametrize("lease", ({"renew_increment": 2005},), indirect=True)
     def test_get_valid_renew_lease_default_period(self, store_valid, lease):
@@ -371,7 +374,7 @@ class TestLeaseStore:
         )
         store_valid.cache.flush.assert_called_once_with("test")
         store_valid.expire_events.assert_called_once_with(
-            tag="vault/lease/test/expire", data={"valid_for_less": 2100, "meta": None}
+            tag="vault/lease/test/expire", data={"valid_for_less": 2100, "ttl": 2000, "meta": None}
         )
 
     @pytest.mark.parametrize("lease", ({"min_ttl": 2100},), indirect=True)
@@ -442,11 +445,13 @@ class TestLeaseStore:
         store_valid.cache.store.assert_called_with("test", ret)
         store_valid.expire_events.assert_not_called()
 
+    @pytest.mark.parametrize("lease", ({}, {"meta": {"foo": "bar"}}), indirect=True)
     def test_get_valid_not_renew(self, store_valid, lease):
         """
         Currently valid leases should not be returned if they undercut
         valid_for. By default, revocation should be attempted and the cache
-        should be flushed. If an event factory was passed, an event should be sent.
+        should be flushed. If an event factory was passed, an event should be sent
+        which includes the per-lease metadata.
         """
         ret = store_valid.get("test", valid_for=2000, renew=False)
         assert ret is None
@@ -456,7 +461,8 @@ class TestLeaseStore:
         )
         store_valid.cache.flush.assert_called_once_with("test")
         store_valid.expire_events.assert_called_once_with(
-            tag="vault/lease/test/expire", data={"valid_for_less": 2000, "meta": None}
+            tag="vault/lease/test/expire",
+            data={"valid_for_less": 2000, "ttl": 1337, "meta": lease["meta"]},
         )
 
     @pytest.mark.parametrize(
@@ -476,7 +482,10 @@ class TestLeaseStore:
             payload={"lease_id": lease["id"], "increment": revoke or lease["revoke_delay"] or 60},
         )
         store_valid.cache.flush.assert_called_once_with("test")
-        store_valid.expire_events.assert_called()
+        store_valid.expire_events.assert_called_once_with(
+            tag="vault/lease/test/expire",
+            data={"valid_for_less": 3500, "ttl": 2000, "meta": lease["meta"]},
+        )
 
     def test_get_valid_not_flush(self, store_valid):
         """
@@ -490,7 +499,7 @@ class TestLeaseStore:
         store_valid.client.post.assert_not_called()
         store_valid.cache.store.assert_not_called()
         store_valid.expire_events.assert_called_once_with(
-            tag="vault/lease/test/expire", data={"valid_for_less": 2000, "meta": None}
+            tag="vault/lease/test/expire", data={"valid_for_less": 2000, "ttl": 1337, "meta": None}
         )
 
     @pytest.mark.parametrize("check_server", (False, True))
@@ -534,7 +543,10 @@ class TestLeaseStore:
                     )
                 )
                 store_valid.cache.flush.assert_called_once_with("test")
-                store_valid.expire_events.assert_called()
+                store_valid.expire_events.assert_called_once_with(
+                    tag="vault/lease/test/expire",
+                    data={"valid_for_less": 1300, "ttl": 0, "meta": lease["meta"]},
+                )
         else:
             store_valid.client.post.assert_not_called()
             store_valid.expire_events.assert_not_called()
@@ -554,7 +566,9 @@ class TestLeaseStore:
         ret = store_valid.get("test", valid_for=3000)
         assert ret is None
         store_valid.cache.flush.assert_called_once_with("test")
-        store_valid.expire_events.assert_called()
+        store_valid.expire_events.assert_called_once_with(
+            tag="vault/lease/test/expire", data={"valid_for_less": 3000, "ttl": 0, "meta": None}
+        )
 
     @pytest.mark.parametrize("as_str", (False, True))
     def test_revoke_already_revoked(self, store_valid, lease, as_str):
