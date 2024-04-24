@@ -78,6 +78,11 @@ class DurationMixin:
 
     @property
     def ttl_left(self):
+        """
+        .. versionadded:: 1.1.0
+
+        Return the time in seconds until the lease expires.
+        """
         return max(self.expire_time - round(time.time()), 0)
 
 
@@ -183,18 +188,26 @@ class VaultLease(BaseLease):
         valid for at least this amount of time, even if the
         passed ``valid_for`` parameter is less.
 
+        .. versionadded:: 1.1.0
+
     renew_increment
         When renewing this lease, instead of the lease's default TTL,
         default to this increment.
+
+        .. versionadded:: 1.1.0
 
     revoke_delay
         When revoking this lease, instead of the default value of 60,
         default to this amount of time before having the Vault server
         revoke it.
 
+        .. versionadded:: 1.1.0
+
     meta
         Cache arbitrary metadata together with the lease. It will
         be included in expiry events.
+
+        .. versionadded:: 1.1.0
     """
 
     def __init__(
@@ -451,6 +464,8 @@ class LeaseStore:
         check_server
             Check on the Vault server whether the lease is still active and was not
             revoked early. Defaults to false.
+
+            .. versionadded:: 1.1.0
         """
         if renew_increment is not None and timestring_map(valid_for) > timestring_map(
             renew_increment
@@ -543,6 +558,8 @@ class LeaseStore:
 
     def list_info(self, match="*"):
         """
+        .. versionadded:: 1.1.0
+
         List cached leases.
 
         match
