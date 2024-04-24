@@ -10,13 +10,14 @@ from tests.support.vault import vault_delete_secret
 from tests.support.vault import vault_list_secrets
 from tests.support.vault import vault_write_secret
 
+pytest.importorskip("docker")
 
 log = logging.getLogger(__name__)
 
 
 pytestmark = [
     pytest.mark.slow_test,
-    pytest.mark.skip_if_binaries_missing("dockerd", "vault", "getent"),
+    pytest.mark.skip_if_binaries_missing("vault", "getent"),
     pytest.mark.usefixtures("vault_container_version"),
 ]
 
@@ -114,47 +115,49 @@ def vault_salt_run_cli(vault_salt_master):
 
 
 @pytest.fixture
-def kv_root_dual_item(vault_container_version):
-    if vault_container_version == "latest":
-        vault_write_secret("salt/user1", password="p4ssw0rd", desc="test user")
-        vault_write_secret("salt/user/user1", password="p4ssw0rd", desc="test user")
-    yield
-    if vault_container_version == "latest":
+def kv_root_dual_item(vault_container_version):  # pylint: disable=unused-argument
+    vault_write_secret("salt/user1", password="p4ssw0rd", desc="test user")
+    vault_write_secret("salt/user/user1", password="p4ssw0rd", desc="test user")
+    try:
+        yield
+    finally:
         vault_delete_secret("salt/user1")
         vault_delete_secret("salt/user/user1")
 
 
-@pytest.mark.usefixtures("vault_container_version")
-@pytest.mark.parametrize("vault_container_version", ["1.3.1", "latest"], indirect=True)
+@pytest.fixture(params=("secret", "secret-v1"))
+def secret_mount(request):
+    return request.param
+
+
 def test_sdb_kv_kvv2_path_local(salt_call_cli):
     ret = salt_call_cli.run(
         "--local",
         "sdb.set",
-        uri="sdb://sdbvault/kv-v2/test/test_sdb_local/foo",
+        uri="sdb://sdbvault/salt/test/test_sdb_local/foo",
         value="local",
     )
     assert ret.returncode == 0
     assert ret.data is True
-    ret = salt_call_cli.run("--local", "sdb.get", "sdb://sdbvault/kv-v2/test/test_sdb_local/foo")
+    ret = salt_call_cli.run("--local", "sdb.get", "sdb://sdbvault/salt/test/test_sdb_local/foo")
     assert ret.data
     assert ret.data == "local"
 
 
-@pytest.mark.usefixtures("kv_root_dual_item", "vault_container_version")
-@pytest.mark.parametrize("vault_container_version", ["latest"], indirect=True)
+@pytest.mark.usefixtures("kv_root_dual_item")
 def test_sdb_kv_dual_item(salt_call_cli):
     ret = salt_call_cli.run("--local", "sdb.get", "sdb://sdbvault/salt/data/user1")
     assert ret.data
     assert ret.data == {"desc": "test user", "password": "p4ssw0rd"}
 
 
-def test_sdb_runner(salt_run_cli):
+def test_sdb_runner(salt_run_cli, secret_mount):
     ret = salt_run_cli.run(
-        "sdb.set", uri="sdb://sdbvault/secret/test/test_sdb_runner/foo", value="runner"
+        "sdb.set", uri=f"sdb://sdbvault/{secret_mount}/test/test_sdb_runner/foo", value="runner"
     )
     assert ret.returncode == 0
     assert ret.data is True
-    ret = salt_run_cli.run("sdb.get", uri="sdb://sdbvault/secret/test/test_sdb_runner/foo")
+    ret = salt_run_cli.run("sdb.get", uri=f"sdb://sdbvault/{secret_mount}/test/test_sdb_runner/foo")
     assert ret.returncode == 0
     assert ret.stdout
     assert ret.stdout == "runner"
@@ -162,20 +165,22 @@ def test_sdb_runner(salt_run_cli):
 
 @pytest.mark.usefixtures("pillar_tree")
 class TestSDB:
-    def test_sdb(self, vault_salt_call_cli):
+    def test_sdb(self, vault_salt_call_cli, secret_mount):
         ret = vault_salt_call_cli.run(
-            "sdb.set", uri="sdb://sdbvault/secret/test/test_sdb/foo", value="bar"
+            "sdb.set", uri=f"sdb://sdbvault/{secret_mount}/test/test_sdb/foo", value="bar"
         )
         assert ret.returncode == 0
         assert ret.data is True
-        ret = vault_salt_call_cli.run("sdb.get", uri="sdb://sdbvault/secret/test/test_sdb/foo")
+        ret = vault_salt_call_cli.run(
+            "sdb.get", uri=f"sdb://sdbvault/{secret_mount}/test/test_sdb/foo"
+        )
         assert ret.returncode == 0
         assert ret.data
         assert ret.data == "bar"
 
-    def test_config(self, vault_salt_call_cli):
+    def test_config(self, vault_salt_call_cli, secret_mount):
         ret = vault_salt_call_cli.run(
-            "sdb.set", uri="sdb://sdbvault/secret/test/test_pillar_sdb/foo", value="baz"
+            "sdb.set", uri=f"sdb://sdbvault/{secret_mount}/test/test_pillar_sdb/foo", value="baz"
         )
         assert ret.returncode == 0
         assert ret.data is True
@@ -222,8 +227,8 @@ class TestGetOrSetHashSingleUseToken:
         }
 
     @pytest.fixture
-    def get_or_set_absent(self):
-        secret_path = "secret/test"
+    def get_or_set_absent(self, secret_mount):
+        secret_path = f"{secret_mount}/test"
         secret_name = "sdb_get_or_set_hash"
         ret = vault_list_secrets(secret_path)
         if secret_name in ret:
@@ -238,17 +243,14 @@ class TestGetOrSetHashSingleUseToken:
                 vault_delete_secret(f"{secret_path}/{secret_name}")
 
     @pytest.mark.usefixtures("get_or_set_absent")
-    @pytest.mark.parametrize("vault_container_version", ["1.3.1", "latest"], indirect=True)
-    def test_sdb_get_or_set_hash_single_use_token(self, vault_salt_call_cli):
+    def test_sdb_get_or_set_hash_single_use_token(self, vault_salt_call_cli, secret_mount):
         """
         Test that sdb.get_or_set_hash works with uses=1.
-        This fails for versions that do not have the sys/internal/ui/mounts/:path
-        endpoint (<0.10.0) because the path metadata lookup consumes a token use there.
         Issue #60779
         """
         ret = vault_salt_call_cli.run(
             "sdb.get_or_set_hash",
-            "sdb://sdbvault/secret/test/sdb_get_or_set_hash/foo",
+            f"sdb://sdbvault/{secret_mount}/test/sdb_get_or_set_hash/foo",
             10,
         )
         assert ret.returncode == 0
@@ -256,7 +258,7 @@ class TestGetOrSetHashSingleUseToken:
         assert result
         ret = vault_salt_call_cli.run(
             "sdb.get_or_set_hash",
-            "sdb://sdbvault/secret/test/sdb_get_or_set_hash/foo",
+            f"sdb://sdbvault/{secret_mount}/test/sdb_get_or_set_hash/foo",
             10,
         )
         assert ret.returncode == 0
@@ -269,29 +271,29 @@ class TestSDBSetPatch:
     def sdb_profile(self):
         return {"patch": True}
 
-    def test_sdb_set(self, vault_salt_call_cli):
+    def test_sdb_set(self, vault_salt_call_cli, secret_mount):
         # Write to an empty path
         ret = vault_salt_call_cli.run(
-            "sdb.set", uri="sdb://sdbvault/secret/test/test_sdb_patch/foo", value="bar"
+            "sdb.set", uri=f"sdb://sdbvault/{secret_mount}/test/test_sdb_patch/foo", value="bar"
         )
         assert ret.returncode == 0
         assert ret.data is True
         # Write to an existing path, this should not overwrite the previous key
         ret = vault_salt_call_cli.run(
-            "sdb.set", uri="sdb://sdbvault/secret/test/test_sdb_patch/bar", value="baz"
+            "sdb.set", uri=f"sdb://sdbvault/{secret_mount}/test/test_sdb_patch/bar", value="baz"
         )
         assert ret.returncode == 0
         assert ret.data is True
         # Ensure the first value is still there
         ret = vault_salt_call_cli.run(
-            "sdb.get", uri="sdb://sdbvault/secret/test/test_sdb_patch/foo"
+            "sdb.get", uri=f"sdb://sdbvault/{secret_mount}/test/test_sdb_patch/foo"
         )
         assert ret.returncode == 0
         assert ret.data
         assert ret.data == "bar"
         # Ensure the second value was written
         ret = vault_salt_call_cli.run(
-            "sdb.get", uri="sdb://sdbvault/secret/test/test_sdb_patch/bar"
+            "sdb.get", uri=f"sdb://sdbvault/{secret_mount}/test/test_sdb_patch/bar"
         )
         assert ret.returncode == 0
         assert ret.data

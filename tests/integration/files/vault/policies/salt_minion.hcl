@@ -1,11 +1,11 @@
-# General KV v1 testing
+# General KV v2 testing
 path "secret/*" {
-  capabilities = ["read", "list", "create", "update", "delete"]
+  capabilities = ["read", "list", "create", "update", "delete", "patch"]
 }
 
-# General KV v2 testing
-path "kv-v2/*" {
-  capabilities = ["read", "list", "create", "update", "delete", "patch"]
+# General KV v1 testing
+path "secret-v1/*" {
+  capabilities = ["read", "list", "create", "update", "delete"]
 }
 
 # ACL policy templating tests

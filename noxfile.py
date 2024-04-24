@@ -145,6 +145,15 @@ def tests(session):
         "COVERAGE_PROCESS_START": str(REPO_ROOT / ".coveragerc"),
     }
 
+    # Support running functional/integration tests under Podman rootless
+    if not CI_RUN and sys.platform.startswith("linux"):
+        uid = os.getuid()
+        if uid != 0:
+            runtime_dir = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{uid}"))
+            podman_sock = runtime_dir / "podman" / "podman.sock"
+            if podman_sock.exists():
+                env["DOCKER_HOST"] = f"unix:{podman_sock}"
+
     session.run("coverage", "erase")
     args = [
         "--rootdir",
@@ -156,6 +165,7 @@ def tests(session):
         "--showlocals",
         "-ra",
         "-s",
+        "-vv",
     ]
     if session._runner.global_config.forcecolor:
         args.append("--color=yes")
