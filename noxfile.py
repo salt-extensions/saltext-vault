@@ -165,6 +165,7 @@ def tests(session):
         "--showlocals",
         "-ra",
         "-s",
+        "-vv",
     ]
     if session._runner.global_config.forcecolor:
         args.append("--color=yes")
