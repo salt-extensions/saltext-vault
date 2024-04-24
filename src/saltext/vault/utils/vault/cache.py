@@ -48,7 +48,7 @@ def _get_config_cache(opts, context, cbank, ckey="config"):
 def _get_cache_backend(config, opts):
     if config["cache"]["backend"] == "session":
         return None
-    if config["cache"]["backend"] in ["localfs", "disk", "file"]:
+    if config["cache"]["backend"] in ("localfs", "disk", "file"):
         # cache.Cache does not allow setting the type of cache by param
         local_opts = copy.copy(opts)
         local_opts["cache"] = "localfs"
@@ -62,10 +62,10 @@ def _get_cache_bank(opts, force_local=False, connection=True, session=False):
     minion_id = None
     # force_local is necessary because pillar compilation would otherwise
     # leak tokens between master and minions
-    if not force_local and hlp._get_salt_run_type(opts) in [
+    if not force_local and hlp._get_salt_run_type(opts) in (
         hlp.SALT_RUNTYPE_MASTER_IMPERSONATING,
         hlp.SALT_RUNTYPE_MASTER_PEER_RUN,
-    ]:
+    ):
         minion_id = opts["grains"]["id"]
     prefix = "vault" if minion_id is None else f"minions/{minion_id}/vault"
     if session:
@@ -286,7 +286,7 @@ class LeaseCacheMixin:
                 log.debug("Using cached lease.")
                 return lease
         if self.expire_events is not None:
-            raise VaultLeaseExpired()
+            raise VaultLeaseExpired(lease)
         return None
 
 
@@ -294,6 +294,7 @@ class VaultLeaseCache(LeaseCacheMixin, CommonCache):
     """
     Handles caching of Vault leases. Supports multiple cache keys.
     Checks whether cached leases are still valid before returning.
+    Does not enforce for per-lease ``min_ttl``.
     """
 
     def get(self, ckey, valid_for=0, flush=True):
@@ -306,14 +307,16 @@ class VaultLeaseCache(LeaseCacheMixin, CommonCache):
             return data
         try:
             ret = self._check_validity(data, valid_for=valid_for)
-        except VaultLeaseExpired:
+        except VaultLeaseExpired as err:
             if self.expire_events is not None:
                 self.expire_events(
                     tag=f"vault/lease/{ckey}/expire",
                     data={
                         "valid_for_less": valid_for
                         if valid_for is not None
-                        else data.get("min_ttl") or 0,
+                        else err.lease.min_ttl or 0,
+                        "ttl_left": err.lease.ttl_left,
+                        "meta": err.lease.meta,
                     },
                 )
             ret = None

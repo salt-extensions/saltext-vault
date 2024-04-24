@@ -326,7 +326,7 @@ class VaultClient:
             raise VaultUnsupportedOperationError(errors)
         if res.status_code == 412:
             raise VaultPreconditionFailedError(errors)
-        if res.status_code in [500, 502]:
+        if res.status_code in (500, 502):
             raise VaultServerError(errors)
         if res.status_code == 503:
             raise VaultUnavailableError(errors)

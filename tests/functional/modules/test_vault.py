@@ -52,7 +52,7 @@ def vault(modules, vault_container_version):  # pylint: disable=unused-argument
             for secret in vault_list_secrets(secret_path):
                 vault_delete_secret(f"{secret_path}/{secret}", metadata=True)
         policies = vault_list_policies()
-        for policy in ["functional_test_policy", "policy_write_test"]:
+        for policy in ("functional_test_policy", "policy_write_test"):
             if policy in policies:
                 vault_delete_policy(policy)
 

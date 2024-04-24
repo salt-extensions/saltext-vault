@@ -105,7 +105,7 @@ def vault_testing_data(vault_container_version):  # pylint: disable=unused-argum
     finally:
         vault_delete_secret("secret/test/jvmdump/ssh_key")
         vault_delete_secret("secret/test/jenkins/master/ssh_key")
-        for x in ["deleteme", "write"]:
+        for x in ("deleteme", "write"):
             if x in vault_list_secrets("secret/test"):
                 vault_delete_secret(f"secret/test/{x}")
 
