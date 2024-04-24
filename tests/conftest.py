@@ -157,7 +157,7 @@ def _vault_container_version_id(value):
 
 @pytest.fixture(
     scope="module",
-    params=["0.9.6", "1.3.1", "latest"],
+    params=["1.14.8", "latest"],
     ids=_vault_container_version_id,
 )
 def vault_container_version(
@@ -173,7 +173,7 @@ def vault_container_version(
 
     factory = salt_factories.get_container(
         "vault",
-        f"ghcr.io/saltstack/salt-ci-containers/vault:{vault_version}",
+        f"hashicorp/vault:{vault_version}",
         check_ports=[vault_port],
         container_run_kwargs={
             "ports": {"8200/tcp": vault_port},
@@ -212,16 +212,8 @@ def vault_container_version(
             pytest.fail("Failed to login to vault")
 
         vault_write_policy_file("salt_master")
+        vault_write_policy_file("salt_minion")
 
-        if "latest" == vault_version:
-            vault_write_policy_file("salt_minion")
-        else:
-            vault_write_policy_file("salt_minion", "salt_minion_old")
-
-        if vault_version in ("1.3.1", "latest"):
-            vault_enable_secret_engine("kv-v2")
-            if vault_version == "latest":
-                vault_enable_auth_method("approle", ["-path=salt-minions"])
-                vault_enable_secret_engine("kv", ["-version=2", "-path=salt"])
-
+        vault_enable_auth_method("approle", ["-path=salt-minions"])
+        vault_enable_secret_engine("kv", ["-version=2", "-path=salt"])
         yield vault_version

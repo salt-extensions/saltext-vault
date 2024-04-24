@@ -111,17 +111,7 @@ def vault_testing_data(vault_container_version):  # pylint: disable=unused-argum
 
 
 @pytest.mark.usefixtures("vault_testing_data", "pillar_dual_use_tree")
-@pytest.mark.parametrize("vault_container_version", ["1.3.1", "latest"], indirect=True)
 class TestSingleUseToken:
-    """
-    Single-use tokens and read operations on versions below 0.10.0
-    do not work since the necessary metadata lookup consumes a use
-    there without caching metadata information (sys/internal/mounts/:path
-    is not available, hence not an unauthenticated endpoint).
-    It is impossible to differentiate between the endpoint not being
-    available and the token not having the correct permissions.
-    """
-
     @pytest.fixture(scope="class")
     def vault_master_config(self, pillar_state_tree, vault_port):
         return {

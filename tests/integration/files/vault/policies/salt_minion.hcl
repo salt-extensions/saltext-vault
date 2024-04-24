@@ -1,10 +1,5 @@
-# General KV v1 testing
-path "secret/*" {
-  capabilities = ["read", "list", "create", "update", "delete"]
-}
-
 # General KV v2 testing
-path "kv-v2/*" {
+path "secret/*" {
   capabilities = ["read", "list", "create", "update", "delete", "patch"]
 }
 

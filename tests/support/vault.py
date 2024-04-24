@@ -102,16 +102,18 @@ def vault_enable_secret_engine(name, options=None):
     pytest.fail(f"Could not enable secret engine `{name}`: {ret.stderr or ret.stdout}")
 
 
-def vault_disable_secret_engine(name):
+def vault_disable_secret_engine(path):
     try:
-        ret = _vault_cmd(["secrets", "disable", name])
+        ret = _vault_cmd(["secrets", "disable", path])
     except RuntimeError as err:
-        pytest.fail(f"Could not disable secret engine `{name}`: {err}")
+        pytest.fail(f"Could not disable secret engine at `{path}`: {err}")
 
     if "Success" in ret.stdout:
         return True
-    log.debug("Failed to disable secret engine `%s`:\n%s\nSTDERR: %s", name, ret, ret.stderr)
-    pytest.fail(f"Could not disable secret engine `{name}`: {ret.stderr or ret.stdout}")
+    log.debug(
+        "Failed to disable secret engine at path `%s`:\n%s\nSTDERR: %s", path, ret, ret.stderr
+    )
+    pytest.fail(f"Could not disable secret engine at path `{path}`: {ret.stderr or ret.stdout}")
 
 
 def vault_enable_auth_method(name, options=None, **kwargs):

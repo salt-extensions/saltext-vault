@@ -115,34 +115,31 @@ def vault_salt_run_cli(vault_salt_master):
 
 
 @pytest.fixture
-def kv_root_dual_item(vault_container_version):
-    if vault_container_version == "latest":
-        vault_write_secret("salt/user1", password="p4ssw0rd", desc="test user")
-        vault_write_secret("salt/user/user1", password="p4ssw0rd", desc="test user")
-    yield
-    if vault_container_version == "latest":
+def kv_root_dual_item(vault_container_version):  # pylint: disable=unused-argument
+    vault_write_secret("salt/user1", password="p4ssw0rd", desc="test user")
+    vault_write_secret("salt/user/user1", password="p4ssw0rd", desc="test user")
+    try:
+        yield
+    finally:
         vault_delete_secret("salt/user1")
         vault_delete_secret("salt/user/user1")
 
 
-@pytest.mark.usefixtures("vault_container_version")
-@pytest.mark.parametrize("vault_container_version", ["1.3.1", "latest"], indirect=True)
 def test_sdb_kv_kvv2_path_local(salt_call_cli):
     ret = salt_call_cli.run(
         "--local",
         "sdb.set",
-        uri="sdb://sdbvault/kv-v2/test/test_sdb_local/foo",
+        uri="sdb://sdbvault/salt/test/test_sdb_local/foo",
         value="local",
     )
     assert ret.returncode == 0
     assert ret.data is True
-    ret = salt_call_cli.run("--local", "sdb.get", "sdb://sdbvault/kv-v2/test/test_sdb_local/foo")
+    ret = salt_call_cli.run("--local", "sdb.get", "sdb://sdbvault/salt/test/test_sdb_local/foo")
     assert ret.data
     assert ret.data == "local"
 
 
-@pytest.mark.usefixtures("kv_root_dual_item", "vault_container_version")
-@pytest.mark.parametrize("vault_container_version", ["latest"], indirect=True)
+@pytest.mark.usefixtures("kv_root_dual_item")
 def test_sdb_kv_dual_item(salt_call_cli):
     ret = salt_call_cli.run("--local", "sdb.get", "sdb://sdbvault/salt/data/user1")
     assert ret.data
@@ -239,12 +236,9 @@ class TestGetOrSetHashSingleUseToken:
                 vault_delete_secret(f"{secret_path}/{secret_name}")
 
     @pytest.mark.usefixtures("get_or_set_absent")
-    @pytest.mark.parametrize("vault_container_version", ["1.3.1", "latest"], indirect=True)
     def test_sdb_get_or_set_hash_single_use_token(self, vault_salt_call_cli):
         """
         Test that sdb.get_or_set_hash works with uses=1.
-        This fails for versions that do not have the sys/internal/ui/mounts/:path
-        endpoint (<0.10.0) because the path metadata lookup consumes a token use there.
         Issue #60779
         """
         ret = vault_salt_call_cli.run(
