@@ -38,6 +38,7 @@ requires-python = ">= 3.8"
 dynamic = ["version"]
 dependencies = [
     "salt>=3006",
+    "cryptography>=36",
 ]
 
 [project.readme]

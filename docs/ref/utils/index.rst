@@ -20,4 +20,5 @@ _________
     vault.helpers
     vault.kv
     vault.leases
+    vault.pki
     versions
