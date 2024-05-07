@@ -8,14 +8,13 @@ import pytest
 import salt.utils.path
 from pytestshellutils.utils import ports
 from pytestshellutils.utils.processes import ProcessResult
-from saltext.vault import PACKAGE_ROOT
 from saltfactories.utils import random_string
 
+from saltext.vault import PACKAGE_ROOT
 from tests.support.helpers import PatchedEnviron
 from tests.support.vault import vault_enable_auth_method
 from tests.support.vault import vault_enable_secret_engine
 from tests.support.vault import vault_write_policy_file
-
 
 # Reset the root logger to its default level(because salt changed it)
 logging.root.setLevel(logging.WARNING)
