@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 import salt.exceptions
+
 import saltext.vault.utils.vault as vaultutil
 from saltext.vault.runners import vault
 from saltext.vault.utils.vault import api as vapi

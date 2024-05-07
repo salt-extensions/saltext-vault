@@ -1,6 +1,7 @@
 """
 High-level utility functions for Vault interaction
 """
+
 import logging
 
 import salt.cache
@@ -10,6 +11,7 @@ import salt.utils.data
 import salt.utils.dictupdate
 import salt.utils.json
 import salt.utils.versions
+
 import saltext.vault.utils.vault.helpers as hlp
 from saltext.vault.utils.vault.auth import InvalidVaultSecretId
 from saltext.vault.utils.vault.auth import InvalidVaultToken

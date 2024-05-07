@@ -5,9 +5,9 @@ from unittest.mock import patch
 import pytest
 import requests
 import salt.exceptions
+
 from saltext.vault.utils import vault
 from saltext.vault.utils.vault import client as vclient
-
 from tests.unit.utils.vault.conftest import _mock_json_response  # pylint: disable=import-error
 
 

@@ -1,6 +1,7 @@
 """
 Tests for the Vault runner
 """
+
 import logging
 import os
 import shutil

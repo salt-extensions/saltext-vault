@@ -44,9 +44,11 @@ The following options can be set in the profile:
     Currently defaults to ``False`` for backwards-compatibility reasons.
     Beginning with version 2 of this extension, will default to ``True``.
 """
+
 import logging
 
 import salt.exceptions
+
 import saltext.vault.utils.vault as vault
 from saltext.vault.utils.versions import warn_until
 

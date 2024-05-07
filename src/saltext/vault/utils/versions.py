@@ -1,12 +1,14 @@
 """
 Helper for warning about deprecations
 """
+
 import inspect
 import os
 import sys
 import warnings
 
 import packaging.version
+
 from saltext.vault import __version__
 
 

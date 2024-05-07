@@ -1,9 +1,10 @@
 import logging
-from unittest.mock import call
 from unittest.mock import Mock
+from unittest.mock import call
 from unittest.mock import patch
 
 import pytest
+
 from saltext.vault.utils import vault
 from saltext.vault.utils.vault import cache as vcache
 from saltext.vault.utils.vault import client as vclient

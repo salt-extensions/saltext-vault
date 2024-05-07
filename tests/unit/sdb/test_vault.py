@@ -1,11 +1,13 @@
 """
 Test case for the vault SDB module
 """
+
 from unittest.mock import ANY
 from unittest.mock import patch
 
 import pytest
 import salt.exceptions
+
 import saltext.vault.utils.vault as vaultutil
 from saltext.vault.sdb import vault
 

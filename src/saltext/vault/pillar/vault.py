@@ -88,13 +88,15 @@ Complete configuration
            merge_strategy: smart
            merge_lists: false
 """
+
 import logging
 
 import salt.utils.dictupdate
-import saltext.vault.utils.vault as vault
-import saltext.vault.utils.vault.helpers as vhelpers
 from salt.exceptions import InvalidConfigError
 from salt.exceptions import SaltException
+
+import saltext.vault.utils.vault as vault
+import saltext.vault.utils.vault.helpers as vhelpers
 from saltext.vault.utils.versions import warn_until
 
 log = logging.getLogger(__name__)

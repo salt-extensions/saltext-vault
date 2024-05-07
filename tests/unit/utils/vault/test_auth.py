@@ -2,6 +2,7 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
+
 from saltext.vault.utils import vault
 from saltext.vault.utils.vault import auth as vauth
 from saltext.vault.utils.vault import cache as vcache

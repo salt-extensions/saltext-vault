@@ -2,6 +2,7 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
+
 from saltext.vault.modules import vault as vaultexe
 from saltext.vault.states import vault
 
