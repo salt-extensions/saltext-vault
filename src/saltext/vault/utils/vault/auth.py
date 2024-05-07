@@ -1,6 +1,7 @@
 """
 Vault authentication models
 """
+
 import logging
 
 import saltext.vault.utils.vault.leases as leases

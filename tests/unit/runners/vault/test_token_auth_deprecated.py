@@ -4,12 +4,14 @@ Unit tests for the Vault runner
 This module only tests a deprecated function, see
 tests/unit/runners/test_vault.py for the current tests.
 """
+
 import logging
 from unittest.mock import ANY
 from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
+
 import saltext.vault.utils.vault as vaultutil
 from saltext.vault.runners import vault
 from saltext.vault.utils.vault import client as vclient

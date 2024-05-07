@@ -1,6 +1,7 @@
 """
 Tests for the Vault module
 """
+
 import logging
 import shutil
 import time

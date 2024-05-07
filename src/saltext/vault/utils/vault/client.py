@@ -1,13 +1,15 @@
 """
 Vault API client implementation
 """
+
 import logging
 import re
 
 import requests
 import salt.exceptions
-import saltext.vault.utils.vault.leases as leases
 from requests.packages.urllib3.util.ssl_ import create_urllib3_context
+
+import saltext.vault.utils.vault.leases as leases
 from saltext.vault.utils.vault.exceptions import VaultAuthExpired
 from saltext.vault.utils.vault.exceptions import VaultInvocationError
 from saltext.vault.utils.vault.exceptions import VaultNotFoundError

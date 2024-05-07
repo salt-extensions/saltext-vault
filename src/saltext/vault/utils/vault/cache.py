@@ -1,11 +1,13 @@
 """
 Vault-specific cache classes
 """
+
 import copy
 import logging
 import time
 
 import salt.cache
+
 import saltext.vault.utils.vault.helpers as hlp
 import saltext.vault.utils.vault.leases as leases
 from saltext.vault.utils.vault.exceptions import VaultConfigExpired
@@ -312,9 +314,9 @@ class VaultLeaseCache(LeaseCacheMixin, CommonCache):
                 self.expire_events(
                     tag=f"vault/lease/{ckey}/expire",
                     data={
-                        "valid_for_less": valid_for
-                        if valid_for is not None
-                        else err.lease.min_ttl or 0,
+                        "valid_for_less": (
+                            valid_for if valid_for is not None else err.lease.min_ttl or 0
+                        ),
                         "ttl_left": err.lease.ttl_left,
                         "meta": err.lease.meta,
                     },

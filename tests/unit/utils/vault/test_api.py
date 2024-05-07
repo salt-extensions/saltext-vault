@@ -2,6 +2,7 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
+
 import saltext.vault.utils.vault as vaultutil
 from saltext.vault.utils.vault import api as vapi
 from saltext.vault.utils.vault import client as vclient

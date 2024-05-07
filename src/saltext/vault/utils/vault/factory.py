@@ -1,6 +1,7 @@
 """
 Salt-Vault integration core functions
 """
+
 import base64
 import copy
 import logging
@@ -15,6 +16,9 @@ import salt.utils.data
 import salt.utils.dictupdate
 import salt.utils.json
 import salt.utils.versions
+from requests.exceptions import ConnectionError
+from salt.defaults import NOT_SET
+
 import saltext.vault.utils.vault.api as vapi
 import saltext.vault.utils.vault.auth as vauth
 import saltext.vault.utils.vault.cache as vcache
@@ -22,8 +26,6 @@ import saltext.vault.utils.vault.client as vclient
 import saltext.vault.utils.vault.helpers as hlp
 import saltext.vault.utils.vault.kv as vkv
 import saltext.vault.utils.vault.leases as vleases
-from requests.exceptions import ConnectionError
-from salt.defaults import NOT_SET
 from saltext.vault.utils.vault.exceptions import VaultAuthExpired
 from saltext.vault.utils.vault.exceptions import VaultConfigExpired
 from saltext.vault.utils.vault.exceptions import VaultException

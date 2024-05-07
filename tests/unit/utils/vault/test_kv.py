@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 import requests.models
+
 from saltext.vault.utils import vault
 from saltext.vault.utils.vault import cache as vcache
 from saltext.vault.utils.vault import client as vclient

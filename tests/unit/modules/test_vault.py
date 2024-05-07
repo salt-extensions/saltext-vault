@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 import salt.exceptions
+
 import saltext.vault.utils.vault as vaultutil
 from saltext.vault.modules import vault
 

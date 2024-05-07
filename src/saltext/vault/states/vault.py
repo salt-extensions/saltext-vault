@@ -5,6 +5,7 @@ Currently handles policies.
 .. important::
     This module requires the general :ref:`Vault setup <vault-setup>`.
 """
+
 import difflib
 import logging
 

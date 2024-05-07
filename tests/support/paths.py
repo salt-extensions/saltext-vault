@@ -9,6 +9,7 @@
 
     Tests related paths
 """
+
 import logging
 import os
 import re

@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 import salt.cache
+
 from saltext.vault.utils import vault
 from saltext.vault.utils.vault import cache as vcache
 

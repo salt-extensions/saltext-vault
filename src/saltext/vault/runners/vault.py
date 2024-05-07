@@ -4,6 +4,7 @@ Runner functions supporting the Vault modules.
 .. important::
     This module requires the general :ref:`Vault setup <vault-setup>`.
 """
+
 import base64
 import copy
 import logging
@@ -18,13 +19,14 @@ import salt.utils.data
 import salt.utils.immutabletypes as immutabletypes
 import salt.utils.json
 import salt.utils.versions
+from salt.defaults import NOT_SET
+from salt.exceptions import SaltInvocationError
+from salt.exceptions import SaltRunnerError
+
 import saltext.vault.utils.vault as vault
 import saltext.vault.utils.vault.cache as vcache
 import saltext.vault.utils.vault.factory as vfactory
 import saltext.vault.utils.vault.helpers as vhelpers
-from salt.defaults import NOT_SET
-from salt.exceptions import SaltInvocationError
-from salt.exceptions import SaltRunnerError
 from saltext.vault.utils.versions import warn_until
 
 log = logging.getLogger(__name__)

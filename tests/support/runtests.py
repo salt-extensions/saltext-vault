@@ -43,6 +43,7 @@
 
     .. _`pytest`: http://pytest.org
     """
+
 import logging
 import os
 import shutil
@@ -182,12 +183,16 @@ RUNTIME_VARS = RuntimeVars(
     TMP_BASEENV_PILLAR_TREE=paths.TMP_PILLAR_TREE,
     TMP_PRODENV_STATE_TREE=paths.TMP_PRODENV_STATE_TREE,
     TMP_PRODENV_PILLAR_TREE=paths.TMP_PRODENV_PILLAR_TREE,
-    SHELL_TRUE_PATH=salt.utils.path.which("true")
-    if not salt.utils.platform.is_windows()
-    else "cmd /c exit 0 > nul",
-    SHELL_FALSE_PATH=salt.utils.path.which("false")
-    if not salt.utils.platform.is_windows()
-    else "cmd /c exit 1 > nul",
+    SHELL_TRUE_PATH=(
+        salt.utils.path.which("true")
+        if not salt.utils.platform.is_windows()
+        else "cmd /c exit 0 > nul"
+    ),
+    SHELL_FALSE_PATH=(
+        salt.utils.path.which("false")
+        if not salt.utils.platform.is_windows()
+        else "cmd /c exit 1 > nul"
+    ),
     RUNNING_TESTS_USER=this_user(),
     RUNTIME_CONFIGS={},
     CODE_DIR=paths.CODE_DIR,
