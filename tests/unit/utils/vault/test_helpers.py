@@ -105,6 +105,26 @@ def test_timestring_map(inpt, expected):
 
 
 @pytest.mark.parametrize(
+    "inpt,expected",
+    [
+        (60.0, 60),
+        (60, 60),
+        ("60", 60),
+        ("60s", 60),
+        ("2m", 120),
+        ("1h", 3600),
+        ("1d", 86400),
+        ("1.5s", 1),
+        ("1.5m", 90),
+        ("1.5h", 5400),
+        ("7.5d", 648000),
+    ],
+)
+def test_timestring_map_with_int(inpt, expected):
+    assert hlp.timestring_map(inpt, cast=int) == expected
+
+
+@pytest.mark.parametrize(
     "creation_time,expected",
     [
         ("2022-08-22T17:16:21-09:30", 1661222781),
