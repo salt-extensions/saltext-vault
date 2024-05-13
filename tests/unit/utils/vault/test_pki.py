@@ -226,4 +226,4 @@ def test_compare_ca_chain_with_same(existing_pki):
 
 def test_compare_ca_chain_with_same_diff_len(existing_pki):
     _, _, chain = existing_pki
-    assert not pki.compare_ca_chain(chain, chain + chain)
+    assert pki.compare_ca_chain(chain, chain + chain) is False
