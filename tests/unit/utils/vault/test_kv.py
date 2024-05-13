@@ -536,7 +536,6 @@ class TestKVV2:
         kvv2.client.patch.assert_called_once_with(
             paths["data"],
             payload={"data": data},
-            add_headers={"Content-Type": "application/merge-patch+json"},
         )
 
     def test_vault_kv_delete(self, kvv2, path, paths):

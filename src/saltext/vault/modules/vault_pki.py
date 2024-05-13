@@ -213,11 +213,9 @@ def write_role(
 
     endpoint = f"{mount}/roles/{name}"
     method = "POST"
-    headers = {}
 
     if read_role(name, mount=mount) is not None:
         method = "PATCH"
-        headers = {"Content-Type": "application/merge-patch+json"}
 
     payload = {k: v for k, v in kwargs.items() if not k.startswith("_")}
 
@@ -247,7 +245,7 @@ def write_role(
         payload["require_cn"] = require_cn
 
     try:
-        vault.query(method, endpoint, __opts__, __context__, payload=payload, add_headers=headers)
+        vault.query(method, endpoint, __opts__, __context__, payload=payload)
         return True
     except vault.VaultUnsupportedOperationError as err:
         raise CommandExecutionError(
@@ -423,7 +421,6 @@ def update_issuer(
             __opts__,
             __context__,
             payload=payload,
-            add_headers={"Content-Type": "application/merge-patch+json"},
         )
         return True
     except vault.VaultException as err:
