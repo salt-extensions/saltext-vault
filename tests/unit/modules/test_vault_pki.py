@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import pytest
 from salt.exceptions import CommandExecutionError
+from salt.exceptions import SaltInvocationError
 
 import saltext.vault.utils.vault as vaultutil
 from saltext.vault.modules import vault_pki
@@ -193,10 +194,10 @@ def test_generate_root_payload(query, common_name, root_type, args):
 
 
 def test_generate_root_raise_err_with_default_name():
-    with pytest.raises(CommandExecutionError):
+    with pytest.raises(SaltInvocationError):
         vault_pki.generate_root("my root", issuer_name="default")
 
-    with pytest.raises(CommandExecutionError):
+    with pytest.raises(SaltInvocationError):
         vault_pki.generate_root("my root", key_name="default")
 
 
@@ -204,5 +205,5 @@ def test_generate_root_raise_err_with_default_name():
     "args", [{"serial": "00:11:22:33:44:55", "certificate": "-----BEGIN CERTIFICATE..."}, {}]
 )
 def test_revoke_certificate_raise_err(args):
-    with pytest.raises(CommandExecutionError):
+    with pytest.raises(SaltInvocationError):
         vault_pki.revoke_certificate(**args)
