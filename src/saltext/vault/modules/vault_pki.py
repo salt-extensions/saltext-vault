@@ -198,7 +198,7 @@ def write_role(
 
     key_usage
         Specifies the allowed key usage constraint on issued certificates.
-        If not set defaults to ["DigitalSignature", "KeyAgreement", "KeyEncipherment"]
+        If unset, defaults to ``["DigitalSignature", "KeyAgreement", "KeyEncipherment"]``
 
     no_store
         If set, certificates issued/signed against this role will not be stored in the storage backend.
@@ -394,7 +394,7 @@ def update_issuer(
         Specifies the URL values for the CRL Distribution Points field as an array.
 
     ocsp_servers
-        pecifies the URL values for the OCSP Servers field as an array.
+        Specifies the URL values for the OCSP Servers field as an array.
 
     """
     endpoint = f"{mount}/issuer/{ref}"
@@ -541,8 +541,8 @@ def generate_root(
         The mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     type
-        Specifies the type of the root to create. If exported, the private key will be returned in the response;
-        if internal the private key will not be returned and cannot be retrieved later
+        Specifies the type of the root to create. If ``exported``, the private key will be returned in the response;
+        if ``internal``, the private key will not be returned and cannot be retrieved later. Defaults to ``internal``.
 
     issuer_name
         Provides a name to the specified issuer. The name must be unique across all issuers and not be the reserved value ``default``.
@@ -564,8 +564,8 @@ def generate_root(
         ignored with ``key_type=ed25519``.
 
     max_path_length
-        Specifies the maximum path length to encode in the generated certificate. -1 means no limit.
-        Unless the signing certificate has a maximum path length set, in which case the path length is set to one
+        Specifies the maximum path length to encode in the generated certificate. ``-1`` means no limit,
+        unless the signing certificate has a maximum path length set, in which case the path length is set to one
         less than that of the signing certificate. A limit of 0 means a literal path length of zero.
     """
 
@@ -1143,8 +1143,7 @@ def _build_csr(private_key, private_key_passphrase=None, digest="sha256", **kwar
 
     csr = builder.sign(key, algorithm=algorithm)
     csr = x509util.load_csr(csr)
-    csr_encoding = getattr(serialization.Encoding, "PEM")
-    csr_bytes = csr.public_bytes(csr_encoding)
+    csr_bytes = csr.public_bytes(serialization.Encoding.PEM)
     csr = csr_bytes.decode()
 
     return csr
