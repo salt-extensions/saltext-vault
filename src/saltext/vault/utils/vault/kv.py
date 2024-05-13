@@ -84,9 +84,8 @@ class VaultKV:
 
         path = v2_info["data"]
         payload = {"data": data}
-        add_headers = {"Content-Type": "application/merge-patch+json"}
         try:
-            return self.client.patch(path, payload=payload, add_headers=add_headers)
+            return self.client.patch(path, payload=payload)
         except VaultPermissionDeniedError:
             log.warning("Failed patching secret, is the `patch` capability set?")
         except VaultUnsupportedOperationError:
