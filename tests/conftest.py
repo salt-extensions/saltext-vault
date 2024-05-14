@@ -330,6 +330,7 @@ def vault_container_version(
         vault_write_policy_file("database_admin")
         vault_write_policy_file("policy_admin")
         vault_write_policy_file("pki_admin")
+        vault_write_policy_file("ssh_admin")
 
         vault_enable_auth_method("approle", ["-path=salt-minions"])
         vault_enable_secret_engine("kv", ["-version=1", "-path=secret-v1"])

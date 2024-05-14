@@ -251,10 +251,14 @@ def vault_list_detailed(path):
     return json.loads(ret.stdout)["data"]
 
 
-def vault_read(path):
+def vault_read(path, default=..., raise_errors=False):
     try:
         ret = _vault_cmd(["read", "-format=json", path])
     except RuntimeError as err:
+        if raise_errors:
+            raise
+        if default is not ...:
+            return default
         pytest.fail(f"Failed to read path at `{path}`: {err}")
     return json.loads(ret.stdout)
 

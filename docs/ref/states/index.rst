@@ -13,3 +13,4 @@ _____________
     vault_db
     vault_pki
     vault_secret
+    vault_ssh
