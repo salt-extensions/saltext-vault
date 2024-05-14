@@ -74,6 +74,38 @@ def read_secret(path, key=None, metadata=False, default=NOT_SET):
         return default
 
 
+def read_secret_meta(path):
+    """
+    .. versionadded:: 1.1.0
+
+    Return secret metadata and versions for <path>.
+    Requires KV v2.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault.read_secret_meta salt/kv/secret
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/metadata/<secret>" {
+            capabilities = ["read"]
+        }
+
+    path
+        The path to the secret, including mount.
+    """
+    log.debug("Reading Vault secret metadata for %s at %s", __grains__.get("id"), path)
+    try:
+        return vault.read_kv_meta(path, __opts__, __context__)
+    except Exception as err:  # pylint: disable=broad-except
+        log.error("Failed to read secret metadata! %s: %s", type(err).__name__, err)
+        return False
+
+
 def write_secret(path, **kwargs):
     """
     Set secret dataset at <path>.
@@ -203,7 +235,7 @@ def patch_secret(path, **kwargs):
         return False
 
 
-def delete_secret(path, *args):
+def delete_secret(path, *args, **kwargs):
     """
     Delete secret at <path>. If <path> is on KV v2, the secret will be soft-deleted.
 
@@ -213,6 +245,7 @@ def delete_secret(path, *args):
 
         salt '*' vault.delete_secret "secret/my/secret"
         salt '*' vault.delete_secret "secret/my/secret" 1 2 3
+        salt '*' vault.delete_secret "secret/my/secret" all_versions=true
 
     Required policy:
 
@@ -228,6 +261,7 @@ def delete_secret(path, *args):
         }
 
         # KV v2 versions
+        # all_versions=True additionally requires the policy for vault.read_secret_meta
         path "<mount>/delete/<secret>" {
             capabilities = ["update"]
         }
@@ -235,22 +269,35 @@ def delete_secret(path, *args):
     path
         The path to the secret, including mount.
 
+    all_versions
+        .. versionadded:: 1.1.0
+
+        Delete all versions of the secret for KV v2.
+        Can only be passed as a keyword argument.
+        Defaults to false.
+
     .. versionadded:: 1.0.0
 
         For KV v2, you can specify versions to soft-delete as supplemental
         positional arguments.
     """
+    all_versions = kwargs.pop("all_versions", False)
+    unknown_kwargs = tuple(x for x in kwargs if not x.startswith("_"))
+    if unknown_kwargs:
+        raise SaltInvocationError(f"Passed unknown keyword arguments: {' '.join(unknown_kwargs)}")
     log.debug("Deleting vault secrets for %s in %s", __grains__.get("id"), path)
     if args:
         log.debug(f"Affected versions: {' '.join(str(x) for x in args)}")
     try:
-        return vault.delete_kv(path, __opts__, __context__, versions=list(args) or None)
+        return vault.delete_kv(
+            path, __opts__, __context__, versions=list(args) or None, all_versions=all_versions
+        )
     except Exception as err:  # pylint: disable=broad-except
         log.error("Failed to delete secret! %s: %s", type(err).__name__, err)
         return False
 
 
-def destroy_secret(path, *args):
+def destroy_secret(path, *args, **kwargs):
     """
     Destroy specified secret versions at <path>. Only supported on Vault KV v2.
 
@@ -258,12 +305,16 @@ def destroy_secret(path, *args):
 
     .. code-block:: bash
 
+        salt '*' vault.destroy_secret "secret/my/secret"
         salt '*' vault.destroy_secret "secret/my/secret" 1 2
+        salt '*' vault.destroy_secret "secret/my/secret" all_versions=true
 
     Required policy:
 
     .. code-block:: vaultpolicy
 
+        # all_versions=True or defaulting to the most recent version additionally
+        # requires the policy for vault.read_secret_meta
         path "<mount>/destroy/<secret>" {
             capabilities = ["update"]
         }
@@ -271,18 +322,59 @@ def destroy_secret(path, *args):
     path
         The path to the secret, including mount.
 
+    all_versions
+        .. versionadded:: 1.1.0
+
+        Delete all versions of the secret for KV v2.
+        Can only be passed as a keyword argument.
+        Defaults to false.
+
     You can specify versions to destroy as supplemental positional arguments.
-    At least one is required.
+
+    .. versionchanged:: 1.1.0
+
+        If no version was specified, defaults to the most recent one.
     """
-    if not args:
-        raise SaltInvocationError("Need at least one version to destroy.")
+    all_versions = kwargs.pop("all_versions", False)
+    unknown_kwargs = tuple(x for x in kwargs if not x.startswith("_"))
+    if unknown_kwargs:
+        raise SaltInvocationError(f"Passed unknown keyword arguments: {' '.join(unknown_kwargs)}")
     log.debug("Destroying vault secrets for %s in %s", __grains__.get("id"), path)
     if args:
         log.debug(f"Affected versions: {' '.join(str(x) for x in args)}")
     try:
-        return vault.destroy_kv(path, list(args), __opts__, __context__)
+        return vault.destroy_kv(
+            path, list(args) or None, __opts__, __context__, all_versions=all_versions
+        )
     except Exception as err:  # pylint: disable=broad-except
         log.error("Failed to destroy secret! %s: %s", type(err).__name__, err)
+        return False
+
+
+def wipe_secret(path):
+    """
+    Remove all version history and data for the secret at <path>.
+    Requires KV v2.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault.wipe_secret "secret/my/secret"
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/metadata/<secret>" {
+            capabilities = ["delete"]
+        }
+    """
+    log.debug("Wiping vault secrets for %s in %s", __grains__.get("id"), path)
+    try:
+        return vault.wipe_kv(path, __opts__, __context__)
+    except Exception as err:  # pylint: disable=broad-except
+        log.error("Failed to wipe secret! %s: %s", type(err).__name__, err)
         return False
 
 
