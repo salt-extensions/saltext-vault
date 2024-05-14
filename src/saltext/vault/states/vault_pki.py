@@ -86,6 +86,11 @@ def certificate_managed(
 
     .. code-block:: vaultpolicy
 
+            # Need to read the role configuration in case of missing issuer_ref
+            path "{mount}/roles/*" {
+                capabilities = ["read"]
+            }
+
             path "{mount}/issuer/{issuer_ref}/sign/{role_name}" {
                 capabilities = ["update"]
             }
@@ -132,7 +137,7 @@ def certificate_managed(
 
     sign_verbatim
         If set to true, the resulting certificate follows the CSR exactly.
-        Otherwise, only ``CN`` can be set for the subject, any other subject parameter (like ``O``) is ignored.
+        Otherwise, only ``CN`` can be set for the subject, any other subject parameters (like ``O``) are ignored.
 
         .. warning::
             This option is using a potentially dangerous endpoint. Be careful when using that option, as roles
@@ -149,14 +154,6 @@ def certificate_managed(
         :obj:`sign_certificate <saltext.vault.modules.vault_pki.sign_certificate>` execution module.
     """
 
-    if encoding not in ["der", "pem", "pkcs7_der", "pkcs7_pem"]:
-        raise CommandExecutionError(
-            f"Invalid value '{encoding}' for encoding. Valid: der, pem, pkcs7_der, pkcs7_pem"
-        )
-
-    if timestring_map(ttl_remaining, cast=int) >= timestring_map(ttl, cast=int):
-        raise CommandExecutionError("The ttl_remaning cannot be larger or equal to ttl.")
-
     ret = {
         "name": name,
         "changes": {},
@@ -170,6 +167,14 @@ def certificate_managed(
     file_args, cert_args = _split_file_kwargs(filter_state_internal_kwargs(kwargs))
 
     try:
+        if encoding not in ["der", "pem", "pkcs7_der", "pkcs7_pem"]:
+            raise SaltInvocationError(
+                f"Invalid value '{encoding}' for encoding. Valid: der, pem, pkcs7_der, pkcs7_pem"
+            )
+
+        if timestring_map(ttl_remaining, cast=int) >= timestring_map(ttl, cast=int):
+            raise SaltInvocationError("The ttl_remaning cannot be larger or equal to ttl.")
+
         # check file.managed changes early to avoid using unnecessary resources
         file_managed_test = _file_managed(name, test=True, replace=False, **file_args)
         if file_managed_test["result"] is False:
@@ -196,6 +201,8 @@ def certificate_managed(
 
         if issuer_ref is None:
             issuer_ref = __salt__["vault_pki.read_role"](role_name, mount=mount)["issuer_ref"]
+            if issuer_ref is None:
+                raise CommandExecutionError(f"role {role_name} does not exists.")
 
         issuer_info = __salt__["vault_pki.read_issuer"](issuer_ref, mount=mount)
 
@@ -245,7 +252,7 @@ def certificate_managed(
                 "ca_chain",
                 "encoding",
             }:
-                verb = "recreat"
+                verb = "recreate"
                 cert = __salt__["x509.encode_certificate"](
                     name,
                     append_certs=ca_chain,
@@ -366,10 +373,11 @@ def role_managed(name, mount="pki", issuer_ref=None, ttl=None, max_ttl=None, **k
                 )
         return changed
 
-    current = __salt__["vault_pki.read_role"](name, mount=mount)
     changes = {}
 
     try:
+        current = __salt__["vault_pki.read_role"](name, mount=mount)
+
         if current:
             changes = _diff_params(current)
             if not changes:

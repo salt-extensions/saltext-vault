@@ -46,14 +46,17 @@ VALID_CSR_ARGS = (
     "SN",
     "GN",
     "UID",
-    "basicConstraints",
-    "keyUsage",
-    "subjectKeyIdentifier",
     "authorityKeyIdentifier",
+    "basicConstraints",
     "certificatePolicies",
-    "policyConstraints",
-    "nameConstraints",
     "extendedKeyUsage",
+    "inhibitAnyPolicy",
+    "keyUsage",
+    "nameConstraints",
+    "noCheck",
+    "policyConstraints",
+    "subjectKeyIdentifier",
+    "tlsfeature",
 )
 
 DIGEST_HASHES = (
