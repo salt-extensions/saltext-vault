@@ -1,6 +1,7 @@
 import logging
 
 import pytest
+from salt.exceptions import CommandExecutionError
 
 from tests.support.vault import vault_delete_policy
 from tests.support.vault import vault_delete_secret
@@ -173,12 +174,18 @@ def test_write_raw_read_secret(vault):
 
 @pytest.fixture
 def existing_secret(vault):
-    ret = vault.write_secret("secret/my/secret", user="foo", password="bar")
+    secret_key = "secret/my/secret"
+    ret = vault.write_secret(secret_key, user="foo", password="bar")
     expected_write = {"destroyed": False, "deletion_time": ""}
     for key in list(ret):
         if key not in expected_write:
             ret.pop(key)
     assert ret == expected_write
+    try:
+        yield
+    finally:
+        # ensure we don't retain the version history between tests
+        vault_delete_secret(secret_key, metadata=True)
 
 
 @pytest.fixture
@@ -191,23 +198,66 @@ def existing_secret_version(existing_secret, vault):  # pylint: disable=unused-a
     assert ret["password"] == "hunter1"
 
 
-@pytest.mark.usefixtures("existing_secret")
-def test_delete_secret(vault):
-    ret = vault.delete_secret("secret/my/secret")
-    assert ret is True
-
-
 @pytest.mark.usefixtures("existing_secret_version")
-def test_delete_secret_versions(vault):
-    ret = vault.delete_secret("secret/my/secret", 1)
-    assert ret is True
-    ret = vault.read_secret("secret/my/secret")
-    assert ret
+def test_read_secret_version(vault):
+    ret = vault.read_secret("secret/my/secret", version=1)
+    assert ret["password"] == "bar"
+    ret = vault.read_secret("secret/my/secret", version=2)
     assert ret["password"] == "hunter1"
-    ret = vault.delete_secret("secret/my/secret", 2)
+
+
+@pytest.mark.usefixtures("existing_secret")
+def test_delete_restore_secret(vault):
+    ret = vault.delete_secret("secret/my/secret")
     assert ret is True
     ret = vault.read_secret("secret/my/secret", default="__was_deleted__")
     assert ret == "__was_deleted__"
+    ret = vault.restore_secret("secret/my/secret")
+    assert ret is True
+    ret = vault.read_secret("secret/my/secret")
+    assert ret["password"] == "bar"
+
+
+@pytest.mark.usefixtures("existing_secret_version")
+def test_delete_restore_secret_versions(vault):
+    key = "secret/my/secret"
+    # delete the first version only, the current one is version 2
+    assert vault.delete_secret(key, 1) is True
+    ret = vault.read_secret(key)
+    assert ret
+    assert ret["password"] == "hunter1"
+    ret = vault.read_secret(key, default="__was_deleted__", version=1)
+    assert ret == "__was_deleted__"
+    # now delete the current one as well
+    assert vault.delete_secret(key, 2) is True
+    ret = vault.read_secret(key, default="__was_deleted__")
+    assert ret == "__was_deleted__"
+    assert vault.restore_secret(key, 1) is True
+    ret = vault.read_secret(key, version=1)
+    assert ret["password"] == "bar"
+    assert vault.restore_secret(key, 2) is True
+    ret = vault.read_secret(key)
+    assert ret["password"] == "hunter1"
+
+
+@pytest.mark.usefixtures("existing_secret_version")
+def test_delete_restore_secret_all_versions(vault):
+    versions = ("bar", "hunter1")
+    assert vault.delete_secret("secret/my/secret", all_versions=True) is True
+    for version in range(len(versions)):
+        ret = vault.read_secret("secret/my/secret", default="__was_deleted__", version=version + 1)
+        assert ret == "__was_deleted__"
+    assert vault.restore_secret("secret/my/secret", all_versions=True) is True
+    for version, data in enumerate(versions):
+        ret = vault.read_secret("secret/my/secret", version=version + 1)
+        assert ret["password"] == data
+
+
+@pytest.mark.usefixtures("existing_secret_version")
+def test_restore_secret_latest_not_deleted(vault):
+    assert vault.delete_secret("secret/my/secret", 1) is True
+    with pytest.raises(CommandExecutionError, match="No secret version to restore."):
+        vault.restore_secret("secret/my/secret")
 
 
 @pytest.mark.usefixtures("existing_secret")
@@ -218,10 +268,34 @@ def test_list_secrets(vault):
     assert ret["keys"] == ["secret"]
 
 
-@pytest.mark.usefixtures("existing_secret")
-def test_destroy_secret_kv2(vault):
-    ret = vault.destroy_secret("secret/my/secret", "1")
-    assert ret is True
+@pytest.mark.usefixtures("existing_secret_version")
+def test_destroy_secret(vault):
+    assert vault.destroy_secret("secret/my/secret") is True
+    ret = vault.read_secret("secret/my/secret", default="__was_deleted__")
+    assert ret == "__was_deleted__"
+    ret = vault.read_secret("secret/my/secret", version=1)
+    assert ret["password"] == "bar"
+
+
+@pytest.mark.usefixtures("existing_secret_version")
+def test_destroy_secret_versions(vault):
+    assert vault.destroy_secret("secret/my/secret", "1") is True
+    ret = vault.read_secret("secret/my/secret")
+    assert ret["password"] == "hunter1"
+
+
+@pytest.mark.usefixtures("existing_secret_version")
+def test_destroy_secret_all_versions(vault):
+    assert vault.destroy_secret("secret/my/secret", all_versions=True) is True
+    for version in range(2):
+        ret = vault.read_secret("secret/my/secret", default="__was_deleted__", version=version + 1)
+        assert ret == "__was_deleted__"
+
+
+@pytest.mark.usefixtures("existing_secret_version")
+def test_wipe_secret(vault):
+    assert vault.wipe_secret("secret/my/secret") is True
+    assert vault.read_secret_meta("secret/my/secret") is False
 
 
 @pytest.mark.usefixtures("existing_secret")

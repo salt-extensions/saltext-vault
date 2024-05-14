@@ -187,13 +187,13 @@ def is_v2(path, opts, context):
     return kv.is_v2(path)
 
 
-def read_kv(path, opts, context, include_metadata=False):
+def read_kv(path, opts, context, include_metadata=False, version=None):
     """
     Read secret at <path>.
     """
     kv, config = get_kv(opts, context, get_config=True)
     try:
-        return kv.read(path, include_metadata=include_metadata)
+        return kv.read(path, include_metadata=include_metadata, version=version)
     except VaultPermissionDeniedError:
         if not _check_clear(config, kv.client):
             raise
@@ -201,7 +201,27 @@ def read_kv(path, opts, context, include_metadata=False):
     # in case policies have changed
     clear_cache(opts, context)
     kv = get_kv(opts, context)
-    return kv.read(path, include_metadata=include_metadata)
+    return kv.read(path, include_metadata=include_metadata, version=version)
+
+
+def read_kv_meta(path, opts, context):
+    """
+    Read secret metadata and version info at <path>.
+    Requires KV v2.
+
+    .. versionadded:: 1.2.0
+    """
+    kv, config = get_kv(opts, context, get_config=True)
+    try:
+        return kv.read_meta(path)
+    except VaultPermissionDeniedError:
+        if not _check_clear(config, kv.client):
+            raise
+
+    # in case policies have changed
+    clear_cache(opts, context)
+    kv = get_kv(opts, context)
+    return kv.read_meta(path)
 
 
 def write_kv(path, data, opts, context):
@@ -243,14 +263,14 @@ def patch_kv(path, data, opts, context):
     return kv.patch(path, data)
 
 
-def delete_kv(path, opts, context, versions=None):
+def delete_kv(path, opts, context, versions=None, all_versions=False):
     """
     Delete secret at <path>. For KV v2, versions can be specified,
     which will be soft-deleted.
     """
     kv, config = get_kv(opts, context, get_config=True)
     try:
-        return kv.delete(path, versions=versions)
+        return kv.delete(path, versions=versions, all_versions=all_versions)
     except VaultPermissionDeniedError:
         if not _check_clear(config, kv.client):
             raise
@@ -258,16 +278,33 @@ def delete_kv(path, opts, context, versions=None):
     # in case policies have changed
     clear_cache(opts, context)
     kv = get_kv(opts, context)
-    return kv.delete(path, versions=versions)
+    return kv.delete(path, versions=versions, all_versions=all_versions)
 
 
-def destroy_kv(path, versions, opts, context):
+def restore_kv(path, opts, context, versions=None, all_versions=False):
+    """
+    Restore secret versions at <path>. Requires KV v2.
+    """
+    kv, config = get_kv(opts, context, get_config=True)
+    try:
+        return kv.restore(path, versions=versions, all_versions=all_versions)
+    except VaultPermissionDeniedError:
+        if not _check_clear(config, kv.client):
+            raise
+
+    # in case policies have changed
+    clear_cache(opts, context)
+    kv = get_kv(opts, context)
+    return kv.restore(path, versions=versions, all_versions=all_versions)
+
+
+def destroy_kv(path, versions, opts, context, all_versions=False):
     """
     Destroy secret <versions> at <path>. Requires KV v2.
     """
     kv, config = get_kv(opts, context, get_config=True)
     try:
-        return kv.destroy(path, versions)
+        return kv.destroy(path, versions, all_versions=all_versions)
     except VaultPermissionDeniedError:
         if not _check_clear(config, kv.client):
             raise
@@ -275,7 +312,27 @@ def destroy_kv(path, versions, opts, context):
     # in case policies have changed
     clear_cache(opts, context)
     kv = get_kv(opts, context)
-    return kv.destroy(path, versions)
+    return kv.destroy(path, versions, all_versions=all_versions)
+
+
+def wipe_kv(path, opts, context):
+    """
+    Completely remove all version history and data at <path>.
+    Requires KV v2.
+
+    .. versionadded:: 1.2.0
+    """
+    kv, config = get_kv(opts, context, get_config=True)
+    try:
+        return kv.nuke(path)
+    except VaultPermissionDeniedError:
+        if not _check_clear(config, kv.client):
+            raise
+
+    # in case policies have changed
+    clear_cache(opts, context)
+    kv = get_kv(opts, context)
+    return kv.nuke(path)
 
 
 def list_kv(path, opts, context):
