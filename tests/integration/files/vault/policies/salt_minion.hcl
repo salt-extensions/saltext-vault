@@ -27,3 +27,8 @@ path "sys/policy" {
 path "sys/policy/*" {
     capabilities = ["read", "create", "update", "delete"]
 }
+
+# Request database credentials in integration test
+path "database/creds/*" {
+    capabilities = ["read"]
+}

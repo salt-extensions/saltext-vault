@@ -1,13 +1,13 @@
 import pytest
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="module")
 def master(master):
     with master.started():
         yield master
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="module")
 def minion(minion):
     with minion.started():
         yield minion
