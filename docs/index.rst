@@ -46,6 +46,7 @@ Found a bug or missing a feature?
   :caption: Provided Modules
   :hidden:
 
+  ref/beacons/index
   ref/modules/index
   ref/pillar/index
   ref/runners/index
