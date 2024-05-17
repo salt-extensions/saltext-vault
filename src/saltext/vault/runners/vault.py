@@ -324,6 +324,7 @@ def get_config(
                 "token_lifecycle": _config("auth:token_lifecycle"),
             },
             "cache": _config("cache"),
+            "client": _config("client"),
             "server": _config("server"),
             "wrap_info_nested": [],
         }

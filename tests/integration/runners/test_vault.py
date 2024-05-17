@@ -8,7 +8,9 @@ import shutil
 from pathlib import Path
 
 import pytest
+import salt.utils.data
 import salt.utils.files
+import salt.utils.msgpack
 from saltfactories.utils import random_string
 
 from tests.support.vault import vault_delete_secret
@@ -693,7 +695,7 @@ class TestAppRoleIssuance:
         self, missing_auth_cache, minion_conn_cachedir, vault_port
     ):  # pylint: disable=unused-argument
         vault_url = f"http://127.0.0.1:{vault_port}"
-        config_data = b"\xdf\x00\x00\x00\x03\xa4auth\xdf\x00\x00\x00\x04\xadapprole_mount\xa7approle\xacapprole_name\xbavault-approle-int-minion-1\xa6method\xa5token\xa9secret_id\xc0\xa5cache\xdf\x00\x00\x00\x03\xa7backend\xa4disk\xa6config\xcd\x0e\x10\xa6secret\xa3ttl\xa6server\xdf\x00\x00\x00\x03\xa9namespace\xc0\xa6verify\xc0\xa3url"
+        config_data = b"\x84\xa4auth\x84\xadapprole_mount\xa7approle\xacapprole_name\xbavault-approle-int-minion-1\xa6method\xa5token\xa9secret_id\xc0\xa5cache\x83\xa7backend\xa4disk\xa6config\xcd\x0e\x10\xa6secret\xa3ttl\xa6client\x86\xabmax_retries\x05\xaebackoff_factor\xcb?\xd3333333\xabbackoff_max\x08\xaebackoff_jitter\xcb?\xf0\x00\x00\x00\x00\x00\x00\xaaretry_post\xc3\xb3respect_retry_after\xc3\xa6server\x83\xa9namespace\xc0\xa6verify\xc0\xa3url"
         config_data += (len(vault_url) + 160).to_bytes(1, "big") + vault_url.encode()
         config_cachefile = minion_conn_cachedir / "config.p"
         with salt.utils.files.fopen(config_cachefile, "wb") as f:
@@ -708,7 +710,7 @@ class TestAppRoleIssuance:
     def cache_server_outdated(
         self, missing_auth_cache, minion_conn_cachedir
     ):  # pylint: disable=unused-argument
-        config_data = b"\xdf\x00\x00\x00\x03\xa4auth\xdf\x00\x00\x00\x05\xadapprole_mount\xa7approle\xacapprole_name\xbavault-approle-int-minion-1\xa6method\xa7approle\xa7role_id\xactest-role-id\xa9secret_id\xc3\xa5cache\xdf\x00\x00\x00\x03\xa7backend\xa4disk\xa6config\xcd\x0e\x10\xa6secret\xa3ttl\xa6server\xdf\x00\x00\x00\x03\xa9namespace\xc0\xa6verify\xc0\xa3url\xb2http://127.0.0.1:8"
+        config_data = b"\x84\xa4auth\x85\xadapprole_mount\xa7approle\xacapprole_name\xbavault-approle-int-minion-1\xa6method\xa7approle\xa7role_id\xactest-role-id\xa9secret_id\xc3\xa5cache\x83\xa7backend\xa4disk\xa6config\xcd\x0e\x10\xa6secret\xa3ttl\xa6client\x86\xabmax_retries\x05\xaebackoff_factor\xcb?\xd3333333\xabbackoff_max\x08\xaebackoff_jitter\xcb?\xf0\x00\x00\x00\x00\x00\x00\xaaretry_post\xc3\xb3respect_retry_after\xc3\xa6server\x83\xa9namespace\xc0\xa6verify\xc0\xa3url\xb2http://127.0.0.1:8"
         config_cachefile = minion_conn_cachedir / "config.p"
         with salt.utils.files.fopen(config_cachefile, "wb") as f:
             f.write(config_data)
@@ -929,13 +931,39 @@ class TestTokenIssuance:
         self, missing_auth_cache, minion_conn_cachedir, vault_port
     ):  # pylint: disable=unused-argument
         vault_url = f"http://127.0.0.1:{vault_port}"
-        config_data = b"\xdf\x00\x00\x00\x03\xa4auth\xdf\x00\x00\x00\x05\xadapprole_mount\xa7approle\xacapprole_name\xbavault-approle-int-minion-1\xa6method\xa7approle\xa7role_id\xactest-role-id\xa9secret_id\xc3\xa5cache\xdf\x00\x00\x00\x03\xa7backend\xa4disk\xa6config\xcd\x0e\x10\xa6secret\xa3ttl\xa6server\xdf\x00\x00\x00\x03\xa9namespace\xc0\xa6verify\xc0\xa3url"
+        config_data = b"\x84\xa4auth\x85\xadapprole_mount\xa7approle\xacapprole_name\xbavault-approle-int-minion-1\xa6method\xa7approle\xa7role_id\xactest-role-id\xa9secret_id\xc3\xa5cache\x83\xa7backend\xa4disk\xa6config\xcd\x0e\x10\xa6secret\xa3ttl\xa6client\x86\xabmax_retries\x05\xaebackoff_factor\xcb?\xd3333333\xabbackoff_max\x08\xaebackoff_jitter\xcb?\xf0\x00\x00\x00\x00\x00\x00\xaaretry_post\xc3\xb3respect_retry_after\xc3\xa6server\x83\xa9namespace\xc0\xa6verify\xc0\xa3url"
         config_data += (len(vault_url) + 160).to_bytes(1, "big") + vault_url.encode()
         config_cachefile = minion_conn_cachedir / "config.p"
         with salt.utils.files.fopen(config_cachefile, "wb") as f:
             f.write(config_data)
         try:
             yield
+        finally:
+            if config_cachefile.exists():
+                config_cachefile.unlink()
+
+    @pytest.fixture
+    def cache_from_old_version(self, vault_salt_call_cli, minion_conn_cachedir):
+        """
+        Removes any top-level keys from cached config except
+        for auth, cache and server.
+        Added when ``client`` was introduced to the config to
+        simulate upgrades from old versions.
+        """
+        ret = vault_salt_call_cli.run("vault.read_secret", "secret/path/foo")
+        assert ret.returncode == 0
+        config_cachefile = minion_conn_cachedir / "config.p"
+        assert config_cachefile.exists()
+        cached_config = salt.utils.data.decode(
+            salt.utils.msgpack.loads(config_cachefile.read_bytes())
+        )
+        old_params = {}
+        for param in ("auth", "cache", "server"):
+            old_params[param] = cached_config.pop(param)
+        config_cachefile.write_bytes(salt.utils.msgpack.dumps(old_params))
+        cached_config.update(old_params)
+        try:
+            yield cached_config
         finally:
             if config_cachefile.exists():
                 config_cachefile.unlink()
@@ -993,6 +1021,31 @@ class TestTokenIssuance:
         assert ret.data
         assert ret.data.get("success") == "yeehaaw"
         assert "Master returned error and requested cache expiration" in caplog.text
+
+    @pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True)
+    @pytest.mark.usefixtures("cache_from_old_version")
+    def test_upgrade_does_not_break_auth(
+        self, vault_salt_call_cli, minion_conn_cachedir, cache_from_old_version
+    ):
+        """
+        Test that after this saltext has been upgraded, an old cached configuration
+        is updated without breaking anything.
+        """
+        token_cachefile = minion_conn_cachedir / "session" / "__token.p"
+        token_data = token_cachefile.read_bytes()
+        ret = vault_salt_call_cli.run("vault.read_secret", "secret/path/foo")
+        assert ret.returncode == 0
+        assert ret.data
+        assert ret.data.get("success") == "yeehaaw"
+        config_cachefile = minion_conn_cachedir / "config.p"
+        cached_config = salt.utils.data.decode(
+            salt.utils.msgpack.loads(config_cachefile.read_bytes())
+        )
+        # cache_from_old_version gives us the expected config, a bit misleading
+        # It should be updated to the new format.
+        assert cached_config == cache_from_old_version
+        # The token should be the same.
+        assert token_cachefile.read_bytes() == token_data
 
     @pytest.mark.parametrize("vault_container_version", ["latest"], indirect=True)
     @pytest.mark.parametrize("ckey", ["config", "__token"])
