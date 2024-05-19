@@ -6,6 +6,7 @@ import logging
 
 from saltext.vault.utils.vault.exceptions import VaultException
 from saltext.vault.utils.vault.exceptions import VaultInvocationError
+from saltext.vault.utils.vault.exceptions import VaultNotFoundError
 from saltext.vault.utils.vault.exceptions import VaultPermissionDeniedError
 from saltext.vault.utils.vault.exceptions import VaultUnsupportedOperationError
 
@@ -37,6 +38,17 @@ class VaultKV:
         if v2_info["v2"] and not include_metadata:
             return ret["data"]
         return ret
+
+    def read_meta(self, path):
+        """
+        Read secret metadata for all versions at path. This is different from
+        the metadata returned by read, which pertains only to the most recent
+        version. Requires KV v2.
+        """
+        v2_info = self.is_v2(path)
+        if not v2_info["v2"]:
+            raise VaultInvocationError("The backend is not KV v2")
+        return self.client.get(v2_info["metadata"])["data"]
 
     def write(self, path, data):
         """
@@ -93,7 +105,7 @@ class VaultKV:
             pass
         return patch_in_memory(path, data)
 
-    def delete(self, path, versions=None):
+    def delete(self, path, versions=None, all_versions=False):
         """
         Delete secret path data. For KV v1, this is permanent.
         For KV v2, this only soft-deletes the data.
@@ -101,11 +113,29 @@ class VaultKV:
         versions
             For KV v2, specifies versions to soft-delete. Needs to be castable
             to a list of integers.
+
+        all_versions
+            For KV v2, delete all known versions. Defaults to false.
         """
         method = "DELETE"
         payload = None
-        versions = self._parse_versions(versions)
         v2_info = self.is_v2(path)
+
+        if all_versions and v2_info["v2"]:
+            versions = []
+            try:
+                curr = self.read_meta(path)
+            except VaultNotFoundError:
+                # The delete API behaves the same
+                return True
+            else:
+                for version, meta in curr["versions"].items():
+                    if not meta["destroyed"] and not meta["deletion_time"]:
+                        versions.append(version)
+                if not versions:
+                    # No version left to delete
+                    return True
+        versions = self._parse_versions(versions)
 
         if v2_info["v2"]:
             if versions is not None:
@@ -120,18 +150,44 @@ class VaultKV:
 
         return self.client.request(method, path, payload=payload)
 
-    def destroy(self, path, versions):
+    def destroy(self, path, versions=None, all_versions=False):
         """
         Permanently remove version data. Requires KV v2.
 
         versions
             Specifies versions to destroy. Needs to be castable
             to a list of integers.
+
+            .. versionchanged:: 1.1.0
+                If unspecified, destroys the most recent version.
+
+        all_versions
+            Destroy all versions of the secret. Defaults to false.
         """
-        versions = self._parse_versions(versions)
         v2_info = self.is_v2(path)
         if not v2_info["v2"]:
             raise VaultInvocationError("Destroy operation requires KV v2.")
+        if all_versions or not versions:
+            versions = []
+            try:
+                curr = self.read_meta(path)["versions"]
+            except VaultNotFoundError:
+                # The destroy API behaves the same
+                return True
+            else:
+                if all_versions:
+                    for version, meta in curr.items():
+                        if not meta["destroyed"]:
+                            versions.append(version)
+                else:
+                    most_recent = str(max(int(x) for x in curr))
+                    if not curr[most_recent]["destroyed"]:
+                        versions = [most_recent]
+                if not versions:
+                    # No version left to destroy
+                    return True
+
+        versions = self._parse_versions(versions)
         path = v2_info["destroy"]
         payload = {"versions": versions}
         return self.client.post(path, payload=payload)
@@ -154,7 +210,7 @@ class VaultKV:
         """
         v2_info = self.is_v2(path)
         if not v2_info["v2"]:
-            raise VaultInvocationError("Nuke operation requires KV v2.")
+            raise VaultInvocationError("Wipe operation requires KV v2.")
         path = v2_info["metadata"]
         return self.client.delete(path)
 
