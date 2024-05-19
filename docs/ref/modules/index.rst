@@ -10,3 +10,4 @@ _________________
     :toctree:
 
     vault
+    vault_db
