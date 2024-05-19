@@ -1,10 +1,14 @@
+import contextlib
 from unittest.mock import ANY
+from unittest.mock import MagicMock
 from unittest.mock import Mock
+from unittest.mock import call
 from unittest.mock import patch
 
 import pytest
 import requests
 import salt.exceptions
+import urllib3.exceptions
 
 from saltext.vault.utils import vault
 from saltext.vault.utils.vault import client as vclient
@@ -31,7 +35,6 @@ def test_vault_client_request_raw_url(endpoint, client, req):
         expected_url,
         headers=ANY,
         json=None,
-        verify=client.get_config()["verify"],
     )
 
 
@@ -47,7 +50,6 @@ def test_vault_client_request_raw_kwargs_passthrough(client, req):
         ANY,
         headers=ANY,
         json=ANY,
-        verify=ANY,
         allow_redirects=False,
         cert="/etc/certs/client.pem",
     )
@@ -126,6 +128,7 @@ def test_vault_client_request_raw_does_not_raise_http_exception(client):
         (404, vault.VaultNotFoundError),
         (405, vault.VaultUnsupportedOperationError),
         (412, vault.VaultPreconditionFailedError),
+        (429, vault.VaultRateLimitExceededError),
         (500, vault.VaultServerError),
         (502, vault.VaultServerError),
         (503, vault.VaultUnavailableError),
@@ -606,6 +609,13 @@ def test_get_expected_creation_path_fails_for_unknown_type():
         vclient._get_expected_creation_path("nonexistent")  # pylint: disable=protected-access
 
 
+@pytest.fixture
+def _send_mock():
+    with patch("saltext.vault.utils.vault.client.HTTPAdapter.send", autospec=True) as send:
+        send.return_value.is_redirect = False
+        yield send
+
+
 @pytest.mark.parametrize(
     "server_config",
     [
@@ -616,25 +626,401 @@ def test_get_expected_creation_path_fails_for_unknown_type():
     ],
     indirect=True,
 )
-def test_vault_client_verify_pem(server_config):
+def test_vault_api_adapter_pem(server_config, _send_mock):
     """
     Test that the ``verify`` parameter to the client can contain a PEM-encoded certificate
     which will be used as the sole trust anchor for the Vault URL.
-    The ``verify`` parameter to ``Session.request`` should be None in that case since
-    it requires a local file path.
+    The ``verify`` parameter to ``HTTPAdapter.send`` should be the default (True)
+    in that case since it requires a local file path.
     """
-    with patch("saltext.vault.utils.vault.client.CACertHTTPSAdapter", autospec=True) as adapter:
-        with patch("saltext.vault.utils.vault.client.requests.Session", autospec=True) as session:
-            client = vclient.VaultClient(**server_config)
-            adapter.assert_called_once_with(server_config["verify"])
-            session.return_value.mount.assert_called_once_with(
-                server_config["url"], adapter.return_value
-            )
-            client.request_raw("GET", "test")
-            session.return_value.request.assert_called_once_with(
-                "GET",
-                f"{server_config['url']}/v1/test",
-                headers=ANY,
-                json=ANY,
-                verify=None,
-            )
+    with patch("saltext.vault.utils.vault.client.create_urllib3_context", autospec=True) as tls:
+        client = vclient.VaultClient(**server_config, connect_timeout=42, read_timeout=1337)
+        tls.return_value.load_verify_locations.assert_called_once_with(
+            cadata=server_config["verify"]
+        )
+        client.request_raw("GET", "test")
+    _send_mock.assert_called_once_with(
+        ANY, ANY, stream=ANY, timeout=ANY, verify=True, cert=None, proxies=ANY
+    )
+
+
+def test_vault_api_adapter_timeout_default(server_config, _send_mock):
+    """
+    Ensure the timeout defaults are set by the adapter.
+    """
+    client = vclient.VaultClient(**server_config, connect_timeout=42, read_timeout=1337)
+    client.request_raw("GET", "test")
+    _send_mock.assert_called_once_with(
+        ANY, ANY, stream=ANY, timeout=(42, 1337), verify=ANY, cert=ANY, proxies=ANY
+    )
+
+
+def test_vault_api_adapter_timeout_override(server_config, _send_mock):
+    """
+    Ensure the timeout defaults can be overridden.
+    """
+    client = vclient.VaultClient(**server_config, connect_timeout=42, read_timeout=1337)
+    client.request_raw("GET", "test", timeout=1234)
+    _send_mock.assert_called_once_with(
+        ANY, ANY, stream=ANY, timeout=1234, verify=ANY, cert=ANY, proxies=ANY
+    )
+
+
+@pytest.mark.parametrize(
+    "server_config",
+    [
+        {
+            "url": "https://127.0.0.1:8200",
+            "verify": False,
+        },
+        {
+            "url": "https://127.0.0.1:8200",
+            "verify": "/some/path",
+        },
+    ],
+    indirect=True,
+)
+def test_vault_api_adapter_verify_set(server_config, _send_mock):
+    """
+    Ensure the ``verify`` parameter is always set as specified.
+    """
+    with patch("saltext.vault.utils.vault.client.create_urllib3_context", autospec=True) as tls:
+        client = vclient.VaultClient(**server_config)
+        client.request_raw("GET", "test")
+        _send_mock.assert_called_once_with(
+            ANY,
+            ANY,
+            stream=ANY,
+            timeout=ANY,
+            verify=server_config["verify"],
+            cert=ANY,
+            proxies=ANY,
+        )
+        tls.assert_not_called()
+
+
+@pytest.fixture
+def sleep_mock():
+    with patch("time.sleep") as sleep:
+        yield sleep
+
+
+@pytest.fixture(params=({},))
+def req_mock(request):
+    headers = {}
+    msg_mock = MagicMock()
+    msg_mock.values.side_effect = headers.values
+    msg_mock.keys.side_effect = headers.keys
+    msg_mock.items.side_effect = headers.items
+    msg_mock.get.side_effect = headers.get
+    msg_mock.get_all.return_value = {}
+    params = getattr(request, "param", {})
+    status = params.get("status", 500)
+    retry_after = params.get("retry_after")
+    error = params.get("err")
+    if error is not None:
+        conn_ctx = patch(
+            "urllib3.connectionpool.HTTPConnectionPool._new_conn", autospec=True, side_effect=error
+        )
+        exp_ctx = pytest.raises(requests.exceptions.ConnectionError)
+    else:
+        conn_ctx = patch("urllib3.connectionpool.HTTPConnectionPool._make_request", autospec=True)
+        exp_ctx = contextlib.nullcontext()
+    if retry_after is not None:
+        headers["Retry-After"] = retry_after
+    with conn_ctx as req:
+        if error is not None:
+            req.side_effect = error
+        else:
+            req.return_value.get_redirect_location.return_value = None
+            req.return_value.cookies = None
+            req.return_value.msg = msg_mock  # urllib <2
+            req.return_value.headers = headers  # urllib >=2
+            req.return_value.status = status
+        yield req, exp_ctx
+
+
+@pytest.mark.parametrize(
+    "req_mock,cnt,slept,respect_retry_after",
+    (
+        ({"status": 200}, 1, 0, True),
+        ({"status": 204}, 1, 0, True),
+        ({"status": 412}, 6, 5, True),
+        ({"status": 429}, 6, 5, True),
+        ({"status": 500}, 6, 5, True),
+        ({"status": 502}, 6, 5, True),
+        ({"status": 503}, 6, 5, True),
+        ({"status": 504}, 6, 5, True),
+        ({"err": urllib3.exceptions.ConnectTimeoutError}, 6, 4, True),
+        ({"err": urllib3.exceptions.ProtocolError}, 6, 4, True),
+        (
+            {
+                "err": urllib3.exceptions.ReadTimeoutError(
+                    MagicMock(), "http://127.0.0.1/v1/test", "foo"
+                )
+            },
+            6,
+            4,
+            True,
+        ),
+        ({"status": 200, "retry_after": "1234"}, 1, 0, True),
+        ({"status": 204, "retry_after": "1234"}, 1, 0, True),
+        ({"status": 412, "retry_after": "1234"}, 6, 5, False),
+        ({"status": 429, "retry_after": "1234"}, 6, 5, False),
+        ({"status": 500, "retry_after": "1234"}, 6, 5, False),
+        ({"status": 502, "retry_after": "1234"}, 6, 5, False),
+        ({"status": 503, "retry_after": "1234"}, 6, 5, False),
+        ({"status": 504, "retry_after": "1234"}, 6, 5, False),
+        ({"err": urllib3.exceptions.ConnectTimeoutError}, 6, 4, False),
+        ({"err": urllib3.exceptions.ProtocolError}, 6, 4, False),
+        (
+            {
+                "err": urllib3.exceptions.ReadTimeoutError(
+                    MagicMock(), "http://127.0.0.1/v1/test", "foo"
+                )
+            },
+            6,
+            4,
+            False,
+        ),
+    ),
+    indirect=("req_mock",),
+)
+def test_vault_retry(server_config, cnt, slept, respect_retry_after, req_mock, sleep_mock):
+    """
+    Ensure the client retries specific response codes only.
+    HTTP error responses should not retry immediately, only connection/read errors.
+    """
+    client = vclient.VaultClient(
+        **server_config, respect_retry_after=respect_retry_after, backoff_jitter=0.0
+    )
+    with req_mock[1]:
+        client.request_raw("GET", "test")
+    assert req_mock[0].call_count == cnt
+    default_sleep = [0.2, 0.3, 0.5, 0.8, 1.3, 2.1, 3.4]
+    calls = [call(default_sleep[x]) for x in range(slept)]
+    assert sleep_mock.call_args_list == calls
+
+
+@pytest.mark.parametrize(
+    "req_mock",
+    (
+        {"status": 412, "retry_after": "42"},
+        {"status": 429, "retry_after": "42"},
+        {"status": 500, "retry_after": "42"},
+        {"status": 502, "retry_after": "42"},
+        {"status": 503, "retry_after": "42"},
+        {"status": 504, "retry_after": "42"},
+    ),
+    indirect=True,
+)
+def test_vault_retry_retry_after(server_config, req_mock, sleep_mock):
+    """
+    Ensure the Retry-After header is respected by default and overrides
+    the backoff algorithm.
+    """
+    client = vclient.VaultClient(**server_config, backoff_jitter=0.0)
+    client.request_raw("GET", "test")
+    assert req_mock[0].call_count == vclient.DEFAULT_MAX_RETRIES + 1
+    calls = [call(42) for x in range(5)]
+    assert sleep_mock.call_args_list == calls
+
+
+@pytest.mark.parametrize(
+    "req_mock",
+    (
+        {"status": 412, "retry_after": "9999999999"},
+        {"status": 429, "retry_after": "9999999999"},
+        {"status": 500, "retry_after": "9999999999"},
+        {"status": 502, "retry_after": "9999999999"},
+        {"status": 503, "retry_after": "9999999999"},
+        {"status": 504, "retry_after": "9999999999"},
+    ),
+    indirect=True,
+)
+@pytest.mark.parametrize("disabled", (False, True))
+def test_vault_retry_retry_after_max(server_config, disabled, req_mock, sleep_mock):
+    """
+    Ensure the Retry-After header is respected by default and overrides
+    the backoff algorithm.
+    """
+    kwargs = {}
+    if disabled:
+        kwargs["retry_after_max"] = None
+    client = vclient.VaultClient(**server_config, backoff_jitter=0.0, **kwargs)
+    client.request_raw("GET", "test")
+    assert req_mock[0].call_count == vclient.DEFAULT_MAX_RETRIES + 1
+    calls = [call(60 if not disabled else 9999999999) for x in range(5)]
+    assert sleep_mock.call_args_list == calls
+
+
+@pytest.mark.parametrize(
+    "req_mock,slept",
+    (
+        ({"err": urllib3.exceptions.ConnectTimeoutError}, 4),
+        ({"err": urllib3.exceptions.ProtocolError}, 4),
+        (
+            {
+                "err": urllib3.exceptions.ReadTimeoutError(
+                    MagicMock(), "http://127.0.0.1/v1/test", "foo"
+                )
+            },
+            4,
+        ),
+        ({"status": 412}, 5),
+        ({"status": 429}, 5),
+        ({"status": 500}, 5),
+        ({"status": 502}, 5),
+        ({"status": 503}, 5),
+        ({"status": 504}, 5),
+    ),
+    indirect=("req_mock",),
+)
+def test_vault_retry_backoff_factor(server_config, slept, req_mock, sleep_mock):
+    """
+    Ensure the backoff_factor has an effect.
+    """
+    client = vclient.VaultClient(**server_config, backoff_factor=0.2, backoff_jitter=0.0)
+    with req_mock[1]:
+        client.request_raw("GET", "test")
+    assert req_mock[0].call_count == vclient.DEFAULT_MAX_RETRIES + 1
+    default_sleep = [0.4, 0.6, 1.0, 1.6, 2.6, 4.2, 6.8]
+    calls = [call(default_sleep[x]) for x in range(slept)]
+    assert sleep_mock.call_args_list == calls
+
+
+@pytest.mark.parametrize(
+    "req_mock,slept",
+    (
+        ({"err": urllib3.exceptions.ConnectTimeoutError}, 4),
+        ({"err": urllib3.exceptions.ProtocolError}, 4),
+        (
+            {
+                "err": urllib3.exceptions.ReadTimeoutError(
+                    MagicMock(), "http://127.0.0.1/v1/test", "foo"
+                )
+            },
+            4,
+        ),
+        ({"status": 412}, 5),
+        ({"status": 429}, 5),
+        ({"status": 500}, 5),
+        ({"status": 502}, 5),
+        ({"status": 503}, 5),
+        ({"status": 504}, 5),
+    ),
+    indirect=("req_mock",),
+)
+def test_vault_retry_backoff_max(server_config, slept, req_mock, sleep_mock):
+    """
+    Ensure backoff_max has an effect.
+    """
+    client = vclient.VaultClient(
+        **server_config, backoff_factor=3, backoff_max=10, backoff_jitter=0.0
+    )
+    with req_mock[1]:
+        client.request_raw("GET", "test")
+    assert req_mock[0].call_count == vclient.DEFAULT_MAX_RETRIES + 1
+    default_sleep = [6.0, 9.0, 10.0, 10.0, 10.0, 10.0, 10.0]
+    calls = [call(default_sleep[x]) for x in range(slept)]
+    assert sleep_mock.call_args_list == calls
+
+
+@pytest.mark.parametrize("max_retries", (0, 8))
+@pytest.mark.parametrize(
+    "req_mock,slept",
+    (
+        ({"err": urllib3.exceptions.ConnectTimeoutError}, -1),
+        ({"err": urllib3.exceptions.ProtocolError}, -1),
+        (
+            {
+                "err": urllib3.exceptions.ReadTimeoutError(
+                    MagicMock(), "http://127.0.0.1/v1/test", "foo"
+                )
+            },
+            -1,
+        ),
+        ({"status": 412}, 0),
+        ({"status": 429}, 0),
+        ({"status": 500}, 0),
+        ({"status": 502}, 0),
+        ({"status": 503}, 0),
+        ({"status": 504}, 0),
+    ),
+    indirect=("req_mock",),
+)
+def test_vault_retry_max_retries(server_config, max_retries, slept, req_mock, sleep_mock):
+    """
+    Ensure max_retries has an effect.
+    """
+    client = vclient.VaultClient(**server_config, max_retries=max_retries, backoff_jitter=0.0)
+    with req_mock[1]:
+        client.request_raw("GET", "test")
+    assert req_mock[0].call_count == max_retries + 1
+    default_sleep = [0.2, 0.3, 0.5, 0.8, 1.3, 2.1, 3.4, 5.5]
+    calls = [call(default_sleep[x]) for x in range(max_retries + slept)]
+    assert sleep_mock.call_args_list == calls
+
+
+@pytest.mark.usefixtures("sleep_mock")
+@pytest.mark.parametrize("method", ("POST", "PATCH"))
+def test_vault_retry_post_not_default(server_config, method, req_mock):
+    """
+    Ensure that by default, we don't retry potentially non-idempotent actions.
+    """
+    client = vclient.VaultClient(**server_config)
+    client.request_raw(method, "test")
+    assert req_mock[0].call_count == 1
+
+
+@pytest.mark.usefixtures("sleep_mock")
+@pytest.mark.parametrize("req_mock", ({"status": 429},), indirect=True)
+@pytest.mark.parametrize("method", ("POST", "PATCH"))
+def test_vault_retry_post_with_too_many_requests(server_config, method, req_mock):
+    """
+    Ensure 429 is always retried, even with POST/PATCH.
+    """
+    client = vclient.VaultClient(**server_config)
+    client.request_raw(method, "test")
+    assert req_mock[0].call_count == vclient.DEFAULT_MAX_RETRIES + 1
+
+
+@pytest.mark.usefixtures("sleep_mock")
+@pytest.mark.parametrize("method", ("POST", "PATCH"))
+def test_vault_retry_post_enabled(server_config, method, req_mock):
+    """
+    Ensure POST/PATCH requests are retried if enabled.
+    """
+    client = vclient.VaultClient(**server_config, retry_post=True)
+    client.request_raw(method, "test")
+    assert req_mock[0].call_count == vclient.DEFAULT_MAX_RETRIES + 1
+
+
+@pytest.mark.usefixtures("sleep_mock")
+@pytest.mark.parametrize("statuses", ((412,), None))
+def test_vault_retry_status(server_config, statuses, req_mock):
+    """
+    Ensure retry_status can be set and HTTP 429 is retried
+    regardless.
+    """
+    client = vclient.VaultClient(**server_config, retry_status=statuses)
+    client.request_raw("GET", "test")
+    assert req_mock[0].call_count == 1
+    req_mock[0].return_value.status = 429
+    client.request_raw("GET", "test")
+    assert req_mock[0].call_count == vclient.DEFAULT_MAX_RETRIES + 2
+
+
+def test_vault_retry_backoff_jitter(server_config, req_mock, sleep_mock):
+    """
+    Ensure that by default, we introduce some jitter to retry intervals.
+    """
+    client = vclient.VaultClient(**server_config, backoff_factor=1, backoff_max=100)
+    client.request_raw("GET", "test")
+    assert req_mock[0].call_count == vclient.DEFAULT_MAX_RETRIES + 1
+    default_sleep = [2.0, 3.0, 5.0, 8.0, 13.0, 21.0, 43.0]
+    assert len(sleep_mock.call_args_list) == vclient.DEFAULT_MAX_RETRIES
+    for exp, cll in zip(default_sleep, sleep_mock.call_args_list):
+        # random.random returning 0 exactly should be very seldom,
+        # so let's accept a tiny bit of flakiness
+        assert exp + vclient.DEFAULT_BACKOFF_JITTER >= cll.args[0] > exp

@@ -184,6 +184,133 @@ The time in seconds to cache tokens/SecretIDs for. Defaults to `ttl`,
 which caches the secret for as long as it is valid, unless a new configuration
 is requested from the master.
 
+:::{vconf} client
+:::
+### `client`
+:::{versionadded} 1.1.0
+:::
+
+Configures Vault API client behavior. By default,
+the client retries requests with a backoff strategy,
+unless the response includes a `Retry-After` header, which is respected.
+Connection errors as well as responses with the status codes
+`412`, `429`, `500`, `502`, `503`, `504` are retried.
+
+:::{vconf} client:connect_timeout
+:::
+#### connect_timeout
+:::{versionadded} 1.1.0
+:::
+The number of seconds to wait for a connection to be established.
+Defaults to `9.2`.
+
+:::{vconf} client:read_timeout
+:::
+#### read_timeout
+:::{versionadded} 1.1.0
+:::
+The number of seconds to wait between packets sent by the server.
+Defaults to `30`.
+
+:::{vconf} client:max_retries
+:::
+#### max_retries
+:::{versionadded} 1.1.0
+:::
+The maximum number of retries (not including the initial request) before
+raising an exception. Set this to `0` to disable retry behavior.
+Defaults to `5`. Maximum: `10`.
+
+:::{vconf} client:backoff_factor
+:::
+#### backoff_factor
+:::{versionadded} 1.1.0
+:::
+A backoff factor (in seconds) to use between retry attempts when applying
+the backoff strategy (based on the Fibonacci sequence).
+Defaults to `0.1`. Maximum: `3.0`
+
+:::{hint}
+The effective sleep time before the nth retry is given by:
+
+  > {backoff_factor} * {Fibonacci(n+3)}
+
+The default values thus result in the following sleep times (in seconds),
+without accounting for {vconf}`backoff_jitter <client:backoff_jitter>`
+and only if the response did not include the `Retry-After` header:
+
+  > [initial request] 0.2 [1st] 0.3 [2nd] 0.5 [3rd] 0.8 [4th] 1.3 [5th]
+
+If we did not receive a response (connection/read error), the first retry
+is executed immediately, thus the following sleep times are in effect by default:
+
+  > [initial request] 0 [1st] 0.2 [2nd] 0.3 [3rd] 0.5 [4th] 0.8 [5th]
+
+:::
+
+:::{vconf} client:backoff_max
+:::
+#### backoff_max
+:::{versionadded} 1.1.0
+:::
+A cap for the effective sleep time between retries.
+Defaults to `10.0`. Maximum: `60.0`.
+
+:::{vconf} client:backoff_jitter
+:::
+#### backoff_jitter
+:::{versionadded} 1.1.0
+:::
+A maximum number of seconds to randomize the effective sleep time
+between retries by. Defaults to `0.2`. Maximum: `5.0`
+
+:::{vconf} client:retry_post
+:::
+#### retry_post
+:::{versionadded} 1.1.0
+:::
+Whether to retry requests that are potentially non-idempotent (`POST`, `PATCH`). Defaults to `False`.
+
+:::{note}
+HTTP 429 responses are always retried, regardless of HTTP verb.
+:::
+
+:::{vconf} client:retry_status
+:::
+#### retry_status
+:::{versionadded} 1.1.0
+:::
+A list of HTTP status codes which should be retried.
+Defaults to `[412, 500, 502, 503, 504]`.
+
+:::{note}
+HTTP 429 is always retried, regardless of HTTP verb and whether it is present
+in this list. It is recommended to ensure the `Retry-After` header is sent by Vault to optimize the spent resources.
+See {vconf}`respect_retry_after <client:respect_retry_after>` for details.
+:::
+
+:::{vconf} client:respect_retry_after
+:::
+#### respect_retry_after
+:::{versionadded} 1.1.0
+:::
+Whether to respect the `Retry-After` header sent by Vault, usually when a
+rate limit has been hit. Defaults to `True`.
+
+:::{hint}
+This header is not sent by default and must be enabled explicitly
+via [enable_rate_limit_response_headers](https://developer.hashicorp.com/vault/api-docs/system/quotas-config#enable_rate_limit_response_headers).
+:::
+
+:::{vconf} client:retry_after_max
+:::
+#### retry_after_max
+:::{versionadded} 1.1.0
+:::
+When {vconf}`respect_retry_after <client:respect_retry_after>` is True, limit
+the maximum amount of seconds the client will sleep before retrying. Set this to `null` (YAML/JSON)/`None` (Python)
+to disable this behavior. Defaults to `60`.
+
 :::{vconf} server
 :::
 ### `server`
@@ -390,8 +517,8 @@ all Vault modules will be broken to prevent an infinite loop.
 ## Minion-only configuration
 
 :::{note}
-In addition to the following minion-only values, {vconf}`auth:token_lifecycle` and {vconf}`server:verify`
-can be set on the minion as well, even if it pulls its configuration from a master.
+In addition to the following minion-only values, {vconf}`auth:token_lifecycle`, {vconf}`server:verify`
+and {vconf}`client` can be set on the minion as well, even if it pulls its configuration from a master.
 :::
 
 :::{vconf} config_location
@@ -439,6 +566,22 @@ vault:
     config: 3600
     kv_metadata: connection
     secret: ttl
+  client:
+    max_retries: 5
+    connect_timeout: 9.2
+    read_timeout: 30
+    backoff_factor: 0.1
+    backoff_max: 10
+    backoff_jitter: 0.2
+    retry_post: false
+    retry_status:
+      - 412
+      - 500
+      - 502
+      - 503
+      - 504
+    respect_retry_after: true
+    retry_after_max: 60
   config_location: <variable, depends on running scope>
   issue:
     allow_minion_override_params: false

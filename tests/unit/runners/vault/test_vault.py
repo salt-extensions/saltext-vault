@@ -42,6 +42,18 @@ def default_config():
             "kv_metadata": "connection",
             "secret": "ttl",
         },
+        "client": {
+            "connect_timeout": vclient.DEFAULT_CONNECT_TIMEOUT,
+            "read_timeout": vclient.DEFAULT_READ_TIMEOUT,
+            "max_retries": vclient.DEFAULT_MAX_RETRIES,
+            "backoff_factor": vclient.DEFAULT_BACKOFF_FACTOR,
+            "backoff_max": vclient.DEFAULT_BACKOFF_MAX,
+            "backoff_jitter": vclient.DEFAULT_BACKOFF_JITTER,
+            "retry_post": vclient.DEFAULT_RETRY_POST,
+            "retry_status": vclient.DEFAULT_RETRY_STATUS,
+            "respect_retry_after": vclient.DEFAULT_RESPECT_RETRY_AFTER,
+            "retry_after_max": vclient.DEFAULT_RETRY_AFTER_MAX,
+        },
         "issue": {
             "allow_minion_override_params": False,
             "type": "token",
@@ -501,6 +513,7 @@ def test_get_config_token(
             },
         },
         "cache": config("cache"),
+        "client": config("client"),
         "server": config("server"),
         "wrap_info_nested": [],
     }
@@ -574,6 +587,7 @@ def test_get_config_approle(config, validate_signature, wrapped_serialized, issu
             },
         },
         "cache": config("cache"),
+        "client": config("client"),
         "server": config("server"),
         "wrap_info_nested": [],
     }

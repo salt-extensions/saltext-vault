@@ -4,15 +4,6 @@ High-level utility functions for Vault interaction
 
 import logging
 
-import salt.cache
-import salt.crypt
-import salt.exceptions
-import salt.utils.data
-import salt.utils.dictupdate
-import salt.utils.json
-import salt.utils.versions
-
-import saltext.vault.utils.vault.helpers as hlp
 from saltext.vault.utils.vault.auth import InvalidVaultSecretId
 from saltext.vault.utils.vault.auth import InvalidVaultToken
 from saltext.vault.utils.vault.auth import LocalVaultSecretId
@@ -24,6 +15,7 @@ from saltext.vault.utils.vault.exceptions import VaultInvocationError
 from saltext.vault.utils.vault.exceptions import VaultNotFoundError
 from saltext.vault.utils.vault.exceptions import VaultPermissionDeniedError
 from saltext.vault.utils.vault.exceptions import VaultPreconditionFailedError
+from saltext.vault.utils.vault.exceptions import VaultRateLimitExceededError
 from saltext.vault.utils.vault.exceptions import VaultServerError
 from saltext.vault.utils.vault.exceptions import VaultUnavailableError
 from saltext.vault.utils.vault.exceptions import VaultUnsupportedOperationError

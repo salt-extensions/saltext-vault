@@ -1479,6 +1479,18 @@ def test_clear_cache_clears_client_from_context(
                     "expire_events": False,
                     "secret": "ttl",
                 },
+                "client": {
+                    "connect_timeout": vclient.DEFAULT_CONNECT_TIMEOUT,
+                    "read_timeout": vclient.DEFAULT_READ_TIMEOUT,
+                    "max_retries": vclient.DEFAULT_MAX_RETRIES,
+                    "backoff_factor": vclient.DEFAULT_BACKOFF_FACTOR,
+                    "backoff_max": vclient.DEFAULT_BACKOFF_MAX,
+                    "backoff_jitter": vclient.DEFAULT_BACKOFF_JITTER,
+                    "retry_post": vclient.DEFAULT_RETRY_POST,
+                    "retry_status": vclient.DEFAULT_RETRY_STATUS,
+                    "respect_retry_after": vclient.DEFAULT_RESPECT_RETRY_AFTER,
+                    "retry_after_max": vclient.DEFAULT_RETRY_AFTER_MAX,
+                },
                 "server": {
                     "url": "http://127.0.0.1:8200",
                     "namespace": None,
@@ -1509,6 +1521,18 @@ def test_clear_cache_clears_client_from_context(
                     "expire_events": False,
                     "secret": "ttl",
                 },
+                "client": {
+                    "connect_timeout": vclient.DEFAULT_CONNECT_TIMEOUT,
+                    "read_timeout": vclient.DEFAULT_READ_TIMEOUT,
+                    "max_retries": vclient.DEFAULT_MAX_RETRIES,
+                    "backoff_factor": vclient.DEFAULT_BACKOFF_FACTOR,
+                    "backoff_max": vclient.DEFAULT_BACKOFF_MAX,
+                    "backoff_jitter": vclient.DEFAULT_BACKOFF_JITTER,
+                    "retry_post": vclient.DEFAULT_RETRY_POST,
+                    "retry_status": vclient.DEFAULT_RETRY_STATUS,
+                    "respect_retry_after": vclient.DEFAULT_RESPECT_RETRY_AFTER,
+                    "retry_after_max": vclient.DEFAULT_RETRY_AFTER_MAX,
+                },
                 "server": {
                     "url": "http://127.0.0.1:8200",
                     "namespace": None,
@@ -1522,7 +1546,7 @@ def test_clear_cache_clears_client_from_context(
 )
 def test_use_local_config(test_config, expected_config, expected_token):
     """
-    Ensure that _use_local_config only returns auth, cache, server scopes
+    Ensure that _use_local_config only returns auth, cache, client and server scopes
     and pops an embedded token, if present
     """
     with patch("saltext.vault.utils.vault.factory.parse_config", Mock(return_value=test_config)):
@@ -1568,6 +1592,21 @@ def test_parse_config_respects_local_verify(opts):
     testval = "/etc/ssl/certs/ca-certificates.crt"
     ret = vfactory.parse_config({"server": {"verify": "default"}}, validate=False, opts=opts)
     assert ret["server"]["verify"] == testval
+
+
+def test_parse_config_respects_local_client():
+    """
+    Ensure locally configured verify values are respected.
+    """
+    opts = {"vault": {"client": {"connect_timeout": 123, "backoff_jitter": 1}}}
+    ret = vfactory.parse_config(
+        {"client": {"read_timeout": 30, "connect_timeout": 1, "backoff_jitter": 0.1}},
+        validate=False,
+        opts=opts,
+    )
+    assert ret["client"]["read_timeout"] == 30
+    assert ret["client"]["connect_timeout"] == 123
+    assert ret["client"]["backoff_jitter"] == 1
 
 
 ############################################

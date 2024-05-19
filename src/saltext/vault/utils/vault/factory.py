@@ -14,8 +14,6 @@ import salt.modules.saltutil
 import salt.utils.context
 import salt.utils.data
 import salt.utils.dictupdate
-import salt.utils.json
-import salt.utils.versions
 from requests.exceptions import ConnectionError
 from salt.defaults import NOT_SET
 
@@ -345,7 +343,7 @@ def _build_authd_client(opts, context, force_local=False):
             token_store=token_auth,
         )
         client = vclient.AuthenticatedVaultClient(
-            auth, session=unauthd_client.session, **config["server"]
+            auth, session=unauthd_client.session, **config["server"], **config["client"]
         )
     elif config["auth"]["method"] in ("token", "wrapped_token"):
         token = _fetch_token(
@@ -358,7 +356,7 @@ def _build_authd_client(opts, context, force_local=False):
         )
         auth = vauth.VaultTokenAuth(token=token, cache=token_cache)
         client = vclient.AuthenticatedVaultClient(
-            auth, session=unauthd_client.session, **config["server"]
+            auth, session=unauthd_client.session, **config["server"], **config["client"]
         )
 
     if client is not None:
@@ -397,9 +395,26 @@ def _build_revocation_client(opts, context, force_local=False):
         return None, None
     auth = vauth.VaultTokenAuth(token=token, cache=token_cache)
     client = vclient.AuthenticatedVaultClient(
-        auth, session=unauthd_client.session, **config["server"]
+        auth, session=unauthd_client.session, **config["server"], **config["client"]
     )
     return client, config
+
+
+def _check_upgrade(config, pre_flush=False):
+    """
+    Check if cached configuration contains all expected keys.
+    Relevant when new keys are introduced to not break immediately after
+    an update since the cached config is assumed to have been parsed already.
+
+    pre_flush needs to be passed since we don't want to cause an update
+    immediately before flushing the cache anyways.
+    """
+    # introduced in v1.1.0
+    if "client" not in config:
+        if not pre_flush:
+            return True
+        config["client"] = {}
+    return False
 
 
 def _get_connection_config(cbank, opts, context, force_local=False, pre_flush=False, update=False):
@@ -422,9 +437,12 @@ def _get_connection_config(cbank, opts, context, force_local=False, pre_flush=Fa
     # an exception indicating all connection-scoped data should be flushed
     # if the config is outdated.
     config = config_cache.get()
-    if config is not None and not update:
-        log.debug("Using cached Vault server connection configuration.")
-        return config, None, vclient.VaultClient(**config["server"])
+    if config is not None:
+        # Check if the cached config is compatible with the current version.
+        update = update or _check_upgrade(config, pre_flush)
+        if not update:
+            log.debug("Using cached Vault server connection configuration.")
+            return config, None, vclient.VaultClient(**config["server"], **config["client"])
 
     if pre_flush:
         # used when building a client that revokes leases before clearing cache
@@ -460,6 +478,7 @@ def _get_connection_config(cbank, opts, context, force_local=False, pre_flush=Fa
     new_config = {
         "auth": new_config["auth"],
         "cache": new_config["cache"],
+        "client": new_config["client"],
         "server": new_config["server"],
     }
     if update and config:
@@ -479,6 +498,8 @@ def _get_connection_config(cbank, opts, context, force_local=False, pre_flush=Fa
         config_cache.flush(cbank=False)
 
     config_cache.store(new_config)
+    if unwrap_client is None:
+        unwrap_client = vclient.VaultClient(**new_config["server"], **new_config["client"])
     return new_config, embedded_token, unwrap_client
 
 
@@ -490,10 +511,11 @@ def _use_local_config(opts):
         {
             "auth": config["auth"],
             "cache": config["cache"],
+            "client": config["client"],
             "server": config["server"],
         },
         embedded_token,
-        vclient.VaultClient(**config["server"]),
+        vclient.VaultClient(**config["server"], **config["client"]),
     )
 
 
@@ -882,6 +904,18 @@ def parse_config(config, validate=True, opts=None, require_token=True):
             "kv_metadata": "connection",
             "secret": "ttl",
         },
+        "client": {
+            "connect_timeout": vclient.DEFAULT_CONNECT_TIMEOUT,
+            "read_timeout": vclient.DEFAULT_READ_TIMEOUT,
+            "max_retries": vclient.DEFAULT_MAX_RETRIES,
+            "backoff_factor": vclient.DEFAULT_BACKOFF_FACTOR,
+            "backoff_max": vclient.DEFAULT_BACKOFF_MAX,
+            "backoff_jitter": vclient.DEFAULT_BACKOFF_JITTER,
+            "retry_post": vclient.DEFAULT_RETRY_POST,
+            "retry_status": list(vclient.DEFAULT_RETRY_STATUS),
+            "respect_retry_after": vclient.DEFAULT_RESPECT_RETRY_AFTER,
+            "retry_after_max": vclient.DEFAULT_RETRY_AFTER_MAX,
+        },
         "issue": {
             "allow_minion_override_params": False,
             "type": "token",
@@ -970,6 +1004,9 @@ def parse_config(config, validate=True, opts=None, require_token=True):
         # same for token_lifecycle
         if local_config.get("auth", {}).get("token_lifecycle"):
             merged["auth"]["token_lifecycle"] = local_config["auth"]["token_lifecycle"]
+        # and client config
+        if local_config.get("client"):
+            merged["client"] = {**merged["client"], **local_config["client"]}
 
     if not validate:
         return merged

@@ -95,6 +95,12 @@ class VaultPreconditionFailedError(VaultException):
     """
 
 
+class VaultRateLimitExceededError(VaultException):
+    """
+    HTTP 429
+    """
+
+
 class VaultServerError(VaultException):
     """
     HTTP 500
