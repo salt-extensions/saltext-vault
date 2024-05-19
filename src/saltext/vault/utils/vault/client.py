@@ -271,6 +271,11 @@ class VaultClient:
         """
         url = self._get_url(endpoint)
         headers = self._get_headers(wrap)
+        if method.upper() == "PATCH":
+            # PATCH always requires JSON patch content-type, so
+            # just replace it.
+            headers["Content-Type"] = "application/merge-patch+json"
+
         try:
             headers.update(add_headers)
         except TypeError:

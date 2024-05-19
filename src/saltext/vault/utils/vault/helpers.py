@@ -8,6 +8,7 @@ import string
 
 from salt.exceptions import InvalidConfigError
 from salt.exceptions import SaltInvocationError
+from salt.state import STATE_INTERNAL_KEYWORDS as _STATE_INTERNAL_KEYWORDS
 
 SALT_RUNTYPE_MASTER = 0
 SALT_RUNTYPE_MASTER_IMPERSONATING = 1
@@ -128,16 +129,16 @@ def expand_pattern_lists(pattern, **mappings):
     return [pattern]
 
 
-def timestring_map(val):
+def timestring_map(val, cast=float):
     """
     Turn a time string (like ``60m``) into a float with seconds as a unit.
     """
     if val is None:
         return val
     if isinstance(val, (int, float)):
-        return float(val)
+        return cast(val)
     try:
-        return float(val)
+        return cast(val)
     except ValueError:
         pass
     if not isinstance(val, str):
@@ -146,14 +147,20 @@ def timestring_map(val):
         raise SaltInvocationError(f"Invalid time string format: {val}")
     raw, unit = float(val[:-1]), val[-1]
     if unit == "s":
-        return raw
+        return cast(raw)
     raw *= 60
     if unit == "m":
-        return raw
+        return cast(raw)
     raw *= 60
     if unit == "h":
-        return raw
+        return cast(raw)
     raw *= 24
     if unit == "d":
-        return raw
+        return cast(raw)
     raise RuntimeError("This path should not have been hit")
+
+
+def filter_state_internal_kwargs(kwargs):
+    # check_cmd is a valid argument to file.managed
+    ignore = set(_STATE_INTERNAL_KEYWORDS) - {"check_cmd"}
+    return {k: v for k, v in kwargs.items() if k not in ignore}
