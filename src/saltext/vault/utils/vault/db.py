@@ -1,3 +1,9 @@
+"""
+Vault Database helpers
+
+.. versionadded:: 1.1.0
+"""
+
 from salt.utils.immutabletypes import freeze
 
 PLUGINS = freeze(

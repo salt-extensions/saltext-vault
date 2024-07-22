@@ -2,6 +2,8 @@
 Manage the Vault database secret engine, request and cache
 leased database credentials.
 
+.. versionadded:: 1.1.0
+
 .. important::
     This module requires the general :ref:`Vault setup <vault-setup>`.
 """
