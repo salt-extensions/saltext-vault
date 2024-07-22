@@ -18,7 +18,7 @@ no_saltext_namespace: false
 package_name: vault
 project_name: vault
 python_requires: '3.8'
-salt_version: '3005'
+salt_version: '3006'
 source_url: https://github.com/salt-extensions/saltext-vault
 ssh_fixtures: false
 summary: Salt Extension for interacting with Vault
