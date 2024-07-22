@@ -9,6 +9,8 @@ Currently, you can
 ------------------
 * manage and dynamically retrieve secrets from the KV v1 and v2 secret backends
 * manage Vault policies
+* manage the Database secret engine
+* request, renew and monitor short-lived database credentials
 * write your own modules on top of the provided utilities
 
 There's much more coming though.
@@ -46,6 +48,7 @@ Found a bug or missing a feature?
   :caption: Provided Modules
   :hidden:
 
+  ref/beacons/index
   ref/modules/index
   ref/pillar/index
   ref/runners/index

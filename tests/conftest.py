@@ -41,7 +41,7 @@ def salt_factories_config():
     }
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="module")
 def master_config_defaults(vault_port):
     """
     This default configuration ensures the master issues authentication
@@ -67,7 +67,7 @@ def master_config_defaults(vault_port):
             "issue": {
                 "token": {
                     "params": {
-                        "uses": 0,
+                        "num_uses": 0,
                     }
                 }
             },
@@ -83,7 +83,7 @@ def master_config_defaults(vault_port):
     }
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="module")
 def master_config_overrides():
     """
     You can override the default configuration per package by overriding this
@@ -92,14 +92,14 @@ def master_config_overrides():
     return {}
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="module")
 def master(salt_factories, master_config_defaults, master_config_overrides):
     return salt_factories.salt_master_daemon(
         random_string("master-"), defaults=master_config_defaults, overrides=master_config_overrides
     )
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="module")
 def minion_config_defaults(vault_port):
     """
     The default minion configuration ensures that the minion works in --local
@@ -123,7 +123,7 @@ def minion_config_defaults(vault_port):
     }
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="module")
 def minion_config_overrides():
     """
     You can override the default configuration per package by overriding this
@@ -132,7 +132,7 @@ def minion_config_overrides():
     return {}
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="module")
 def minion(master, minion_config_defaults, minion_config_overrides):
     return master.salt_minion_daemon(
         random_string("minion-"), defaults=minion_config_defaults, overrides=minion_config_overrides
@@ -217,3 +217,12 @@ def vault_container_version(
         vault_enable_secret_engine("kv", ["-version=1", "-path=secret-v1"])
         vault_enable_secret_engine("kv", ["-version=2", "-path=salt"])
         yield vault_version
+
+
+@pytest.fixture(scope="session")
+def container_host_ref():
+    # For Podman, there is `host.containers.internal`, which works even rootless.
+    # This env var is set by nox.
+    # `host.docker.internal` exists, but does not work in CI for some reason.
+    # There, return the default IP address of the host on the default network (hardcoded).
+    return os.environ.get("CONTAINER_HOST_REF", "172.17.0.1")
