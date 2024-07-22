@@ -47,7 +47,7 @@ if this_year == 2021:
 else:
     copyright_year = f"2021 - {this_year}"
 project = dist.metadata["Summary"]
-author = dist.metadata["Author"]
+author = dist.metadata.get("Author")
 
 if author is None:
     # Core metadata is serialized differently with pyproject.toml:
