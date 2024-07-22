@@ -621,6 +621,8 @@ def _fetch_token(config, opts, token_cache, unwrap_client, force_local=False, em
                 # lookup and verify raw token
                 token_info = unwrap_client.token_lookup(embedded_token, raw=True)
                 if token_info.status_code != 200:
+                    log.error("Token lookup failed! status code: %d", token_info.status_code)
+                    log.debug("The Vault server response was: %s", token_info.text)
                     raise VaultException(
                         "Configured token cannot be verified. It is most likely expired or invalid."
                     )
