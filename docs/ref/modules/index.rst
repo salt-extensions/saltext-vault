@@ -11,3 +11,4 @@ _________________
 
     vault
     vault_db
+    vault_pki
