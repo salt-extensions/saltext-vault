@@ -16,7 +16,7 @@ jobs:
 
       - name: Extract tag name
         id: get_version
-        run: echo "::set-output name=version::$(echo ${GITHUB_REF#refs/tags/v})"
+        run: echo "version=$(echo ${GITHUB_REF#refs/tags/v})" >> $GITHUB_OUTPUT
 
   call_central_workflow:
     needs: get_tag_version
