@@ -598,6 +598,7 @@ class TestGetConnectionConfig:
         cached.store.assert_not_called()
 
 
+@pytest.mark.usefixtures("time_stopped")
 class TestFetchSecretId:
     """
     Tests for Vault Fetch Secret Id
