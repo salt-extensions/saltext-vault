@@ -4,6 +4,32 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## v1.1.0 (2024-07-23)
+
+
+### Removed
+
+- Dropped support for Python 3.7 [#59](https://github.com/salt-extensions/saltext-vault/issues/59)
+- Dropped support for Salt 3005 [#70](https://github.com/salt-extensions/saltext-vault/issues/70)
+
+
+### Fixed
+
+- Fixed a crash when renewing/revoking leases that have been revoked on the Vault server early [#45](https://github.com/salt-extensions/saltext-vault/issues/45)
+
+
+### Added
+
+- Added an optional switch for validating cached leases with the Vault server before returning them from the LeaseStore [#46](https://github.com/salt-extensions/saltext-vault/issues/46)
+- Implemented setting per-lease defaults of lifecycle parameters [#47](https://github.com/salt-extensions/saltext-vault/issues/47)
+- Implemented caching arbitrary metadata together with a lease and included it in expiry events [#48](https://github.com/salt-extensions/saltext-vault/issues/48)
+- Added a LeaseStore method for listing cached lease information [#49](https://github.com/salt-extensions/saltext-vault/issues/49)
+- Added `vault_db` modules for management and usage of the Vault database secret backend [#52](https://github.com/salt-extensions/saltext-vault/issues/52)
+- Added `vault_lease` beacon module to monitor and renew cached leases [#53](https://github.com/salt-extensions/saltext-vault/issues/53)
+- Added vault_pki modules for interfacing with the PKI backend and managing X.509 certificates [#58](https://github.com/salt-extensions/saltext-vault/issues/58)
+- Added support for retry logic and specific connection settings in `vault:client` [#65](https://github.com/salt-extensions/saltext-vault/issues/65)
+
+
 ## v1.0.0 (2024-04-23)
 
 
