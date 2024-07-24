@@ -316,6 +316,16 @@ def restore_secret(path, *versions, **kwargs):
 
         salt '*' vault.restore_secret secret/my/secret 1 2
 
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        # all_versions=True or defaulting to the most recent version additionally
+        # requires the policy for vault.read_secret_meta
+        path "<mount>/undelete/<secret>" {
+            capabilities = ["update"]
+        }
+
     path
         The path to the secret, including mount.
 
@@ -325,6 +335,8 @@ def restore_secret(path, *versions, **kwargs):
         Defaults to false.
 
     You can specify versions to restore as supplemental positional arguments.
+    If no version is specified, tries to restore the latest version, and if
+    the latest version has not been deleted, fails.
     """
     all_versions = kwargs.pop("all_versions", False)
     unknown_kwargs = tuple(x for x in kwargs if not x.startswith("_"))
