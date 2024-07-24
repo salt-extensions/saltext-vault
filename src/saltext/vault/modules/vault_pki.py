@@ -12,14 +12,6 @@ Manage the Vault PKI secret engine.
 import logging
 from typing import Tuple
 
-try:
-    import salt.utils.x509 as x509util
-    from cryptography.hazmat.primitives import serialization
-
-    HAS_CRYPTOGRAPHY = True
-except ImportError:
-    HAS_CRYPTOGRAPHY = False
-
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 
@@ -32,8 +24,6 @@ __virtualname__ = "vault_pki"
 
 
 def __virtual__():
-    if not HAS_CRYPTOGRAPHY:
-        return (False, "Could not load cryptography")
     return __virtualname__
 
 
@@ -60,20 +50,6 @@ VALID_CSR_ARGS = (
     "policyConstraints",
     "subjectKeyIdentifier",
     "tlsfeature",
-)
-
-DIGEST_HASHES = (
-    "SHA1",
-    "SHA224",
-    "SHA256",
-    "SHA384",
-    "SHA512",
-    "SHA512_224",
-    "SHA512_256",
-    "SHA3_224",
-    "SHA3_256",
-    "SHA3_384",
-    "SHA3_512",
 )
 
 
@@ -1007,7 +983,7 @@ def sign_certificate(
 
         csr_args["CN"] = common_name
 
-        csr = _build_csr(
+        csr = __salt__["x509.create_csr"](
             private_key=private_key,
             private_key_passphrase=private_key_passphrase,
             digest=digest,
@@ -1054,10 +1030,9 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
 
     try:
         if certificate is not None:
-            certificate = x509util.load_cert(certificate)
-            cert_encoding = getattr(serialization.Encoding, "PEM")
-            cert_bytes = certificate.public_bytes(cert_encoding)
-            payload["certificate"] = cert_bytes.decode()
+            payload["certificate"] = __salt__["x509.encode_certificate"](
+                certificate, encoding="pem"
+            )
         elif serial is not None:
             if isinstance(serial, int):
                 serial = dec2hex(serial)
@@ -1120,30 +1095,6 @@ def _split_sans(sans) -> Tuple[list, list, list, list]:
         ) from err
 
     return dns_sans, ip_sans, uri_sans, other_sans
-
-
-def _build_csr(private_key, private_key_passphrase=None, digest="sha256", **kwargs):
-    if digest.upper() not in DIGEST_HASHES:
-        raise CommandExecutionError(
-            f"Invalid value '{digest}' for digest. Valid: {','.join(DIGEST_HASHES)}"
-        )
-
-    builder, key = x509util.build_csr(
-        private_key=private_key, private_key_passphrase=private_key_passphrase, **kwargs
-    )
-    algorithm = None
-    if x509util.get_key_type(key) not in [
-        x509util.KEY_TYPE.ED25519,
-        x509util.KEY_TYPE.ED448,
-    ]:
-        algorithm = x509util.get_hashing_algorithm(digest)
-
-    csr = builder.sign(key, algorithm=algorithm)
-    csr = x509util.load_csr(csr)
-    csr_bytes = csr.public_bytes(serialization.Encoding.PEM)
-    csr = csr_bytes.decode()
-
-    return csr
 
 
 def _split_csr_kwargs(kwargs):
