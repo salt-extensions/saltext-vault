@@ -4,6 +4,19 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## v1.1.1 (2024-07-24)
+
+
+### Changed
+
+- Required x509_v2 modules to be available for specific parameters to `vault_pki`, dropped direct dependency on cryptography [#78](https://github.com/salt-extensions/saltext-vault/issues/78)
+
+
+### Fixed
+
+- Fixed vault.update_config crash [#77](https://github.com/salt-extensions/saltext-vault/issues/77)
+
+
 ## v1.1.0 (2024-07-23)
 
 
