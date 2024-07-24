@@ -4,7 +4,7 @@ Class wrappers for several Vault API endpoints
 
 import salt.utils.json
 
-import saltext.vault.utils.vault.leases as vleases
+from saltext.vault.utils.vault import leases
 from saltext.vault.utils.vault.exceptions import VaultInvocationError
 from saltext.vault.utils.vault.exceptions import VaultNotFoundError
 
@@ -262,7 +262,7 @@ class AppRoleApi:
             return response
         # Sadly, secret_id_num_uses is not part of the information returned, but
         # it can be read with `read_secret_id` using the accessor.
-        return vleases.VaultSecretId(**response["data"])
+        return leases.VaultSecretId(**response["data"])
 
     def read_secret_id(self, name, secret_id=None, accessor=None, mount="approle"):
         """

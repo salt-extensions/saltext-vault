@@ -5,11 +5,13 @@ Vault-specific cache classes
 import copy
 import logging
 import time
+from abc import ABC
+from abc import abstractmethod
 
 import salt.cache
 
-import saltext.vault.utils.vault.helpers as hlp
-import saltext.vault.utils.vault.leases as leases
+from saltext.vault.utils.vault import helpers
+from saltext.vault.utils.vault import leases
 from saltext.vault.utils.vault.exceptions import VaultConfigExpired
 from saltext.vault.utils.vault.exceptions import VaultLeaseExpired
 
@@ -64,9 +66,9 @@ def _get_cache_bank(opts, force_local=False, connection=True, session=False):
     minion_id = None
     # force_local is necessary because pillar compilation would otherwise
     # leak tokens between master and minions
-    if not force_local and hlp._get_salt_run_type(opts) in (
-        hlp.SALT_RUNTYPE_MASTER_IMPERSONATING,
-        hlp.SALT_RUNTYPE_MASTER_PEER_RUN,
+    if not force_local and helpers._get_salt_run_type(opts) in (
+        helpers.SALT_RUNTYPE_MASTER_IMPERSONATING,
+        helpers.SALT_RUNTYPE_MASTER_PEER_RUN,
     ):
         minion_id = opts["grains"]["id"]
     prefix = "vault" if minion_id is None else f"minions/{minion_id}/vault"
@@ -77,7 +79,7 @@ def _get_cache_bank(opts, force_local=False, connection=True, session=False):
     return prefix
 
 
-class CommonCache:
+class CommonCache(ABC):
     """
     Base class that unifies context and other cache backends.
     """
@@ -88,6 +90,10 @@ class CommonCache:
         self.cache = cache_backend
         self.ttl = ttl
         self.flush_exception = flush_exception
+
+    @abstractmethod
+    def flush(self):
+        raise NotImplementedError()
 
     def _ckey_exists(self, ckey, flush=True):
         if self.cbank in self.context and ckey in self.context[self.cbank]:

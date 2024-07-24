@@ -29,6 +29,9 @@ pytestmark = [
 @pytest.fixture(scope="module")
 def minion_config_overrides(vault_port):
     return {
+        "features": {
+            "x509_v2": True,
+        },
         "vault": {
             "auth": {
                 "method": "token",
@@ -40,7 +43,7 @@ def minion_config_overrides(vault_port):
             "server": {
                 "url": f"http://127.0.0.1:{vault_port}",
             },
-        }
+        },
     }
 
 
@@ -176,7 +179,7 @@ def test_update_role(vault_pki):
 
 @pytest.mark.usefixtures("issuers_setup")
 def test_list_issuers(vault_pki):
-    ret = [info["issuer_name"] for id, info in vault_pki.list_issuers().items()]
+    ret = [info["issuer_name"] for info in vault_pki.list_issuers().values()]
     assert set(ret) == {"test-issuer-root", "testissuer"}
 
 
@@ -318,13 +321,13 @@ def test_read_issuer_certificate_with_chain(vault_pki):
 
 @pytest.mark.usefixtures("issuers_setup")
 def test_delete_issuer(vault_pki):
-    ret = [info["issuer_name"] for id, info in vault_pki.list_issuers().items()]
+    ret = [info["issuer_name"] for info in vault_pki.list_issuers().values()]
     assert "testissuer" in ret
 
     ret = vault_pki.delete_issuer("testissuer")
     assert ret
 
-    ret = [info["issuer_name"] for id, info in vault_pki.list_issuers().items()]
+    ret = [info["issuer_name"] for info in vault_pki.list_issuers().values()]
     assert "testissuer" not in ret
 
 
@@ -337,7 +340,7 @@ def test_delete_issuer_with_private_key(vault_pki):
     ret = vault_pki.delete_issuer("testissuer", include_key=True)
     assert ret
 
-    ret = [info["issuer_name"] for id, info in vault_pki.list_issuers().items()]
+    ret = [info["issuer_name"] for info in vault_pki.list_issuers().values()]
     assert "testissuer" not in ret
 
     keys = vault_list("pki/keys")
@@ -365,7 +368,6 @@ def test_update_issuer(vault_pki):
     )
 
     ret = vault_pki.read_issuer("testissuer")
-
     assert "http://crl.example.com/ca.crl" in ret["crl_distribution_points"]
     assert "http://aia.example.com/ca.list" in ret["issuing_certificates"]
     assert "http://ocsp.example.com" in ret["ocsp_servers"]
@@ -378,7 +380,7 @@ def test_read_issuer_crl(vault_pki):
     crl_complete = x509.load_pem_x509_crl(ret_complete.encode())
     assert crl_complete.issuer.rfc4514_string() == "CN=Test Issuer CA"
     ret_delta = vault_pki.read_issuer_crl("testissuer", delta=True)
-    crl_delta = x509.load_pem_x509_crl(ret_complete.encode())
+    crl_delta = x509.load_pem_x509_crl(ret_delta.encode())
     assert crl_delta.issuer.rfc4514_string() == "CN=Test Issuer CA"
     assert ret_delta != ret_complete
 
@@ -489,12 +491,9 @@ def test_read_certificate(vault_pki, private_key):
         private_key=private_key,
     )
     assert "certificate" in ret
+
     signed_certificate = load_cert(ret["certificate"])
-
     serial = dec2hex(signed_certificate.serial_number)
-
     ret = vault_pki.read_certificate(serial)
-
     read_certificate = load_cert(ret)
-
     assert read_certificate.serial_number == signed_certificate.serial_number

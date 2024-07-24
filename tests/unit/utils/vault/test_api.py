@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-import saltext.vault.utils.vault as vaultutil
+from saltext.vault.utils import vault
 from saltext.vault.utils.vault import api as vapi
 from saltext.vault.utils.vault import client as vclient
 
@@ -324,7 +324,7 @@ def test_generate_secret_id(client, wrapped_response, secret_id_response, wrap, 
 
     def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
         if kwargs.get("wrap"):
-            return vaultutil.VaultWrappedResponse(**wrapped_response["wrap_info"])
+            return vault.VaultWrappedResponse(**wrapped_response["wrap_info"])
         return secret_id_response
 
     client.post.side_effect = res_or_wrap
@@ -333,9 +333,9 @@ def test_generate_secret_id(client, wrapped_response, secret_id_response, wrap, 
         "test-minion", mount="salt-minions", metadata=metadata, wrap=wrap
     )
     if wrap:
-        assert res == vaultutil.VaultWrappedResponse(**wrapped_response["wrap_info"])
+        assert res == vault.VaultWrappedResponse(**wrapped_response["wrap_info"])
     else:
-        assert res == vaultutil.VaultSecretId(**secret_id_response["data"])
+        assert res == vault.VaultSecretId(**secret_id_response["data"])
     client.post.assert_called_once_with(
         "auth/salt-minions/role/test-minion/secret-id",
         payload={"metadata": '{"foo": "bar"}'},
@@ -351,13 +351,13 @@ def test_read_role_id(client, wrapped_response, wrap, approle_api):
 
     def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
         if kwargs.get("wrap"):
-            return vaultutil.VaultWrappedResponse(**wrapped_response["wrap_info"])
+            return vault.VaultWrappedResponse(**wrapped_response["wrap_info"])
         return {"data": {"role_id": "test-role-id"}}
 
     client.get.side_effect = res_or_wrap
     res = approle_api.read_role_id("test-minion", mount="salt-minions", wrap=wrap)
     if wrap:
-        assert res == vaultutil.VaultWrappedResponse(**wrapped_response["wrap_info"])
+        assert res == vault.VaultWrappedResponse(**wrapped_response["wrap_info"])
     else:
         assert res == "test-role-id"
     client.get.assert_called_once_with("auth/salt-minions/role/test-minion/role-id", wrap=wrap)

@@ -95,8 +95,8 @@ import salt.utils.dictupdate
 from salt.exceptions import InvalidConfigError
 from salt.exceptions import SaltException
 
-import saltext.vault.utils.vault as vault
-import saltext.vault.utils.vault.helpers as vhelpers
+from saltext.vault.utils import vault
+from saltext.vault.utils.vault import helpers
 from saltext.vault.utils.versions import warn_until
 
 log = logging.getLogger(__name__)
@@ -202,7 +202,7 @@ def _get_paths(path_pattern, minion_id, pillar):
 
     paths = []
     try:
-        for expanded_pattern in vhelpers.expand_pattern_lists(path_pattern, **mappings):
+        for expanded_pattern in helpers.expand_pattern_lists(path_pattern, **mappings):
             paths.append(expanded_pattern.format(**mappings))
     except KeyError:
         log.warning("Could not resolve pillar path pattern %s", path_pattern)

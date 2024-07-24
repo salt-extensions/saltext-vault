@@ -12,6 +12,12 @@ import logging
 import os
 
 import salt.utils.files
+from salt.exceptions import CommandExecutionError
+from salt.exceptions import SaltInvocationError
+
+from saltext.vault.utils.vault.helpers import filter_state_internal_kwargs
+from saltext.vault.utils.vault.helpers import timestring_map
+from saltext.vault.utils.vault.pki import check_cert_for_changes
 
 try:
     import salt.utils.x509 as x509util
@@ -19,12 +25,7 @@ try:
     HAS_CRYPTOGRAPHY = True
 except ImportError:
     HAS_CRYPTOGRAPHY = False
-from salt.exceptions import CommandExecutionError
-from salt.exceptions import SaltInvocationError
 
-from saltext.vault.utils.vault.helpers import filter_state_internal_kwargs
-from saltext.vault.utils.vault.helpers import timestring_map
-from saltext.vault.utils.vault.pki import check_cert_for_changes
 
 log = logging.getLogger(__name__)
 

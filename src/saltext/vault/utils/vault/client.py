@@ -12,7 +12,7 @@ import salt.exceptions
 from requests.adapters import HTTPAdapter
 from requests.adapters import Retry
 
-import saltext.vault.utils.vault.leases as leases
+from saltext.vault.utils.vault import leases
 from saltext.vault.utils.vault.exceptions import VaultAuthExpired
 from saltext.vault.utils.vault.exceptions import VaultInvocationError
 from saltext.vault.utils.vault.exceptions import VaultNotFoundError
@@ -377,6 +377,9 @@ class VaultClient:
         return res.json()["data"]
 
     def token_valid(self, valid_for=0, remote=True):  # pylint: disable=unused-argument
+        """
+        This client does not have a token, hence it's always invalid.
+        """
         return False
 
     def get_config(self):

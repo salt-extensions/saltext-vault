@@ -14,7 +14,7 @@ from salt.defaults import NOT_SET
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 
-import saltext.vault.utils.vault.db as vaultdb
+from saltext.vault.utils.vault import db as vaultdb
 from saltext.vault.utils.vault.helpers import timestring_map
 
 log = logging.getLogger(__name__)

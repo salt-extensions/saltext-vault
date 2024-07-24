@@ -161,6 +161,9 @@ def timestring_map(val, cast=float):
 
 
 def filter_state_internal_kwargs(kwargs):
+    """
+    Removes state-internal kwargs from a kwargs dict.
+    """
     # check_cmd is a valid argument to file.managed
     ignore = set(_STATE_INTERNAL_KEYWORDS) - {"check_cmd"}
     return {k: v for k, v in kwargs.items() if k not in ignore}

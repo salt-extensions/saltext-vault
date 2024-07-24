@@ -16,8 +16,8 @@ from salt.defaults import NOT_SET
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 
-import saltext.vault.utils.vault as vault
-import saltext.vault.utils.vault.db as vaultdb
+from saltext.vault.utils import vault
+from saltext.vault.utils.vault import db as vaultdb
 
 log = logging.getLogger(__name__)
 

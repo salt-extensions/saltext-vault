@@ -21,10 +21,13 @@ from saltext.vault.utils.vault.exceptions import VaultUnavailableError
 from saltext.vault.utils.vault.exceptions import VaultUnsupportedOperationError
 from saltext.vault.utils.vault.exceptions import VaultUnwrapException
 from saltext.vault.utils.vault.factory import clear_cache
+from saltext.vault.utils.vault.factory import get_approle_api
 from saltext.vault.utils.vault.factory import get_authd_client
+from saltext.vault.utils.vault.factory import get_identity_api
 from saltext.vault.utils.vault.factory import get_kv
 from saltext.vault.utils.vault.factory import get_lease_store
 from saltext.vault.utils.vault.factory import parse_config
+from saltext.vault.utils.vault.factory import update_config
 from saltext.vault.utils.vault.leases import VaultLease
 from saltext.vault.utils.vault.leases import VaultSecretId
 from saltext.vault.utils.vault.leases import VaultToken

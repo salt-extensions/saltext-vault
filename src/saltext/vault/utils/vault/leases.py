@@ -627,13 +627,13 @@ class LeaseStore:
             )
         try:
             ret = self.client.post(endpoint, payload=payload)
-        except VaultException as err:
+        except VaultInvocationError as err:
+            if "lease not found" not in str(err):
+                raise
+            raise VaultNotFoundError(str(err)) from err
+        except VaultException:
             if raise_all_errors or not isinstance(lease, VaultLease):
                 raise
-            if isinstance(err, VaultInvocationError):
-                if "lease not found" not in str(err):
-                    raise
-                raise VaultNotFoundError(str(err)) from err
             return lease
 
         if _store and isinstance(lease, VaultLease):
@@ -695,9 +695,8 @@ class LeaseStore:
         try:
             # 0 would attempt a complete renewal
             self.renew(lease, increment=delta or 1, _store=False)
-        except VaultInvocationError as err:
-            if "lease not found" not in str(err):
-                raise
+        except VaultNotFoundError:
+            pass
 
         if str(lease) in self.lease_id_ckey_cache:
             self.cache.flush(self.lease_id_ckey_cache.pop(str(lease)))

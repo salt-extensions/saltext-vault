@@ -12,18 +12,10 @@ Manage the Vault PKI secret engine.
 import logging
 from typing import Tuple
 
-try:
-    import salt.utils.x509 as x509util
-    from cryptography.hazmat.primitives import serialization
-
-    HAS_CRYPTOGRAPHY = True
-except ImportError:
-    HAS_CRYPTOGRAPHY = False
-
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 
-import saltext.vault.utils.vault as vault
+from saltext.vault.utils import vault
 from saltext.vault.utils.vault.pki import dec2hex
 
 log = logging.getLogger(__name__)
@@ -32,8 +24,6 @@ __virtualname__ = "vault_pki"
 
 
 def __virtual__():
-    if not HAS_CRYPTOGRAPHY:
-        return (False, "Could not load cryptography")
     return __virtualname__
 
 
@@ -60,20 +50,6 @@ VALID_CSR_ARGS = (
     "policyConstraints",
     "subjectKeyIdentifier",
     "tlsfeature",
-)
-
-DIGEST_HASHES = (
-    "SHA1",
-    "SHA224",
-    "SHA256",
-    "SHA384",
-    "SHA512",
-    "SHA512_224",
-    "SHA512_256",
-    "SHA3_224",
-    "SHA3_256",
-    "SHA3_384",
-    "SHA3_512",
 )
 
 
@@ -508,7 +484,7 @@ def set_default_issuer(name, mount="pki"):
 def generate_root(
     common_name,
     mount="pki",
-    type="internal",
+    type="internal",  # pylint: disable=redefined-builtin
     issuer_name=None,
     key_name=None,
     ttl=None,
@@ -814,7 +790,7 @@ def issue_certificate(
     issuer_ref=None,
     alt_names=None,
     ttl=None,
-    format="pem",
+    format="pem",  # pylint: disable=redefined-builtin
     exclude_cn_from_sans=False,
     **kwargs,
 ):
@@ -929,6 +905,9 @@ def sign_certificate(
         The private key for which certificate should be issued. Can be text or path.
         Either ``csr`` or ``private_key`` parameter can be set, not both.
 
+        .. note::
+            This parameter requires the :py:mod:`x509_v2 execution module <salt.modules.x509_v2>` to be available.
+
     private_key_passphrase
         The passphrase for the ``private_key`` if encrypted. Not used in case of ``csr``.
 
@@ -1007,7 +986,7 @@ def sign_certificate(
 
         csr_args["CN"] = common_name
 
-        csr = _build_csr(
+        csr = __salt__["x509.create_csr"](
             private_key=private_key,
             private_key_passphrase=private_key_passphrase,
             digest=digest,
@@ -1040,6 +1019,9 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
     certificate
         Specifies the certificate (PEM or path) to revoke. Either ``serial`` or ``certificate`` must be specified.
 
+        .. note::
+            This parameter requires the :py:mod:`x509_v2 execution module <salt.modules.x509_v2>` to be available.
+
     mount
         The mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
@@ -1054,10 +1036,9 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
 
     try:
         if certificate is not None:
-            certificate = x509util.load_cert(certificate)
-            cert_encoding = getattr(serialization.Encoding, "PEM")
-            cert_bytes = certificate.public_bytes(cert_encoding)
-            payload["certificate"] = cert_bytes.decode()
+            payload["certificate"] = __salt__["x509.encode_certificate"](
+                certificate, encoding="pem"
+            )
         elif serial is not None:
             if isinstance(serial, int):
                 serial = dec2hex(serial)
@@ -1120,30 +1101,6 @@ def _split_sans(sans) -> Tuple[list, list, list, list]:
         ) from err
 
     return dns_sans, ip_sans, uri_sans, other_sans
-
-
-def _build_csr(private_key, private_key_passphrase=None, digest="sha256", **kwargs):
-    if digest.upper() not in DIGEST_HASHES:
-        raise CommandExecutionError(
-            f"Invalid value '{digest}' for digest. Valid: {','.join(DIGEST_HASHES)}"
-        )
-
-    builder, key = x509util.build_csr(
-        private_key=private_key, private_key_passphrase=private_key_passphrase, **kwargs
-    )
-    algorithm = None
-    if x509util.get_key_type(key) not in [
-        x509util.KEY_TYPE.ED25519,
-        x509util.KEY_TYPE.ED448,
-    ]:
-        algorithm = x509util.get_hashing_algorithm(digest)
-
-    csr = builder.sign(key, algorithm=algorithm)
-    csr = x509util.load_csr(csr)
-    csr_bytes = csr.public_bytes(serialization.Encoding.PEM)
-    csr = csr_bytes.decode()
-
-    return csr
 
 
 def _split_csr_kwargs(kwargs):
