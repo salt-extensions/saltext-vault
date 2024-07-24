@@ -17,13 +17,13 @@ import salt.utils.dictupdate
 from requests.exceptions import ConnectionError
 from salt.defaults import NOT_SET
 
-import saltext.vault.utils.vault.api as vapi
-import saltext.vault.utils.vault.auth as vauth
-import saltext.vault.utils.vault.cache as vcache
-import saltext.vault.utils.vault.client as vclient
-import saltext.vault.utils.vault.helpers as hlp
-import saltext.vault.utils.vault.kv as vkv
-import saltext.vault.utils.vault.leases as vleases
+from saltext.vault.utils.vault import api as vapi
+from saltext.vault.utils.vault import auth as vauth
+from saltext.vault.utils.vault import cache as vcache
+from saltext.vault.utils.vault import client as vclient
+from saltext.vault.utils.vault import helpers as hlp
+from saltext.vault.utils.vault import kv as vkv
+from saltext.vault.utils.vault import leases as vleases
 from saltext.vault.utils.vault.exceptions import VaultAuthExpired
 from saltext.vault.utils.vault.exceptions import VaultConfigExpired
 from saltext.vault.utils.vault.exceptions import VaultException

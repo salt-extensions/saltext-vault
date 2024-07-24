@@ -15,7 +15,7 @@ from typing import Tuple
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 
-import saltext.vault.utils.vault as vault
+from saltext.vault.utils import vault
 from saltext.vault.utils.vault.pki import dec2hex
 
 log = logging.getLogger(__name__)

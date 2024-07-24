@@ -114,7 +114,7 @@ import logging
 import salt.utils.beacons
 import salt.utils.dictupdate as dup
 
-import saltext.vault.utils.vault as vault
+from saltext.vault.utils import vault
 from saltext.vault.utils.vault.helpers import timestring_map
 
 log = logging.getLogger(__name__)

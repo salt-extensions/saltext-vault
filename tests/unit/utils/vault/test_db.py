@@ -1,6 +1,6 @@
 import pytest
 
-import saltext.vault.utils.vault.db as db
+from saltext.vault.utils.vault import db
 
 
 @pytest.mark.parametrize(

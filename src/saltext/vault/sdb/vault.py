@@ -49,7 +49,7 @@ import logging
 
 import salt.exceptions
 
-import saltext.vault.utils.vault as vault
+from saltext.vault.utils import vault
 from saltext.vault.utils.versions import warn_until
 
 log = logging.getLogger(__name__)

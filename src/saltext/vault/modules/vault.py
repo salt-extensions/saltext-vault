@@ -12,7 +12,7 @@ from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltException
 from salt.exceptions import SaltInvocationError
 
-import saltext.vault.utils.vault as vault
+from saltext.vault.utils import vault
 from saltext.vault.utils.versions import warn_until
 
 log = logging.getLogger(__name__)

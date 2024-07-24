@@ -23,10 +23,10 @@ from salt.defaults import NOT_SET
 from salt.exceptions import SaltInvocationError
 from salt.exceptions import SaltRunnerError
 
-import saltext.vault.utils.vault as vault
-import saltext.vault.utils.vault.cache as vcache
-import saltext.vault.utils.vault.factory as vfactory
-import saltext.vault.utils.vault.helpers as vhelpers
+from saltext.vault.utils import vault
+from saltext.vault.utils.vault import cache as vcache
+from saltext.vault.utils.vault import factory
+from saltext.vault.utils.vault import helpers
 from saltext.vault.utils.versions import warn_until
 
 log = logging.getLogger(__name__)
@@ -410,7 +410,7 @@ def _get_role_id(minion_id, issue_params, wrap):
     issue_params_parsed = _parse_issue_params(issue_params)
 
     if approle is False or (
-        vhelpers._get_salt_run_type(__opts__) != vhelpers.SALT_RUNTYPE_MASTER_IMPERSONATING
+        helpers._get_salt_run_type(__opts__) != helpers.SALT_RUNTYPE_MASTER_IMPERSONATING
         and not _approle_params_match(approle, issue_params_parsed)
     ):
         # This means the role has to be created/updated first
@@ -492,9 +492,9 @@ def generate_secret_id(minion_id, signature, impersonated_by_master=False, issue
         if approle_meta is False:
             raise vault.VaultNotFoundError(f"No AppRole found for minion {minion_id}.")
 
-        if vhelpers._get_salt_run_type(
+        if helpers._get_salt_run_type(
             __opts__
-        ) != vhelpers.SALT_RUNTYPE_MASTER_IMPERSONATING and not _approle_params_match(
+        ) != helpers.SALT_RUNTYPE_MASTER_IMPERSONATING and not _approle_params_match(
             approle_meta, issue_params
         ):
             _manage_approle(minion_id, issue_params)
@@ -871,7 +871,7 @@ def clear_cache(master=True, minions=True):
         Defaults to true. Set this to a list of minion IDs to only clear
         cached data pertaining to thse minions.
     """
-    config, _, _ = vfactory._get_connection_config("vault", __opts__, __context__, force_local=True)
+    config, _, _ = factory._get_connection_config("vault", __opts__, __context__, force_local=True)
     cache = vcache._get_cache_backend(config, __opts__)
 
     if cache is None:
@@ -937,7 +937,7 @@ def _get_policies(minion_id, refresh_pillar=None, **kwargs):  # pylint: disable=
     policies = []
     for pattern in _config("policies:assign"):
         try:
-            for expanded_pattern in vhelpers.expand_pattern_lists(pattern, **mappings):
+            for expanded_pattern in helpers.expand_pattern_lists(pattern, **mappings):
                 policies.append(expanded_pattern.format(**mappings).lower())  # Vault requirement
         except KeyError:
             log.warning("Could not resolve policy pattern %s for minion %s", pattern, minion_id)
@@ -1027,7 +1027,7 @@ def _get_metadata(minion_id, metadata_patterns, refresh_pillar=None):
     for key, pattern in metadata_patterns.items():
         metadata[key] = []
         try:
-            for expanded_pattern in vhelpers.expand_pattern_lists(pattern, **mappings):
+            for expanded_pattern in helpers.expand_pattern_lists(pattern, **mappings):
                 metadata[key].append(expanded_pattern.format(**mappings))
         except KeyError:
             log.warning(
@@ -1197,11 +1197,11 @@ def _manage_entity_alias(minion_id):
 
 
 def _get_approle_api():
-    return vfactory.get_approle_api(__opts__, __context__, force_local=True)
+    return vault.get_approle_api(__opts__, __context__, force_local=True)
 
 
 def _get_identity_api():
-    return vfactory.get_identity_api(__opts__, __context__, force_local=True)
+    return vault.get_identity_api(__opts__, __context__, force_local=True)
 
 
 def _get_master_client():

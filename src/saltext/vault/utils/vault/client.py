@@ -12,7 +12,7 @@ import salt.exceptions
 from requests.adapters import HTTPAdapter
 from requests.adapters import Retry
 
-import saltext.vault.utils.vault.leases as leases
+from saltext.vault.utils.vault import leases
 from saltext.vault.utils.vault.exceptions import VaultAuthExpired
 from saltext.vault.utils.vault.exceptions import VaultInvocationError
 from saltext.vault.utils.vault.exceptions import VaultNotFoundError

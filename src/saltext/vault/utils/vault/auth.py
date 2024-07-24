@@ -4,7 +4,7 @@ Vault authentication models
 
 import logging
 
-import saltext.vault.utils.vault.leases as leases
+from saltext.vault.utils.vault import leases
 from saltext.vault.utils.vault.exceptions import VaultAuthExpired
 
 log = logging.getLogger(__name__)
