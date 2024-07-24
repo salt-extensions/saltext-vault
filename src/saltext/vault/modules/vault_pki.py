@@ -905,6 +905,9 @@ def sign_certificate(
         The private key for which certificate should be issued. Can be text or path.
         Either ``csr`` or ``private_key`` parameter can be set, not both.
 
+        .. note::
+            This parameter requires the :py:mod:`x509_v2 execution module <salt.modules.x509_v2>` to be available.
+
     private_key_passphrase
         The passphrase for the ``private_key`` if encrypted. Not used in case of ``csr``.
 
@@ -1015,6 +1018,9 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
 
     certificate
         Specifies the certificate (PEM or path) to revoke. Either ``serial`` or ``certificate`` must be specified.
+
+        .. note::
+            This parameter requires the :py:mod:`x509_v2 execution module <salt.modules.x509_v2>` to be available.
 
     mount
         The mount path the PKI backend is mounted to. Defaults to ``pki``.
