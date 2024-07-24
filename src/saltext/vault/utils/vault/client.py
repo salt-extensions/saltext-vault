@@ -377,6 +377,9 @@ class VaultClient:
         return res.json()["data"]
 
     def token_valid(self, valid_for=0, remote=True):  # pylint: disable=unused-argument
+        """
+        This client does not have a token, hence it's always invalid.
+        """
         return False
 
     def get_config(self):

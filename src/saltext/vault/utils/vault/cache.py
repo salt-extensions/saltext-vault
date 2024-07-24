@@ -5,6 +5,8 @@ Vault-specific cache classes
 import copy
 import logging
 import time
+from abc import ABC
+from abc import abstractmethod
 
 import salt.cache
 
@@ -77,7 +79,7 @@ def _get_cache_bank(opts, force_local=False, connection=True, session=False):
     return prefix
 
 
-class CommonCache:
+class CommonCache(ABC):
     """
     Base class that unifies context and other cache backends.
     """
@@ -88,6 +90,10 @@ class CommonCache:
         self.cache = cache_backend
         self.ttl = ttl
         self.flush_exception = flush_exception
+
+    @abstractmethod
+    def flush(self):
+        raise NotImplementedError()
 
     def _ckey_exists(self, ckey, flush=True):
         if self.cbank in self.context and ckey in self.context[self.cbank]:

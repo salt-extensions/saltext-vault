@@ -13,6 +13,8 @@ from saltext.vault.utils.vault import pki
 class TestCA:
     def __init__(self, common_name):
         self.common_name = common_name
+        self.private_key = None
+        self.certificate = None
 
     def generate(self):
         one_day = datetime.timedelta(1, 0, 0)
@@ -74,6 +76,8 @@ class TestCertificate:
     def __init__(self, common_name, ca: TestCA):
         self.common_name = common_name
         self.ca = ca
+        self.private_key = None
+        self.certificate = None
 
     def generate(self, alt_names=None):
         one_day = datetime.timedelta(1, 0, 0)
@@ -176,17 +180,17 @@ def new_ca():
 @pytest.fixture
 def existing_pki(existing_ca):  # pylint: disable=unused-argument
     instance = TestPKIFactory.instance("existing")
-    certObj = instance.issue_certificate("acme.com")
+    cert_obj = instance.issue_certificate("acme.com")
 
-    return certObj.certificate, certObj.private_key, [certObj.ca.certificate]
+    return cert_obj.certificate, cert_obj.private_key, [cert_obj.ca.certificate]
 
 
 @pytest.fixture
 def new_pki():
     instance = TestPKIFactory.instance("new")
-    certObj = instance.issue_certificate("acme.com")
+    cert_obj = instance.issue_certificate("acme.com")
 
-    return certObj.certificate, certObj.private_key, [certObj.ca.certificate]
+    return cert_obj.certificate, cert_obj.private_key, [cert_obj.ca.certificate]
 
 
 @pytest.mark.parametrize(

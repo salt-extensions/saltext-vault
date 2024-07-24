@@ -212,7 +212,7 @@ class LocalVaultSecretId(leases.VaultSecretId):
     Represents a SecretID from local configuration and should not be cached.
     """
 
-    def is_valid(self, valid_for=0, uses=1):
+    def is_valid(self, valid_for=0, uses=1):  # pylint: disable=unused-argument
         """
         Local SecretIDs are always assumed to be valid until proven otherwise
         """
@@ -229,7 +229,7 @@ class InvalidVaultToken(leases.VaultToken):
         self.use_count = 0
         self.num_uses = 0
 
-    def is_valid(self, valid_for=0, uses=1):
+    def is_valid(self, valid_for=0, uses=1):  # pylint: disable=unused-argument
         return False
 
 
@@ -241,5 +241,5 @@ class InvalidVaultSecretId(leases.VaultSecretId):
     def __init__(self, *args, **kwargs):  # pylint: disable=super-init-not-called
         pass
 
-    def is_valid(self, valid_for=0, uses=1):
+    def is_valid(self, valid_for=0, uses=1):  # pylint: disable=unused-argument
         return False

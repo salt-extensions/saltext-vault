@@ -484,7 +484,7 @@ def set_default_issuer(name, mount="pki"):
 def generate_root(
     common_name,
     mount="pki",
-    type="internal",
+    type="internal",  # pylint: disable=redefined-builtin
     issuer_name=None,
     key_name=None,
     ttl=None,
@@ -790,7 +790,7 @@ def issue_certificate(
     issuer_ref=None,
     alt_names=None,
     ttl=None,
-    format="pem",
+    format="pem",  # pylint: disable=redefined-builtin
     exclude_cn_from_sans=False,
     **kwargs,
 ):

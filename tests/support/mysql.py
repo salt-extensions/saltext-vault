@@ -13,7 +13,7 @@ from saltfactories.utils import random_string
 # This `pytest.importorskip` here actually works because this module
 # is imported into test modules, otherwise, the skipping would just fail
 pytest.importorskip("docker")
-import docker.errors  # isort:skip
+import docker.errors  # isort:skip pylint:disable=wrong-import-position
 
 log = logging.getLogger(__name__)
 

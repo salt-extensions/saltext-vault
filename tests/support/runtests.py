@@ -51,7 +51,7 @@ import shutil
 import salt.utils.path
 import salt.utils.platform
 
-import tests.support.paths as paths
+from tests.support import paths  # pylint: disable=import-error
 
 try:
     import pwd
@@ -118,7 +118,7 @@ class RuntimeVars:
 
     def lock(self):
         # Late import
-        from salt.utils.immutabletypes import freeze
+        from salt.utils.immutabletypes import freeze  # pylint: disable=import-outside-toplevel
 
         frozen_vars = freeze(self._vars.copy())
         self._vars = frozen_vars

@@ -14,7 +14,7 @@ import salt.modules.saltutil
 import salt.utils.context
 import salt.utils.data
 import salt.utils.dictupdate
-from requests.exceptions import ConnectionError
+from requests.exceptions import ConnectionError  # pylint: disable=redefined-builtin
 from salt.defaults import NOT_SET
 
 from saltext.vault.utils.vault import api as vapi

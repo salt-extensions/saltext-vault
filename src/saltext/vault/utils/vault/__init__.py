@@ -27,6 +27,7 @@ from saltext.vault.utils.vault.factory import get_identity_api
 from saltext.vault.utils.vault.factory import get_kv
 from saltext.vault.utils.vault.factory import get_lease_store
 from saltext.vault.utils.vault.factory import parse_config
+from saltext.vault.utils.vault.factory import update_config
 from saltext.vault.utils.vault.leases import VaultLease
 from saltext.vault.utils.vault.leases import VaultSecretId
 from saltext.vault.utils.vault.leases import VaultToken
