@@ -56,6 +56,7 @@ Found a bug or missing a feature?
   ref/sdb/index
   ref/states/index
   ref/utils/index
+  ref/wrapper/index
 
 .. toctree::
   :maxdepth: 2

@@ -163,6 +163,7 @@ def test_token_auth_used_num_uses(uncached, token, num_uses):
         uncached.store.assert_not_called()
 
 
+@pytest.mark.usefixtures("time_stopped")
 @pytest.mark.parametrize("num_uses", [0, 1, 10])
 def test_token_auth_update_token(uncached, token, num_uses):
     """

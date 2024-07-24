@@ -42,6 +42,7 @@ def get_authd_client(opts, context, force_local=False, get_config=False):
     """
     Returns an AuthenticatedVaultClient that is valid for at least one query.
     """
+    opts = _check_salt_ssh_opts(opts)
 
     def try_build():
         client = config = None
@@ -168,6 +169,7 @@ def clear_cache(opts, context, ckey=None, connection=True, session=False, force_
         regardless of determined run type. Defaults to false and should not
         be set by anything other than the runner.
     """
+    opts = _check_salt_ssh_opts(opts)
     cbank = vcache._get_cache_bank(
         opts, connection=connection, session=session, force_local=force_local
     )
@@ -253,6 +255,7 @@ def update_config(opts, context, keep_session=False):
         significantly.
         Defaults to False.
     """
+    opts = _check_salt_ssh_opts(opts)
     if hlp._get_salt_run_type(opts) in (
         hlp.SALT_RUNTYPE_MASTER,
         hlp.SALT_RUNTYPE_MINION_LOCAL,
@@ -816,6 +819,7 @@ def get_kv(opts, context, get_config=False):
     Return an instance of VaultKV, which can be used
     to interact with the ``kv`` backend.
     """
+    opts = _check_salt_ssh_opts(opts)
     client, config = get_authd_client(opts, context, get_config=True)
     ttl = None
     connection = True
@@ -842,6 +846,7 @@ def get_lease_store(opts, context, get_config=False):
     Return an instance of LeaseStore, which can be used
     to cache leases and handle operations like renewals and revocations.
     """
+    opts = _check_salt_ssh_opts(opts)
     client, config = get_authd_client(opts, context, get_config=True)
     session_cbank = vcache._get_cache_bank(opts, session=True)
     expire_events = None
@@ -863,6 +868,7 @@ def get_approle_api(opts, context, force_local=False, get_config=False):
     """
     Return an instance of AppRoleApi containing an AuthenticatedVaultClient.
     """
+    opts = _check_salt_ssh_opts(opts)
     client, config = get_authd_client(opts, context, force_local=force_local, get_config=True)
     api = vapi.AppRoleApi(client)
     if get_config:
@@ -874,6 +880,7 @@ def get_identity_api(opts, context, force_local=False, get_config=False):
     """
     Return an instance of IdentityApi containing an AuthenticatedVaultClient.
     """
+    opts = _check_salt_ssh_opts(opts)
     client, config = get_authd_client(opts, context, force_local=force_local, get_config=True)
     api = vapi.IdentityApi(client)
     if get_config:
@@ -1028,3 +1035,14 @@ def parse_config(config, validate=True, opts=None, require_token=True):
     except AssertionError as err:
         raise salt.exceptions.InvalidConfigError(f"Invalid vault configuration: {err}") from err
     return merged
+
+
+def _check_salt_ssh_opts(opts):
+    if "__master_opts__" in opts and "vault" not in opts:
+        # Let's run the same way as during pillar compilation.
+        vopts = {}
+        vopts.update(opts)
+        vopts.update(opts["__master_opts__"])
+        vopts["id"] = vopts["minion_id"] = opts["id"]
+        opts = vopts
+    return opts
