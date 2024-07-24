@@ -44,6 +44,7 @@ def existing_secret():
     try:
         yield key
     finally:
+        # ensure we don't retain the version history between tests
         vault_delete_secret(key, metadata=True)
 
 
@@ -57,6 +58,15 @@ def test_read_secret(salt_ssh_cli, existing_secret):
     ret = salt_ssh_cli.run("vault.read_secret", existing_secret)
     assert ret.returncode == 0
     assert ret.data == {"user": "foo", "password": "bar"}
+
+
+def test_read_secret_version(salt_ssh_cli, existing_secret_version):
+    ret = salt_ssh_cli.run("vault.read_secret", existing_secret_version, version=1)
+    assert ret.returncode == 0
+    assert ret.data == {"user": "foo", "password": "bar"}
+    ret = salt_ssh_cli.run("vault.read_secret", existing_secret_version, version=2)
+    assert ret.returncode == 0
+    assert ret.data == {"user": "foo", "password": "hunter1"}
 
 
 def test_write_secret(salt_ssh_cli, existing_secret):
@@ -80,10 +90,52 @@ def test_patch_secret(salt_ssh_cli, existing_secret):
     assert new == {"user": "foo", "password": "bar", "bar": "baz"}
 
 
-def test_delete_secret(salt_ssh_cli, existing_secret):
+def test_delete_restore_secret(salt_ssh_cli, existing_secret):
     ret = salt_ssh_cli.run("vault.delete_secret", existing_secret)
     assert ret.returncode == 0
     assert vault_read_secret(existing_secret) is None
+    ret = salt_ssh_cli.run("vault.restore_secret", existing_secret)
+    assert ret.returncode == 0
+    assert vault_read_secret(existing_secret)
+
+
+@pytest.mark.usefixtures("existing_secret_version")
+def test_delete_restore_secret_all_versions(salt_ssh_cli, existing_secret):
+    versions = ("bar", "hunter1")
+    ret = salt_ssh_cli.run("vault.delete_secret", existing_secret, all_versions=True)
+    assert ret.returncode == 0
+    assert ret.data is True
+    for version in range(len(versions)):
+        ret = salt_ssh_cli.run(
+            "vault.read_secret", existing_secret, default="__was_deleted__", version=version + 1
+        )
+        assert ret.returncode == 0
+        assert ret.data == "__was_deleted__"
+    ret = salt_ssh_cli.run("vault.restore_secret", existing_secret, all_versions=True)
+    assert ret.returncode == 0
+    assert ret.data is True
+    for version, data in enumerate(versions):
+        ret = salt_ssh_cli.run("vault.read_secret", existing_secret, version=version + 1)
+        assert ret.returncode == 0
+        assert ret.data["password"] == data
+
+
+def test_destroy_secret(salt_ssh_cli, existing_secret_version):
+    ret = salt_ssh_cli.run("vault.destroy_secret", existing_secret_version)
+    assert ret.returncode == 0
+    assert vault_read_secret(existing_secret_version) is None
+    ret = salt_ssh_cli.run("vault.read_secret", existing_secret_version, version=1)
+    assert ret.returncode == 0
+    assert ret.data["password"] == "bar"
+
+
+def test_wipe_secret(salt_ssh_cli, existing_secret_version):
+    ret = salt_ssh_cli.run("vault.wipe_secret", existing_secret_version)
+    assert ret.returncode == 0
+    assert vault_read_secret(existing_secret_version) is None
+    ret = salt_ssh_cli.run("vault.read_secret_meta", existing_secret_version)
+    assert ret.returncode == 0
+    assert ret.data is False
 
 
 @pytest.mark.usefixtures("existing_secret")

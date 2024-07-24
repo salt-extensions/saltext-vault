@@ -107,6 +107,7 @@ def kvv2_info():
         "delete": "secret/data/some/path",
         "delete_versions": "secret/delete/some/path",
         "destroy": "secret/destroy/some/path",
+        "undelete": "secret/undelete/some/path",
         "type": "kv",
     }
 

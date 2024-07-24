@@ -587,7 +587,7 @@ def creds_cached(
 
     .. note::
 
-        This function is mosly intended to associate a specific credential with
+        This function is mostly intended to associate a specific credential with
         a beacon that warns about expiry and allows to run an associated state to
         reconfigure an application with new credentials.
         See the :py:mod:`vault_lease beacon module <saltext.vault.beacons.vault_lease>`
@@ -725,7 +725,7 @@ def creds_uncached(
 
     .. note::
 
-        This function is mosly intended to remove a cached lease and its
+        This function is mostly intended to remove a cached lease and its
         beacon. See :py:func:`creds_cached` for a more detailed description.
         To remove the associated beacon together with the lease, just pass
         ``beacon: true`` as a parameter to this state.

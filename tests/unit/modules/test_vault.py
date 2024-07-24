@@ -247,7 +247,9 @@ def test_delete_secret(delete_kv, args):
     path = "secret/some/path"
     res = vault.delete_secret(path, *args)
     assert res
-    delete_kv.assert_called_once_with(path, opts=ANY, context=ANY, versions=args or None)
+    delete_kv.assert_called_once_with(
+        path, opts=ANY, context=ANY, versions=args or None, all_versions=False
+    )
 
 
 @pytest.mark.usefixtures("delete_kv_err")
@@ -262,7 +264,7 @@ def test_delete_secret_err(args, caplog):
         assert "Failed to delete secret! VaultPermissionDeniedError: damn" in caplog.messages
 
 
-@pytest.mark.parametrize("args", [[1], [1, 2]])
+@pytest.mark.parametrize("args", [[], [1], [1, 2]])
 def test_destroy_secret(destroy_kv, args):
     """
     Ensure destroy_secret works as expected
@@ -270,16 +272,9 @@ def test_destroy_secret(destroy_kv, args):
     path = "secret/some/path"
     res = vault.destroy_secret(path, *args)
     assert res
-    destroy_kv.assert_called_once_with(path, args, opts=ANY, context=ANY)
-
-
-@pytest.mark.usefixtures("destroy_kv")
-def test_destroy_secret_requires_version():
-    """
-    Ensure destroy_secret requires at least one version
-    """
-    with pytest.raises(salt.exceptions.SaltInvocationError, match=".*at least one version.*"):
-        vault.destroy_secret("secret/some/path")
+    destroy_kv.assert_called_once_with(
+        path, args or None, opts=ANY, context=ANY, all_versions=False
+    )
 
 
 @pytest.mark.usefixtures("destroy_kv_err")
