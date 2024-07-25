@@ -1,5 +1,5 @@
 """
-Interface with a Vault server.
+Interface with a Vault server and the KV secret backend.
 
 .. important::
     This module requires the general :ref:`Vault setup <vault-setup>`.

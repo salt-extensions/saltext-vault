@@ -1,5 +1,6 @@
 """
-Interface with the Vault SSH secret engine.
+Manage the Vault SSH secret engine, request SSH credentials
+and certificates.
 
 .. versionadded:: 1.2.0
 
@@ -451,7 +452,7 @@ def list_roles_zeroaddr(mount="ssh"):
 
     .. code-block:: bash
 
-        salt '*' vault_ssh.list_roles_zeroaddr 10.1.0.1
+        salt '*' vault_ssh.list_roles_zeroaddr
 
     Required policy:
 

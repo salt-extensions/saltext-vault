@@ -1,6 +1,5 @@
 """
-States for managing Hashicorp Vault.
-Currently handles policies.
+Statefully manage Vault policies.
 
 .. important::
     This module requires the general :ref:`Vault setup <vault-setup>`.

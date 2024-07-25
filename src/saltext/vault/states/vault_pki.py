@@ -1,5 +1,5 @@
 """
-Manage the Vault PKI secret engine.
+Manage the Vault PKI secret engine and Vault-issued X.509 certificates.
 
 .. versionadded:: 1.1.0
 
