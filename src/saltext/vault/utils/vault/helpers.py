@@ -167,3 +167,22 @@ def filter_state_internal_kwargs(kwargs):
     # check_cmd is a valid argument to file.managed
     ignore = set(_STATE_INTERNAL_KEYWORDS) - {"check_cmd"}
     return {k: v for k, v in kwargs.items() if k not in ignore}
+
+
+def deserialize_csl(data):
+    """
+    Ensure a value is a proper Python list, not a string containing
+    a comma-separated list.
+    """
+    if data is None:
+        return data
+    if isinstance(data, str):
+        # need to account for the empty string
+        if not data:
+            return []
+        return data.split(",")
+    try:
+        return list(data)
+    except TypeError:
+        pass
+    raise SaltInvocationError(f"Expected a comma-separated string list or a list, got {type(data)}")

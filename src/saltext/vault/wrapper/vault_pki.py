@@ -2,6 +2,29 @@
 SSH wrapper for the :py:mod:`vault_pki <saltext.vault.modules.vault_pki>` execution module.
 
 See there for documentation.
+
+Setup notes
+-----------
+In addition to the regular :ref:`Vault setup <vault-setup>`, using
+:py:func:`sign_certificate <saltext.vault.modules.vault_pki.sign_certificate>` and
+:py:func:`revoke_certificate <saltext.vault.modules.vault_pki.revoke_certificate>`
+requires the :py:mod:`x509_v2 <salt.modules.x509_v2>` module to be active on the target.
+
+This means:
+
+1. The global Python installation on the target needs to have the
+   ``cryptography`` library installed.
+
+2. On Salt releases below 3008, you need to include the following in your
+   master configuration:
+
+   .. code-block:: yaml
+
+        # e.g. /etc/salt/master.d/salt_ssh.conf
+
+        ssh_minion_opts:
+          features:
+            x509_v2: true
 """
 
 from salt.utils.functools import namespaced_function

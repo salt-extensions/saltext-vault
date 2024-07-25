@@ -1,7 +1,5 @@
 """
-.. _vault_pki:
-
-Manage the Vault PKI secret engine.
+Manage the Vault PKI secret engine, request X.509 certificates.
 
 .. versionadded:: 1.1.0
 
