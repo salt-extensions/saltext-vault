@@ -59,16 +59,15 @@ The following is a non-exhaustive list of points to consider:
      capabilities = ["create", "read", "update"]
    }
 
-   # Issue tokens with token roles
+   # Issue tokens with Token Roles
    # You can substitute the glob with the role name the master is configured with
    path "auth/token/create/*" {
      capabilities = ["create", "read", "update"]
    }
    ```
-4. A [Token Role][] and policies as needed. This is not strictly required, but if
+4. A [Token Role](token-role-target) and policies as needed. This is not strictly required, but if
    omitted, issued minion tokens will be bound to the Salt master one's and be able
-   to inherit all its policies. The linked guide is for Nomad since the Vault
-   documentation on this is slim.
+   to inherit all its policies.
 :::
 
 :::{tab} AppRole
@@ -131,11 +130,9 @@ The following is a non-exhaustive list of points to consider:
 5. Policies for minions as needed.
 :::
 
-[Token Role]: https://developer.hashicorp.com/nomad/docs/integrations/vault/acl#vault-token-role-configuration
-
 ## Salt master configuration
 
-### Credential issuance
+### Credential orchestration
 To allow minions to pull configuration and credentials from the Salt master,
 add this segment to the master configuration, e.g. in `/etc/salt/master.d/peer_run.conf`:
 
@@ -184,9 +181,19 @@ vault:
 ```
 :::
 
+(token-role-target)=
 #### Credential issuance
 :::{tab} Token
-It is strongly recommended to configure a [Token Role][] (but not strictly required):
+By default, token issuance endpoints restrict assignment to only a subset
+of the requester's policies and tie the child token's validity to the parent token.
+This configuration requires the Salt master to possess all policies it assigns
+to minions. Additionally, it allows minions to potentially inherit token issuance
+authorizations.
+
+To overcome these restrictions without relying on `sudo` capabilities, it is highly
+recommended to configure a Token Role. This allows for specifying assignable
+policies without these constraints and optionally enables the "orphaning" of child tokens,
+allowing them to remain valid beyond the Salt master token's expiration.
 
 ```yaml
 vault:
@@ -194,7 +201,10 @@ vault:
     token:
       role_name: <your-token-role>
 ```
+
+See the [Nomad Token Role][] docs for details.
 :::
+
 
 :::{tab} AppRole
 ```yaml
@@ -203,6 +213,8 @@ vault:
     type: approle
 ```
 :::
+
+[Nomad Token Role]: https://developer.hashicorp.com/nomad/docs/integrations/vault/acl#vault-token-role-configuration
 
 ### Common customizations
 A couple of configuration values are not required, but commonly customized.
@@ -337,7 +349,7 @@ vault:
 vault:
   auth:
     method: approle
-    approle_mount: approle  # <-- mount the salt master authenticates at
+    approle_mount: approle  # <-- mount the Salt master authenticates at
     role_id: e5a7b66e-5d08-da9c-7075-71984634b882
     secret_id: 841771dc-11c9-bbc7-bcac-6a3945a69cd9
   cache:
@@ -345,7 +357,7 @@ vault:
   issue:
     type: approle
     approle:
-      mount: salt-minions   # <-- mount the salt master manages
+      mount: salt-minions   # <-- mount the Salt master manages
   metadata:
     entity:
       minion-id: '{minion}'
