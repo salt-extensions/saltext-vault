@@ -337,7 +337,7 @@ vault:
 vault:
   auth:
     method: approle
-    mount: approle         # <-- mount the salt master authenticates at
+    approle_mount: approle  # <-- mount the salt master authenticates at
     role_id: e5a7b66e-5d08-da9c-7075-71984634b882
     secret_id: 841771dc-11c9-bbc7-bcac-6a3945a69cd9
   cache:
@@ -345,7 +345,7 @@ vault:
   issue:
     type: approle
     approle:
-      mount: salt-minions  # <-- mount the salt master manages
+      mount: salt-minions   # <-- mount the salt master manages
   metadata:
     entity:
       minion-id: '{minion}'
