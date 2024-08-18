@@ -7,6 +7,6 @@ def setup(app):
     app.add_crossref_type(
         directivename="vconf",
         rolename="vconf",
-        indextemplate="single: %s; topics/configuration_reference",
+        indextemplate="single: configuration; %s",
     )
     return {"parallel_read_safe": True, "parallel_write_safe": True}
