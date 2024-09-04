@@ -548,7 +548,9 @@ def unseal():
         salt-run vault.unseal
     """
     for key in __opts__["vault"]["keys"]:
-        ret = vault.query("POST", "sys/unseal", __opts__, __context__, payload={"key": key})
+        ret = vault.query(
+            "POST", "sys/unseal", __opts__, __context__, is_unauthd=True, payload={"key": key}
+        )
         if ret["sealed"] is False:
             return True
     return False
