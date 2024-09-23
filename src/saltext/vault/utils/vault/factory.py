@@ -191,8 +191,7 @@ def clear_cache(opts, context, ckey=None, connection=True, session=False, force_
                 ):
                     if config["cache"]["clear_attempt_revocation"]:
                         delta = config["cache"]["clear_attempt_revocation"]
-                        if delta is True:
-                            delta = 1
+                        delta = 1 if delta is True else delta
                         client.token_revoke(delta)
                     if (
                         config["cache"]["expire_events"]

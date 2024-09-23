@@ -55,8 +55,7 @@ def check_cert_for_changes(
         ):
             changes["replaced"] = True
             return changes
-        else:
-            raise
+        raise
 
     if encoding != current_encoding:
         changes["encoding"] = {

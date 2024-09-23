@@ -485,7 +485,6 @@ class LeaseStore:
                 self.expire_events(tag=f"vault/lease/{ckey}/expire", data=event_data)
             if revoke is None or revoke:
                 self.revoke(lease, delta=revoke)
-            return None
 
         # Since we can renew leases, do not check for future validity in cache
         lease = self.cache.get(ckey, flush=bool(revoke))

@@ -172,14 +172,18 @@ def ext_pillar(
 
     vault_pillar = {}
 
-    for path in _get_paths(path_pattern, minion_id, pillar):
+    for rendered_path in _get_paths(path_pattern, minion_id, pillar):
         try:
-            vault_pillar_single = vault.read_kv(path, __opts__, __context__)
+            vault_pillar_single = vault.read_kv(rendered_path, __opts__, __context__)
         except vault.VaultNotFoundError:
-            log.info("Vault secret not found for: %s", path, exc_info_on_loglevel=logging.DEBUG)
+            log.info(
+                "Vault secret not found for: %s", rendered_path, exc_info_on_loglevel=logging.DEBUG
+            )
         except SaltException:
             log.warning(
-                "Error fetching Vault secret at: %s", path, exc_info_on_loglevel=logging.DEBUG
+                "Error fetching Vault secret at: %s",
+                rendered_path,
+                exc_info_on_loglevel=logging.DEBUG,
             )
         else:
             vault_pillar = salt.utils.dictupdate.merge(
