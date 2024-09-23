@@ -5,8 +5,8 @@ import pytest
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 
-import saltext.vault.utils.vault as vault
 from saltext.vault.modules import vault_db
+from saltext.vault.utils import vault
 
 
 @pytest.fixture

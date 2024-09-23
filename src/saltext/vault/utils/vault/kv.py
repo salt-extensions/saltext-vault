@@ -138,13 +138,12 @@ class VaultKV:
             except VaultNotFoundError:
                 # The delete API behaves the same
                 return True
-            else:
-                for version, meta in curr["versions"].items():
-                    if not meta["destroyed"] and not meta["deletion_time"]:
-                        versions.append(version)
-                if not versions:
-                    # No version left to delete
-                    return True
+            for version, meta in curr["versions"].items():
+                if not meta["destroyed"] and not meta["deletion_time"]:
+                    versions.append(version)
+            if not versions:
+                # No version left to delete
+                return True
         versions = self._parse_versions(versions)
 
         if v2_info["v2"]:
@@ -224,18 +223,17 @@ class VaultKV:
             except VaultNotFoundError:
                 # The destroy API behaves the same
                 return True
+            if all_versions:
+                for version, meta in curr.items():
+                    if not meta["destroyed"]:
+                        versions.append(version)
             else:
-                if all_versions:
-                    for version, meta in curr.items():
-                        if not meta["destroyed"]:
-                            versions.append(version)
-                else:
-                    most_recent = str(max(int(x) for x in curr))
-                    if not curr[most_recent]["destroyed"]:
-                        versions = [most_recent]
-                if not versions:
-                    # No version left to destroy
-                    return True
+                most_recent = str(max(int(x) for x in curr))
+                if not curr[most_recent]["destroyed"]:
+                    versions = [most_recent]
+            if not versions:
+                # No version left to destroy
+                return True
 
         versions = self._parse_versions(versions)
         path = v2_info["destroy"]

@@ -726,6 +726,9 @@ def read_ca(mount="ssh"):
     if res.status_code == 200:
         return res.text
     res.raise_for_status()
+    raise CommandExecutionError(
+        f"Internal error, this should not have been hit. Response ({res.status_code}): {res.text}"
+    )
 
 
 def sign_key(
@@ -809,7 +812,7 @@ def sign_key(
     ]:
         if val is not None:
             payload[param] = {
-                k: salt.utils.json.dumps(v) if isinstance(v, dict) or isinstance(v, list) else v
+                k: salt.utils.json.dumps(v) if isinstance(v, (dict, list)) else v
                 for k, v in val.items()
             }
 
@@ -911,7 +914,7 @@ def generate_key_cert(
     ]:
         if val is not None:
             payload[param] = {
-                k: salt.utils.json.dumps(v) if isinstance(v, dict) or isinstance(v, list) else v
+                k: salt.utils.json.dumps(v) if isinstance(v, (dict, list)) else v
                 for k, v in val.items()
             }
 

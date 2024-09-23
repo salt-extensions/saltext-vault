@@ -16,12 +16,12 @@ import salt.crypt
 import salt.exceptions
 import salt.pillar
 import salt.utils.data
-import salt.utils.immutabletypes as immutabletypes
 import salt.utils.json
 import salt.utils.versions
 from salt.defaults import NOT_SET
 from salt.exceptions import SaltInvocationError
 from salt.exceptions import SaltRunnerError
+from salt.utils import immutabletypes
 
 from saltext.vault.utils import vault
 from saltext.vault.utils.vault import cache as vcache
