@@ -78,10 +78,6 @@ tests = [
     "pytest-salt-factories[docker]>=1.0.0; sys_platform != 'win32'",
     "pytest-timeout",
     "cryptography>=36",
-    # pytest-shell-utilities does not work with v6 currently
-    # https://github.com/saltstack/pytest-shell-utilities/issues/44
-    # This can be removed once the issue has been fixed.
-    "psutil<6",
 ]
 
 [project.entry-points."salt.loader"]
