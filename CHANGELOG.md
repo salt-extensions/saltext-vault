@@ -4,6 +4,27 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## v1.2.0 (2024-10-02)
+
+
+### Changed
+
+- Readded direct package dependency on cryptography
+
+
+### Fixed
+
+- Change unseal query to be always unauthenticated. [#85](https://github.com/salt-extensions/saltext-vault/issues/85)
+
+
+### Added
+
+- Added support for credential orchestration in Salt-SSH wrappers, added wrappers for vault, vault_db, vault_pki modules [#54](https://github.com/salt-extensions/saltext-vault/issues/54)
+- Added `vault_ssh` execution, state and wrapper modules for managing and using the SSH secret backend [#58](https://github.com/salt-extensions/saltext-vault/issues/58)
+- Improved handling of KV v2 secret versions [#61](https://github.com/salt-extensions/saltext-vault/issues/61)
+- Added `vault_secret` state module for statefully managing secrets [#62](https://github.com/salt-extensions/saltext-vault/issues/62)
+
+
 ## v1.1.1 (2024-07-24)
 
 
