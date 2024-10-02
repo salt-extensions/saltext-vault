@@ -38,6 +38,7 @@ requires-python = ">= 3.8"
 dynamic = ["version"]
 dependencies = [
     "salt>=3006",
+    "cryptography>=36",
 ]
 
 [project.readme]
@@ -77,7 +78,6 @@ tests = [
     "pytest-salt-factories>=1.0.0; sys_platform == 'win32'",
     "pytest-salt-factories[docker]>=1.0.0; sys_platform != 'win32'",
     "pytest-timeout",
-    "cryptography>=36",
 ]
 
 [project.entry-points."salt.loader"]
