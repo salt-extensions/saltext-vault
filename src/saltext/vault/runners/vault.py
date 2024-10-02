@@ -27,6 +27,7 @@ from saltext.vault.utils import vault
 from saltext.vault.utils.vault import cache as vcache
 from saltext.vault.utils.vault import factory
 from saltext.vault.utils.vault import helpers
+from saltext.vault.utils.vault.client import VaultClient
 from saltext.vault.utils.versions import warn_until
 
 log = logging.getLogger(__name__)
@@ -547,8 +548,12 @@ def unseal():
 
         salt-run vault.unseal
     """
+    config = factory.parse_config(__opts__.get("vault", {}))
+    client = VaultClient(**config["server"], **config["client"])
+
     for key in __opts__["vault"]["keys"]:
-        ret = vault.query("POST", "sys/unseal", __opts__, __context__, payload={"key": key})
+        ret = client.post("sys/unseal", payload={"key": key})
+        # Return immediately after Vault is unsealed. No need to go over all the keys
         if ret["sealed"] is False:
             return True
     return False
