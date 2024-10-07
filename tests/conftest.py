@@ -21,7 +21,7 @@ from tests.support.vault import vault_write_policy_file
 
 try:
     import pwd
-except ImportError:
+except ImportError:  # pragma: no cover
     import salt.utils.win_functions
 
 # Reset the root logger to its default level(because salt changed it)
@@ -30,7 +30,7 @@ logging.root.setLevel(logging.WARNING)
 
 # This swallows all logging to stdout.
 # To show select logs, set --log-cli-level=<level>
-for handler in logging.root.handlers[:]:
+for handler in logging.root.handlers[:]:  # pragma: no cover
     logging.root.removeHandler(handler)
     handler.close()
 
@@ -38,7 +38,7 @@ log = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="session")
-def salt_factories_config():
+def salt_factories_config():  # pragma: no cover
     """
     Return a dictionary with the keyword arguments for FactoriesManager
     """
@@ -49,6 +49,7 @@ def salt_factories_config():
     }
 
 
+<<<<<<< before updating
 @pytest.fixture(scope="module")
 def master_config_defaults(vault_port):
     """
@@ -93,6 +94,10 @@ def master_config_defaults(vault_port):
 
 @pytest.fixture(scope="module")
 def master_config_overrides():
+=======
+@pytest.fixture(scope="package")
+def master_config():  # pragma: no cover
+>>>>>>> after updating
     """
     You can override the default configuration per package by overriding this
     fixture in a conftest.py file.
@@ -100,6 +105,7 @@ def master_config_overrides():
     return {}
 
 
+<<<<<<< before updating
 @pytest.fixture(scope="module")
 def master(salt_factories, master_config_defaults, master_config_overrides):
     return salt_factories.salt_master_daemon(
@@ -133,6 +139,15 @@ def minion_config_defaults(vault_port):
 
 @pytest.fixture(scope="module")
 def minion_config_overrides():
+=======
+@pytest.fixture(scope="package")
+def master(salt_factories, master_config):  # pragma: no cover
+    return salt_factories.salt_master_daemon(random_string("master-"), overrides=master_config)
+
+
+@pytest.fixture(scope="package")
+def minion_config():  # pragma: no cover
+>>>>>>> after updating
     """
     You can override the default configuration per package by overriding this
     fixture in a conftest.py file.
@@ -140,15 +155,21 @@ def minion_config_overrides():
     return {}
 
 
+<<<<<<< before updating
 @pytest.fixture(scope="module")
 def minion(master, minion_config_defaults, minion_config_overrides):
     return master.salt_minion_daemon(
         random_string("minion-"), defaults=minion_config_defaults, overrides=minion_config_overrides
     )
+=======
+@pytest.fixture(scope="package")
+def minion(master, minion_config):  # pragma: no cover
+    return master.salt_minion_daemon(random_string("minion-"), overrides=minion_config)
+>>>>>>> after updating
 
 
 @pytest.fixture(scope="session")
-def current_user():
+def current_user():  # pragma: no cover
     """
     Get the user associated with the current process.
     """
@@ -158,7 +179,7 @@ def current_user():
 
 
 @pytest.fixture(scope="module")
-def sshd_server(salt_factories, sshd_config_dir):
+def sshd_server(salt_factories, sshd_config_dir):  # pragma: no cover
     sshd_config_dict = {
         "Protocol": "2",
         # Turn strict modes off so that we can operate in /tmp
@@ -215,7 +236,7 @@ def sshd_server(salt_factories, sshd_config_dir):
 
 
 @pytest.fixture(scope="module")
-def known_hosts_file(sshd_server, master, salt_factories):
+def known_hosts_file(sshd_server, master, salt_factories):  # pragma: no cover
     with pytest.helpers.temp_file(
         "ssh-known-hosts",
         "\n".join(sshd_server.get_host_keys()),
@@ -231,7 +252,7 @@ def known_hosts_file(sshd_server, master, salt_factories):
 @pytest.fixture(scope="module")
 def salt_ssh_roster_file(
     sshd_server, master, known_hosts_file, current_user
-):  # pylint: disable=unused-argument
+):  # pylint: disable=unused-argument; pragma: no cover
     roster_contents = f"""
     localhost:
       host: 127.0.0.1
@@ -246,7 +267,7 @@ def salt_ssh_roster_file(
 
 
 @pytest.fixture(scope="session")
-def sshd_config_dir(salt_factories):
+def sshd_config_dir(salt_factories):  # pragma: no cover
     config_dir = salt_factories.get_root_dir_for_daemon("sshd")
     try:
         yield config_dir

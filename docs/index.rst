@@ -1,5 +1,5 @@
-``saltext-vault``: Integrate Salt with Vault
-============================================
+``saltext-vault``: Integrate Salt with HashiCorp Vault
+======================================================
 
 This Salt Extension provides modules for interacting with Vault by HashiCorp,
 a secrets and encryption management system. You only need to setup your Salt master,
