@@ -25,6 +25,12 @@ jobs:
         with:
           fetch-depth: 2  # coverage: Issue detecting commit SHA
 
+      - name: Setup Vault
+        # renovate: datasource=git-tags depName=https://github.com/eLco/setup-vault depType=action
+        uses: eLco/setup-vault@5d0ddffdfca9650484ae1378dafc376a9ebcd15e  # v1.0.3
+        with:
+          vault_version: 1.15.4
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3  # v5.2.0
         with:

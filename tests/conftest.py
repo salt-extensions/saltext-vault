@@ -49,9 +49,8 @@ def salt_factories_config():  # pragma: no cover
     }
 
 
-<<<<<<< before updating
 @pytest.fixture(scope="module")
-def master_config_defaults(vault_port):
+def master_config_defaults(vault_port):  # pragma: no cover
     """
     This default configuration ensures the master issues authentication
     credentials with the correct policies. By default, it will issue
@@ -93,11 +92,7 @@ def master_config_defaults(vault_port):
 
 
 @pytest.fixture(scope="module")
-def master_config_overrides():
-=======
-@pytest.fixture(scope="package")
-def master_config():  # pragma: no cover
->>>>>>> after updating
+def master_config_overrides():  # pragma: no cover
     """
     You can override the default configuration per package by overriding this
     fixture in a conftest.py file.
@@ -105,16 +100,15 @@ def master_config():  # pragma: no cover
     return {}
 
 
-<<<<<<< before updating
 @pytest.fixture(scope="module")
-def master(salt_factories, master_config_defaults, master_config_overrides):
+def master(salt_factories, master_config_defaults, master_config_overrides):  # pragma: no cover
     return salt_factories.salt_master_daemon(
         random_string("master-"), defaults=master_config_defaults, overrides=master_config_overrides
     )
 
 
 @pytest.fixture(scope="module")
-def minion_config_defaults(vault_port):
+def minion_config_defaults(vault_port):  # pragma: no cover
     """
     The default minion configuration ensures that the minion works in --local
     mode and that the ``sdbvault`` SDB configuration is present.
@@ -138,16 +132,7 @@ def minion_config_defaults(vault_port):
 
 
 @pytest.fixture(scope="module")
-def minion_config_overrides():
-=======
-@pytest.fixture(scope="package")
-def master(salt_factories, master_config):  # pragma: no cover
-    return salt_factories.salt_master_daemon(random_string("master-"), overrides=master_config)
-
-
-@pytest.fixture(scope="package")
-def minion_config():  # pragma: no cover
->>>>>>> after updating
+def minion_config_overrides():  # pragma: no cover
     """
     You can override the default configuration per package by overriding this
     fixture in a conftest.py file.
@@ -155,17 +140,11 @@ def minion_config():  # pragma: no cover
     return {}
 
 
-<<<<<<< before updating
 @pytest.fixture(scope="module")
-def minion(master, minion_config_defaults, minion_config_overrides):
+def minion(master, minion_config_defaults, minion_config_overrides):  # pragma: no cover
     return master.salt_minion_daemon(
         random_string("minion-"), defaults=minion_config_defaults, overrides=minion_config_overrides
     )
-=======
-@pytest.fixture(scope="package")
-def minion(master, minion_config):  # pragma: no cover
-    return master.salt_minion_daemon(random_string("minion-"), overrides=minion_config)
->>>>>>> after updating
 
 
 @pytest.fixture(scope="session")

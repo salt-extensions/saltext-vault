@@ -1,23 +1,14 @@
 import pytest
 
-<<<<<<< before updating
+
 @pytest.fixture(scope="module")
-def master(master):
-=======
-@pytest.fixture(scope="package")
 def master(master):  # pragma: no cover
->>>>>>> after updating
     with master.started():
         yield master
 
 
-<<<<<<< before updating
 @pytest.fixture(scope="module")
-def minion(minion):
-=======
-@pytest.fixture(scope="package")
 def minion(minion):  # pragma: no cover
->>>>>>> after updating
     with minion.started():
         yield minion
 

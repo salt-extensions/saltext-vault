@@ -24,7 +24,6 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       deploy-docs: true
-      setup-vault: true
       release: true
       version: ${{ needs.get_tag_version.outputs.version }}
     permissions:
