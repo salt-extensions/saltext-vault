@@ -8,7 +8,6 @@ Manage the Vault PKI secret engine, request X.509 certificates.
 """
 
 import logging
-from typing import Tuple
 
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
@@ -1074,7 +1073,7 @@ def read_urls(mount="pki"):
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
 
-def _split_sans(sans) -> Tuple[list, list, list, list]:
+def _split_sans(sans) -> tuple[list, list, list, list]:
     dns_sans = []
     ip_sans = []
     uri_sans = []

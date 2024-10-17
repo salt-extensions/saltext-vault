@@ -7,7 +7,6 @@ Vault PKI helpers
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
-from typing import List
 
 import salt.utils.x509 as x509util
 from cryptography import x509 as cx509
@@ -141,7 +140,7 @@ def compare_cert_signing(current: cx509.Certificate, signing_ca: cx509.Certifica
     return changes
 
 
-def compare_ca_chain(current: List[cx509.Certificate], new: List[cx509.Certificate]):
+def compare_ca_chain(current: list[cx509.Certificate], new: list[cx509.Certificate]):
     if len(current) != len(new):
         return False
     for i, new_cert in enumerate(new):
