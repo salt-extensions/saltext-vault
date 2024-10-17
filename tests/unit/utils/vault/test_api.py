@@ -249,12 +249,15 @@ def test_write_entity_alias(client, aliases, entity_fetch_response, identity_api
         if aliases[0]["mount_accessor"] == "test-accessor":
             payload["id"] = aliases[0]["id"]
 
-    with patch(
-        "saltext.vault.utils.vault.api.IdentityApi._lookup_mount_accessor",
-        return_value="test-accessor",
-    ), patch(
-        "saltext.vault.utils.vault.api.IdentityApi.read_entity",
-        return_value=entity_fetch_response["data"],
+    with (
+        patch(
+            "saltext.vault.utils.vault.api.IdentityApi._lookup_mount_accessor",
+            return_value="test-accessor",
+        ),
+        patch(
+            "saltext.vault.utils.vault.api.IdentityApi.read_entity",
+            return_value=entity_fetch_response["data"],
+        ),
     ):
         identity_api.write_entity_alias(
             "salt_minion_test-minion",

@@ -216,14 +216,17 @@ def sshd_server(salt_factories, sshd_config_dir):  # pragma: no cover
 
 @pytest.fixture(scope="module")
 def known_hosts_file(sshd_server, master, salt_factories):  # pragma: no cover
-    with pytest.helpers.temp_file(
-        "ssh-known-hosts",
-        "\n".join(sshd_server.get_host_keys()),
-        salt_factories.tmp_root_dir,
-    ) as known_hosts_file, pytest.helpers.temp_file(
-        "master.d/ssh-known-hosts.conf",
-        f"known_hosts_file: {known_hosts_file}",
-        master.config_dir,
+    with (
+        pytest.helpers.temp_file(
+            "ssh-known-hosts",
+            "\n".join(sshd_server.get_host_keys()),
+            salt_factories.tmp_root_dir,
+        ) as known_hosts_file,
+        pytest.helpers.temp_file(
+            "master.d/ssh-known-hosts.conf",
+            f"known_hosts_file: {known_hosts_file}",
+            master.config_dir,
+        ),
     ):
         yield known_hosts_file
 

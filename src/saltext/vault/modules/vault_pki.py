@@ -1074,7 +1074,7 @@ def read_urls(mount="pki"):
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
 
-def _split_sans(sans) -> Tuple[list, list, list, list]:
+def _split_sans(sans) -> tuple[list, list, list, list]:
     dns_sans = []
     ip_sans = []
     uri_sans = []

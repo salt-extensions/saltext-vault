@@ -812,13 +812,17 @@ def test_generate_secret_id(
         expected.update(wrapped_serialized)
     else:
         expected["data"].update(secret_id_serialized)
-    with patch("saltext.vault.runners.vault._get_secret_id", autospec=True) as gen, patch(
-        "saltext.vault.runners.vault._approle_params_match",
-        autospec=True,
-        return_value=True,
-    ) as matcher, patch(
-        "saltext.vault.runners.vault._lookup_approle_cached", autospec=True
-    ) as lookup_approle:
+    with (
+        patch("saltext.vault.runners.vault._get_secret_id", autospec=True) as gen,
+        patch(
+            "saltext.vault.runners.vault._approle_params_match",
+            autospec=True,
+            return_value=True,
+        ) as matcher,
+        patch(
+            "saltext.vault.runners.vault._lookup_approle_cached", autospec=True
+        ) as lookup_approle,
+    ):
 
         def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
             if kwargs.get("wrap"):
@@ -879,15 +883,18 @@ def test_generate_secret_id_updates_params(
         "misc_data": {"secret_id_num_uses": approle_meta["secret_id_num_uses"]},
         "wrap_info": wrapped_serialized["wrap_info"],
     }
-    with patch("saltext.vault.runners.vault._get_secret_id", autospec=True) as gen, patch(
-        "saltext.vault.runners.vault._approle_params_match",
-        autospec=True,
-        return_value=False,
-    ) as matcher, patch(
-        "saltext.vault.runners.vault._manage_approle", autospec=True
-    ) as manage_approle, patch(
-        "saltext.vault.runners.vault._lookup_approle_cached", autospec=True
-    ) as lookup_approle:
+    with (
+        patch("saltext.vault.runners.vault._get_secret_id", autospec=True) as gen,
+        patch(
+            "saltext.vault.runners.vault._approle_params_match",
+            autospec=True,
+            return_value=False,
+        ) as matcher,
+        patch("saltext.vault.runners.vault._manage_approle", autospec=True) as manage_approle,
+        patch(
+            "saltext.vault.runners.vault._lookup_approle_cached", autospec=True
+        ) as lookup_approle,
+    ):
         res = Mock(spec=vaultutil.VaultWrappedResponse)
         res.serialize_for_minion.return_value = wrapped_serialized
         gen.return_value = res
