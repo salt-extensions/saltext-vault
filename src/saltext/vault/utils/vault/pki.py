@@ -7,7 +7,6 @@ Vault PKI helpers
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
-from typing import List
 
 import salt.utils.x509 as x509util
 from cryptography import x509 as cx509

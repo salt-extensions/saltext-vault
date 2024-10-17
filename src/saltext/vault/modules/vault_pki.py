@@ -8,7 +8,6 @@ Manage the Vault PKI secret engine, request X.509 certificates.
 """
 
 import logging
-from typing import Tuple
 
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
