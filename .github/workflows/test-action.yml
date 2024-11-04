@@ -20,7 +20,7 @@ jobs:
           - {salt-version: "3007.1", python-version: "3.10"}
 
     steps:
-      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871  # v4.2.1
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
         with:
           fetch-depth: 2  # coverage: Issue detecting commit SHA
 
@@ -31,7 +31,7 @@ jobs:
           vault_version: 1.15.4
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3  # v5.2.0
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -68,7 +68,7 @@ jobs:
           flags: ${{ steps.codecov-flags.outputs.flags }},project
           name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-project
           use_oidc: true
-          version: v0.7.6
+          version: v0.8.0
 
       - name: Upload Tests Code Coverage
         uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673  # v4.5.0
@@ -79,7 +79,7 @@ jobs:
           flags: ${{ steps.codecov-flags.outputs.flags }},tests
           name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-tests
           use_oidc: true
-          version: v0.7.6
+          version: v0.8.0
 
       - name: Upload Logs
         if: always()
@@ -115,26 +115,14 @@ jobs:
           - {salt-version: "3007.1", python-version: "3.9"}
 
     steps:
-      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871  # v4.2.1
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
         with:
           fetch-depth: 2
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3  # v5.2.0
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Download libeay32.dll
-        run: |
-          PY_LOC="$(which python.exe)"
-          export PY_LOC
-          echo "${PY_LOC}"
-          PY_DIR="$(dirname "${PY_LOC}")"
-          export PY_DIR
-          echo "${PY_DIR}"
-          curl https://repo.saltproject.io/windows/dependencies/64/libeay32.dll --output "${PY_DIR}/libeay32.dll"
-          ls -l "${PY_DIR}"
-        shell: bash
 
       - name: Install Nox
         run: |
@@ -174,7 +162,7 @@ jobs:
           flags: ${{ steps.codecov-flags.outputs.flags }},project
           name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-project
           use_oidc: true
-          version: v0.7.6
+          version: v0.8.0
 
       - name: Upload Tests Code Coverage
         uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673  # v4.5.0
@@ -185,7 +173,7 @@ jobs:
           flags: ${{ steps.codecov-flags.outputs.flags }},tests
           name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-tests
           use_oidc: true
-          version: v0.7.6
+          version: v0.8.0
 
       - name: Upload Logs
         if: always()
@@ -221,12 +209,12 @@ jobs:
           - {salt-version: "3007.1", python-version: "3.10"}
 
     steps:
-      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871  # v4.2.1
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
         with:
           fetch-depth: 2
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3  # v5.2.0
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -263,7 +251,7 @@ jobs:
           flags: ${{ steps.codecov-flags.outputs.flags }},project
           name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-project
           use_oidc: true
-          version: v0.7.6
+          version: v0.8.0
 
       - name: Upload Tests Code Coverage
         uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673  # v4.5.0
@@ -274,7 +262,7 @@ jobs:
           flags: ${{ steps.codecov-flags.outputs.flags }},tests
           name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-tests
           use_oidc: true
-          version: v0.7.6
+          version: v0.8.0
 
       - name: Upload Logs
         if: always()
