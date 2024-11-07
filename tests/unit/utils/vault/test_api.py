@@ -314,7 +314,7 @@ def test_lookup_mount_accessor(client, identity_api, lookup_mount_response):
     Ensure _lookup_mount_accessor calls the API as expected.
     """
     client.get.return_value = lookup_mount_response
-    res = identity_api._lookup_mount_accessor("salt-minions")  # pylint: disable=protected-access
+    res = identity_api._lookup_mount_accessor("salt-minions")
     client.get.assert_called_once_with("sys/auth/salt-minions")
     assert res == "auth_approle_cafebabe"
 

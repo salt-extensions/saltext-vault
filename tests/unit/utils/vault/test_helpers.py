@@ -24,7 +24,7 @@ def test_get_salt_run_type(opts_runtype, expected):
     """
     Ensure run types are detected as expected
     """
-    assert hlp._get_salt_run_type(opts_runtype) == expected  # pylint: disable=protected-access
+    assert hlp._get_salt_run_type(opts_runtype) == expected
 
 
 @pytest.mark.parametrize(

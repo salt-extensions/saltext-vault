@@ -101,9 +101,7 @@ def test_get_paths(pattern, expected):
     previous_pillar = {
         "role": "foo",
     }
-    result = vault._get_paths(  # pylint: disable=protected-access
-        pattern, "test-minion", previous_pillar
-    )
+    result = vault._get_paths(pattern, "test-minion", previous_pillar)
     assert result == expected
 
 

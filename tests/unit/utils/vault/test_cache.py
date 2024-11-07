@@ -71,6 +71,7 @@ def time_stopped(request):
         yield
 
 
+@pytest.mark.usefixtures("salt_runtype")
 @pytest.mark.parametrize("connection", [True, False])
 @pytest.mark.parametrize(
     "salt_runtype,force_local,expected",
@@ -83,16 +84,12 @@ def time_stopped(request):
     ],
     indirect=["salt_runtype"],
 )
-def test_get_cache_bank(
-    connection, salt_runtype, force_local, expected
-):  # pylint: disable=unused-argument
+def test_get_cache_bank(connection, force_local, expected):
     """
     Ensure the cache banks are mapped as expected, depending on run type
     """
     opts = {"grains": {"id": "test-minion"}}
-    cbank = vcache._get_cache_bank(  # pylint: disable=protected-access
-        opts, force_local=force_local, connection=connection
-    )  # pylint: disable=protected-access
+    cbank = vcache._get_cache_bank(opts, force_local=force_local, connection=connection)
     if connection:
         expected += "/connection"
     assert cbank == expected
@@ -116,9 +113,7 @@ class TestVaultCache:
         if config != "session":
             uncached.contains.assert_called_once_with(cbank, ckey)
 
-    def test_get_cached_from_context(
-        self, context, cached, cbank, ckey, data
-    ):  # pylint: disable-msg=too-many-arguments
+    def test_get_cached_from_context(self, context, cached, cbank, ckey, data):
         """
         Ensure that cached data in __context__ is respected, regardless
         of cache backend.
@@ -152,9 +147,7 @@ class TestVaultCache:
         cached_outdated.fetch.assert_not_called()
 
     @pytest.mark.parametrize("config", ["session", "other"])
-    def test_flush(
-        self, config, context, cached, cbank, ckey
-    ):  # pylint: disable-msg=too-many-arguments
+    def test_flush(self, config, context, cached, cbank, ckey):
         """
         Ensure that flushing clears the context key only and, if
         a cache backend is in use, it is also cleared.
@@ -168,9 +161,7 @@ class TestVaultCache:
             cached.flush.assert_called_once_with(cbank, ckey)
 
     @pytest.mark.parametrize("config", ["session", "other"])
-    def test_flush_cbank(
-        self, config, context, cached, cbank, ckey
-    ):  # pylint: disable-msg=too-many-arguments
+    def test_flush_cbank(self, config, context, cached, cbank, ckey):
         """
         Ensure that flushing with cbank=True clears the context bank and, if
         a cache backend is in use, it is also cleared.
@@ -185,9 +176,7 @@ class TestVaultCache:
 
     @pytest.mark.parametrize("context", [{}, {"vault/connection": {}}])
     @pytest.mark.parametrize("config", ["session", "other"])
-    def test_store(
-        self, config, context, uncached, cbank, ckey, data
-    ):  # pylint: disable-msg=too-many-arguments
+    def test_store(self, config, context, uncached, cbank, ckey, data):
         """
         Ensure that storing data in cache always updates the context
         and, if a cache backend is in use, it is also stored there.
@@ -236,16 +225,14 @@ class TestVaultConfigCache:
         """
         Ensure an uninitialized instance is returned when there is no cache
         """
-        res = vault.cache._get_config_cache({}, {}, cbank, ckey)  # pylint: disable=protected-access
+        res = vault.cache._get_config_cache({}, {}, cbank, ckey)
         assert res.config is None
 
     def test_get_config_context_cached(self, uncached, cbank, ckey, context):
         """
         Ensure cached data in context wins
         """
-        res = vault.cache._get_config_cache(  # pylint: disable=protected-access
-            {}, context, cbank, ckey
-        )  # pylint: disable=protected-access
+        res = vault.cache._get_config_cache({}, context, cbank, ckey)
         assert res.config == context[cbank][ckey]
         uncached.contains.assert_not_called()
 
@@ -253,7 +240,7 @@ class TestVaultConfigCache:
         """
         Ensure cached data from other sources is respected
         """
-        res = vault.cache._get_config_cache({}, {}, cbank, ckey)  # pylint: disable=protected-access
+        res = vault.cache._get_config_cache({}, {}, cbank, ckey)
         assert res.config == data
         cached.contains.assert_called_once_with(cbank, ckey)
         cached.fetch.assert_called_once_with(cbank, ckey)
@@ -274,7 +261,7 @@ class TestVaultConfigCache:
             else:
                 assert cache.ttl is None
                 assert cache.cache is None
-            cache._load(data)  # pylint: disable=protected-access
+            cache._load(data)
             assert cache.ttl == data["cache"]["config"]
             assert cache.cache is not None
             if config is not None and config["cache"]["backend"] != "session":
@@ -289,9 +276,7 @@ class TestVaultConfigCache:
         res = cache.exists()
         assert res is bool(config)
 
-    def test_get(
-        self, config, cached, context, cbank, ckey, data
-    ):  # pylint: disable-msg=too-many-arguments
+    def test_get(self, config, cached, context, cbank, ckey, data):
         """
         Ensure cached data is returned and backend settings honored,
         unless the instance has not been initialized yet
@@ -313,9 +298,7 @@ class TestVaultConfigCache:
             cached.contains.assert_not_called()
             assert res is None
 
-    def test_flush(
-        self, config, context, cached, cbank, ckey
-    ):  # pylint: disable-msg=too-many-arguments
+    def test_flush(self, config, context, cached, cbank, ckey):
         """
         Ensure flushing deletes the whole cache bank (=connection scope),
         unless the configuration has not been initialized.
@@ -500,9 +483,8 @@ class TestVaultAuthCache:
         with pytest.raises(vault.VaultAuthExpired):
             cache.flush()
 
-    def test_flush_exceptions_with_get(
-        self, cached_outdated, cbank, ckey
-    ):  # pylint: disable=unused-argument
+    @pytest.mark.usefixtures("cached_outdated")
+    def test_flush_exceptions_with_get(self, cbank, ckey):
         """
         Ensure internal flushing is disabled when the object is initialized
         with a reference to an exception class.
@@ -617,9 +599,7 @@ class TestVaultLeaseCache:
 
     @pytest.mark.parametrize("lease", ({}, {"meta": {"foo": "bar"}}), indirect=True)
     @pytest.mark.usefixtures("cached_outdated")
-    def test_expire_events_with_get(
-        self, events, lease
-    ):  # pylint: disable=unused-argument, disable-msg=too-many-arguments
+    def test_expire_events_with_get(self, events, lease):
         """
         Ensure internal flushing is disabled when the object is initialized
         with a reference to an exception class.

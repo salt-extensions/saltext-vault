@@ -420,7 +420,7 @@ class TestLeaseStore:
         valid_for,
         lease_renewed_response,
         lease_renewed_extended_response,
-    ):  # pylint: disable-msg=too-many-arguments
+    ):
         """
         Ensure that, if renew_increment was not set and the default period
         does not yield valid_for, a second renewal is attempted by valid_for.

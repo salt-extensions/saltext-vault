@@ -244,7 +244,7 @@ def kvv2(kvv2_info, kvv2_response, metadata_nocache, kv_list_response):
 @pytest.mark.parametrize("clear_unauthd,token_valid", [(False, False), (True, False), (True, True)])
 def test_kv_wrapper_handles_perm_exceptions(
     wrapper, param, result, test_remote_config, clear_unauthd, token_valid
-):  # pylint: disable-msg=too-many-arguments
+):
     """
     Test that *_kv wrappers retry with a new client if
       a) the current configuration might be invalid
@@ -405,9 +405,7 @@ class TestKVV1:
             ),
         ],
     )
-    def test_vault_kv_patch(
-        self, kvv1, path, existing, data, expected
-    ):  # pylint: disable-msg=too-many-arguments
+    def test_vault_kv_patch(self, kvv1, path, existing, data, expected):
         """
         Ensure that VaultKV.patch works for KV v1.
         This also tests the internal JSON merge patch implementation.
@@ -475,14 +473,14 @@ class TestKVV2:
         Ensure parsing versions works as expected:
         single integer/number string or list of those are allowed
         """
-        assert kvv2._parse_versions(versions) == expected  # pylint: disable=protected-access
+        assert kvv2._parse_versions(versions) == expected
 
     def test_parse_versions_raises_exception_when_unparsable(self, kvv2):
         """
         Ensure unparsable versions raise an exception
         """
         with pytest.raises(vault.VaultInvocationError):
-            kvv2._parse_versions("four")  # pylint: disable=protected-access
+            kvv2._parse_versions("four")
 
     def test_get_secret_path_metadata_lookup_unexpected_response(self, kvv2, caplog, path):
         """
@@ -494,7 +492,7 @@ class TestKVV2:
         resp_mm.status_code = 200
         resp_mm.reason = ""
         kvv2.client.get.return_value = resp_mm
-        res = kvv2._get_secret_path_metadata(path)  # pylint: disable=protected-access
+        res = kvv2._get_secret_path_metadata(path)
         assert res is None
         assert "Unexpected response to metadata query" in caplog.text
 
@@ -503,7 +501,7 @@ class TestKVV2:
         Ensure HTTP error status codes are treated as not KV
         """
         kvv2.client.get.side_effect = vault.VaultPermissionDeniedError
-        res = kvv2._get_secret_path_metadata(path)  # pylint: disable=protected-access
+        res = kvv2._get_secret_path_metadata(path)
         assert res is None
         assert "VaultPermissionDeniedError:" in caplog.text
 
