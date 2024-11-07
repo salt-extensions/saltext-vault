@@ -14,6 +14,40 @@ from saltext.vault.utils.vault import factory as vfactory
 from tests.unit.utils.vault.conftest import _mock_json_response  # pylint: disable=import-error
 
 
+@pytest.fixture(params=("token", "approle"))
+def get_config_response(config_defaults, server_config, wrapped_role_id_response, request):
+    # avoid mutating default config
+    res = {
+        "auth": config_defaults["auth"].copy(),
+        "cache": config_defaults["cache"].copy(),
+        "client": config_defaults["client"].copy(),
+        "server": server_config,
+    }
+
+    if request.param == "token":
+        res["auth"]["token"] = "test-token"
+
+    if request.param == "wrapped_token":
+        res["auth"]["method"] = "wrapped_token"
+        res["auth"]["token"] = "test-wrapped-token"
+
+    if request.param == "approle":
+        res["auth"]["method"] = "approle"
+        res["auth"]["role_id"] = "test-role-id"
+
+    if request.param == "approle_no_secretid":
+        res["auth"]["method"] = "approle"
+        res["auth"]["role_id"] = "test-role-id"
+        res["auth"]["secret_id"] = False
+
+    if request.param == "approle_wrapped_roleid":
+        res["auth"]["method"] = "approle"
+        res["auth"]["role_id"] = {"wrap_info": wrapped_role_id_response["wrap_info"]}
+        res["auth"]["secret_id"] = True
+        res["wrap_info_nested"] = ["auth:role_id"]
+    return res
+
+
 class TestGetAuthdClient:
     """
     Tests for Vault Get Authd Client
@@ -345,7 +379,7 @@ class TestBuildAuthdClient:
         assert client.token_valid(remote=False)
         if test_remote_config["auth"]["method"] == "approle":
             if (
-                not test_remote_config["auth"]["secret_id"]
+                test_remote_config["auth"]["secret_id"] is False
                 or cached(None, None, vfactory.TOKEN_CKEY).get()
                 or cached(None, None, "secret_id").get()
             ):
@@ -1254,6 +1288,32 @@ class TestQueryMaster:
         }
 
     @pytest.mark.parametrize(
+        "get_config_response",
+        ("approle_wrapped_roleid",),
+        indirect=True,
+    )
+    def test_query_master_respects_client_config_when_unwrapping_without_cached_config(
+        self,
+        opts,
+        publish_runner,
+        saltutil_runner,
+        server_config,
+        get_config_response,
+    ):
+        """
+        Ensure that when no cached configuration is available, the client used
+        to unwrap token/RoleID (and transitively, SecretID) respects custom
+        ``client`` configuration.
+        """
+        get_config_response["client"]["retry_post"] = True
+        publish_runner.return_value = saltutil_runner.return_value = get_config_response
+        with patch("saltext.vault.utils.vault.client.VaultClient", autospec=True) as client_init:
+            client_init.return_value.get_config.return_value = server_config
+            vfactory._query_master("get_config", opts)
+        assert "retry_post" in client_init.call_args.kwargs
+        assert client_init.call_args.kwargs["retry_post"] is True
+
+    @pytest.mark.parametrize(
         "unauthd_client_mock,key",
         [
             ("data", "data"),
@@ -1478,6 +1538,7 @@ def test_clear_cache_clears_client_from_context(
                     "clear_on_unauthorized": True,
                     "config": 3600,
                     "expire_events": False,
+                    "kv_metadata": "connection",
                     "secret": "ttl",
                 },
                 "client": {
@@ -1520,6 +1581,7 @@ def test_clear_cache_clears_client_from_context(
                     "clear_on_unauthorized": True,
                     "config": 3600,
                     "expire_events": False,
+                    "kv_metadata": "connection",
                     "secret": "ttl",
                 },
                 "client": {
