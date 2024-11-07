@@ -120,6 +120,7 @@ def test_vault_client_request_raw_does_not_raise_http_exception(client):
         res.raise_for_status()
 
 
+@pytest.mark.usefixtures("req_failed")
 @pytest.mark.parametrize(
     "req_failed,expected",
     [
@@ -137,9 +138,7 @@ def test_vault_client_request_raw_does_not_raise_http_exception(client):
     indirect=["req_failed"],
 )
 @pytest.mark.parametrize("raise_error", [True, False])
-def test_vault_client_request_respects_raise_error(
-    raise_error, req_failed, expected, client
-):  # pylint: disable=unused-argument
+def test_vault_client_request_respects_raise_error(raise_error, expected, client):
     """
     request should inspect the response object and raise appropriate errors
     or fall back to raise_for_status if raise_error is true
@@ -241,12 +240,11 @@ def test_vault_client_wrap_info_only_data(wrapped_role_id_lookup_response, clien
     assert res == wrapped_role_id_lookup_response["data"]
 
 
+@pytest.mark.usefixtures("req_failed")
 @pytest.mark.parametrize(
     "req_failed,expected", [(502, vault.VaultServerError)], indirect=["req_failed"]
 )
-def test_vault_client_wrap_info_should_fail_with_sensible_response(
-    expected, req_failed, client
-):  # pylint: disable=unused-argument
+def test_vault_client_wrap_info_should_fail_with_sensible_response(expected, client):
     """
     wrap_info should return sensible Exceptions, not KeyError etc
     """
@@ -282,6 +280,7 @@ def test_vault_client_unwrap_should_default_to_token_header_before_payload(
         assert headers.get("X-Vault-Token") == token
 
 
+@pytest.mark.usefixtures("req_failed")
 @pytest.mark.parametrize("func", ["unwrap", "token_lookup"])
 @pytest.mark.parametrize(
     "req_failed,expected",
@@ -294,9 +293,7 @@ def test_vault_client_unwrap_should_default_to_token_header_before_payload(
     ],
     indirect=["req_failed"],
 )
-def test_vault_client_unwrap_should_raise_appropriate_errors(
-    func, req_failed, expected, client
-):  # pylint: disable=unused-argument
+def test_vault_client_unwrap_should_raise_appropriate_errors(func, expected, client):
     """
     unwrap/token_lookup should raise exceptions the same way request does
     """
@@ -419,15 +416,14 @@ def test_vault_client_request_raw_increases_use_count_when_necessary_depending_o
     assert client.auth.used.called is use
 
 
+@pytest.mark.usefixtures("req_failed")
 @pytest.mark.parametrize("client", ["valid_token"], indirect=True)
 @pytest.mark.parametrize(
     "req_failed",
     [400, 403, 404, 405, 412, 500, 502, 503, 401],
     indirect=True,
 )
-def test_vault_client_request_raw_increases_use_count_when_necessary_depending_on_response(
-    client, req_failed  # pylint: disable=unused-argument
-):
+def test_vault_client_request_raw_increases_use_count_when_necessary_depending_on_response(client):
     """
     When a request is issued to an endpoint that consumes a use, make sure that
     this is registered regardless of status code:
@@ -595,10 +591,7 @@ def test_get_expected_creation_path(secret, config, expected):
     """
     Ensure expected creation paths are resolved as expected
     """
-    assert (
-        vclient._get_expected_creation_path(secret, config)  # pylint: disable=protected-access
-        == expected
-    )
+    assert vclient._get_expected_creation_path(secret, config) == expected
 
 
 def test_get_expected_creation_path_fails_for_unknown_type():
@@ -606,7 +599,7 @@ def test_get_expected_creation_path_fails_for_unknown_type():
     Ensure unknown source types result in an exception
     """
     with pytest.raises(salt.exceptions.SaltInvocationError):
-        vclient._get_expected_creation_path("nonexistent")  # pylint: disable=protected-access
+        vclient._get_expected_creation_path("nonexistent")
 
 
 @pytest.fixture

@@ -500,8 +500,14 @@ def _get_connection_config(cbank, opts, context, force_local=False, pre_flush=Fa
         config_cache.flush(cbank=False)
 
     config_cache.store(new_config)
-    if unwrap_client is None:
-        unwrap_client = vclient.VaultClient(**new_config["server"], **new_config["client"])
+    # Always reinitialize client in case the unwrap_client `client` config is
+    # out of sync with the new config. This is a theoretical precaution since
+    # the client should be instantiated in _query_master using the new config.
+    unwrap_client = vclient.VaultClient(
+        **new_config["server"],
+        **new_config["client"],
+        session=unwrap_client.session if unwrap_client is not None else None,
+    )
     return new_config, embedded_token, unwrap_client
 
 
@@ -710,7 +716,7 @@ def _query_master(
 
         if result.get("wrap_info") or result.get("wrap_info_nested"):
             if unwrap_client is None:
-                unwrap_client = vclient.VaultClient(**result["server"])
+                unwrap_client = vclient.VaultClient(**result["server"], **result.get("client", {}))
 
             for key in [""] + result.get("wrap_info_nested", []):
                 if key:

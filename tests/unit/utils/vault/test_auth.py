@@ -270,7 +270,7 @@ def test_approle_auth_get_token_login(approle, mount, client, token_store_empty_
 @pytest.mark.parametrize("num_uses", [0, 1, 10])
 def test_approle_auth_used_num_uses(
     token_store_empty_first, approle, client, uncached, num_uses, token
-):  # pylint: disable-msg=too-many-arguments
+):
     """
     Ensure that cache writes for use count are only done when
     num_uses is not 0 (= unlimited)

@@ -38,20 +38,9 @@ def _mock_json_response(data, status_code=200, reason=""):
     return response
 
 
-@pytest.fixture(params=[{}])
-def server_config(request):
-    conf = {
-        "url": "http://127.0.0.1:8200",
-        "namespace": None,
-        "verify": None,
-    }
-    conf.update(request.param)
-    return conf
-
-
-@pytest.fixture(params=["token", "approle"])
-def test_config(server_config, request):
-    defaults = {
+@pytest.fixture
+def config_defaults():
+    return {
         "auth": {
             "approle_mount": "approle",
             "approle_name": "salt-master",
@@ -68,6 +57,7 @@ def test_config(server_config, request):
             "clear_on_unauthorized": True,
             "config": 3600,
             "expire_events": False,
+            "kv_metadata": "connection",
             "secret": "ttl",
         },
         "client": {
@@ -123,61 +113,59 @@ def test_config(server_config, request):
             "cache_time": 60,
             "refresh_pillar": None,
         },
-        "server": server_config,
+        "server": {
+            "namespace": None,
+            "verify": None,
+        },
     }
 
+
+@pytest.fixture(params=[{}])
+def server_config(request):
+    conf = {
+        "url": "http://127.0.0.1:8200",
+        "namespace": None,
+        "verify": None,
+    }
+    conf.update(request.param)
+    return conf
+
+
+@pytest.fixture(params=["token", "approle"])
+def test_config(config_defaults, server_config, request):
+    # avoid mutating default config
+    defaults = config_defaults.copy()
+    auth = defaults["auth"].copy()
+
     if request.param == "token":
-        defaults["auth"]["token"] = "test-token"
+        auth["token"] = "test-token"
 
     if request.param == "wrapped_token":
-        defaults["auth"]["method"] = "wrapped_token"
-        defaults["auth"]["token"] = "test-wrapped-token"
+        auth["method"] = "wrapped_token"
+        auth["token"] = "test-wrapped-token"
 
     if request.param == "approle":
-        defaults["auth"]["method"] = "approle"
-        defaults["auth"]["role_id"] = "test-role-id"
-        defaults["auth"]["secret_id"] = "test-secret-id"
+        auth["method"] = "approle"
+        auth["role_id"] = "test-role-id"
+        auth["secret_id"] = "test-secret-id"
 
     if request.param == "approle_no_secretid":
-        defaults["auth"]["method"] = "approle"
-        defaults["auth"]["role_id"] = "test-role-id"
+        auth["method"] = "approle"
+        auth["role_id"] = "test-role-id"
+        auth["secret_id"] = False
+
+    defaults["auth"] = auth
+    defaults["server"] = server_config
     return defaults
 
 
 @pytest.fixture(params=["token", "approle"])
-def test_remote_config(server_config, request):
+def test_remote_config(config_defaults, server_config, request):
+    # avoid mutating default config
     defaults = {
-        "auth": {
-            "approle_mount": "approle",
-            "approle_name": "salt-master",
-            "method": "token",
-            "secret_id": None,
-            "token_lifecycle": {
-                "minimum_ttl": 10,
-                "renew_increment": None,
-            },
-        },
-        "cache": {
-            "backend": "session",
-            "clear_attempt_revocation": 60,
-            "clear_on_unauthorized": True,
-            "config": 3600,
-            "expire_events": False,
-            "kv_metadata": "connection",
-            "secret": "ttl",
-        },
-        "client": {
-            "connect_timeout": vclient.DEFAULT_CONNECT_TIMEOUT,
-            "read_timeout": vclient.DEFAULT_READ_TIMEOUT,
-            "max_retries": vclient.DEFAULT_MAX_RETRIES,
-            "backoff_factor": vclient.DEFAULT_BACKOFF_FACTOR,
-            "backoff_max": vclient.DEFAULT_BACKOFF_MAX,
-            "backoff_jitter": vclient.DEFAULT_BACKOFF_JITTER,
-            "retry_post": vclient.DEFAULT_RETRY_POST,
-            "retry_status": vclient.DEFAULT_RETRY_STATUS,
-            "respect_retry_after": vclient.DEFAULT_RESPECT_RETRY_AFTER,
-            "retry_after_max": vclient.DEFAULT_RETRY_AFTER_MAX,
-        },
+        "auth": config_defaults["auth"].copy(),
+        "cache": config_defaults["cache"].copy(),
+        "client": config_defaults["client"].copy(),
         "server": server_config,
     }
 
@@ -201,6 +189,7 @@ def test_remote_config(server_config, request):
     if request.param == "approle_no_secretid":
         defaults["auth"]["method"] = "approle"
         defaults["auth"]["role_id"] = "test-role-id"
+        defaults["auth"]["secret_id"] = False
 
     # this happens when wrapped role_ids are merged by _query_master
     if request.param == "approle_wrapped_roleid":
@@ -585,11 +574,9 @@ def events():
 
 @pytest.fixture(params=["MASTER", "MASTER_IMPERSONATING", "MINION_LOCAL", "MINION_REMOTE"])
 def salt_runtype(request):
-    runtype = Mock(spec=hlp._get_salt_run_type)  # pylint: disable=protected-access
+    runtype = Mock(spec=hlp._get_salt_run_type)
     runtype.return_value = getattr(hlp, f"SALT_RUNTYPE_{request.param}")
-    with patch(
-        "saltext.vault.utils.vault.helpers._get_salt_run_type", runtype
-    ):  # pylint: disable=protected-access
+    with patch("saltext.vault.utils.vault.helpers._get_salt_run_type", runtype):
         yield
 
 
