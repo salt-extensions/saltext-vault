@@ -4,6 +4,14 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## 1.2.1 (2024-11-07)
+
+
+### Fixed
+
+- Fixed the client used for unwrapping authentication credentials not respecting `client` configuration when no cached configuration is available [#95](https://github.com/salt-extensions/saltext-vault/issues/95)
+
+
 ## v1.2.0 (2024-10-02)
 
 
