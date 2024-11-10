@@ -4,6 +4,14 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## 1.2.2 (2024-11-10)
+
+
+### Fixed
+
+- Fixed compatibility with master cluster mode [#99](https://github.com/salt-extensions/saltext-vault/issues/99)
+
+
 ## 1.2.1 (2024-11-07)
 
 
