@@ -10,6 +10,7 @@ import copy
 import logging
 import os
 from collections.abc import Mapping
+from pathlib import Path
 
 import salt.cache
 import salt.crypt
@@ -916,15 +917,18 @@ def _validate_signature(minion_id, signature, impersonated_by_master):
     Validate that either minion with id minion_id, or the master, signed the
     request
     """
-    pki_dir = __opts__["pki_dir"]
-    if impersonated_by_master:
-        public_key = f"{pki_dir}/master.pub"
+    if not impersonated_by_master and __opts__.get("cluster_id") is not None:
+        pki_dir = Path(__opts__["cluster_pki_dir"])
     else:
-        public_key = f"{pki_dir}/minions/{minion_id}"
+        pki_dir = Path(__opts__["pki_dir"])
+    if impersonated_by_master:
+        public_key = pki_dir / "master.pub"
+    else:
+        public_key = pki_dir / "minions" / minion_id
 
     log.trace("Validating signature for %s", minion_id)
     signature = base64.b64decode(signature)
-    if not salt.crypt.verify_signature(public_key, minion_id, signature):
+    if not salt.crypt.verify_signature(str(public_key), minion_id, signature):
         raise salt.exceptions.AuthenticationError(
             f"Could not validate token request from {minion_id}"
         )

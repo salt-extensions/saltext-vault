@@ -20,7 +20,6 @@ pytest.importorskip("docker")
 
 log = logging.getLogger(__name__)
 
-
 pytestmark = [
     pytest.mark.slow_test,
     pytest.mark.skip_if_binaries_missing("vault", "getent"),
@@ -524,15 +523,6 @@ def vault_pillar_values_approle(vault_salt_minion):
     finally:
         vault_delete_secret(f"salt/minions/{vault_salt_minion.id}")
         vault_delete_secret("salt/roles/foo")
-
-
-@pytest.fixture(scope="class")
-def vault_testing_values(vault_container_version):  # pylint: disable=unused-argument
-    vault_write_secret("secret/path/foo", success="yeehaaw")
-    try:
-        yield
-    finally:
-        vault_delete_secret("secret/path/foo")
 
 
 @pytest.fixture
