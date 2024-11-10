@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import ANY
 from unittest.mock import MagicMock
 from unittest.mock import Mock
@@ -13,10 +14,11 @@ from saltext.vault.utils.vault import client as vclient
 
 
 @pytest.fixture
-def configure_loader_modules():
+def configure_loader_modules(master_opts):
     return {
         vault: {
             "__grains__": {"id": "test-master"},
+            "__opts__": master_opts,
         }
     }
 
@@ -1484,3 +1486,24 @@ def test_revoke_token_by_accessor(client):
     client.post.assert_called_once_with(
         "auth/token/revoke-accessor", payload={"accessor": "test-accessor"}
     )
+
+
+@pytest.mark.parametrize("cluster_id", (None, "test_cluster"))
+@pytest.mark.parametrize("impersonated", (False, True))
+def test_validate_signature_pki_dir(cluster_id, impersonated, master_opts):
+    """
+    Ensure we can validate minion signatures when running in
+    master cluster mode.
+    """
+    master_opts["cluster_id"] = cluster_id
+    base = Path(master_opts["pki_dir"])
+    if not impersonated and cluster_id:
+        base = base.parent / "cluster" / "pki"
+        master_opts["cluster_pki_dir"] = str(base)
+    if impersonated:
+        expected = base / "master.pub"
+    else:
+        expected = base / "minions" / "test-minion"
+    with patch("salt.crypt.verify_signature", autospec=True) as verify:
+        vault._validate_signature("test-minion", "", impersonated)
+    assert verify.call_args.args[0] == str(expected)
