@@ -49,7 +49,7 @@ The SecretID of the AppRole. Only required if the configured AppRole requires it
 :::{vconf} auth:token
 :::
 #### token
-Token to authenticate to Vault with. Required if {vconf}`auth:method` == `approle`.
+Token to authenticate to Vault with. Required if {vconf}`auth:method` == `token`.
 
 :::{hint}
 You can also pull configuration values, e.g. the token, from environment variables
@@ -77,7 +77,7 @@ Token renewal settings.
 This setting can be specified inside a minion's configuration as well
 and will override the master's default for the minion.
 
-Token lifecycle settings have significancy for any authentication method,
+Token lifecycle settings have significance for any authentication method,
 not just `token`.
 :::
 
