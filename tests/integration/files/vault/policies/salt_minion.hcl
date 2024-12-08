@@ -18,6 +18,17 @@ path "salt/data/roles/{{identity.entity.metadata.role}}" {
     capabilities = ["read"]
 }
 
+# ACL policy templating tests with list-valued metadata
+path "salt/data/roles/{{identity.entity.metadata.roles__0}}" {
+    capabilities = ["read"]
+}
+path "salt/data/roles/{{identity.entity.metadata.roles__1}}" {
+    capabilities = ["read"]
+}
+path "salt/data/roles/{{identity.entity.metadata.roles__2}}" {
+    capabilities = ["read"]
+}
+
 # Test list policies
 path "sys/policy" {
     capabilities = ["read"]
