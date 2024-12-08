@@ -504,7 +504,6 @@ def pillar_roles_tree(
     roles:
       - dev
       - web
-    # this is for entity metadata since lists are cumbersome at best
     role: foo
     """
     top_file = vault_salt_master.pillar_tree.base.temp_file("top.sls", top_pillar_contents)
@@ -517,12 +516,19 @@ def pillar_roles_tree(
 @pytest.fixture(scope="class")
 def vault_pillar_values_approle(vault_salt_minion):
     vault_write_secret(f"salt/minions/{vault_salt_minion.id}", minion_id_acl_template="worked")
+    # template is a single value
     vault_write_secret("salt/roles/foo", pillar_role_acl_template="worked")
+    # template expands to multiple values, templated policy relies on workaround
+    # that expands the keys (roles__0, roles__1, ...)
+    vault_write_secret("salt/roles/dev", pillar_roles_0_acl_template="worked")
+    vault_write_secret("salt/roles/web", pillar_roles_1_acl_template="worked")
     try:
         yield
     finally:
         vault_delete_secret(f"salt/minions/{vault_salt_minion.id}")
         vault_delete_secret("salt/roles/foo")
+        vault_delete_secret("salt/roles/dev")
+        vault_delete_secret("salt/roles/web")
 
 
 @pytest.fixture
@@ -606,7 +612,13 @@ def entities_synced(
     assert f"salt_minion_{vault_salt_minion.id}" in ret.data
     ret = vault_salt_run_cli.run("vault.show_entity", vault_salt_minion.id)
     assert ret.returncode == 0
-    assert ret.data == {"minion-id": vault_salt_minion.id, "role": "foo"}
+    assert ret.data == {
+        "minion-id": vault_salt_minion.id,
+        "role": "foo",
+        "roles": "dev,web",
+        "roles__0": "dev",
+        "roles__1": "web",
+    }
     yield
 
 
@@ -626,6 +638,7 @@ class TestAppRoleIssuance:
             "ext_pillar": [
                 {"vault": "salt/minions/{minion}"},
                 {"vault": "salt/roles/{pillar[role]}"},
+                {"vault": "salt/roles/{pillar[roles]}"},
             ],
             "peer_run": {
                 ".*": [
@@ -656,6 +669,7 @@ class TestAppRoleIssuance:
                     "entity": {
                         "minion-id": "{minion}",
                         "role": "{pillar[role]}",
+                        "roles": "{pillar[roles]}",
                     },
                 },
                 "policies": {
@@ -733,6 +747,8 @@ class TestAppRoleIssuance:
         assert ret.data
         assert ret.data.get("minion_id_acl_template") == "worked"
         assert ret.data.get("pillar_role_acl_template") == "worked"
+        assert ret.data.get("pillar_roles_0_acl_template") == "worked"
+        assert ret.data.get("pillar_roles_1_acl_template") == "worked"
 
     @pytest.mark.usefixtures("approles_synced")
     @pytest.mark.usefixtures("conn_cache_absent")
