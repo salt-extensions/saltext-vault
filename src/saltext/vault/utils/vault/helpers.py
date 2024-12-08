@@ -85,20 +85,19 @@ def expand_pattern_lists(pattern, **mappings):
     length N in the mappings present in the pattern, N copies of the pattern are
     returned, each with an element of the list substituted.
 
-    pattern:
-        A pattern to expand, for example ``by-role/{grains[roles]}``
+    pattern
+        A pattern to expand, for example ``by-role/{pillar[roles]}``
 
-    mappings:
+    mappings
         A dictionary of variables that can be expanded into the pattern.
 
-    Example: Given the pattern `` by-role/{grains[roles]}`` and the below grains
+    Example: Given the pattern `` by-role/{pillar[roles]}`` and the below pillar
 
     .. code-block:: yaml
 
-        grains:
-            roles:
-                - web
-                - database
+        roles:
+          - web
+          - database
 
     This function will expand into two patterns,
     ``[by-role/web, by-role/database]``.

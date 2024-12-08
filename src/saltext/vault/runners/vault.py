@@ -1035,19 +1035,60 @@ def _get_metadata(minion_id, metadata_patterns, refresh_pillar=None):
     metadata = {}
     for key, pattern in metadata_patterns.items():
         metadata[key] = []
+        composite_prefix = f"{key}__"
+
+        # First, expand templates that make use of composite values (recursively)
+        # until we have a list of patterns with simple values.
         try:
-            for expanded_pattern in helpers.expand_pattern_lists(pattern, **mappings):
-                metadata[key].append(expanded_pattern.format(**mappings))
-        except KeyError:
+            expanded_patterns = helpers.expand_pattern_lists(pattern, **mappings)
+        except (IndexError, KeyError):
+            # If any template in the chain fails to render, skip all of them.
+            # This was inherited from the old code and might be changed in a
+            # new major release @FIXME
             log.warning(
                 "Could not resolve metadata pattern %s for minion %s",
                 pattern,
                 minion_id,
             )
+            expanded_patterns = []
+
+        # Then substitute these simple template variables with their values.
+        for expanded_pattern in expanded_patterns:
+            try:
+                metadata[key].append(expanded_pattern.format(**mappings))
+            except (IndexError, KeyError):
+                log.warning(
+                    "Could not resolve metadata pattern %s for minion %s",
+                    pattern,
+                    minion_id,
+                )
+
         # Since composite values are disallowed for metadata,
         # at least ensure the order of the comma-separated string
         # is predictable
         metadata[key].sort()
+        # ... and assign the individual values to keys suffixed with their respective index.
+        # A corresponding policy needs to account for this by repeating each assignment:
+        #   path "salt/data/roles/{{identity.entity.metadata.role__0}}" {capabilities = ["read"]}
+        #   path "salt/data/roles/{{identity.entity.metadata.role__1}}" {capabilities = ["read"]}
+        #   ...
+        if expanded_patterns == [pattern]:
+            # Don't expand when the template did not involve a composite value.
+            pass
+        elif conflicting_keys := [
+            mkey for mkey in metadata_patterns if mkey.startswith(composite_prefix)
+        ]:
+            # Don't risk overwriting explicitly set keys. It's unlikely, but check regardless.
+            log.warning(
+                "Skipping list expansion of entity metadata '%s' for minion '%s': "
+                "Detected potentially conflicting key(s): %s'",
+                key,
+                minion_id,
+                conflicting_keys,
+            )
+        else:
+            for idx, value in enumerate(metadata[key]):
+                metadata[f"{composite_prefix}{idx}"] = [value]
 
     log.debug("%s metadata: %s", minion_id, metadata)
     return {k: ",".join(v) for k, v in metadata.items()}
