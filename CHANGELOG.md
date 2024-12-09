@@ -4,6 +4,19 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## 1.3.0 (2024-12-09)
+
+
+### Fixed
+
+- Fixed a crash when a templated field accesses an out-of-bounds list index
+
+
+### Added
+
+- When metadata that is written to Vault is templated using a list or dict, in addition to concatenating the values into a sorted comma-separated list, the master now additionally creates a separate suffixed key for each individual item [#106](https://github.com/salt-extensions/saltext-vault/issues/106)
+
+
 ## 1.2.2 (2024-11-10)
 
 
