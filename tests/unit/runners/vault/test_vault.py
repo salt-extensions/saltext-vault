@@ -248,6 +248,7 @@ def pillar():
     return {
         "mixedcase": "UP-low-UP",
         "role": "test",
+        "roles": ["foo", "bar"],
     }
 
 
@@ -1019,6 +1020,14 @@ def test_get_policies_for_nonexisting_minions(expected):
             {"pillar-rendering:{pillar[role]}": "pillar-rendering:{pillar[role]}"},
             {"pillar-rendering:{pillar[role]}": "pillar-rendering:test"},
         ),
+        (
+            {"list-val": "list-val:{pillar[roles][0]}"},
+            {"list-val": "list-val:foo"},
+        ),
+        (
+            {"list-val-out-of-bounds": "list-val-out-of-bounds:{pillar[roles][10]}"},
+            {"list-val-out-of-bounds": ""},
+        ),
     ],
 )
 def test_get_metadata(metadata_patterns, expected, pillar):
@@ -1053,7 +1062,29 @@ def test_get_metadata_list():
                 {"salt_role": "salt_role_{pillar[roles]}"},
                 refresh_pillar=False,
             )
-            assert res == {"salt_role": "salt_role_bar,salt_role_foo"}
+            assert res == {
+                "salt_role": "salt_role_bar,salt_role_foo",
+                "salt_role__0": "salt_role_bar",
+                "salt_role__1": "salt_role_foo",
+            }
+
+
+def test_get_metadata_list_conflict():
+    with patch("salt.utils.minions.get_minion_data", autospec=True) as get_minion_data:
+        get_minion_data.return_value = (None, None, None)
+        with patch(
+            "saltext.vault.utils.vault.helpers.expand_pattern_lists", autospec=True
+        ) as expand:
+            expand.side_effect = lambda x, *args, **kwargs: ["foo", "bar"] if "pillar" in x else [x]
+            res = vault._get_metadata(
+                "test-minion",
+                {"salt_role": "salt_role_{pillar[roles]}", "salt_role__1": "wat"},
+                refresh_pillar=False,
+            )
+            assert res == {
+                "salt_role": "bar,foo",
+                "salt_role__1": "wat",
+            }
 
 
 @pytest.mark.usefixtures("config")
