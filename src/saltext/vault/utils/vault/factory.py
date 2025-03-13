@@ -202,7 +202,7 @@ def clear_cache(opts, context, ckey=None, connection=True, session=False, force_
                             hlp.SALT_RUNTYPE_MASTER_PEER_RUN,
                         )
                     ):
-                        scope = cbank.split("/")[-1]
+                        scope = cbank.rsplit("/", maxsplit=1)[-1]
                         _get_event(opts)(data={"scope": scope}, tag=f"vault/cache/{scope}/clear")
             except Exception as err:  # pylint: disable=broad-except
                 log.error(

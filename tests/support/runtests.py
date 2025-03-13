@@ -1,48 +1,48 @@
 """
-    :codeauthor: Pedro Algarvio (pedro@algarvio.me)
+:codeauthor: Pedro Algarvio (pedro@algarvio.me)
 
-    .. _runtime_vars:
+.. _runtime_vars:
 
-    Runtime Variables
-    -----------------
+Runtime Variables
+-----------------
 
-    :command:`salt-runtests` provides a variable, :py:attr:`RUNTIME_VARS` which has some common paths defined at
-    startup:
+:command:`salt-runtests` provides a variable, :py:attr:`RUNTIME_VARS` which has some common paths defined at
+startup:
 
-    .. autoattribute:: tests.support.runtests.RUNTIME_VARS
-        :annotation:
+.. autoattribute:: tests.support.runtests.RUNTIME_VARS
+    :annotation:
 
-        :TMP: Tests suite temporary directory
-        :TMP_CONF_DIR: Configuration directory from where the daemons that :command:`salt-runtests` starts get their
-                       configuration files.
-        :TMP_CONF_MASTER_INCLUDES: Salt Master configuration files includes directory. See
-                                   :salt_conf_master:`default_include`.
-        :TMP_CONF_MINION_INCLUDES: Salt Minion configuration files includes directory. Seei
-                                   :salt_conf_minion:`include`.
-        :TMP_CONF_CLOUD_INCLUDES: Salt cloud configuration files includes directory. The same as the salt master and
-                                  minion includes configuration, though under a different directory name.
-        :TMP_CONF_CLOUD_PROFILE_INCLUDES: Salt cloud profiles configuration files includes directory. Same as above.
-        :TMP_CONF_CLOUD_PROVIDER_INCLUDES: Salt cloud providers configuration files includes directory. Same as above.
-        :TMP_SCRIPT_DIR: Temporary scripts directory from where the Salt CLI tools will be called when running tests.
-        :TMP_SALT_INTEGRATION_FILES: Temporary directory from where Salt's test suite integration files are copied to.
-        :TMP_BASEENV_STATE_TREE: Salt master's **base** environment state tree directory
-        :TMP_PRODENV_STATE_TREE: Salt master's **production** environment state tree directory
-        :TMP_BASEENV_PILLAR_TREE: Salt master's **base** environment pillar tree directory
-        :TMP_PRODENV_PILLAR_TREE: Salt master's **production** environment pillar tree directory
+    :TMP: Tests suite temporary directory
+    :TMP_CONF_DIR: Configuration directory from where the daemons that :command:`salt-runtests` starts get their
+                   configuration files.
+    :TMP_CONF_MASTER_INCLUDES: Salt Master configuration files includes directory. See
+                               :salt_conf_master:`default_include`.
+    :TMP_CONF_MINION_INCLUDES: Salt Minion configuration files includes directory. Seei
+                               :salt_conf_minion:`include`.
+    :TMP_CONF_CLOUD_INCLUDES: Salt cloud configuration files includes directory. The same as the salt master and
+                              minion includes configuration, though under a different directory name.
+    :TMP_CONF_CLOUD_PROFILE_INCLUDES: Salt cloud profiles configuration files includes directory. Same as above.
+    :TMP_CONF_CLOUD_PROVIDER_INCLUDES: Salt cloud providers configuration files includes directory. Same as above.
+    :TMP_SCRIPT_DIR: Temporary scripts directory from where the Salt CLI tools will be called when running tests.
+    :TMP_SALT_INTEGRATION_FILES: Temporary directory from where Salt's test suite integration files are copied to.
+    :TMP_BASEENV_STATE_TREE: Salt master's **base** environment state tree directory
+    :TMP_PRODENV_STATE_TREE: Salt master's **production** environment state tree directory
+    :TMP_BASEENV_PILLAR_TREE: Salt master's **base** environment pillar tree directory
+    :TMP_PRODENV_PILLAR_TREE: Salt master's **production** environment pillar tree directory
 
 
-    Use it on your test case in case of need. As simple as:
+Use it on your test case in case of need. As simple as:
 
-    .. code-block:: python
+.. code-block:: python
 
-        import os
-        from tests.support.runtests import RUNTIME_VARS
+    import os
+    from tests.support.runtests import RUNTIME_VARS
 
-        # Path to the testing minion configuration file
-        minion_config_path = os.path.join(RUNTIME_VARS.TMP_CONF_DIR, 'minion')
+    # Path to the testing minion configuration file
+    minion_config_path = os.path.join(RUNTIME_VARS.TMP_CONF_DIR, 'minion')
 
-    .. _`pytest`: http://pytest.org
-    """
+.. _`pytest`: http://pytest.org
+"""
 
 import logging
 import os

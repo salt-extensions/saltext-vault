@@ -1,12 +1,12 @@
 """
-    :copyright: Copyright 2013-2017 by the SaltStack Team, see AUTHORS for more details.
-    :license: Apache 2.0, see LICENSE for more details.
+:copyright: Copyright 2013-2017 by the SaltStack Team, see AUTHORS for more details.
+:license: Apache 2.0, see LICENSE for more details.
 
 
-    tests.support.helpers
-    ~~~~~~~~~~~~~~~~~~~~~
+tests.support.helpers
+~~~~~~~~~~~~~~~~~~~~~
 
-    Test support helpers
+Test support helpers
 """
 
 import logging

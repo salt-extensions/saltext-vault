@@ -1,13 +1,13 @@
 """
-    :codeauthor: Pedro Algarvio (pedro@algarvio.me)
-    :copyright: Copyright 2017 by the SaltStack Team, see AUTHORS for more details.
-    :license: Apache 2.0, see LICENSE for more details.
+:codeauthor: Pedro Algarvio (pedro@algarvio.me)
+:copyright: Copyright 2017 by the SaltStack Team, see AUTHORS for more details.
+:license: Apache 2.0, see LICENSE for more details.
 
 
-    tests.support.paths
-    ~~~~~~~~~~~~~~~~~~~
+tests.support.paths
+~~~~~~~~~~~~~~~~~~~
 
-    Tests related paths
+Tests related paths
 """
 
 import logging
