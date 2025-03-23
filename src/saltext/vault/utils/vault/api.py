@@ -31,7 +31,12 @@ class AppRoleApi:
             Defaults to ``approle``.
         """
         endpoint = f"auth/{mount}/role"
-        return self.client.list(endpoint)["data"]["keys"]
+        try:
+            return self.client.list(endpoint)["data"]["keys"]
+        except VaultNotFoundError:
+            # When no AppRole has been created on the mount yet,
+            # Vault returns 404 instead of an empty list.
+            return []
 
     def read_approle(self, name, mount="approle"):
         """
@@ -340,7 +345,10 @@ class IdentityApi:
         Return a list of the names of all entities known by Vault.
         """
         endpoint = "identity/entity/name"
-        return self.client.list(endpoint)["data"]["keys"]
+        try:
+            return self.client.list(endpoint)["data"]["keys"]
+        except VaultNotFoundError:
+            return []
 
     def read_entity(self, name):
         """
