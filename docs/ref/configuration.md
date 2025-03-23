@@ -411,6 +411,18 @@ params
 Whether to allow minions to request to override parameters for issuing credentials.
 See {vconf}`issue_params`.
 
+:::{vconf} issue:block_minion_requests
+:::
+#### block_minion_requests
+:::{versionadded} 1.4.0
+:::
+Whether to block minions from requesting Vault credentials. Defaults to false.
+Enabling this means only the master itself is allowed to receive credentials
+on behalf of minions, e.g. during pillar compilation and when running
+via Salt-SSH using the wrapper modules.
+
+Usually, you don't want to enable this.
+
 :::{vconf} issue:wrap
 :::
 #### wrap
@@ -600,6 +612,7 @@ vault:
   config_location: <variable, depends on running scope>
   issue:
     allow_minion_override_params: false
+    block_minion_requests: false
     type: token
     approle:
       mount: salt-minions
