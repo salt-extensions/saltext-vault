@@ -1,3 +1,4 @@
+import contextlib
 from pathlib import Path
 from unittest.mock import ANY
 from unittest.mock import MagicMock
@@ -58,6 +59,7 @@ def default_config():
         },
         "issue": {
             "allow_minion_override_params": False,
+            "block_minion_requests": False,
             "type": "token",
             "approle": {
                 "mount": "salt-minions",
@@ -355,7 +357,9 @@ def metadata(request, metadata_entity_default, metadata_secret_default):
 @pytest.fixture
 def validate_signature():
     with patch(
-        "saltext.vault.runners.vault._validate_signature", autospec=True, return_value=None
+        "saltext.vault.runners.vault._validate_signature",
+        autospec=True,
+        return_value=None,
     ) as validate:
         yield validate
 
@@ -1519,6 +1523,7 @@ def test_revoke_token_by_accessor(client):
     )
 
 
+@pytest.mark.usefixtures("config")
 @pytest.mark.parametrize("cluster_id", (None, "test_cluster"))
 @pytest.mark.parametrize("impersonated", (False, True))
 def test_validate_signature_pki_dir(cluster_id, impersonated, master_opts):
@@ -1538,3 +1543,16 @@ def test_validate_signature_pki_dir(cluster_id, impersonated, master_opts):
     with patch("salt.crypt.verify_signature", autospec=True) as verify:
         vault._validate_signature("test-minion", "", impersonated)
     assert verify.call_args.args[0] == str(expected)
+
+
+@pytest.mark.usefixtures("config")
+@pytest.mark.parametrize("config", ({"issue:block_minion_requests": True},), indirect=True)
+@pytest.mark.parametrize("impersonated", (False, True))
+def test_issue_non_impersonated_only(impersonated):
+    if not impersonated:
+        ctx = pytest.raises(salt.exceptions.AuthenticationError, match="have been disabled")
+    else:
+        ctx = contextlib.nullcontext()
+    with ctx, patch("salt.crypt.verify_signature", autospec=True) as verify:
+        vault._validate_signature("test-minion", "", impersonated)
+    assert bool(verify.call_count) is impersonated
