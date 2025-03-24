@@ -28,14 +28,18 @@ jobs:
           python -m
           pip install
           build
-          setuptools_scm
           --user
 
       - name: Echo Version
         run: echo "${{ inputs.version }}"
 
       - name: Build Wheel
-        run: python -m build --outdir dist/
+        run: |
+          # The version of our PyPA publish action (specifically the twine version used in it)
+          # does not support Core Metadata 2.4, which was introduced in setuptools release 77.
+          # We cannot upgrade it until the release workflow has been refactored into standalone one.
+          echo "setuptools<77" > "$RUNNER_TEMP/build-constraints.txt"
+          PIP_CONSTRAINT="$RUNNER_TEMP/build-constraints.txt" python -m build --outdir dist/
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
