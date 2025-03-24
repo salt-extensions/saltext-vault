@@ -4,13 +4,6 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
-## 1.3.1 (2025-03-23)
-
-
-### Fixed
-
-- Fixed running `vault.sync_approles` on a fresh, empty mount [#111](https://github.com/salt-extensions/saltext-vault/issues/111)
-
 ## 1.3.0 (2024-12-09)
 
 
