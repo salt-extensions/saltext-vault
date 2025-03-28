@@ -327,7 +327,11 @@ def _build_authd_client(opts, context, force_local=False):
                     or force_local
                 ):
                     secret_id = _fetch_secret_id(
-                        config, opts, secret_id_cache, unauthd_client, force_local=force_local
+                        config,
+                        opts,
+                        secret_id_cache,
+                        unauthd_client,
+                        force_local=force_local,
                     )
                 else:
                     secret_id = vauth.InvalidVaultSecretId()
@@ -444,7 +448,11 @@ def _get_connection_config(cbank, opts, context, force_local=False, pre_flush=Fa
         update = update or _check_upgrade(config, pre_flush)
         if not update:
             log.debug("Using cached Vault server connection configuration.")
-            return config, None, vclient.VaultClient(**config["server"], **config["client"])
+            return (
+                config,
+                None,
+                vclient.VaultClient(**config["server"], **config["client"]),
+            )
 
     if pre_flush:
         # used when building a client that revokes leases before clearing cache
@@ -932,6 +940,7 @@ def parse_config(config, validate=True, opts=None, require_token=True):
         },
         "issue": {
             "allow_minion_override_params": False,
+            "block_minion_requests": False,
             "type": "token",
             "approle": {
                 "mount": "salt-minions",
