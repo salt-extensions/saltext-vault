@@ -556,10 +556,10 @@ See the master configuration {vconf}`issue:token:params` or {vconf}`issue:approl
 for reference.
 
 
-[Vault AppRole API docs]: https://www.vaultproject.io/api-docs/auth/approle#create-update-approle
-[Token Role]: https://developer.hashicorp.com/nomad/docs/integrations/vault/acl#vault-token-role-configuration
+[Vault AppRole API docs]: https://developer.hashicorp.com/vault/api-docs/auth/approle#create-update-approle
+[Token Role]: https://developer.hashicorp.com/vault/api-docs/auth/token#create-update-token-role
 [Vault Token API docs]: https://developer.hashicorp.com/vault/api-docs/auth/token#create-token
-[certificate verification]: https://requests.readthedocs.io/en/latest/user/advanced.html#ssl-cert-verification
+[certificate verification]: https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification
 [Vault namespace]: https://developer.hashicorp.com/vault/docs/enterprise/namespaces
 
 
