@@ -202,7 +202,6 @@ vault:
       role_name: <your-token-role>
 ```
 
-See the [Nomad Token Role][] docs for details.
 :::
 
 
@@ -214,7 +213,6 @@ vault:
 ```
 :::
 
-[Nomad Token Role]: https://developer.hashicorp.com/nomad/docs/integrations/vault/acl#vault-token-role-configuration
 
 ### Common customizations
 A couple of configuration values are not required, but commonly customized.
