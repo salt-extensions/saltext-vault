@@ -10,7 +10,7 @@ from salt.exceptions import SaltInvocationError
 from saltext.vault.utils.vault import pki
 
 
-class TestCA:
+class CAFixture:
     def __init__(self, common_name):
         self.common_name = common_name
         self.private_key = None
@@ -72,8 +72,8 @@ class TestCA:
         self.certificate = certificate
 
 
-class TestCertificate:
-    def __init__(self, common_name, ca: TestCA):
+class CertificateFixture:
+    def __init__(self, common_name, ca: CAFixture):
         self.common_name = common_name
         self.ca = ca
         self.private_key = None
@@ -126,37 +126,37 @@ class TestCertificate:
         self.certificate = certificate
 
 
-class TestPKIInfra:
+class PKIInfra:
     certs = {}
 
     def __init__(self, name):
-        ca = TestCA(name)
+        ca = CAFixture(name)
         ca.generate()
         self.certs = {}
         self.ca = ca
 
     def issue_certificate(self, common_name, alt_names=None):
         if common_name not in self.certs:
-            cert = TestCertificate(f"{common_name}", self.ca)
+            cert = CertificateFixture(f"{common_name}", self.ca)
             cert.generate(alt_names)
             self.certs[common_name] = cert
         return self.certs[common_name]
 
 
-class TestPKIFactory:
+class PKIInfraFactory:
     pki_infra = {}
 
     @classmethod
     def instance(cls, name):
         if name not in cls.pki_infra:
-            inst = TestPKIInfra(name=f"{name} CA")
+            inst = PKIInfra(name=f"{name} CA")
             cls.pki_infra[name] = inst
         return cls.pki_infra[name]
 
 
 @pytest.fixture(scope="module")
 def existing_ca():
-    instance = TestPKIFactory.instance("existing")
+    instance = PKIInfraFactory.instance("existing")
     instance.issue_certificate("acme.com")
 
     return instance
@@ -164,14 +164,14 @@ def existing_ca():
 
 @pytest.fixture(scope="module")
 def existing_ca_with_alt_names():
-    instance = TestPKIFactory.instance("existing")
+    instance = PKIInfraFactory.instance("existing")
     instance.issue_certificate("acme.org", alt_names=["acme.com"])
     return instance
 
 
 @pytest.fixture(scope="module")
 def new_ca():
-    instance = TestPKIFactory.instance("new")
+    instance = PKIInfraFactory.instance("new")
     instance.issue_certificate("acme.com")
 
     return instance
@@ -179,7 +179,7 @@ def new_ca():
 
 @pytest.fixture
 def existing_pki(existing_ca):  # pylint: disable=unused-argument
-    instance = TestPKIFactory.instance("existing")
+    instance = PKIInfraFactory.instance("existing")
     cert_obj = instance.issue_certificate("acme.com")
 
     return cert_obj.certificate, cert_obj.private_key, [cert_obj.ca.certificate]
@@ -187,7 +187,7 @@ def existing_pki(existing_ca):  # pylint: disable=unused-argument
 
 @pytest.fixture
 def new_pki():
-    instance = TestPKIFactory.instance("new")
+    instance = PKIInfraFactory.instance("new")
     cert_obj = instance.issue_certificate("acme.com")
 
     return cert_obj.certificate, cert_obj.private_key, [cert_obj.ca.certificate]

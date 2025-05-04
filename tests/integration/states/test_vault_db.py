@@ -18,8 +18,7 @@ from tests.support.vault import vault_write
 pytest.importorskip("docker")
 
 pytestmark = [
-    pytest.mark.slow_test,
-    pytest.mark.skip_if_binaries_missing("vault", "getent"),
+    pytest.mark.skip_if_binaries_missing("vault"),
     pytest.mark.usefixtures("vault_container_version"),
     pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True),
 ]
