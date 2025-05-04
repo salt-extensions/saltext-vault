@@ -4,6 +4,13 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## 1.3.2 (2025-05-04)
+
+
+### Fixed
+
+- Fixed vault_pki.certificate_managed always recreating certificate with `append_ca_chain=True` [#123](https://github.com/salt-extensions/saltext-vault/issues/123)
+
 ## 1.3.1 (2025-03-24)
 
 
