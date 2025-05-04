@@ -218,6 +218,12 @@ def certificate_managed(
 
         if append_ca_chain:
             ca_chain = [x509util.load_cert(x) for x in issuer_info["ca_chain"]]
+            # Filter self-signed CA, which shouldn't be in the chain.
+            ca_chain = [
+                cert
+                for cert in ca_chain
+                if cert.subject.rfc4514_string() != cert.issuer.rfc4514_string()
+            ]
 
         if file_exists:
             if reissue:

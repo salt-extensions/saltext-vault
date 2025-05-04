@@ -15,7 +15,7 @@ pytest.importorskip("docker")
 
 pytestmark = [
     pytest.mark.slow_test,
-    pytest.mark.skip_if_binaries_missing("vault", "getent"),
+    pytest.mark.skip_if_binaries_missing("vault"),
     pytest.mark.usefixtures("vault_container_version"),
 ]
 
@@ -170,6 +170,66 @@ HdI7Pfaf/l0HozAw/Al+LXbpmSBdfmz0U/EGAKRqXMW5+vQ7XHXD
 
 
 @pytest.fixture
+def ca_sub_key():
+    return """\
+-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCqbHMHARaW7ncu
+bcgLhHEyo9wEOh4a82D5B1Y1VH/XJvwBD4Bt59HS46zqYNtXXRbWnWkISL8wvWmC
+JEXZ7GmoTL+e8s/h8C1A0vqeThBv0TJyZK93CRD80vG/v+NiLd2SjlPknXibDwFz
+wrkZnGLryRqmswvG12ahOYQYWlPCv+BIUxDUL/Pz0z4ZEgoZgArVXMiqXlCfvsPy
+Uenx5VLNQZB95K88TMhr/fCbrncddlvDzUPlW4IpLbyfKE9MCCiWnXYqgMr/WzJx
+6u6Pf9B4G+2GVCYNEeNFcsbYOgRuZAz5tSrIvIaiWqz0Uy8/+7xRHV/80EO4eUGA
+aNJUWRoxAgMBAAECggEAIVNetPZuA+qyzJX0IehuuE/ZlMwGmg+QnXHlVj1lWF3L
+tqtg2l0UJ1CVPindinpuHl6erNuI44+Og7/zFtfHm30SlZL2usBcIQqArpcmWK9I
+VZ1BwJ25wC7BzlTIMqk0ZFXHqvNuI6guCQSBbLQrld74ArQNb/8sFwfnwFlder33
+cEEkxzkz1+tjDVPllJqhDHC4pWHfGiU/NzfLnMKTnlViOYHywYLPKi4T5H4PA/Nd
+Lwqnv4AURmBXxi0pYc/7640pZiBuyNfAW6zik4m4hZMPdznpRyLC2VAZMZWLdxry
+38a1HHK4ZgQtq7hgS10GtJLqoB/hfFQPVTLdKKg2DwKBgQDqmrFaL7UodukHoTQT
+Ob7WmizCCRRjYfljREJMHa7DgLODjVfrBcHWgKV6sB8OFESx+FJA9IW8yOaGwmKJ
+m2PlNTeAXt6wfLdX2pq+8Wb4PFmYeqxrAubItYdiQEnVYZOWCpTx+aByHz76F5if
+DHXvaeYztyjE7b88e+gIWv1fjwKBgQC591SvojZ57J1yQGUutNese/QqqhFbBJz9
+RWCm217ksoqVZYZWxsG+wGH6R0pDjRYxn0wXrrqCLag4TI73qPawUV22C/+m7L2o
+mmJ4BXxklmrtYBXd/xdMTOvzvxskClbK1oYmloWGh4LmZFBKq7DTsWXzyidZJz5i
+1rwM0A0KPwKBgQCKEs8sgAWDsjBF8EdAxWyeyxBqhoN8Vk47cRH/0DxqDZYZZ5eF
+19aUUxSRV5R/achgYgCu//qx+B9M0pzB1jV90cs/fxZbEpupVhxbIqJymLo2doSB
+WqzPFZ9/YMzTi+EbnlC49SzL3b3n3PlTKjdC17XHXBXfiPlTNK2ENWEH2wKBgFHE
+fmf7WxihAVmLFvJCcdJVbjaUMK1kieKS7rxvGHpWRrkJutfM7MOCs5HoZq7tCiUn
+db20Bi3XBXA7uWEL2ewM2reA7xfmYD4SI9nCD7/qo3lcFkFWOFhEOjsifDyMjz0A
+tluhM3TDgLrswKEUfNuX1MwsxsBckQHEiUrY7+LhAoGABk3BBSVayHrTCT4xJipk
+PIlGdKHjzdnI4adfJEWlGQA5EUv+fiorfeFW0u1yKyiftbCrkwG8z4S5JB3PkBZc
+kbVyt+nUh7+gOoNE0ebGJzirkLiFzeulFmQFE3VzwxXuuBm/Zl8ruOiRjftooJx0
+A1vWs/C545K2v/LLxc55Cug=
+-----END PRIVATE KEY-----
+"""
+
+
+@pytest.fixture
+def ca_sub_cert():
+    return """\
+-----BEGIN CERTIFICATE-----
+MIIDTTCCAjWgAwIBAgIUJ8/bURqv1pOka8sHUVqp+C4+FWIwDQYJKoZIhvcNAQEL
+BQAwKzELMAkGA1UEBhMCVVMxDTALBgNVBAMMBFRlc3QxDTALBgNVBAoMBFNhbHQw
+HhcNMjUwNTA0MTQyMjUxWhcNMzUwNTAyMTQyMjUxWjAuMQswCQYDVQQGEwJVUzEN
+MAsGA1UECgwEU2FsdDEQMA4GA1UEAwwHVGVzdFN1YjCCASIwDQYJKoZIhvcNAQEB
+BQADggEPADCCAQoCggEBAKpscwcBFpbudy5tyAuEcTKj3AQ6HhrzYPkHVjVUf9cm
+/AEPgG3n0dLjrOpg21ddFtadaQhIvzC9aYIkRdnsaahMv57yz+HwLUDS+p5OEG/R
+MnJkr3cJEPzS8b+/42It3ZKOU+SdeJsPAXPCuRmcYuvJGqazC8bXZqE5hBhaU8K/
+4EhTENQv8/PTPhkSChmACtVcyKpeUJ++w/JR6fHlUs1BkH3krzxMyGv98Juudx12
+W8PNQ+VbgiktvJ8oT0wIKJaddiqAyv9bMnHq7o9/0Hgb7YZUJg0R40Vyxtg6BG5k
+DPm1Ksi8hqJarPRTLz/7vFEdX/zQQ7h5QYBo0lRZGjECAwEAAaNmMGQwEgYDVR0T
+AQH/BAgwBgEB/wIBADAOBgNVHQ8BAf8EBAMCAQYwHQYDVR0OBBYEFDru5IneLp7q
+OrwVwHw6i3deyooOMB8GA1UdIwQYMBaAFFzy8fRTKSOe7kBakqO0Ki71potnMA0G
+CSqGSIb3DQEBCwUAA4IBAQBJQJcAMsbKJObyn9uX5JTy/pFptden0c9XXmwdNq53
+fY85pWWSN4E5880yWzhVtB60z4hR4V0hI07928rx+zqgYSRvFJD4Sv50ju7QzjtK
+cMm0oySqBACJBoQvQjffpnFxsMiPVpbVuEDmDYGrlAkAaXy9O/AMD5D3476QuMsV
+4IPOZ65ISOE7yTlYsIXMcEvAej8Rv1uRSScWwoxU7F0XsULMXMfVdW6b0/x/Js2N
+UfxmAJVK8gpR1J2uT0LZgZ5QHgGagYtDwiWYyW/w5fSzxCA43KrOg6g4x+y/PBFj
+cYpgWHc7NNeYGs6uKgA+IJJalICKGMSJpStncc6SGeKi
+-----END CERTIFICATE-----
+"""
+
+
+@pytest.fixture
 def cert_args(tmp_path, private_key):
     return {
         "name": f"{tmp_path}/cert",
@@ -219,8 +279,10 @@ def issuer_setup(ca_cert, ca_key):
     ret_data = vault_write("/pki/config/ca", pem_bundle="\n".join([ca_cert, ca_key]))["data"]
     issuer_id = ret_data["imported_issuers"][0]
     vault_write(f"/pki/issuer/{issuer_id}", issuer_name="root")
-    yield issuer_id
-    vault_delete(f"/pki/issuer/{issuer_id}")
+    try:
+        yield issuer_id
+    finally:
+        vault_delete(f"/pki/issuer/{issuer_id}")
 
 
 @pytest.fixture
@@ -228,8 +290,30 @@ def issuer_setup_additional(ca2_cert, ca2_key):
     ret_data = vault_write("/pki/config/ca", pem_bundle="\n".join([ca2_cert, ca2_key]))["data"]
     issuer_id = ret_data["imported_issuers"][0]
     vault_write(f"/pki/issuer/{issuer_id}", issuer_name="additional")
-    yield issuer_id
-    vault_delete(f"/pki/issuer/{issuer_id}")
+    try:
+        yield issuer_id
+    finally:
+        vault_delete(f"/pki/issuer/{issuer_id}")
+
+
+@pytest.fixture
+def issuer_setup_sub(ca_cert, ca_sub_cert, ca_sub_key):
+    ret_data = vault_write(
+        "/pki/config/ca", pem_bundle="\n".join([ca_sub_cert, ca_sub_key, ca_cert])
+    )["data"]
+    issuers = ret_data["mapping"]
+    imported_key = ret_data["imported_keys"][0]
+    try:
+        root_id = next(x for x in issuers if issuers[x] != imported_key)
+        sub_id = next(x for x in issuers if issuers[x] if issuers[x] == imported_key)
+    except StopIteration as err:
+        raise AssertionError("Unable to find issuer IDs") from err
+    vault_write(f"/pki/issuer/{sub_id}", issuer_name="sub")
+    try:
+        yield sub_id
+    finally:
+        vault_delete(f"/pki/issuer/{sub_id}")
+        vault_delete(f"/pki/issuer/{root_id}")
 
 
 @pytest.mark.usefixtures("issuer_setup")
@@ -279,16 +363,23 @@ def test_certificate_managed_encoding(vault_pki, cert_args, encoding):
     assert enc == encoding
 
 
-@pytest.mark.usefixtures("issuer_setup")
+@pytest.mark.usefixtures("issuer_setup_sub")
 @pytest.mark.usefixtures("roles_setup")
 def test_certificate_managed_includes_chain(vault_pki, cert_args):
     cert_args["append_ca_chain"] = True
+    cert_args["issuer_ref"] = "sub"
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result
+    assert ret.changes
 
     _, chain = load_cert(cert_args["name"], load_chain=True)
 
     assert len(chain) == 1
+
+    # Ensure it's idempotent still
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result
+    assert not ret.changes
 
 
 @pytest.mark.usefixtures("issuer_setup")
