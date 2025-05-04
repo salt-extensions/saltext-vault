@@ -15,8 +15,7 @@ from tests.support.vault import vault_write_secret
 pytest.importorskip("docker")
 
 pytestmark = [
-    pytest.mark.slow_test,
-    pytest.mark.skip_if_binaries_missing("vault", "getent"),
+    pytest.mark.skip_if_binaries_missing("vault"),
 ]
 
 log = logging.getLogger(__name__)
@@ -58,7 +57,6 @@ def vault(modules, vault_container_version):  # pylint: disable=unused-argument
                 vault_delete_policy(policy)
 
 
-@pytest.mark.windows_whitelisted
 def test_vault_read_secret_issue_61084(sys_mod):
     """
     Test issue 61084. `sys.argspec` should return valid data and not throw a
@@ -70,7 +68,6 @@ def test_vault_read_secret_issue_61084(sys_mod):
     assert isinstance(result.get("vault.read_secret"), dict)
 
 
-@pytest.mark.windows_whitelisted
 def test_vault_list_secrets_issue_61084(sys_mod):
     """
     Test issue 61084. `sys.argspec` should return valid data and not throw a

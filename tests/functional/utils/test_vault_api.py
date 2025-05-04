@@ -8,7 +8,7 @@ from tests.support.vault import vault_enable_auth_method
 pytest.importorskip("docker")
 
 pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault", "getent"),
+    pytest.mark.skip_if_binaries_missing("vault"),
     pytest.mark.usefixtures("vault_container_version"),
 ]
 
