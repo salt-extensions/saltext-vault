@@ -70,7 +70,7 @@ jobs:
           fail_ci_if_error: false
           flags: ${{ steps.codecov-flags.outputs.flags }},project
           name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-project
-          use_oidc: true
+          use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
           version: v10.4.0
 
       - name: Upload Tests Code Coverage
@@ -81,7 +81,7 @@ jobs:
           fail_ci_if_error: false
           flags: ${{ steps.codecov-flags.outputs.flags }},tests
           name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-tests
-          use_oidc: true
+          use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
           version: v10.4.0
 
       - name: Upload Logs
@@ -167,7 +167,7 @@ jobs:
           fail_ci_if_error: false
           flags: ${{ steps.codecov-flags.outputs.flags }},project
           name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-project
-          use_oidc: true
+          use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
           version: v10.4.0
 
       - name: Upload Tests Code Coverage
@@ -178,7 +178,7 @@ jobs:
           fail_ci_if_error: false
           flags: ${{ steps.codecov-flags.outputs.flags }},tests
           name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-tests
-          use_oidc: true
+          use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
           version: v10.4.0
 
       - name: Upload Logs
@@ -259,7 +259,7 @@ jobs:
           fail_ci_if_error: false
           flags: ${{ steps.codecov-flags.outputs.flags }},project
           name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-project
-          use_oidc: true
+          use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
           version: v10.4.0
 
       - name: Upload Tests Code Coverage
@@ -270,7 +270,7 @@ jobs:
           fail_ci_if_error: false
           flags: ${{ steps.codecov-flags.outputs.flags }},tests
           name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-tests
-          use_oidc: true
+          use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
           version: v10.4.0
 
       - name: Upload Logs
