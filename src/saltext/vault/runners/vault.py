@@ -917,6 +917,10 @@ def _validate_signature(minion_id, signature, impersonated_by_master):
     Validate that either minion with id minion_id, or the master, signed the
     request
     """
+    if not impersonated_by_master and _config("issue:block_minion_requests"):
+        raise salt.exceptions.AuthenticationError(
+            "Non-impersonated requests have been disabled in the config"
+        )
     if not impersonated_by_master and __opts__.get("cluster_id") is not None:
         pki_dir = Path(__opts__["cluster_pki_dir"])
     else:
