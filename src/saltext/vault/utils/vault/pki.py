@@ -84,11 +84,12 @@ def check_cert_for_changes(
                     changes.update({"subject": {k: {"old": "", "new": kwargs[k]}}})
 
     append_chain = [x509util.load_cert(x) for x in append_chain]
-    for ca in append_chain:
-        if ca.subject.rfc4514_string() == ca.issuer.rfc4514_string():
-            # Self-signed CA. Shouldn't be in the chain.
-            append_chain.remove(ca)
-            continue
+    # Filter self-signed CA, which shouldn't be in the chain.
+    append_chain = [
+        cert
+        for cert in append_chain
+        if cert.subject.rfc4514_string() != cert.issuer.rfc4514_string()
+    ]
 
     if not compare_ca_chain(current_chain, append_chain):
         changes["ca_chain"] = True
