@@ -1,0 +1,1 @@
+Fixed vault ext_pillar failing with `KeyError: 'id'` when the Salt master compiles pillar for minions by properly handling the `MASTER_IMPERSONATING` run type

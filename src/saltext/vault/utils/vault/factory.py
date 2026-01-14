@@ -187,7 +187,11 @@ def clear_cache(opts, context, ckey=None, connection=True, session=False, force_
                 if config["auth"]["method"] != "token" or not (
                     force_local
                     or hlp._get_salt_run_type(opts)
-                    in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
+                    in (
+                        hlp.SALT_RUNTYPE_MASTER,
+                        hlp.SALT_RUNTYPE_MASTER_IMPERSONATING,
+                        hlp.SALT_RUNTYPE_MINION_LOCAL,
+                    )
                 ):
                     if config["cache"]["clear_attempt_revocation"]:
                         delta = config["cache"]["clear_attempt_revocation"]
@@ -323,7 +327,11 @@ def _build_authd_client(opts, context, force_local=False):
                 # For remote sources, we would needlessly request one, so don't.
                 if (
                     hlp._get_salt_run_type(opts)
-                    in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
+                    in (
+                        hlp.SALT_RUNTYPE_MASTER,
+                        hlp.SALT_RUNTYPE_MASTER_IMPERSONATING,
+                        hlp.SALT_RUNTYPE_MINION_LOCAL,
+                    )
                     or force_local
                 ):
                     secret_id = _fetch_secret_id(
@@ -421,10 +429,15 @@ def _check_upgrade(config, pre_flush=False):
 
 def _get_connection_config(cbank, opts, context, force_local=False, pre_flush=False, update=False):
     if (
-        hlp._get_salt_run_type(opts) in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
+        hlp._get_salt_run_type(opts) in (
+            hlp.SALT_RUNTYPE_MASTER,
+            hlp.SALT_RUNTYPE_MASTER_IMPERSONATING,
+            hlp.SALT_RUNTYPE_MINION_LOCAL,
+        )
         or force_local
     ):
         # only cache config fetched from remote
+        # MASTER_IMPERSONATING is when master compiles pillar for a minion (ext_pillar)
         return _use_local_config(opts)
 
     if pre_flush and update:
@@ -549,7 +562,11 @@ def _fetch_secret_id(config, opts, secret_id_cache, unwrap_client, force_local=F
         return secret_id
 
     if (
-        hlp._get_salt_run_type(opts) in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
+        hlp._get_salt_run_type(opts) in (
+            hlp.SALT_RUNTYPE_MASTER,
+            hlp.SALT_RUNTYPE_MASTER_IMPERSONATING,
+            hlp.SALT_RUNTYPE_MINION_LOCAL,
+        )
         or force_local
     ):
         secret_id = config["auth"]["secret_id"]
@@ -604,7 +621,11 @@ def _fetch_token(config, opts, token_cache, unwrap_client, force_local=False, em
         return token
 
     if (
-        hlp._get_salt_run_type(opts) in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
+        hlp._get_salt_run_type(opts) in (
+            hlp.SALT_RUNTYPE_MASTER,
+            hlp.SALT_RUNTYPE_MASTER_IMPERSONATING,
+            hlp.SALT_RUNTYPE_MINION_LOCAL,
+        )
         or force_local
     ):
         token = None
