@@ -815,7 +815,7 @@ def test_vault_retry_retry_after(server_config, req_mock, sleep_mock):
     client = vclient.VaultClient(**server_config, backoff_jitter=0.0)
     client.request_raw("GET", "test")
     assert req_mock[0].call_count == vclient.DEFAULT_MAX_RETRIES + 1
-    calls = [call(42) for x in range(5)]
+    calls = [call(42) for _ in range(5)]
     assert sleep_mock.call_args_list == calls
 
 
@@ -839,11 +839,14 @@ def test_vault_retry_retry_after_max(server_config, disabled, req_mock, sleep_mo
     """
     kwargs = {}
     if disabled:
+        # This implementation was created before urllib3 2.6.3 introduced the
+        # same switch in https://github.com/urllib3/urllib3/pull/3743.
+        # Keep supporting `None` here, but expect it to default to urllib3's default of 6h.
         kwargs["retry_after_max"] = None
     client = vclient.VaultClient(**server_config, backoff_jitter=0.0, **kwargs)
     client.request_raw("GET", "test")
     assert req_mock[0].call_count == vclient.DEFAULT_MAX_RETRIES + 1
-    calls = [call(60 if not disabled else 9999999999) for x in range(5)]
+    calls = [call(60 if not disabled else 21600) for _ in range(5)]
     assert sleep_mock.call_args_list == calls
 
 

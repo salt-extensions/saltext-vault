@@ -135,7 +135,8 @@ class VaultClient:
         self.backoff_jitter = max(0, min(backoff_jitter, MAX_BACKOFF_JITTER))
         self.retry_post = bool(retry_post)
         self.respect_retry_after = bool(respect_retry_after)
-        self.retry_after_max = max(0, retry_after_max) if retry_after_max is not None else None
+        # urllib3 2.6.3 introduced this parameter and set its default to 21600 (6h). Match that.
+        self.retry_after_max = max(0, retry_after_max) if retry_after_max is not None else 21600
         self.retry_status = tuple(retry_status) if retry_status is not None else None
 
         retry = VaultRetry(
@@ -674,8 +675,10 @@ class VaultRetry(Retry):
         else:
             kwargs["backoff_max"] = backoff_max
             kwargs["backoff_jitter"] = backoff_jitter
-        self.retry_after_max = retry_after_max
         super().__init__(*args, **kwargs)
+        # urllib3 2.6.3 introduced the same parameter. Avoid having to guess
+        # wheter the parameter is supported by setting it ourselves.
+        self.retry_after_max = retry_after_max
 
     def is_retry(self, method, status_code, has_retry_after=False):
         """

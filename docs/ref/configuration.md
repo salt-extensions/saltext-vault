@@ -308,8 +308,7 @@ via [enable_rate_limit_response_headers](https://developer.hashicorp.com/vault/a
 :::{versionadded} 1.1.0
 :::
 When {vconf}`respect_retry_after <client:respect_retry_after>` is True, limit
-the maximum amount of seconds the client sleeps before retrying. Set this to `null` (YAML/JSON)/`None` (Python)
-to disable this behavior. Defaults to `60`.
+the maximum amount of seconds the client sleeps before retrying. Defaults to `60`.
 
 :::{vconf} server
 :::
