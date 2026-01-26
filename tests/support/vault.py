@@ -145,6 +145,40 @@ def vault_disable_auth_method(name):
     pytest.fail(f"Could not disable auth method `{name}`: {ret.stderr or ret.stdout}")
 
 
+def vault_write_approle(name, mount="approle", **kwargs):
+    cmd = ["write", "-f", f"auth/{mount}/role/{name}"] + [f"{k}={v}" for k, v in kwargs.items()]
+    try:
+        _vault_cmd(cmd)
+    except RuntimeError as err:
+        pytest.fail(f"Failed to write approle `{name}` at `{mount}`: {err}")
+
+
+def vault_delete_approle(name, mount="approle"):
+    cmd = ["delete", f"auth/{mount}/role/{name}"]
+    try:
+        _vault_cmd(cmd)
+    except RuntimeError as err:
+        pytest.fail(f"Failed to write approle `{name}` at `{mount}`: {err}")
+
+
+def vault_get_role_id(name, mount="approle"):
+    cmd = ["read", "-format=json", f"auth/{mount}/role/{name}/role-id"]
+    try:
+        ret = _vault_cmd(cmd)
+    except RuntimeError as err:
+        pytest.fail(f"Failed to read role-id for `{name}` at `{mount}`: {err}")
+    return json.loads(ret.stdout)["data"]["role_id"]
+
+
+def vault_create_secret_id(name, mount="approle"):
+    cmd = ["write", "-f", "-format=json", f"auth/{mount}/role/{name}/secret-id"]
+    try:
+        ret = _vault_cmd(cmd)
+    except RuntimeError as err:
+        pytest.fail(f"Failed to create secret-id for `{name}` at `{mount}`: {err}")
+    return json.loads(ret.stdout)["data"]["secret_id"]
+
+
 def vault_write_secret(path, **kwargs):
     cmd = ["kv", "put", path] + [f"{k}={v}" for k, v in kwargs.items()]
     try:
