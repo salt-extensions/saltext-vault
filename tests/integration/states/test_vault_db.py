@@ -146,8 +146,7 @@ def _cleanup():
 
 @pytest.fixture
 def _lease_beacon(master, salt_call_cli):
-    state_contents = dedent(
-        """
+    state_contents = dedent("""
         Vault lease is cached:
           vault_db.creds_cached:
             - name: testrole
@@ -160,8 +159,7 @@ def _lease_beacon(master, salt_call_cli):
             # The beacon ensures this min_ttl, must be >= valid_for if set
             - min_ttl: 1200
             - meta: other.state.or.something.else
-    """
-    )
+    """)
     states = master.state_tree.base.temp_file("vault_lease.sls", state_contents)
     try:
         with states:
@@ -176,14 +174,12 @@ def _lease_beacon(master, salt_call_cli):
 
 @pytest.fixture
 def _lease_beacon_absent(master, salt_call_cli):
-    state_contents = dedent(
-        """
+    state_contents = dedent("""
         Vault lease is not cached:
           vault_db.creds_uncached:
             - name: testrole
             - beacon: true
-    """
-    )
+    """)
     states = master.state_tree.base.temp_file("vault_lease_absent.sls", state_contents)
     try:
         with states:
