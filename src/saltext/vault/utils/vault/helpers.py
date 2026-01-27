@@ -117,7 +117,7 @@ def expand_pattern_lists(pattern, **mappings):
     for _, field_name, _, _ in f.parse(pattern):
         if field_name is None:
             continue
-        (value, _) = f.get_field(field_name, None, mappings)
+        value, _ = f.get_field(field_name, None, mappings)
         if isinstance(value, (list, dict)):
             token = f"{{{field_name}}}"
             expanded = [pattern.replace(token, str(elem)) for elem in value]
