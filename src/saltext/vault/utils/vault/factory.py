@@ -14,6 +14,7 @@ import salt.modules.saltutil
 import salt.utils.context
 import salt.utils.data
 import salt.utils.dictupdate
+import salt.utils.sdb
 from requests.exceptions import ConnectionError  # pylint: disable=redefined-builtin
 from salt.defaults import NOT_SET
 
@@ -335,7 +336,7 @@ def _build_authd_client(opts, context, force_local=False):
                     )
                 else:
                     secret_id = vauth.InvalidVaultSecretId()
-        role_id = config["auth"]["role_id"]
+        role_id = _render_sdb(config["auth"]["role_id"], opts)
         # this happens with wrapped response merging
         if isinstance(role_id, dict):
             role_id = role_id["role_id"]
@@ -404,6 +405,19 @@ def _build_revocation_client(opts, context, force_local=False):
         auth, session=unauthd_client.session, **config["server"], **config["client"]
     )
     return client, config
+
+
+def _render_sdb(val, opts):
+    """
+    Check if the configuration value needs to be pulled from SDB and do so, if so.
+    Otherwise, return the value unaltered.
+    """
+    try:
+        if not (val or "").startswith("sdb://"):
+            return val
+    except AttributeError:
+        return val
+    return salt.utils.sdb.sdb_get(val, opts, strict=True)
 
 
 def _check_upgrade(config, pre_flush=False):
@@ -522,7 +536,7 @@ def _get_connection_config(cbank, opts, context, force_local=False, pre_flush=Fa
 def _use_local_config(opts):
     log.debug("Using Vault connection details from local config.")
     config = parse_config(opts.get("vault", {}))
-    embedded_token = config["auth"].pop("token", None)
+    embedded_token = _render_sdb(config["auth"].pop("token", None), opts)
     return (
         {
             "auth": config["auth"],
@@ -560,7 +574,7 @@ def _fetch_secret_id(config, opts, secret_id_cache, unwrap_client, force_local=F
         hlp._get_salt_run_type(opts) in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
         or force_local
     ):
-        secret_id = config["auth"]["secret_id"]
+        secret_id = _render_sdb(config["auth"]["secret_id"], opts)
         if isinstance(secret_id, dict):
             if secret_id.get("wrap_info"):
                 secret_id = unwrap_client.unwrap(

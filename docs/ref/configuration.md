@@ -41,10 +41,20 @@ of a wrapping request.
 #### role_id
 The role ID of the AppRole. Required if {vconf}`auth:method` == `approle`.
 
+:::{versionchanged} 1.4.0
+It's possible to specify this value using an `sdb://` URI, e.g. to pull it from
+environment variables.
+:::
+
 :::{vconf} auth:secret_id
 :::
 #### secret_id
 The SecretID of the AppRole. Only required if the configured AppRole requires it.
+
+:::{versionchanged} 1.4.0
+It's possible to specify this value using an `sdb://` URI, e.g. to pull it from
+environment variables.
+:::
 
 :::{vconf} auth:token
 :::
@@ -52,8 +62,8 @@ The SecretID of the AppRole. Only required if the configured AppRole requires it
 Token to authenticate to Vault with. Required if {vconf}`auth:method` == `token`.
 
 :::{hint}
-You can also pull configuration values, e.g. the token, from environment variables
-using the `env` SDB module:
+It's possible to specify this value using an `sdb://` URI, e.g. to pull it from
+environment variables:
 
 ```yaml
 vault:
