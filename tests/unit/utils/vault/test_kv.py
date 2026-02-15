@@ -210,6 +210,7 @@ def kvv1(kvv1_info, kvv1_response, metadata_nocache, kv_list_response):
     client = Mock(spec=vclient.AuthenticatedVaultClient)
     client.get.return_value = kvv1_response
     client.post.return_value = True
+    client.put.return_value = True
     client.patch.side_effect = vclient.VaultPermissionDeniedError
     client.list.return_value = kv_list_response
     client.delete.return_value = True
@@ -222,6 +223,7 @@ def kvv2(kvv2_info, kvv2_response, metadata_nocache, kv_list_response):
     client = Mock(spec=vclient.AuthenticatedVaultClient)
     client.get.return_value = kvv2_response
     client.post.return_value = True
+    client.put.return_value = True
     client.patch.return_value = True
     client.list.return_value = kv_list_response
     client.delete.return_value = True
@@ -386,7 +388,7 @@ class TestKVV1:
         """
         data = {"bar": "baz"}
         kvv1.write(path, data)
-        kvv1.client.post.assert_called_once_with(path, payload=data)
+        kvv1.client.put.assert_called_once_with(path, payload=data)
 
     @pytest.mark.parametrize(
         "existing,data,expected",
@@ -412,7 +414,7 @@ class TestKVV1:
         """
         kvv1.client.get.return_value = {"data": existing}
         kvv1.patch(path, data)
-        kvv1.client.post.assert_called_once_with(
+        kvv1.client.put.assert_called_once_with(
             path,
             payload=expected,
         )
@@ -422,7 +424,9 @@ class TestKVV1:
         Ensure that VaultKV.delete works for KV v1.
         """
         kvv1.delete(path)
-        kvv1.client.request.assert_called_once_with("DELETE", path, payload=None)
+        kvv1.client.request.assert_called_once_with(
+            "DELETE", path, payload=None, safe_to_retry=None
+        )
 
     def test_vault_kv_delete_versions(self, kvv1, path):
         """
@@ -524,7 +528,7 @@ class TestKVV2:
         """
         data = {"bar": "baz"}
         kvv2.write(path, data)
-        kvv2.client.post.assert_called_once_with(paths["data"], payload={"data": data})
+        kvv2.client.put.assert_called_once_with(paths["data"], payload={"data": data})
 
     def test_vault_kv_patch(self, kvv2, path, paths):
         """
@@ -535,6 +539,7 @@ class TestKVV2:
         kvv2.client.patch.assert_called_once_with(
             paths["data"],
             payload={"data": data},
+            safe_to_retry=True,
         )
 
     def test_vault_kv_delete(self, kvv2, path, paths):
@@ -542,7 +547,9 @@ class TestKVV2:
         Ensure that VaultKV.delete works for KV v2.
         """
         kvv2.delete(path)
-        kvv2.client.request.assert_called_once_with("DELETE", paths["data"], payload=None)
+        kvv2.client.request.assert_called_once_with(
+            "DELETE", paths["data"], payload=None, safe_to_retry=None
+        )
 
     @pytest.mark.parametrize("versions", [[1, 2], [2], 2, ["1", "2"], ["2"], "2", [1, "2"]])
     def test_vault_kv_delete_versions(self, kvv2, versions, path, paths):
@@ -555,7 +562,7 @@ class TestKVV2:
             expected = [int(versions)]
         kvv2.delete(path, versions=versions)
         kvv2.client.request.assert_called_once_with(
-            "POST", paths["delete_versions"], payload={"versions": expected}
+            "POST", paths["delete_versions"], payload={"versions": expected}, safe_to_retry=True
         )
 
     @pytest.mark.parametrize("versions", [[1, 2], [2], 2, ["1", "2"], ["2"], "2", [1, "2"]])

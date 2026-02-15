@@ -332,7 +332,9 @@ def _write_role(name, key_type, mount="ssh", **kwargs):
         elif val is not None:
             payload[param] = val
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)
+        return vault.query(
+            "POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True
+        )
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -432,9 +434,9 @@ def list_roles_ip(address, mount="ssh"):
     endpoint = f"{mount}/lookup"
     payload = {"ip": address}
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"][
-            "roles"
-        ]
+        return vault.query(
+            "POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True
+        )["data"]["roles"]
     except vault.VaultInvocationError as err:
         if "Missing roles" not in str(err):
             raise
@@ -505,7 +507,9 @@ def write_zeroaddr_roles(roles, mount="ssh"):
     endpoint = f"{mount}/config/zeroaddress"
     payload = {"roles": roles}
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)
+        return vault.query(
+            "POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True
+        )
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 

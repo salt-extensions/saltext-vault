@@ -156,7 +156,7 @@ class AppRoleApi:
                 "token_type": token_type,
             }
         )
-        return self.client.post(endpoint, payload=payload)
+        return self.client.put(endpoint, payload=payload)
 
     def delete_approle(self, name, mount="approle"):
         """
@@ -297,7 +297,7 @@ class AppRoleApi:
             endpoint = f"auth/{mount}/role/{name}/secret-id-accessor/lookup"
             payload = {"secret_id_accessor": accessor}
         try:
-            return self.client.post(endpoint, payload=payload)["data"]
+            return self.client.put(endpoint, payload=payload)["data"]
         except TypeError as err:
             # lookup does not raise exceptions, only returns True
             raise VaultNotFoundError() from err
@@ -380,7 +380,7 @@ class IdentityApi:
             "alias_name": alias,
             "alias_mount_accessor": self._lookup_mount_accessor(mount),
         }
-        entity = self.client.post(endpoint, payload=payload)
+        entity = self.client.put(endpoint, payload=payload)
         if isinstance(entity, dict):
             return entity["data"]
         raise VaultNotFoundError()
@@ -412,7 +412,7 @@ class IdentityApi:
                 "disabled": disabled,
             }
         )
-        return self.client.post(endpoint, payload=payload)
+        return self.client.put(endpoint, payload=payload)
 
     def delete_entity(self, name):
         """
@@ -462,7 +462,7 @@ class IdentityApi:
             if alias["mount_accessor"] == mount_accessor:
                 payload["id"] = alias["id"]
                 break
-        return self.client.post("identity/entity-alias", payload=payload)
+        return self.client.put("identity/entity-alias", payload=payload)
 
     def _lookup_mount_accessor(self, mount):
         endpoint = f"sys/auth/{mount}"

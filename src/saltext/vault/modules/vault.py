@@ -627,7 +627,9 @@ def policy_write(policy, rules):
     endpoint = f"sys/policy/{policy}"
     payload = {"policy": rules}
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)
+        return vault.query(
+            "POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True
+        )
     except SaltException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 

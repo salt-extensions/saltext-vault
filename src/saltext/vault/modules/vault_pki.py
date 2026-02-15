@@ -218,7 +218,7 @@ def write_role(
         payload["require_cn"] = require_cn
 
     try:
-        vault.query(method, endpoint, __opts__, __context__, payload=payload)
+        vault.query(method, endpoint, __opts__, __context__, payload=payload, safe_to_retry=True)
         return True
     except vault.VaultUnsupportedOperationError as err:
         raise CommandExecutionError(
@@ -472,7 +472,7 @@ def set_default_issuer(name, mount="pki"):
     endpoint = f"{mount}/config/issuers"
     payload = {"default": name}
     try:
-        vault.query("POST", endpoint, __opts__, __context__, payload=payload)
+        vault.query("POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True)
         return True
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
@@ -1041,7 +1041,7 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
                 serial = dec2hex(serial)
             payload["serial_number"] = serial
 
-        vault.query("POST", endpoint, __opts__, __context__, payload=payload)
+        vault.query("POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True)
         return True
     except vault.VaultInvocationError:
         return False

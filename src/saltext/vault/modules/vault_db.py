@@ -175,7 +175,7 @@ def write_connection(
         payload["password_policy"] = password_policy
 
     try:
-        vault.query("POST", endpoint, __opts__, __context__, payload=payload)
+        vault.query("POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
@@ -513,7 +513,9 @@ def _write_role(
                 )
         payload["credential_config"] = credential_config
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)
+        return vault.query(
+            "POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True
+        )
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
