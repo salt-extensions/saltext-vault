@@ -518,9 +518,9 @@ class TestLeaseStore:
         Ensure that "valid" leases are validated with the server only if requested.
         """
         if expected:
-            store_valid.client.post.return_value = lease_lookup_response
+            store_valid.client.put.return_value = lease_lookup_response
         else:
-            store_valid.client.post.side_effect = (
+            store_valid.client.put.side_effect = (
                 vault.VaultInvocationError("invalid lease"),
                 lease_renewed_response,
             )
@@ -528,20 +528,18 @@ class TestLeaseStore:
         assert (ret == lease) is (expected or not check_server)
         if check_server:
             if expected:
-                store_valid.client.post.assert_called_once_with(
+                store_valid.client.put.assert_called_once_with(
                     "sys/leases/lookup", payload={"lease_id": lease["id"]}
                 )
                 store_valid.cache.flush.assert_not_called()
                 store_valid.expire_events.assert_not_called()
             else:
-                store_valid.client.post.assert_has_calls(
-                    (
-                        call("sys/leases/lookup", payload={"lease_id": lease["id"]}),
-                        call(
-                            "sys/leases/renew",
-                            payload={"lease_id": lease["id"], "increment": 60},
-                        ),
-                    )
+                store_valid.client.put.assert_called_once_with(
+                    "sys/leases/lookup", payload={"lease_id": lease["id"]}
+                )
+                store_valid.client.post.assert_called_once_with(
+                    "sys/leases/renew",
+                    payload={"lease_id": lease["id"], "increment": 60},
                 )
                 store_valid.cache.flush.assert_called_once_with("test")
                 store_valid.expire_events.assert_called_once_with(
@@ -549,7 +547,7 @@ class TestLeaseStore:
                     data={"valid_for_less": 1300, "ttl": 0, "meta": lease["meta"]},
                 )
         else:
-            store_valid.client.post.assert_not_called()
+            store_valid.client.put.assert_not_called()
             store_valid.expire_events.assert_not_called()
         store_valid.cache.store.assert_not_called()
 

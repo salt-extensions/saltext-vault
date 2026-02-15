@@ -587,7 +587,7 @@ class LeaseStore:
         endpoint = "sys/leases/lookup"
         payload = {"lease_id": str(lease)}
         try:
-            return self.client.post(endpoint, payload=payload)
+            return self.client.put(endpoint, payload=payload)
         except VaultInvocationError as err:
             if "invalid lease" not in str(err):
                 raise

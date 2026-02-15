@@ -354,6 +354,7 @@ def test_policy_write(query, policy_response):
         opts=ANY,
         context=ANY,
         payload={"policy": policy_response["rules"]},
+        safe_to_retry=True,
     )
 
 

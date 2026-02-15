@@ -279,7 +279,8 @@ between retries by. Defaults to `0.2`. Maximum: `5.0`
 #### retry_post
 :::{versionadded} 1.1.0
 :::
-Whether to retry requests that are potentially non-idempotent (`POST`, `PATCH`). Defaults to `False`.
+Whether to retry requests that are potentially non-idempotent (`POST`, `PATCH`, unless explicitly marked as idempotent during the call).
+Defaults to `False`.
 
 :::{note}
 HTTP 429 responses are always retried, regardless of HTTP verb.

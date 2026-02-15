@@ -1,4 +1,5 @@
 import contextlib
+import copy
 from unittest.mock import ANY
 from unittest.mock import MagicMock
 from unittest.mock import Mock
@@ -730,6 +731,8 @@ def req_mock(request):
             req.return_value.msg = msg_mock  # urllib <2
             req.return_value.headers = headers  # urllib >=2
             req.return_value.status = status
+            delattr(req.return_value, "stream")
+            req.return_value.read.side_effect = (b"{", b"}", None, None)
         yield req, exp_ctx
 
 
@@ -990,6 +993,33 @@ def test_vault_retry_post_enabled(server_config, method, req_mock):
     client = vclient.VaultClient(**server_config, retry_post=True)
     client.request_raw(method, "test")
     assert req_mock[0].call_count == vclient.DEFAULT_MAX_RETRIES + 1
+
+
+@pytest.mark.usefixtures("sleep_mock")
+@pytest.mark.parametrize("method", ("post", "patch", "put", "delete"))
+def test_vault_safe_to_retry(server_config, method, req_mock):
+    """
+    Ensure it's possible to specifically mark requests as (not) idempotent,
+    overriding the heuristic based on HTTP verb.
+    """
+    failure = req_mock[0].return_value
+    success = copy.deepcopy(failure)
+    success.status = 200
+    req_mock[0].side_effect = (failure, success)
+    client = vclient.VaultClient(**server_config)
+    if method == "post":
+        client.post("test", safe_to_retry=True)
+    elif method == "patch":
+        client.patch("test", {}, safe_to_retry=True)
+    elif method == "put":
+        client.put("test")
+    else:
+        with pytest.raises(vault.VaultServerError):
+            client.delete("test", safe_to_retry=False)
+    if method == "delete":
+        assert req_mock[0].call_count == 1
+    else:
+        assert req_mock[0].call_count == 2
 
 
 @pytest.mark.usefixtures("sleep_mock")

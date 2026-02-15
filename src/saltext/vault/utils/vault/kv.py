@@ -58,7 +58,7 @@ class VaultKV:
             raise VaultInvocationError("The backend is not KV v2")
         return self.client.get(v2_info["metadata"])["data"]
 
-    def write(self, path, data):
+    def write(self, path, data, cas=None):
         """
         Write secret data to path.
         """
@@ -66,7 +66,11 @@ class VaultKV:
         if v2_info["v2"]:
             path = v2_info["data"]
             data = {"data": data}
-        return self.client.post(path, payload=data)
+            if cas is not None:
+                data["options"] = {"cas": cas}
+        # Always treat this request as idempotent, even though it's technically not
+        # on KVv2 (writing the same data twice increases the current version twice).
+        return self.client.put(path, payload=data)
 
     def patch(self, path, data):
         """
@@ -93,19 +97,22 @@ class VaultKV:
                     data[key] = value
             return data
 
-        def patch_in_memory(path, data):
-            current = self.read(path)
-            updated = apply_json_merge_patch(current, data)
-            return self.write(path, updated)
-
         v2_info = self.is_v2(path)
+
+        def patch_in_memory(path, data):
+            current = self.read(path, include_metadata=v2_info["v2"])
+            updated = apply_json_merge_patch(current["data"] if v2_info["v2"] else current, data)
+            return self.write(
+                path, updated, cas=current["metadata"]["version"] if v2_info["v2"] else None
+            )
+
         if not v2_info["v2"]:
             return patch_in_memory(path, data)
 
         path = v2_info["data"]
         payload = {"data": data}
         try:
-            return self.client.patch(path, payload=payload)
+            return self.client.patch(path, payload=payload, safe_to_retry=True)
         except VaultPermissionDeniedError:
             log.warning("Failed patching secret, is the `patch` capability set?")
         except VaultUnsupportedOperationError:
@@ -130,6 +137,7 @@ class VaultKV:
         method = "DELETE"
         payload = None
         v2_info = self.is_v2(path)
+        safe_to_retry = None
 
         if all_versions and v2_info["v2"]:
             versions = []
@@ -151,13 +159,14 @@ class VaultKV:
                 method = "POST"
                 path = v2_info["delete_versions"]
                 payload = {"versions": versions}
+                safe_to_retry = True
             else:
                 # data and delete operations only differ by HTTP verb
                 path = v2_info["data"]
         elif versions is not None:
             raise VaultInvocationError("Versioning support requires KV v2.")
 
-        return self.client.request(method, path, payload=payload)
+        return self.client.request(method, path, payload=payload, safe_to_retry=safe_to_retry)
 
     def restore(self, path, versions=None, all_versions=False):
         """

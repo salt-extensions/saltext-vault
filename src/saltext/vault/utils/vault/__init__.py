@@ -43,8 +43,10 @@ def query(
     opts,
     context,
     payload=None,
+    *,
     wrap=False,
     raise_error=True,
+    safe_to_retry=None,
     is_unauthd=False,
     **kwargs,
 ):
@@ -75,6 +77,13 @@ def query(
         Whether to inspect the response code and raise exceptions.
         Defaults to True.
 
+    safe_to_retry
+        .. versionadded:: 1.4.0
+
+        A boolean indicating whether this request is safe to retry (idempotent) or not.
+        If not provided, defaults to guessing based on the HTTP method.
+        Unsafe requests are not retried, unless :vconf:`client:retry_post` is enabled.
+
     is_unauthd
         Whether the queried endpoint is an unauthenticated one and hence
         does not deduct a token use. Only relevant for endpoints not found
@@ -88,6 +97,7 @@ def query(
             payload=payload,
             wrap=wrap,
             raise_error=raise_error,
+            safe_to_retry=safe_to_retry,
             is_unauthd=is_unauthd,
             **kwargs,
         )
@@ -104,6 +114,7 @@ def query(
         payload=payload,
         wrap=wrap,
         raise_error=raise_error,
+        safe_to_retry=safe_to_retry,
         is_unauthd=is_unauthd,
         **kwargs,
     )
@@ -115,9 +126,11 @@ def query_raw(
     opts,
     context,
     payload=None,
+    *,
     wrap=False,
     retry=True,
     is_unauthd=False,
+    safe_to_retry=None,
     **kwargs,
 ):
     """
@@ -144,9 +157,20 @@ def query_raw(
         was denied (to check for revoked cached credentials).
         Defaults to True.
 
+        .. note::
+            Affects handling of ``403 Forbidden`` responses by this function and
+            is independent from client settings.
+
     wrap
         Whether to request response wrapping. Should be a time string
         like ``30s`` or False (default).
+
+    safe_to_retry
+        .. versionadded:: 1.4.0
+
+        A boolean indicating whether this request is safe to retry (idempotent) or not.
+        If not provided, defaults to guessing based on the HTTP method.
+        Unsafe requests are not retried, unless :vconf:`client:retry_post` is enabled.
 
     is_unauthd
         Whether the queried endpoint is an unauthenticated one and hence
@@ -155,7 +179,13 @@ def query_raw(
     """
     client, config = get_authd_client(opts, context, get_config=True)
     res = client.request_raw(
-        method, endpoint, payload=payload, wrap=wrap, is_unauthd=is_unauthd, **kwargs
+        method,
+        endpoint,
+        payload=payload,
+        wrap=wrap,
+        safe_to_retry=safe_to_retry,
+        is_unauthd=is_unauthd,
+        **kwargs,
     )
 
     if not retry:
@@ -173,6 +203,7 @@ def query_raw(
             endpoint,
             payload=payload,
             wrap=wrap,
+            safe_to_retry=safe_to_retry,
             is_unauthd=is_unauthd,
             **kwargs,
         )

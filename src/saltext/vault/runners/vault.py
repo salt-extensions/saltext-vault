@@ -553,7 +553,7 @@ def unseal():
     client = VaultClient(**config["server"], **config["client"])
 
     for key in __opts__["vault"]["keys"]:
-        ret = client.post("sys/unseal", payload={"key": key})
+        ret = client.put("sys/unseal", payload={"key": key})
         # Return immediately after Vault is unsealed. No need to go over all the keys
         if ret["sealed"] is False:
             return True

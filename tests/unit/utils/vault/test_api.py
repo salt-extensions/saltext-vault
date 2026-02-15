@@ -265,7 +265,7 @@ def test_write_entity_alias(client, aliases, entity_fetch_response, identity_api
             mount="salt-minions",
             custom_metadata=metadata,
         )
-        client.post.assert_called_with("identity/entity-alias", payload=payload)
+        client.put.assert_called_with("identity/entity-alias", payload=payload)
 
 
 def test_write_entity(client, identity_api):
@@ -275,7 +275,7 @@ def test_write_entity(client, identity_api):
     metadata = {"foo": "bar"}
     identity_api.write_entity("salt_minion_test-minion", metadata=metadata)
     payload = {"metadata": metadata}
-    client.post.assert_called_with("identity/entity/name/salt_minion_test-minion", payload=payload)
+    client.put.assert_called_with("identity/entity/name/salt_minion_test-minion", payload=payload)
 
 
 def test_read_entity_by_alias_failed(client, identity_api):
@@ -286,7 +286,7 @@ def test_read_entity_by_alias_failed(client, identity_api):
         "saltext.vault.utils.vault.api.IdentityApi._lookup_mount_accessor",
         return_value="test-accessor",
     ):
-        client.post.return_value = []
+        client.put.return_value = []
         with pytest.raises(vapi.VaultNotFoundError):
             identity_api.read_entity_by_alias(alias="test-role-id", mount="salt-minions")
 
@@ -299,14 +299,14 @@ def test_read_entity_by_alias(client, entity_lookup_response, identity_api):
         "saltext.vault.utils.vault.api.IdentityApi._lookup_mount_accessor",
         return_value="test-accessor",
     ):
-        client.post.return_value = entity_lookup_response
+        client.put.return_value = entity_lookup_response
         res = identity_api.read_entity_by_alias(alias="test-role-id", mount="salt-minions")
         assert res == entity_lookup_response["data"]
         payload = {
             "alias_name": "test-role-id",
             "alias_mount_accessor": "test-accessor",
         }
-        client.post.assert_called_once_with("identity/lookup/entity", payload=payload)
+        client.put.assert_called_once_with("identity/lookup/entity", payload=payload)
 
 
 def test_lookup_mount_accessor(client, identity_api, lookup_mount_response):
@@ -387,4 +387,4 @@ def test_write_approle(approle_api, client):
         "token_policies": policies,
     }
     approle_api.write_approle("test-minion", mount="salt-minions", **payload)
-    client.post.assert_called_once_with("auth/salt-minions/role/test-minion", payload=payload)
+    client.put.assert_called_once_with("auth/salt-minions/role/test-minion", payload=payload)

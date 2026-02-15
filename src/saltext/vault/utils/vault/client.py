@@ -171,8 +171,11 @@ class VaultClient:
             adapter.connect_timeout = self.connect_timeout
             adapter.read_timeout = self.read_timeout
         self.session = session
+        self._vault_adapter = adapter
 
-    def delete(self, endpoint, wrap=False, raise_error=True, add_headers=None):
+    def delete(
+        self, endpoint, *, wrap=False, raise_error=True, add_headers=None, safe_to_retry=None
+    ):
         """
         Wrapper for client.request("DELETE", ...)
         """
@@ -182,17 +185,23 @@ class VaultClient:
             wrap=wrap,
             raise_error=raise_error,
             add_headers=add_headers,
+            safe_to_retry=safe_to_retry,
         )
 
-    def get(self, endpoint, wrap=False, raise_error=True, add_headers=None):
+    def get(self, endpoint, *, wrap=False, raise_error=True, add_headers=None, safe_to_retry=None):
         """
         Wrapper for client.request("GET", ...)
         """
         return self.request(
-            "GET", endpoint, wrap=wrap, raise_error=raise_error, add_headers=add_headers
+            "GET",
+            endpoint,
+            wrap=wrap,
+            raise_error=raise_error,
+            add_headers=add_headers,
+            safe_to_retry=safe_to_retry,
         )
 
-    def list(self, endpoint, wrap=False, raise_error=True, add_headers=None):
+    def list(self, endpoint, *, wrap=False, raise_error=True, add_headers=None, safe_to_retry=None):
         """
         Wrapper for client.request("LIST", ...)
         TODO: configuration to enable GET requests with query parameters for LIST?
@@ -203,12 +212,21 @@ class VaultClient:
             wrap=wrap,
             raise_error=raise_error,
             add_headers=add_headers,
+            safe_to_retry=safe_to_retry,
         )
 
-    def post(self, endpoint, payload=None, wrap=False, raise_error=True, add_headers=None):
+    def post(
+        self,
+        endpoint,
+        payload=None,
+        *,
+        wrap=False,
+        raise_error=True,
+        add_headers=None,
+        safe_to_retry=None,
+    ):
         """
         Wrapper for client.request("POST", ...)
-        Vault considers POST and PUT to be synonymous.
         """
         return self.request(
             "POST",
@@ -217,9 +235,44 @@ class VaultClient:
             wrap=wrap,
             raise_error=raise_error,
             add_headers=add_headers,
+            safe_to_retry=safe_to_retry,
         )
 
-    def patch(self, endpoint, payload, wrap=False, raise_error=True, add_headers=None):
+    def put(
+        self,
+        endpoint,
+        payload=None,
+        *,
+        wrap=False,
+        raise_error=True,
+        add_headers=None,
+        safe_to_retry=True,
+    ):
+        """
+        Also a wrapper for client.request("POST", ...)
+        Vault considers POST and PUT to be synonymous.
+        The difference to ``post`` is that this request is marked as safe to retry by default (idempotent).
+        """
+        return self.request(
+            "POST",
+            endpoint,
+            payload=payload,
+            wrap=wrap,
+            raise_error=raise_error,
+            add_headers=add_headers,
+            safe_to_retry=safe_to_retry,
+        )
+
+    def patch(
+        self,
+        endpoint,
+        payload,
+        *,
+        wrap=False,
+        raise_error=True,
+        add_headers=None,
+        safe_to_retry=None,
+    ):
         """
         Wrapper for client.request("PATCH", ...)
         """
@@ -230,6 +283,7 @@ class VaultClient:
             wrap=wrap,
             raise_error=raise_error,
             add_headers=add_headers,
+            safe_to_retry=safe_to_retry,
         )
 
     def request(
@@ -237,9 +291,11 @@ class VaultClient:
         method,
         endpoint,
         payload=None,
+        *,
         wrap=False,
         raise_error=True,
         add_headers=None,
+        safe_to_retry=None,
         **kwargs,
     ):
         """
@@ -253,6 +309,7 @@ class VaultClient:
             payload=payload,
             wrap=wrap,
             add_headers=add_headers,
+            safe_to_retry=safe_to_retry,
             **kwargs,
         )
         if res.status_code == 204:
@@ -266,7 +323,17 @@ class VaultClient:
             return leases.VaultWrappedResponse(**data["wrap_info"])
         return data
 
-    def request_raw(self, method, endpoint, payload=None, wrap=False, add_headers=None, **kwargs):
+    def request_raw(
+        self,
+        method,
+        endpoint,
+        payload=None,
+        *,
+        wrap=False,
+        add_headers=None,
+        safe_to_retry=None,
+        **kwargs,
+    ):
         """
         Issue a request against the Vault API. Returns the raw response object.
         """
@@ -281,13 +348,20 @@ class VaultClient:
             headers.update(add_headers)
         except TypeError:
             pass
-        res = self.session.request(
-            method,
-            url,
-            headers=headers,
-            json=payload,
-            **kwargs,
-        )
+
+        self._vault_adapter.max_retries.safe_to_retry = safe_to_retry
+
+        try:
+            res = self.session.request(
+                method,
+                url,
+                headers=headers,
+                json=payload,
+                **kwargs,
+            )
+        finally:
+            self._vault_adapter.max_retries.safe_to_retry = None
+
         return res
 
     def unwrap(self, wrapped, expected_creation_path=None):
@@ -341,7 +415,7 @@ class VaultClient:
         """
         endpoint = "sys/wrapping/lookup"
         add_headers = {"X-Vault-Token": str(wrapped)}
-        return self.post(endpoint, wrap=False, add_headers=add_headers)["data"]
+        return self.put(endpoint, wrap=False, add_headers=add_headers)["data"]
 
     def token_lookup(self, token=None, accessor=None, raw=False):
         """
@@ -366,11 +440,17 @@ class VaultClient:
         add_headers = {"X-Vault-Token": token}
 
         if accessor is not None:
+            method = "POST"
             endpoint = "auth/token/lookup-accessor"
             payload["accessor"] = accessor
 
         res = self.request_raw(
-            method, endpoint, payload=payload, wrap=False, add_headers=add_headers
+            method,
+            endpoint,
+            payload=payload,
+            wrap=False,
+            add_headers=add_headers,
+            safe_to_retry=True,
         )
         if raw:
             return res
@@ -489,8 +569,12 @@ class AuthenticatedVaultClient(VaultClient):
             endpoint += "-accessor"
             payload["accessor"] = accessor
         if raw:
-            return self.request_raw(method, endpoint, payload=payload, wrap=False)
-        return self.request(method, endpoint, payload=payload, wrap=False)["data"]
+            return self.request_raw(
+                method, endpoint, payload=payload, wrap=False, safe_to_retry=True
+            )
+        return self.request(method, endpoint, payload=payload, wrap=False, safe_to_retry=True)[
+            "data"
+        ]
 
     def token_renew(self, increment=None, token=None, accessor=None):
         """
@@ -563,8 +647,10 @@ class AuthenticatedVaultClient(VaultClient):
         method,
         endpoint,
         payload=None,
+        *,
         wrap=False,
         add_headers=None,
+        safe_to_retry=None,
         is_unauthd=False,
         **kwargs,
     ):  # pylint: disable=arguments-differ
@@ -577,6 +663,7 @@ class AuthenticatedVaultClient(VaultClient):
             payload=payload,
             wrap=wrap,
             add_headers=add_headers,
+            safe_to_retry=safe_to_retry,
             **kwargs,
         )
         # tokens are used regardless of status code
@@ -679,6 +766,21 @@ class VaultRetry(Retry):
         # urllib3 2.6.3 introduced the same parameter. Avoid having to guess
         # wheter the parameter is supported by setting it ourselves.
         self.retry_after_max = retry_after_max
+        self.safe_to_retry = None
+
+    def _is_method_retryable(self, method):
+        """
+        Some API calls can be safely retried, even if their HTTP method is not
+        considered idempotent usually (e.g. POST for lookups).
+        Other HTTP methods are generally considered idempotent, but are not
+        for specific API calls (like DELETE on KVv2).
+
+        Therefore, we allow to override the inbuilt HTTP method-only logic
+        on a per-request basis.
+        """
+        if self.safe_to_retry is not None:
+            return self.safe_to_retry
+        return super()._is_method_retryable(method)
 
     def is_retry(self, method, status_code, has_retry_after=False):
         """
@@ -743,4 +845,5 @@ class VaultRetry(Retry):
             ret.backoff_jitter = self.backoff_jitter
             ret.backoff_max = self.backoff_max
         ret.retry_after_max = self.retry_after_max
+        ret.safe_to_retry = self.safe_to_retry
         return ret

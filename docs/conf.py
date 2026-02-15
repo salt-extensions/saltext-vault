@@ -77,7 +77,11 @@ rst_prolog = """
 
 # -- General configuration ---------------------------------------------------
 
-linkcheck_ignore = [r"http://localhost:\d+", r"https://www\.hashicorp\.com/products/vault"]
+linkcheck_ignore = [
+    r"http://localhost:\d+",
+    r"https://www\.hashicorp\.com/products/vault",
+    r"https://developer\.hashicorp\.com/.*",
+]
 linkcheck_anchors_ignore_for_url = [r"https://github.com/\w+/\w+/issues/\d+"]
 
 # Add any Sphinx extension module names here, as strings. They can be
