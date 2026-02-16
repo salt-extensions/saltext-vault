@@ -4,6 +4,26 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## 1.4.0 (2026-02-15)
+
+
+### Changed
+
+- Marked some API methods using `POST`/`PATCH` requests as safe to retry by default since they are effectively idempotent [#97](https://github.com/salt-extensions/saltext-vault/issues/97)
+
+
+### Fixed
+
+- Fixed handling of `retry_after_max` with urllib3 2.6.3, which introduced the same parameter and set its default to 6h. When `retry_after_max` is explicitly set to `None`, we default to 6h from now on too, otherwise the previous default of 60s applies. [#130](https://github.com/salt-extensions/saltext-vault/issues/130)
+- Fixed SDB URI resolution in `auth:token` to make documented token-from-env behavior work [#133](https://github.com/salt-extensions/saltext-vault/issues/133)
+- Fixed Vault client token lookups using an accessor. These lookups used the wrong API method (`GET` instead of `POST`)
+
+
+### Added
+
+- Added the ability to disallow non-impersonated authentication requests via `issue:block_minion_requests`, effectively limiting authentication credential issuance to the master only [#109](https://github.com/salt-extensions/saltext-vault/issues/109)
+- Added SDB URI resolution for `auth:role_id` and `auth:secret_id` to achieve feature parity between auth methods [#134](https://github.com/salt-extensions/saltext-vault/issues/134)
+
 ## 1.3.2 (2025-05-04)
 
 
