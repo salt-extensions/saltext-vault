@@ -66,11 +66,15 @@ def _get_cache_bank(opts, force_local=False, connection=True, session=False):
     minion_id = None
     # force_local is necessary because pillar compilation would otherwise
     # leak tokens between master and minions
-    if not force_local and helpers._get_salt_run_type(opts) in (
-        helpers.SALT_RUNTYPE_MASTER_IMPERSONATING,
-        helpers.SALT_RUNTYPE_MASTER_PEER_RUN,
-    ):
-        minion_id = opts["grains"]["id"]
+    if not force_local:
+        run_type = helpers._get_salt_run_type(opts)
+        if run_type == helpers.SALT_RUNTYPE_MASTER_IMPERSONATING:
+            # When master is impersonating a minion (e.g., ext_pillar compilation),
+            # minion_id is available in opts but grains may not be populated yet
+            minion_id = opts.get("minion_id")
+        elif run_type == helpers.SALT_RUNTYPE_MASTER_PEER_RUN:
+            # For peer runs, grains are guaranteed to exist (checked in _get_salt_run_type)
+            minion_id = opts["grains"]["id"]
     prefix = "vault" if minion_id is None else f"minions/{minion_id}/vault"
     if session:
         return prefix + "/connection/session"
