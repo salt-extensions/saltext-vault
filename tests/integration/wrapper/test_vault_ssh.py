@@ -19,8 +19,7 @@ pytest.importorskip("docker")
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("vault_container_version"),
-    pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True),
+    pytest.mark.usefixtures("container"),
 ]
 
 
@@ -106,7 +105,7 @@ def ec_pub_file(ec_pub, tmp_path):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def ssh_engine(vault_container_version):  # pylint: disable=unused-argument
+def ssh_engine(container):  # pylint: disable=unused-argument
     assert vault_enable_secret_engine("ssh")
     yield
     assert vault_disable_secret_engine("ssh")
@@ -286,20 +285,27 @@ def test_read_ca(salt_ssh_cli, ec_pub):
 
 
 @pytest.mark.usefixtures("ca_setup")
-def test_destroy_ca(salt_ssh_cli):
+def test_destroy_ca(salt_ssh_cli, container):
     res = salt_ssh_cli.run("vault_ssh.destroy_ca")
     assert res.returncode == 0
-    assert res.data is True
+    if "openbao" in container:
+        assert res.data["warnings"]
+        assert "Deleted 1 issuers" in res.data["warnings"][0]
+    else:
+        assert res.data is True
     try:
         res = vault_read("ssh/config/ca", raise_errors=True)
     except RuntimeError as err:
-        assert "keys haven't been configured yet" in str(err)
+        if "openbao" in container:
+            assert "no default issuer currently configured" in str(err)
+        else:
+            assert "keys haven't been configured yet" in str(err)
     else:
         raise AssertionError(f"CA has not been deleted: {res}")
 
 
 @pytest.mark.usefixtures("ca_setup", "roles_setup")
-def test_sign_key_user(salt_ssh_cli, ec_pub):
+def test_sign_key_user(salt_ssh_cli, ec_pub, container):
     res = salt_ssh_cli.run(
         "vault_ssh.sign_key",
         "userrole",
@@ -309,7 +315,10 @@ def test_sign_key_user(salt_ssh_cli, ec_pub):
         valid_principals=["foobar"],
     )
     assert res.returncode == 0
-    assert set(res.data) == {"serial_number", "signed_key"}
+    expected = {"serial_number", "signed_key"}
+    if "openbao" in container:
+        expected.add("issuer_id")
+    assert set(res.data) == expected
     if CERT_CHECK:
         cert = load_cert(res.data["signed_key"])
         assert cert.type == SSHCertificateType.USER
@@ -319,12 +328,15 @@ def test_sign_key_user(salt_ssh_cli, ec_pub):
 
 
 @pytest.mark.usefixtures("ca_setup", "roles_setup")
-def test_sign_key_host(salt_ssh_cli, ec_pub):
+def test_sign_key_host(salt_ssh_cli, ec_pub, container):
     res = salt_ssh_cli.run(
         "vault_ssh.sign_key", "hostrole", ec_pub, cert_type="host", valid_principals=["foo.bar.biz"]
     )
     assert res.returncode == 0
-    assert set(res.data) == {"serial_number", "signed_key"}
+    expected = {"serial_number", "signed_key"}
+    if "openbao" in container:
+        expected.add("issuer_id")
+    assert set(res.data) == expected
     if CERT_CHECK:
         cert = load_cert(res.data["signed_key"])
         assert cert.type == SSHCertificateType.HOST
@@ -333,7 +345,7 @@ def test_sign_key_host(salt_ssh_cli, ec_pub):
 
 
 @pytest.mark.usefixtures("ca_setup", "roles_setup")
-def test_generate_key_cert_user(salt_ssh_cli):
+def test_generate_key_cert_user(salt_ssh_cli, container):
     res = salt_ssh_cli.run(
         "vault_ssh.generate_key_cert",
         "userrole",
@@ -342,7 +354,10 @@ def test_generate_key_cert_user(salt_ssh_cli):
         valid_principals=["foobar"],
     )
     assert res.returncode == 0
-    assert set(res.data) == {"private_key", "private_key_type", "serial_number", "signed_key"}
+    expected = {"private_key", "private_key_type", "serial_number", "signed_key"}
+    if "openbao" in container:
+        expected.add("issuer_id")
+    assert set(res.data) == expected
     assert res.data["private_key_type"] == "ssh-rsa"
     assert res.data["private_key"].startswith("-----BEGIN")
     if CERT_CHECK:
@@ -354,7 +369,7 @@ def test_generate_key_cert_user(salt_ssh_cli):
 
 
 @pytest.mark.usefixtures("ca_setup", "roles_setup")
-def test_generate_key_cert_host(salt_ssh_cli):
+def test_generate_key_cert_host(salt_ssh_cli, container):
     res = salt_ssh_cli.run(
         "vault_ssh.generate_key_cert",
         "hostrole",
@@ -362,7 +377,10 @@ def test_generate_key_cert_host(salt_ssh_cli):
         valid_principals=["foo.bar.biz"],
     )
     assert res.returncode == 0
-    assert set(res.data) == {"private_key", "private_key_type", "serial_number", "signed_key"}
+    expected = {"private_key", "private_key_type", "serial_number", "signed_key"}
+    if "openbao" in container:
+        expected.add("issuer_id")
+    assert set(res.data) == expected
     assert res.data["private_key_type"] == "ssh-rsa"
     assert res.data["private_key"].startswith("-----BEGIN")
     if CERT_CHECK:

@@ -5,7 +5,7 @@ from tests.support.vault import vault_write_secret
 
 
 @pytest.fixture(scope="class")
-def vault_testing_values(vault_container_version):  # pylint: disable=unused-argument
+def vault_testing_values(container):  # pylint: disable=unused-argument
     vault_write_secret("secret/path/foo", success="yeehaaw")
     try:
         yield

@@ -22,8 +22,7 @@ pytest.importorskip("docker")
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("vault_container_version"),
-    pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True),
+    pytest.mark.usefixtures("container"),
 ]
 
 
@@ -99,7 +98,7 @@ def private_key(tmp_path_factory):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def pki_engine(vault_container_version):  # pylint: disable=unused-argument
+def pki_engine(container):  # pylint: disable=unused-argument
     assert vault_enable_secret_engine("pki")
     yield
     assert vault_disable_secret_engine("pki")

@@ -17,7 +17,7 @@ pytest.importorskip("docker")
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("vault_container_version"),
+    pytest.mark.usefixtures("container"),
 ]
 
 
@@ -94,7 +94,7 @@ def testdb(mysql_container, container_host_ref):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def db_engine(vault_container_version):  # pylint: disable=unused-argument
+def db_engine(container):  # pylint: disable=unused-argument
     assert vault_enable_secret_engine("database")
     yield
     assert vault_disable_secret_engine("database")
@@ -418,7 +418,6 @@ def test_creds_cached(testmode, vault_db, modules):
     assert bool(modules.vault_db.list_cached()) is not testmode
 
 
-@pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True)
 def test_creds_cached_already_cached(testmode, vault_db, modules, _cached_creds):
     ret = vault_db.creds_cached("testrole", test=testmode)
     assert ret.result is True
@@ -427,7 +426,6 @@ def test_creds_cached_already_cached(testmode, vault_db, modules, _cached_creds)
     assert modules.vault_db.get_creds("testrole") == _cached_creds
 
 
-@pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True)
 def test_creds_cached_already_cached_but_different_params(
     testmode, vault_db, modules, _cached_creds
 ):
@@ -554,7 +552,6 @@ def test_creds_uncached(testmode, vault_db, modules, _cached_creds):
     assert bool(after) is testmode
 
 
-@pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True)
 def test_creds_uncached_no_changes(testmode, vault_db):
     ret = vault_db.creds_uncached("testrole", test=testmode)
     assert ret.result is True

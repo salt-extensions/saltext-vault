@@ -42,7 +42,7 @@ def sys_mod(modules):
 
 
 @pytest.fixture
-def vault(modules, vault_container_version):  # pylint: disable=unused-argument
+def vault(modules, container):  # pylint: disable=unused-argument
     try:
         yield modules.vault
     finally:
@@ -80,7 +80,7 @@ def test_vault_list_secrets_issue_61084(sys_mod):
 
 
 @pytest.fixture
-def existing_secret_v1(vault_container_version):  # pylint: disable=unused-argument
+def existing_secret_v1(container):  # pylint: disable=unused-argument
     path = "secret-v1/my/secret"
     vault_write_secret(path, user="foo", password="bar")
     ret = vault_read_secret(path)
@@ -318,7 +318,7 @@ path "secret/some/thing" {
 
 
 @pytest.fixture
-def existing_policy(policy_rules, vault_container_version):  # pylint: disable=unused-argument
+def existing_policy(policy_rules, container):  # pylint: disable=unused-argument
     vault_write_policy("functional_test_policy", policy_rules)
     try:
         yield

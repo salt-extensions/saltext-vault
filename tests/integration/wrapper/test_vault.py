@@ -11,8 +11,7 @@ pytest.importorskip("docker")
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("vault_container_version"),
-    pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True),
+    pytest.mark.usefixtures("container"),
 ]
 
 
