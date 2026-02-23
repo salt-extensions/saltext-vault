@@ -13,8 +13,7 @@ salt_version = int(salt.version.__version__.split(".")[0])
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
     pytest.mark.skipif(salt_version < 3007, reason="Master cluster requires Salt 3007+"),
-    pytest.mark.usefixtures("vault_container_version", "vault_testing_values"),
-    pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True),
+    pytest.mark.usefixtures("container", "vault_testing_values"),
 ]
 
 

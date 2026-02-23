@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("vault_container_version"),
+    pytest.mark.usefixtures("container"),
 ]
 
 
@@ -172,7 +172,7 @@ def pillar_caching_salt_call_cli(pillar_caching_salt_minion):
 
 
 @pytest.fixture(scope="class")
-def vault_pillar_values_policy(vault_container_version):  # pylint: disable=unused-argument
+def vault_pillar_values_policy(container):  # pylint: disable=unused-argument
     vault_write_secret("secret/path/foo", vault_sourced="fail")
     try:
         yield
@@ -181,7 +181,6 @@ def vault_pillar_values_policy(vault_container_version):  # pylint: disable=unus
 
 
 @pytest.mark.usefixtures("vault_pillar_values_policy")
-@pytest.mark.parametrize("vault_container_version", ["latest"], indirect=True)
 class TestVaultPillarPolicyTemplatesWithoutCache:
     @pytest.fixture(autouse=True)
     def pillar_policy_tree(
@@ -326,7 +325,6 @@ class TestVaultPillarPolicyTemplatesWithoutCache:
 
 
 @pytest.mark.usefixtures("vault_pillar_values_policy")
-@pytest.mark.parametrize("vault_container_version", ["latest"], indirect=True)
 class TestVaultPillarPolicyTemplatesWithCache:
     @pytest.fixture(autouse=True)
     def pillar_caching_policy_tree(self, pillar_caching_salt_master, pillar_caching_salt_minion):
@@ -1014,7 +1012,6 @@ class TestTokenIssuance:
             "salt_role_web",
         }
 
-    @pytest.mark.parametrize("vault_container_version", ["latest"], indirect=True)
     @pytest.mark.usefixtures("cache_auth_outdated")
     def test_auth_method_switch_does_not_break_minion_auth(self, vault_salt_call_cli, caplog):
         """
@@ -1027,7 +1024,6 @@ class TestTokenIssuance:
         assert ret.data.get("success") == "yeehaaw"
         assert "Master returned error and requested cache expiration" in caplog.text
 
-    @pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True)
     @pytest.mark.usefixtures("cache_from_old_version")
     def test_upgrade_does_not_break_auth(
         self, vault_salt_call_cli, minion_conn_cachedir, cache_from_old_version
@@ -1052,7 +1048,6 @@ class TestTokenIssuance:
         # The token should be the same.
         assert token_cachefile.read_bytes() == token_data
 
-    @pytest.mark.parametrize("vault_container_version", ["latest"], indirect=True)
     @pytest.mark.parametrize("ckey", ["config", "__token"])
     def test_cache_is_used_on_the_minion(self, ckey, vault_salt_call_cli, minion_conn_cachedir):
         """
@@ -1068,7 +1063,6 @@ class TestTokenIssuance:
             assert ret.returncode == 0
         assert f"{ckey}.p" in os.listdir(cache)
 
-    @pytest.mark.parametrize("vault_container_version", ["latest"], indirect=True)
     @pytest.mark.parametrize("ckey", ["config", "__token"])
     def test_cache_is_used_on_the_impersonating_master(
         self, ckey, vault_salt_run_cli, vault_salt_minion
@@ -1086,7 +1080,6 @@ class TestTokenIssuance:
         assert ckey in ret.data
 
     @pytest.mark.usefixtures("conn_cache_absent")
-    @pytest.mark.parametrize("vault_container_version", ["latest"], indirect=True)
     def test_issue_param_overrides_require_setting(self, overriding_vault_salt_minion):
         """
         Test that minion overrides of issue params are not set by default
@@ -1102,7 +1095,6 @@ class TestTokenIssuance:
 
 
 @pytest.mark.usefixtures("vault_testing_values")
-@pytest.mark.parametrize("vault_container_version", ["latest"], indirect=True)
 class TestAppRoleIssuanceWithoutSecretId:
     @pytest.fixture(scope="class")
     def vault_master_config(self, vault_port):
@@ -1159,7 +1151,6 @@ class TestAppRoleIssuanceWithoutSecretId:
 
 
 @pytest.mark.usefixtures("vault_testing_values")
-@pytest.mark.parametrize("vault_container_version", ["latest"], indirect=True)
 class TestOldConfigSyntax:
     @pytest.fixture(scope="class")
     def vault_master_config(self, pillar_state_tree, vault_port):
