@@ -19,7 +19,7 @@ pytest.importorskip("docker")
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("vault_container_version"),
+    pytest.mark.usefixtures("container"),
 ]
 
 
@@ -106,7 +106,7 @@ def ec_pub_file(ec_pub, tmp_path):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def ssh_engine(vault_container_version):  # pylint: disable=unused-argument
+def ssh_engine(container):  # pylint: disable=unused-argument
     assert vault_enable_secret_engine("ssh")
     yield
     assert vault_disable_secret_engine("ssh")
@@ -277,18 +277,26 @@ def test_read_ca(vault_ssh, ec_pub):
 
 
 @pytest.mark.usefixtures("ca_setup")
-def test_destroy_ca(vault_ssh):
-    assert vault_ssh.destroy_ca() is True
+def test_destroy_ca(vault_ssh, container):
+    res = vault_ssh.destroy_ca()
+    if "openbao" in container:
+        assert res["warnings"]
+        assert "Deleted 1 issuers" in res["warnings"][0]
+    else:
+        assert res is True
     try:
         res = vault_read("ssh/config/ca", raise_errors=True)
     except RuntimeError as err:
-        assert "keys haven't been configured yet" in str(err)
+        if "openbao" in container:
+            assert "no default issuer currently configured" in str(err)
+        else:
+            assert "keys haven't been configured yet" in str(err)
     else:
         raise AssertionError(f"CA has not been deleted: {res}")
 
 
 @pytest.mark.usefixtures("ca_setup", "roles_setup")
-def test_sign_key_user(vault_ssh, ec_pub):
+def test_sign_key_user(vault_ssh, ec_pub, container):
     res = vault_ssh.sign_key(
         "userrole",
         ec_pub,
@@ -296,7 +304,10 @@ def test_sign_key_user(vault_ssh, ec_pub):
         extensions={"permit-pty": ""},
         valid_principals=["foobar"],
     )
-    assert set(res) == {"serial_number", "signed_key"}
+    expected = {"serial_number", "signed_key"}
+    if "openbao" in container:
+        expected.add("issuer_id")
+    assert set(res) == expected
     if CERT_CHECK:
         cert = load_cert(res["signed_key"])
         assert cert.type == SSHCertificateType.USER
@@ -306,9 +317,12 @@ def test_sign_key_user(vault_ssh, ec_pub):
 
 
 @pytest.mark.usefixtures("ca_setup", "roles_setup")
-def test_sign_key_host(vault_ssh, ec_pub):
+def test_sign_key_host(vault_ssh, ec_pub, container):
     res = vault_ssh.sign_key("hostrole", ec_pub, cert_type="host", valid_principals=["foo.bar.biz"])
-    assert set(res) == {"serial_number", "signed_key"}
+    expected = {"serial_number", "signed_key"}
+    if "openbao" in container:
+        expected.add("issuer_id")
+    assert set(res) == expected
     if CERT_CHECK:
         cert = load_cert(res["signed_key"])
         assert cert.type == SSHCertificateType.HOST
@@ -317,14 +331,17 @@ def test_sign_key_host(vault_ssh, ec_pub):
 
 
 @pytest.mark.usefixtures("ca_setup", "roles_setup")
-def test_generate_key_cert_user(vault_ssh):
+def test_generate_key_cert_user(vault_ssh, container):
     res = vault_ssh.generate_key_cert(
         "userrole",
         critical_options={"force-command": "rm -rf /"},
         extensions={"permit-pty": ""},
         valid_principals=["foobar"],
     )
-    assert set(res) == {"private_key", "private_key_type", "serial_number", "signed_key"}
+    expected = {"private_key", "private_key_type", "serial_number", "signed_key"}
+    if "openbao" in container:
+        expected.add("issuer_id")
+    assert set(res) == expected
     assert res["private_key_type"] == "ssh-rsa"
     assert res["private_key"].startswith("-----BEGIN")
     if CERT_CHECK:
@@ -336,11 +353,14 @@ def test_generate_key_cert_user(vault_ssh):
 
 
 @pytest.mark.usefixtures("ca_setup", "roles_setup")
-def test_generate_key_cert_host(vault_ssh):
+def test_generate_key_cert_host(vault_ssh, container):
     res = vault_ssh.generate_key_cert(
         "hostrole", cert_type="host", valid_principals=["foo.bar.biz"]
     )
-    assert set(res) == {"private_key", "private_key_type", "serial_number", "signed_key"}
+    expected = {"private_key", "private_key_type", "serial_number", "signed_key"}
+    if "openbao" in container:
+        expected.add("issuer_id")
+    assert set(res) == expected
     assert res["private_key_type"] == "ssh-rsa"
     assert res["private_key"].startswith("-----BEGIN")
     if CERT_CHECK:

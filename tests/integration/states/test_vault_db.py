@@ -19,8 +19,7 @@ pytest.importorskip("docker")
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("vault_container_version"),
-    pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True),
+    pytest.mark.usefixtures("container"),
 ]
 
 
@@ -90,7 +89,7 @@ def testdb(mysql_container, container_host_ref):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def db_engine(vault_container_version):  # pylint: disable=unused-argument
+def db_engine(container):  # pylint: disable=unused-argument
     assert vault_enable_secret_engine("database")
     yield
     assert vault_disable_secret_engine("database")

@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import shutil
@@ -268,36 +267,36 @@ def vault_environ(vault_port):
         yield
 
 
-def _vault_container_version_id(value):
-    return f"vault=={value}"
+CONTAINER_TARGETS = os.environ.get(
+    "TESTING_CONTAINER", "hashicorp/vault:latest,openbao/openbao:latest"
+).split(",")
 
 
 @pytest.fixture(
     scope="module",
-    params=["1.14.8", "latest"],
-    ids=_vault_container_version_id,
+    params=CONTAINER_TARGETS,
 )
-def vault_container_version(
+def container(
     request, salt_factories, vault_port, vault_environ
 ):  # pylint: disable=unused-argument
-    vault_version = request.param
     vault_binary = salt.utils.path.which("vault")
-    config = {
-        "backend": {"file": {"path": "/vault/file"}},
-        "default_lease_ttl": "168h",
-        "max_lease_ttl": "720h",
-    }
+
+    if "openbao" in request.param:
+        env = {
+            "BAO_DEV_ROOT_TOKEN_ID": "testsecret",
+        }
+    else:
+        env = {
+            "VAULT_DEV_ROOT_TOKEN_ID": "testsecret",
+        }
 
     factory = salt_factories.get_container(
         "vault",
-        f"hashicorp/vault:{vault_version}",
+        request.param,
         check_ports=[vault_port],
         container_run_kwargs={
             "ports": {"8200/tcp": vault_port},
-            "environment": {
-                "VAULT_DEV_ROOT_TOKEN_ID": "testsecret",
-                "VAULT_LOCAL_CONFIG": json.dumps(config),
-            },
+            "environment": env,
         },
         pull_before_start=True,
         skip_on_pull_failure=True,
@@ -337,7 +336,7 @@ def vault_container_version(
         vault_enable_auth_method("approle", ["-path=salt-minions"])
         vault_enable_secret_engine("kv", ["-version=1", "-path=secret-v1"])
         vault_enable_secret_engine("kv", ["-version=2", "-path=salt"])
-        yield vault_version
+        yield request.param
 
 
 @pytest.fixture(scope="session")
