@@ -1,5 +1,5 @@
 """
-Manage Vault KV v1/v2 secrets statefully.
+Manage Vault (or OpenBao) KV v1/v2 secrets statefully.
 
 .. versionadded:: 1.2.0
 

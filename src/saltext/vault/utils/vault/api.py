@@ -1,5 +1,5 @@
 """
-Class wrappers for several Vault API endpoints
+Class wrappers for several Vault (or OpenBao) API endpoints
 """
 
 import salt.utils.json

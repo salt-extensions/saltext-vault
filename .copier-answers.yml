@@ -30,7 +30,7 @@ python_requires: '3.10'
 relax_pylint: false
 salt_version: '3006'
 source_url: https://github.com/salt-extensions/saltext-vault
-summary: Salt Extension for interacting with Vault
+summary: Salt Extension for interacting with Vault (or OpenBao)
 test_containers: true
 tracker_url: https://github.com/salt-extensions/saltext-vault/issues
 url: https://github.com/salt-extensions/saltext-vault

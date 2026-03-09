@@ -1,5 +1,5 @@
 """
-Vault API client implementation
+Vault (or OpenBao) API client implementation
 """
 
 import logging

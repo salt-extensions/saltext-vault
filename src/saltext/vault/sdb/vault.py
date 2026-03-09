@@ -1,5 +1,5 @@
 """
-Use secret values sourced from Vault in ``sdb://`` URIs.
+Use secret values sourced from Vault (or OpenBao) in ``sdb://`` URIs.
 
 .. important::
     This module requires the general :ref:`Vault setup <vault-setup>`.

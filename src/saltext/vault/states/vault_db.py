@@ -1,5 +1,5 @@
 """
-Manage the Vault database secret engine, request and cache
+Manage the Vault (or OpenBao) database secret engine, request and cache
 leased database credentials.
 
 .. versionadded:: 1.1.0

@@ -1,5 +1,5 @@
 """
-Manage the Vault SSH secret engine, request SSH credentials
+Manage the Vault (or OpenBao) SSH secret engine, request SSH credentials
 and certificates.
 
 .. versionadded:: 1.2.0

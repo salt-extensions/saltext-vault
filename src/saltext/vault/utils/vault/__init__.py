@@ -1,5 +1,5 @@
 """
-High-level utility functions for Vault interaction
+High-level utility functions for Vault (or OpenBao) interaction
 """
 
 import logging

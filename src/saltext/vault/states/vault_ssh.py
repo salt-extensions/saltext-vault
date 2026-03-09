@@ -1,5 +1,5 @@
 """
-Manage the Vault SSH secret engine.
+Manage the Vault (or OpenBao) SSH secret engine.
 
 .. versionadded:: 1.2.0
 
