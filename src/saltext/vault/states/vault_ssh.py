@@ -1,5 +1,5 @@
 """
-Manage the Vault SSH secret engine.
+Manage the Vault (or OpenBao) SSH secret engine.
 
 .. versionadded:: 1.2.0
 
@@ -86,7 +86,10 @@ def ca_present(
         try:
             current = __salt__["vault_ssh.read_ca"](mount=mount)
         except CommandExecutionError as err:
-            if "keys haven't been configured yet" not in str(err):
+            if (
+                "keys haven't been configured yet" not in err.message  # Vault
+                and "no default issuer currently configured" not in err.message  # OpenBao
+            ):
                 raise
             current = None
         if current:
@@ -142,9 +145,11 @@ def ca_absent(
         try:
             current = __salt__["vault_ssh.read_ca"](mount=mount)
         except CommandExecutionError as err:
-            if "keys haven't been configured yet" not in str(err):
+            if (
+                "keys haven't been configured yet" not in err.message  # Vault
+                and "no default issuer currently configured" not in err.message  # OpenBao
+            ):
                 raise
-            # not sure if not found or empty response @TODO test
             current = None
         if not current:
             return ret

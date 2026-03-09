@@ -1,5 +1,5 @@
 """
-Use secrets sourced from Vault in minion pillars.
+Use secrets sourced from Vault (or OpenBao) in minion pillars.
 
 .. important::
     This module requires the general :ref:`Vault setup <vault-setup>`.

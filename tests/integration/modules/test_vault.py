@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("vault_container_version"),
+    pytest.mark.usefixtures("container"),
 ]
 
 
@@ -96,7 +96,7 @@ def pillar_dual_use_tree(
 
 
 @pytest.fixture(scope="class")
-def vault_testing_data(vault_container_version):  # pylint: disable=unused-argument
+def vault_testing_data(container):  # pylint: disable=unused-argument
     vault_write_secret("secret/test/jvmdump/ssh_key", public_key="yup_dump")
     vault_write_secret("secret/test/jenkins/master/ssh_key", public_key="yup_master")
     vault_write_secret("secret/test/deleteme", pls=":)")

@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("vault_container_version"),
+    pytest.mark.usefixtures("container"),
 ]
 
 
@@ -115,7 +115,7 @@ def vault_salt_run_cli(vault_salt_master):
 
 
 @pytest.fixture
-def kv_root_dual_item(vault_container_version):  # pylint: disable=unused-argument
+def kv_root_dual_item(container):  # pylint: disable=unused-argument
     vault_write_secret("salt/user1", password="p4ssw0rd", desc="test user")
     vault_write_secret("salt/user/user1", password="p4ssw0rd", desc="test user")
     try:

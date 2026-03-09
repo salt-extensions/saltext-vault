@@ -1,6 +1,6 @@
 # Salt Extension for HashiCorp Vault
 
-Salt Extension for interacting with Vault
+Salt Extension for interacting with Vault (or OpenBao)
 
 ## Security
 

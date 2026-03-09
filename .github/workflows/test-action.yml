@@ -12,13 +12,23 @@ jobs:
 
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 6
       matrix:
         include:
-          - {salt-version: "3006.19", python-version: "3.10"}
-          - {salt-version: "3007.11", python-version: "3.10"}
+          - {salt-version: "3006.19", python-version: "3.10", testing-container: "hashicorp/vault:1.14.8"}
+          - {salt-version: "3007.11", python-version: "3.10", testing-container: "hashicorp/vault:latest"}
+          - {salt-version: "3007.11", python-version: "3.10", testing-container: "openbao/openbao:latest"}
+
+    env:
+      TESTING_CONTAINER: ${{ matrix.testing-container }}
 
     steps:
+      - name: Generate Run ID
+        run: |
+          RUNID="${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-${TESTING_CONTAINER//[:\/]/_}"
+          echo "RUNID=${RUNID}" >> "$GITHUB_ENV"
+          echo "Run ID: ${RUNID}"
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 2  # coverage: Issue detecting commit SHA
@@ -68,7 +78,7 @@ jobs:
           disable_search: true
           fail_ci_if_error: false
           flags: ${{ steps.codecov-flags.outputs.flags }},project
-          name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-project
+          name: ${{ env.RUNID }}-project
           use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
           version: v10.4.0
 
@@ -79,7 +89,7 @@ jobs:
           disable_search: true
           fail_ci_if_error: false
           flags: ${{ steps.codecov-flags.outputs.flags }},tests
-          name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-tests
+          name: ${{ env.RUNID }}-tests
           use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
           version: v10.4.0
 
@@ -87,20 +97,20 @@ jobs:
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
         with:
-          name: runtests-${{ runner.os }}-py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}.log
+          name: runtests-${{ env.RUNID }}.log
           path: artifacts/runtests-*.log
 
       - name: Set Exit Status
         if: always()
         run: |
           mkdir exitstatus
-          echo "${{ job.status }}" > exitstatus/${{ github.job }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}
+          echo "${{ job.status }}" > exitstatus/${{ env.RUNID }}
 
       - name: Upload Exit Status
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
         with:
-          name: exitstatus-${{ github.job }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}
+          name: exitstatus-${{ env.RUNID }}
           path: exitstatus
           if-no-files-found: error
 

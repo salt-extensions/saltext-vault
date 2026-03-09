@@ -1,5 +1,5 @@
 """
-Statefully manage Vault policies.
+Statefully manage Vault (or OpenBao) policies.
 
 .. important::
     This module requires the general :ref:`Vault setup <vault-setup>`.

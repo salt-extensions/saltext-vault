@@ -12,7 +12,7 @@ write_to_template = "__version__ = \"{version}\"\n"
 
 [project]
 name = "saltext.vault"
-description = "Salt Extension for interacting with Vault"
+description = "Salt Extension for interacting with Vault (or OpenBao)"
 authors = [
     {name = "Salt Core Team", email = "saltproject@vmware.com"},
 ]

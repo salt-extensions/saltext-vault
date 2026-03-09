@@ -1,5 +1,5 @@
 """
-Manage the Vault PKI secret engine, request X.509 certificates.
+Manage the Vault (or OpenBao) PKI secret engine, request X.509 certificates.
 
 .. versionadded:: 1.1.0
 

@@ -11,7 +11,7 @@ pytest.importorskip("docker")
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("vault_container_version"),
+    pytest.mark.usefixtures("container"),
 ]
 
 
@@ -98,7 +98,7 @@ def ec_pub_file(ec_pub, tmp_path):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def ssh_engine(vault_container_version):  # pylint: disable=unused-argument
+def ssh_engine(container):  # pylint: disable=unused-argument
     assert vault_enable_secret_engine("ssh")
     yield
     assert vault_disable_secret_engine("ssh")

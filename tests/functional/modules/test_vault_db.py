@@ -20,7 +20,7 @@ pytest.importorskip("docker")
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("vault_container_version"),
+    pytest.mark.usefixtures("container"),
 ]
 
 
@@ -97,7 +97,7 @@ def testdb(mysql_container, container_host_ref):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def db_engine(vault_container_version):  # pylint: disable=unused-argument
+def db_engine(container):  # pylint: disable=unused-argument
     assert vault_enable_secret_engine("database")
     yield
     assert vault_disable_secret_engine("database")
@@ -344,7 +344,6 @@ def test_get_creds_static(vault_db, teststaticrole):
     assert ret["username"] == teststaticrole["username"]
 
 
-@pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True)
 def test_get_creds_cached(vault_db, _cached_creds):
     ret_new = vault_db.get_creds("testrole", cache=True)
     assert ret_new
@@ -354,7 +353,6 @@ def test_get_creds_cached(vault_db, _cached_creds):
     assert ret_new["password"] == _cached_creds["password"]
 
 
-@pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True)
 @pytest.mark.usefixtures("roles_setup")
 def test_get_creds_cached__multiple(vault_db):
     ret = vault_db.get_creds("testrole", cache="one")
@@ -371,7 +369,6 @@ def test_get_creds_cached__multiple(vault_db):
     assert vault_db.get_creds("testrole", cache="two") == ret_new
 
 
-@pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True)
 @pytest.mark.usefixtures("roles_setup")
 @pytest.mark.parametrize("roles_setup", [["testreissuerole"]], indirect=True)
 @pytest.mark.parametrize(
@@ -394,7 +391,6 @@ def test_get_creds_cached_valid_for_reissue(vault_db, testreissuerole, _cached_c
     assert ret_new["password"] != _cached_creds["password"]
 
 
-@pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True)
 @pytest.mark.usefixtures("roles_setup")
 @pytest.mark.parametrize("roles_setup", [["testreissuerole"]], indirect=True)
 @pytest.mark.parametrize(
@@ -414,7 +410,6 @@ def test_get_creds_cached_with_cached_min_ttl(vault_db, _cached_creds):
     assert ret_new["password"] != _cached_creds["password"]
 
 
-@pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True)
 @pytest.mark.parametrize(
     "_cached_creds,new",
     (
@@ -447,7 +442,6 @@ def test_get_creds_cached_changed_lifecycle(vault_db, _cached_creds, new, warn, 
 
 
 @pytest.mark.usefixtures("_cached_creds")
-@pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True)
 def test_clear_cached(vault_db):
     assert vault_db.list_cached()
     assert vault_db.clear_cached() is True
@@ -455,7 +449,6 @@ def test_clear_cached(vault_db):
 
 
 @pytest.mark.usefixtures("_cached_creds")
-@pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True)
 def test_list_cached(vault_db):
     ret = vault_db.list_cached()
     ckey = "db.database.dynamic.testrole.default"
@@ -474,7 +467,6 @@ def test_list_cached(vault_db):
 
 
 @pytest.mark.usefixtures("_cached_creds")
-@pytest.mark.parametrize("vault_container_version", ("latest",), indirect=True)
 def test_renew_cached(vault_db):
     curr = vault_db.list_cached()
     ckey = "db.database.dynamic.testrole.default"
