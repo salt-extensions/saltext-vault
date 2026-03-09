@@ -4,6 +4,18 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## 1.5.0 (2026-03-09)
+
+
+### Fixed
+
+- Fixed `vault_ssh.ca_(present|absent)` in OpenBao
+
+
+### Added
+
+- Added official OpenBao support [#139](https://github.com/salt-extensions/saltext-vault/issues/139)
+
 ## 1.4.0 (2026-02-15)
 
 
