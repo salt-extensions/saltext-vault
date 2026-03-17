@@ -15,17 +15,12 @@ jobs:
       max-parallel: 6
       matrix:
         include:
-<<<<<<< before updating
-          - {salt-version: "3006.19", python-version: "3.10", testing-container: "hashicorp/vault:1.14.8"}
-          - {salt-version: "3007.11", python-version: "3.10", testing-container: "hashicorp/vault:latest"}
-          - {salt-version: "3007.11", python-version: "3.10", testing-container: "openbao/openbao:latest"}
+          - {salt-version: "3006.23", python-version: "3.10", testing-container: "hashicorp/vault:1.14.8"}
+          - {salt-version: "3007.13", python-version: "3.10", testing-container: "hashicorp/vault:latest"}
+          - {salt-version: "3007.13", python-version: "3.10", testing-container: "openbao/openbao:latest"}
 
     env:
       TESTING_CONTAINER: ${{ matrix.testing-container }}
-=======
-          - {salt-version: "3006.23", python-version: "3.10"}
-          - {salt-version: "3007.13", python-version: "3.10"}
->>>>>>> after updating
 
     steps:
       - name: Generate Run ID
@@ -83,15 +78,9 @@ jobs:
           disable_search: true
           fail_ci_if_error: false
           flags: ${{ steps.codecov-flags.outputs.flags }},project
-<<<<<<< before updating
           name: ${{ env.RUNID }}-project
-          use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
-          version: v10.4.0
-=======
-          name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-project
           use_oidc: true
           version: v11.2.6
->>>>>>> after updating
 
       - name: Upload Tests Code Coverage
         uses: codecov/codecov-action@0561704f0f02c16a585d4c7555e57fa2e44cf909  # v5.5.2
@@ -100,15 +89,9 @@ jobs:
           disable_search: true
           fail_ci_if_error: false
           flags: ${{ steps.codecov-flags.outputs.flags }},tests
-<<<<<<< before updating
           name: ${{ env.RUNID }}-tests
-          use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
-          version: v10.4.0
-=======
-          name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-tests
           use_oidc: true
           version: v11.2.6
->>>>>>> after updating
 
       - name: Upload Logs
         if: always()
@@ -117,26 +100,11 @@ jobs:
           name: runtests-${{ env.RUNID }}.log
           path: artifacts/runtests-*.log
 
-<<<<<<< before updating
-      - name: Set Exit Status
-        if: always()
-        run: |
-          mkdir exitstatus
-          echo "${{ job.status }}" > exitstatus/${{ env.RUNID }}
-
-=======
->>>>>>> after updating
       - name: Upload Exit Status
         if: always()
         uses: ./.github/actions/upload-exitstatus
         with:
-<<<<<<< before updating
-          name: exitstatus-${{ env.RUNID }}
-          path: exitstatus
-          if-no-files-found: error
-=======
-          name: ${{ github.job }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}
->>>>>>> after updating
+          name: ${{ env.RUNID }}
 
   Windows:
     runs-on: windows-2025
@@ -200,13 +168,8 @@ jobs:
           fail_ci_if_error: false
           flags: ${{ steps.codecov-flags.outputs.flags }},project
           name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-project
-<<<<<<< before updating
-          use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
-          version: v10.4.0
-=======
           use_oidc: true
           version: v11.2.6
->>>>>>> after updating
 
       - name: Upload Tests Code Coverage
         uses: codecov/codecov-action@0561704f0f02c16a585d4c7555e57fa2e44cf909  # v5.5.2
@@ -216,13 +179,8 @@ jobs:
           fail_ci_if_error: false
           flags: ${{ steps.codecov-flags.outputs.flags }},tests
           name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-tests
-<<<<<<< before updating
-          use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
-          version: v10.4.0
-=======
           use_oidc: true
           version: v11.2.6
->>>>>>> after updating
 
       - name: Upload Logs
         if: always()
@@ -294,13 +252,8 @@ jobs:
           fail_ci_if_error: false
           flags: ${{ steps.codecov-flags.outputs.flags }},project
           name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-project
-<<<<<<< before updating
-          use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
-          version: v10.4.0
-=======
           use_oidc: true
           version: v11.2.6
->>>>>>> after updating
 
       - name: Upload Tests Code Coverage
         uses: codecov/codecov-action@0561704f0f02c16a585d4c7555e57fa2e44cf909  # v5.5.2
@@ -310,13 +263,8 @@ jobs:
           fail_ci_if_error: false
           flags: ${{ steps.codecov-flags.outputs.flags }},tests
           name: ${{ runner.os }}-Py${{ matrix.python-version }}-Salt${{ matrix.salt-version }}-tests
-<<<<<<< before updating
-          use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
-          version: v10.4.0
-=======
           use_oidc: true
           version: v11.2.6
->>>>>>> after updating
 
       - name: Upload Logs
         if: always()
