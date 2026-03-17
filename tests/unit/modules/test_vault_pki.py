@@ -201,6 +201,40 @@ def test_generate_root_raise_err_with_default_name():
         vault_pki.generate_root("my root", key_name="default")
 
 
+def test_read_certificate_returns_certificate(query):
+    certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
+    query.return_value = {"data": {"certificate": certificate}}
+
+    ret = vault_pki.read_certificate("00:11:22", mount="mount")
+
+    assert ret == certificate
+    endpoint = query.call_args[0][1]
+    assert endpoint == "mount/cert/00:11:22"
+
+
+def test_read_certificate_with_chain(query):
+    certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
+    issuer = "-----BEGIN CERTIFICATE-----\nissuer\n-----END CERTIFICATE-----\n"
+    root = "-----BEGIN CERTIFICATE-----\nroot\n-----END CERTIFICATE-----\n"
+    query.return_value = {"data": {"certificate": certificate, "ca_chain": [issuer, root]}}
+
+    ret = vault_pki.read_certificate("00:11:22", include_chain=True)
+
+    assert ret == f"{certificate}{issuer}{root}"
+
+
+def test_read_certificate_with_chain_returns_existing_bundle(query):
+    certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
+    issuer = "-----BEGIN CERTIFICATE-----\nissuer\n-----END CERTIFICATE-----\n"
+    root = "-----BEGIN CERTIFICATE-----\nroot\n-----END CERTIFICATE-----\n"
+    bundle = f"{certificate}{issuer}{root}"
+    query.return_value = {"data": {"certificate": bundle, "ca_chain": [issuer, root]}}
+
+    ret = vault_pki.read_certificate("00:11:22", include_chain=True)
+
+    assert ret == bundle
+
+
 @pytest.mark.parametrize(
     "args", [{"serial": "00:11:22:33:44:55", "certificate": "-----BEGIN CERTIFICATE..."}, {}]
 )

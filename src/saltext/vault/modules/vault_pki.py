@@ -748,7 +748,7 @@ def list_certificates(mount="pki"):
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
 
-def read_certificate(serial, mount="pki"):
+def read_certificate(serial, mount="pki", include_chain=False):
     """
     Read issued certificate.
     Returns certificate in PEM format
@@ -771,11 +771,29 @@ def read_certificate(serial, mount="pki"):
 
     mount
         The mount path the PKI backend is mounted to. Defaults to ``pki``.
+
+    include_chain
+        If set to true will append the CA chain to the certificate.
     """
     endpoint = f"{mount}/cert/{serial}"
 
     try:
-        return vault.query("GET", endpoint, __opts__, __context__)["data"]["certificate"]
+        cert_data = vault.query("GET", endpoint, __opts__, __context__)["data"]
+        certificate = cert_data["certificate"]
+
+        if not include_chain:
+            return certificate
+
+        ca_chain = cert_data.get("ca_chain") or []
+        if not ca_chain:
+            return certificate
+
+        # Avoid duplicating certificates in case Vault already returns a bundle.
+        if certificate.count("-----BEGIN CERTIFICATE-----") > 1:
+            return certificate
+        if certificate in ca_chain:
+            return "".join(ca_chain)
+        return "".join([certificate, *ca_chain])
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
