@@ -48,6 +48,26 @@ To work around that, you can :ref:`template the path <vault-templating>`.
     the merged result is nested below.
     There is currently no way to nest multiple results under different keys.
 
+Nested keys
+~~~~~~~~~~~
+A Vault secret can contain arbitrarily nested JSON.
+Suppose minions with the ``testrole`` role need the following pillar data:
+
+.. code-block:: yaml
+
+    foobar:
+      users:
+        barbaz:
+          password: correct horse battery staple
+
+You can write this data into their pillar path in Vault:
+
+.. code-block:: bash
+
+     vault kv put -mount=salt roles/testrole - <<EOF
+    {"foobar": {"users": {"barbaz": {"password": "correct horse battery staple"}}}}
+    EOF
+
 .. vconf:: pillar
 
 Configuration reference
