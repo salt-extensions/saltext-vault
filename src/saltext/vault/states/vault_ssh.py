@@ -40,39 +40,39 @@ def ca_present(
 ):
     """
     Ensure a CA is present on the mount. Note that only one is possible
-    per mount. This state will not inspect the properties once a CA
+    per mount. This state does not inspect the properties once a CA
     has been initialized.
 
     name
         Irrelevant.
 
     private_key
-        The private key part of the SSH CA key pair. Can be a file
+        Private key part of the SSH CA key pair. Can be a file
         local to the minion or a PEM-encoded string.
-        If this or ``public_key`` is unspecified, will generate a pair
+        If this or ``public_key`` is unspecified, generates a pair
         on the Vault server.
 
     public_key
-        The public key part of the SSH CA key pair. Can be a file
+        Public key part of the SSH CA key pair. Can be a file
         local to the minion or a PEM-encoded string.
-        If this or ``public_key`` is unspecified, will generate a pair
+        If this or ``public_key`` is unspecified, generates a pair
         on the Vault server.
 
     key_type
-        The desired key type for the generated SSH CA key when generating
+        Desired key type for the generated SSH CA key when generating
         on the Vault server. Valid: ``ssh-rsa`` (default), ``sha2-nistp256``,
         ``ecdsa-sha2-nistp384``, ``ecdsa-sha2-nistp521``, or ``ssh-ed25519``.
         Can also specify an algorithm: ``rsa``, ``ec``, or ``ed25519``.
 
     key_bits
-        The desired key bits for the generated SSH CA key when generating
+        Desired key bits for the generated SSH CA key when generating
         on the Vault server. Only used for variable length keys (e.g. ``ssh-rsa``)
         or when ``ec`` was specified as ``key_type``, in which case this
         selects the NIST P-curve: ``256``, ``384``, ``521``.
-        0 (default) will select 4096 bits for RSA or NIST P-256 for EC.
+        0 (default) selects 4096 bits for RSA or NIST P-256 for EC.
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     ret = {
@@ -124,14 +124,14 @@ def ca_absent(
     mount="ssh",
 ):
     """
-    Ensure a CA is absent from the mount. Note that you will not be
-    able to easily recover a destroy private key.
+    Ensure a CA is absent from the mount. Note that you are
+    unable to easily recover a destroy private key.
 
     name
         Irrelevant.
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     ret = {
@@ -185,10 +185,10 @@ def role_present_otp(
     Ensure an SSH role (OTP type) is present as specified.
 
     name
-        The name of the SSH role.
+        Name of the SSH role.
 
     default_user
-        The default username for which a credential will be generated.
+        Default username for which a credential is generated.
         Required.
 
     cidr_list
@@ -198,17 +198,17 @@ def role_present_otp(
     allowed_users
         List of usernames the client can request under this role.
         By default, **any usernames are allowed** (``*``).
-        The ``default_user`` will always be allowed.
+        The ``default_user`` is always allowed.
 
     exclude_cidr_list
         List of CIDR blocks not accepted by the role.
 
     port
-        Specifies the port number for SSH connections, which will be returned to
+        Specifies the port number for SSH connections, which is returned to
         OTP clients as an informative value. Defaults to ``22``.
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     ret = {
@@ -360,10 +360,10 @@ def role_present_ca(
     Ensure an SSH role (CA type) is present as specified.
 
     name
-        The name of the SSH role.
+        Name of the SSH role.
 
     default_user
-        The default username for which a credential will be generated.
+        Default username for which a credential is generated.
         When ``default_user_template`` is true, this can contain an identity
         template with any prefix or suffix, like ``ssh-{{identity.entity.id}}-user``.
         If you wish this to be a valid principal, it must also be in ``allowed_users``.
@@ -377,7 +377,7 @@ def role_present_ca(
         By default, none are allowed. Set this to ``*`` to allow any usernames.
         If ``allowed_users_template`` is true, this list can contain an
         identity template with any prefix or suffix. The ``default_user``
-        will always be allowed.
+        is always allowed.
 
     allowed_users_template
         Allow ``allowed_users`` to be specified using identity template values.
@@ -407,8 +407,8 @@ def role_present_ca(
 
     allowed_extensions
         List of extensions that certificates can carry when signed.
-        If unset (default), will always take the extensions
-        from ``default_extensions`` only. If set to ``*``, will allow
+        If unset (default), always takes the extensions
+        from ``default_extensions`` only. If set to ``*``, allows
         any extension to be set.
         For the list of extensions, take a look at the sshd manual's
         AUTHORIZED_KEYS FILE FORMAT section. You should add a ``permit-``
@@ -443,7 +443,7 @@ def role_present_ca(
 
     allow_user_key_ids
         Allow users to override the key ID for a certificate. When false (default),
-        the key ID will always be the token display name.
+        the key ID always equals the token display name.
         The key ID is logged by the SSH server and can be useful for auditing.
 
     key_id_format
@@ -468,7 +468,7 @@ def role_present_ca(
         Defaults to ``30s``.
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     ret = {
@@ -515,10 +515,10 @@ def role_absent(name, mount="ssh"):
     Ensure an SSH role is absent.
 
     name
-        The name of the role.
+        Name of the role.
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     ret = {

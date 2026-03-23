@@ -338,7 +338,7 @@ class TestBuildAuthdClient:
     @pytest.fixture(params=["token", "secret_id", "both", "none"])
     def cached(self, token_auth, secret_id_response, request):
         cached_what = request.param
-        # Save a reference to the original class since it will be
+        # Save a reference to the original class since it is
         # mocked when _cache is called
         vauth_cache = vcache.VaultAuthCache
 
@@ -1099,7 +1099,7 @@ class TestQueryMaster:
         self, server_config, request, unauthd_client_mock
     ):  # pylint: disable=unused-argument
         # We're requesting unauthd_client_mock here because if it's not requested
-        # first, its spec will be sourced from a MagicMock (and fail in Python >=3.11)
+        # first, its spec is sourced from a MagicMock (and fail in Python >=3.11)
         with patch("saltext.vault.utils.vault.client.VaultClient", autospec=True) as unwrap_client:
             unwrap_client.return_value.get_config.return_value = server_config
             unwrap_client.return_value.unwrap.return_value = {request.param: {"bar": "baz"}}

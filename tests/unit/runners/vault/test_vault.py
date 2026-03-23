@@ -989,7 +989,7 @@ def test_get_policies_does_not_render_pillar_unnecessarily(config, grains, pilla
 )
 def test_get_policies_for_nonexisting_minions(expected):
     """
-    For non-existing minions, or the master-minion, grains will be None.
+    For non-existing minions, or the master-minion, grains are None.
     """
     with patch("salt.utils.minions.get_minion_data", autospec=True) as get_minion_data:
         get_minion_data.return_value = (None, None, None)

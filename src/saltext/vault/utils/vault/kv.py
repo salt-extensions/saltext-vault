@@ -79,7 +79,7 @@ class VaultKV:
         and writing back the whole secret, thus might consume more than one token use.
 
         Since this uses the `JSON Merge Patch format <https://datatracker.ietf.org/doc/html/draft-ietf-appsawg-json-merge-patch-07>`_,
-        values set to ``null`` (``None``) will be dropped.
+        values set to ``null`` (``None``) are dropped.
         """
 
         def apply_json_merge_patch(data, patch):

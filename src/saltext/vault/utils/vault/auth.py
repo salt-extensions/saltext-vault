@@ -177,7 +177,7 @@ class VaultAppRole:
 
         valid_for
             Allows to check whether the AppRole will still be valid in the future.
-            This can be an integer, which will be interpreted as seconds, or a
+            This can be an integer, which is interpreted as seconds, or a
             time string using the same format as Vault does:
             Suffix ``s`` for seconds, ``m`` for minutes, ``h`` for hours, ``d`` for days.
             Defaults to 0.

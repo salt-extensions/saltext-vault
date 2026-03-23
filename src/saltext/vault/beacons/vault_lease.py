@@ -70,14 +70,14 @@ Configuration reference
 .. vconf:: lease_beacon.leases
 
 ``leases``
-    The leases to monitor, referenced by their cache keys.
+    Leases to monitor, referenced by their cache keys.
     This can be a string (single lease), list (multiple leases)
     or mapping (multiple leases with parameter overrides).
 
 .. vconf:: lease_beacon.min_ttl
 
 ``min_ttl``
-    The minimum TTL a monitored lease should have.
+    Minimum TTL a monitored lease should have.
     Can be overridden per configured lease in :vconf:`lease_beacon.leases`.
     If a ``min_ttl`` was set on the lease during its creation,
     this value must be equal or greater to have any effect.
@@ -100,7 +100,7 @@ Configuration reference
     Can be overridden per configured lease in :vconf:`lease_beacon.leases`.
     If ``meta`` was set on the lease during creation, the corresponding
     value takes precedence. If both values are either mappings or lists,
-    they will be merged together.
+    they are merged together.
 
 .. vconf:: lease_beacon.renew
 

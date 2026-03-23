@@ -379,7 +379,7 @@ class VaultClient:
             .. note::
                 This check prevents tampering with wrapping tokens, which are
                 valid for one request only. Usually, if an attacker sniffs a wrapping
-                token, there will be two unwrapping requests, causing an audit warning.
+                token, there are two unwrapping requests, causing an audit warning.
                 If the attacker can issue a new wrapping token and insert it into the
                 response instead, this warning would be silenced. Assuming they do not
                 possess the permissions to issue a wrapping token from the correct
@@ -422,11 +422,11 @@ class VaultClient:
         Lookup token meta information.
 
         token
-            The token to look up or to use to look up the accessor.
+            Token to look up or to use to look up the accessor.
             Required.
 
         accessor
-            The accessor to use to query the token meta information.
+            Accessor to use to query the token meta information.
 
         raw
             Return the raw response object instead of response data.
@@ -546,12 +546,12 @@ class AuthenticatedVaultClient(VaultClient):
         Lookup token meta information.
 
         token
-            The token to look up. If neither token nor accessor
+            Token to look up. If neither token nor accessor
             are specified, looks up the current token in use by
             this client.
 
         accessor
-            The accessor of the token to query the meta information for.
+            Accessor of the token to query the meta information for.
 
         raw
             Return the raw response object instead of response data.
@@ -587,12 +587,12 @@ class AuthenticatedVaultClient(VaultClient):
             Can be an integer (seconds) or a time string like ``1h``. Optional.
 
         token
-            The token that should be renewed. Optional.
+            Token that should be renewed. Optional.
             If token and accessor are unset, renews the token currently in use
             by this client.
 
         accessor
-            The accessor of the token that should be renewed. Optional.
+            Accessor of the token that should be renewed. Optional.
         """
         endpoint = "auth/token/renew"
         payload = {}
@@ -621,16 +621,16 @@ class AuthenticatedVaultClient(VaultClient):
         Revoke a token by setting its TTL to 1s.
 
         delta
-            The time in seconds to request revocation after.
+            Time in seconds to request revocation after.
             Defaults to 1s.
 
         token
-            The token that should be revoked. Optional.
+            Token that should be revoked. Optional.
             If token and accessor are unset, revokes the token currently in use
             by this client.
 
         accessor
-            The accessor of the token that should be revoked. Optional.
+            Accessor of the token that should be revoked. Optional.
         """
         try:
             self.token_renew(increment=delta, token=token, accessor=accessor)

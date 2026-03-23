@@ -46,10 +46,10 @@ def read_role(name, mount="ssh"):
         }
 
     name
-        The name of the SSH role.
+        Name of the SSH role.
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     try:
@@ -85,10 +85,10 @@ def write_role_otp(
         }
 
     name
-        The name of the SSH role.
+        Name of the SSH role.
 
     default_user
-        The default username for which a credential will be generated.
+        Default username for which a credential should be generated.
         Required.
 
     cidr_list
@@ -98,17 +98,17 @@ def write_role_otp(
     allowed_users
         List of usernames the client can request under this role.
         By default, **any usernames are allowed** (``*``).
-        The ``default_user`` will always be allowed.
+        The ``default_user`` is always allowed.
 
     exclude_cidr_list
         List of CIDR blocks not accepted by the role.
 
     port
-        Specifies the port number for SSH connections, which will be returned to
+        Specifies the port number for SSH connections, which is returned to
         OTP clients as an informative value. Defaults to ``22``.
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     payload = {
@@ -167,10 +167,10 @@ def write_role_ca(
         }
 
     name
-        The name of the SSH role.
+        Name of the SSH role.
 
     default_user
-        The default username for which a credential will be generated.
+        Default username for which a credential should be generated.
         When ``default_user_template`` is true, this can contain an identity
         template with any prefix or suffix, like ``ssh-{{identity.entity.id}}-user``.
         If you wish this to be a valid principal, it must also be in ``allowed_users``.
@@ -184,7 +184,7 @@ def write_role_ca(
         By default, none are allowed. Set this to ``*`` to allow any usernames.
         If ``allowed_users_template`` is true, this list can contain an
         identity template with any prefix or suffix. The ``default_user``
-        will always be allowed.
+        is always allowed.
 
     allowed_users_template
         Allow ``allowed_users`` to be specified using identity template values.
@@ -214,8 +214,8 @@ def write_role_ca(
 
     allowed_extensions
         List of extensions that certificates can carry when signed.
-        If unset (default), will always take the extensions
-        from ``default_extensions`` only. If set to ``*``, will allow
+        If unset (default), always takes the extensions
+        from ``default_extensions`` only. If set to ``*``, allows
         any extension to be set.
         For the list of extensions, take a look at the sshd manual's
         AUTHORIZED_KEYS FILE FORMAT section. You should add a ``permit-``
@@ -250,7 +250,7 @@ def write_role_ca(
 
     allow_user_key_ids
         Allow users to override the key ID for a certificate. When false (default),
-        the key ID will always be the token display name.
+        the key ID always equals the token display name.
         The key ID is logged by the SSH server and can be useful for auditing.
 
     key_id_format
@@ -275,7 +275,7 @@ def write_role_ca(
         Defaults to ``30s``.
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     if not (allow_user_certificates or allow_host_certificates):
@@ -358,10 +358,10 @@ def delete_role(name, mount="ssh"):
         }
 
     name
-        The name of the SSH role.
+        Name of the SSH role.
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     try:
@@ -389,7 +389,7 @@ def list_roles(mount="ssh"):
         }
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     try:
@@ -425,10 +425,10 @@ def list_roles_ip(address, mount="ssh"):
         }
 
     address
-        The IP address to list roles for.
+        IP address to list roles for.
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     endpoint = f"{mount}/lookup"
@@ -465,7 +465,7 @@ def list_roles_zeroaddr(mount="ssh"):
         }
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     try:
@@ -498,10 +498,10 @@ def write_zeroaddr_roles(roles, mount="ssh"):
         }
 
     roles
-        The list of role names that should be marked as zero address roles.
+        List of role names that should be marked as zero address roles.
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     endpoint = f"{mount}/config/zeroaddress"
@@ -534,7 +534,7 @@ def delete_zeroaddr_roles(mount="ssh"):
         }
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     try:
@@ -564,17 +564,17 @@ def get_creds(name, address, username="", mount="ssh"):
         }
 
     name
-        The name of the role.
+        Name of the role.
 
     address
-        The IP address of the host to generate credentials for.
+        IP address of the host to generate credentials for.
 
     username
-        The username on the remote host to generate credentials for.
-        If empty, the default username of the role will be used.
+        Username on the remote host to generate credentials for.
+        If empty, the default username of the role is used.
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     endpoint = f"{mount}/creds/{name}"
@@ -611,32 +611,32 @@ def create_ca(
         }
 
     private_key
-        The private key part of the SSH CA key pair. Can be a file
+        Private key part of the SSH CA key pair. Can be a file
         local to the minion or a PEM-encoded string.
-        If this or ``public_key`` is unspecified, will generate a pair
+        If this or ``public_key`` is unspecified, generates a pair
         on the Vault server.
 
     public_key
-        The public key part of the SSH CA key pair. Can be a file
+        Public key part of the SSH CA key pair. Can be a file
         local to the minion or a PEM-encoded string.
-        If this or ``public_key`` is unspecified, will generate a pair
+        If this or ``public_key`` is unspecified, generates a pair
         on the Vault server.
 
     key_type
-        The desired key type for the generated SSH CA key when generating
+        Desired key type for the generated SSH CA key when generating
         on the Vault server. Valid: ``ssh-rsa`` (default), ``sha2-nistp256``,
         ``ecdsa-sha2-nistp384``, ``ecdsa-sha2-nistp521``, or ``ssh-ed25519``.
         Can also specify an algorithm: ``rsa``, ``ec``, or ``ed25519``.
 
     key_bits
-        The desired key bits for the generated SSH CA key when generating
+        Desired key bits for the generated SSH CA key when generating
         on the Vault server. Only used for variable length keys (e.g. ``ssh-rsa``)
         or when ``ec`` was specified as ``key_type``, in which case this
         selects the NIST P-curve: ``256``, ``384``, ``521``.
-        0 (default) will select 4096 bits for RSA or NIST P-256 for EC.
+        0 (default) selects 4096 bits for RSA or NIST P-256 for EC.
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     endpoint = f"{mount}/config/ca"
@@ -684,7 +684,7 @@ def destroy_ca(mount="ssh"):
         }
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     try:
@@ -714,7 +714,7 @@ def read_ca(mount="ssh"):
         }
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     try:
@@ -765,36 +765,36 @@ def sign_key(
         }
 
     name
-        The name of the SSH role.
+        Name of the SSH role.
 
     public_key
-        The SSH public key that should be signed. Can be a file local to
+        SSH public key that should be signed. Can be a file local to
         the minion or a PEM-encoded string.
 
     ttl
         Request a specific time to live for the certificate, limited by the
-        role's TTL. If unspecified, will default to the role's TTL or system
+        role's TTL. If unspecified, defaults to the role's TTL or system
         values.
 
     valid_principals
         List of usernames/hostnames the certificate should be signed for.
 
     cert_type
-        The type of certificate to issue, either ``user`` or ``host``. Defaults
+        Type of certificate to issue, either ``user`` or ``host``. Defaults
         to ``user``.
 
     key_id
-        The key ID the created certificate should have. If unspecified, the display
-        name of the creating token will be used.
+        Key ID the created certificate should have. If unspecified, the display
+        name of the creating token is used.
 
     critical_options
-        A map of critical options the certificate should carry.
+        Map of critical options the certificate should carry.
 
     extensions
-        A map of extensions the certificate should carry.
+        Map of extensions the certificate should carry.
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     endpoint = f"{mount}/sign/{name}"
@@ -858,45 +858,45 @@ def generate_key_cert(
         }
 
     name
-        The name of the SSH role.
+        Name of the SSH role.
 
     key_type
-        The desired key type for the generated SSH CA key.
+        Desired key type for the generated SSH CA key.
         Valid: ``ssh-rsa`` (default), ``sha2-nistp256``,
         ``ecdsa-sha2-nistp384``, ``ecdsa-sha2-nistp521``, or ``ssh-ed25519``.
         Can also specify an algorithm: ``rsa``, ``ec``, or ``ed25519``.
 
     key_bits
-        The desired key bits for the generated SSH CA key.
+        Desired key bits for the generated SSH CA key.
         Only used for variable length keys (e.g. ``ssh-rsa``)
         or when ``ec`` was specified as ``key_type``, in which case this
         selects the NIST P-curve: ``256``, ``384``, ``521``.
-        0 (default) will select 4096 bits for RSA or NIST P-256 for EC.
+        0 (default) selects 4096 bits for RSA or NIST P-256 for EC.
 
     ttl
         Request a specific time to live for the certificate, limited by the
-        role's TTL. If unspecified, will default to the role's TTL or system
+        role's TTL. If unspecified, defaults to the role's TTL or system
         values.
 
     valid_principals
         List of usernames/hostnames the certificate should be signed for.
 
     cert_type
-        The type of certificate to issue, either ``user`` or ``host``. Defaults
+        Type of certificate to issue, either ``user`` or ``host``. Defaults
         to ``user``.
 
     key_id
-        The key ID the created certificate should have. If unspecified, the display
-        name of the creating token will be used.
+        Key ID the created certificate should have. If unspecified, the display
+        name of the creating token is used.
 
     critical_options
-        A map of critical options the certificate should carry.
+        Map of critical options the certificate should carry.
 
     extensions
-        A map of extensions the certificate should carry.
+        Map of extensions the certificate should carry.
 
     mount
-        The name of the mount point the SSH secret backend is mounted at.
+        Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
     """
     endpoint = f"{mount}/issue/{name}"

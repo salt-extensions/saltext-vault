@@ -35,7 +35,7 @@ def list_connections(mount="database"):
             salt '*' vault_db.list_connections
 
     mount
-        The mount path the DB backend is mounted to. Defaults to ``database``.
+        Mount path the DB backend is mounted to. Defaults to ``database``.
     """
     endpoint = f"{mount}/config"
     try:
@@ -59,10 +59,10 @@ def fetch_connection(name, mount="database"):
             salt '*' vault_db.fetch_connection mydb
 
     name
-        The name of the database connection.
+        Name of the database connection.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
     """
     endpoint = f"{mount}/config/{name}"
     try:
@@ -95,11 +95,11 @@ def write_connection(
     .. note::
 
         It is highly recommended to use a Vault-specific user rather than the admin user in the
-        database when configuring the plugin. This user will be used to create/update/delete users
-        within the database so it will need to have the appropriate permissions to do so.
+        database when configuring the plugin. This user is used to create/update/delete users
+        within the database, it needs to have the appropriate permissions to do so.
         If the plugin supports rotating the root credentials, it is highly recommended to perform
-        that action after configuring the plugin. This will change the password of the user
-        configured in this step. The new password will not be viewable by users.
+        that action after configuring the plugin. This changes the password of the user
+        configured in this step. The new password cannot be displayed.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/databases#configure-connection>`__.
 
@@ -111,10 +111,10 @@ def write_connection(
                 url=http://127.0.0.1:9200 username=vault password=hunter2
 
     name
-        The name of the database connection.
+        Name of the database connection.
 
     plugin
-        The name of the database plugin. Known plugins to this module are:
+        Name of the database plugin. Known plugins to this module are:
         ``cassandra``, ``couchbase``, ``elasticsearch``, ``influxdb``, ``hanadb``, ``mongodb``,
         ``mongodb_atlas``, ``mssql``, ``mysql``, ``oracle``, ``postgresql``, ``redis``,
         ``redis_elasticache``, ``redshift``, ``snowflake``.
@@ -136,20 +136,19 @@ def write_connection(
         See the plugin's API page for more information on support and formatting for this parameter.
 
     password_policy
-        The name of the password policy to use when generating passwords for this database.
-        If not specified, this will use a default policy defined as:
+        Name of the password policy to use when generating passwords for this database.
+        If not specified, this uses a default policy defined as:
         20 characters with at least 1 uppercase, 1 lowercase, 1 number, and 1 dash character.
 
     rotate
         Rotate the root credentials after plugin setup. Defaults to True.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
 
     kwargs
         Different plugins require different parameters. You need to make sure that you pass them
-        as supplemental keyword arguments. For known plugins, the required arguments will
-        be checked.
+        as supplemental keyword arguments. For known plugins, the required arguments are checked.
     """
     endpoint = f"{mount}/config/{name}"
     plugin_meta = vaultdb.get_plugin_meta(plugin)
@@ -197,10 +196,10 @@ def delete_connection(name, mount="database"):
             salt '*' vault_db.delete_connection mydb
 
     name
-        The name of the database connection.
+        Name of the database connection.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
     """
     endpoint = f"{mount}/config/{name}"
     try:
@@ -222,10 +221,10 @@ def reset_connection(name, mount="database"):
             salt '*' vault_db.reset_connection mydb
 
     name
-        The name of the database connection.
+        Name of the database connection.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
     """
     endpoint = f"{mount}/reset/{name}"
     try:
@@ -240,7 +239,7 @@ def rotate_root(name, mount="database"):
 
     .. warning::
 
-        The rotated password will not be accessible, so it is highly recommended to create
+        The rotated password is not accessible, so it is highly recommended to create
         a dedicated user account as Vault's configured "root".
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/databases#rotate-root-credentials>`__.
@@ -252,10 +251,10 @@ def rotate_root(name, mount="database"):
             salt '*' vault_db.rotate_root mydb
 
     name
-        The name of the database connection.
+        Name of the database connection.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
     """
     endpoint = f"{mount}/rotate-root/{name}"
     try:
@@ -281,7 +280,7 @@ def list_roles(static=False, mount="database"):
         Whether to list static roles. Defaults to False.
 
     mount
-        The mount path the DB backend is mounted to. Defaults to ``database``.
+        Mount path the DB backend is mounted to. Defaults to ``database``.
     """
     endpoint = f"{mount}/{'static-' if static else ''}roles"
     try:
@@ -306,13 +305,13 @@ def fetch_role(name, static=False, mount="database"):
             salt '*' vault_db.fetch_role myrole
 
     name
-        The name of the database role.
+        Name of the database role.
 
     static
         Whether this role is static. Defaults to False.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
     """
     endpoint = f"{mount}/{'static-' if static else ''}roles/{name}"
     try:
@@ -345,13 +344,13 @@ def write_static_role(
             salt '*' vault_db.write_static_role myrole mydb myuser 24h
 
     name
-        The name of the database role.
+        Name of the database role.
 
     connection
-        The name of the database connection this role applies to.
+        Name of the database connection this role applies to.
 
     username
-        The username to manage.
+        Username to manage.
 
     rotation_period
         Specifies the amount of time Vault should wait before rotating the password.
@@ -359,10 +358,10 @@ def write_static_role(
 
     rotation_statements
         Specifies the database statements to be executed to rotate the password for the
-        configured database user. Not every plugin type will support this functionality.
+        configured database user. Not every plugin type supports this functionality.
 
     credential_type
-        Specifies the type of credential that will be generated for the role.
+        Specifies the type of credential that is generated for the role.
         Options include: ``password``, ``rsa_private_key``. Defaults to ``password``.
         See the plugin's API page for credential types supported by individual databases.
 
@@ -373,7 +372,7 @@ def write_static_role(
         (defaults to ``pkcs8``) are available.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
     """
     payload = {
         "username": username,
@@ -418,10 +417,10 @@ def write_role(
                 \["CREATE USER '{{name}}'@'%' IDENTIFIED BY '{{password}}'", "GRANT SELECT ON *.* TO '{{name}}'@'%'"\]
 
     name
-        The name of the database role.
+        Name of the database role.
 
     connection
-        The name of the database connection this role applies to.
+        Name of the database connection this role applies to.
 
     creation_statements
         Specifies a list of database statements executed to create and configure a user,
@@ -449,7 +448,7 @@ def write_role(
         Availability and formatting depend on the specific plugin.
 
     credential_type
-        Specifies the type of credential that will be generated for the role.
+        Specifies the type of credential that is generated for the role.
         Options include: ``password``, ``rsa_private_key``. Defaults to ``password``.
         See the plugin's API page for credential types supported by individual databases.
 
@@ -460,7 +459,7 @@ def write_role(
         (defaults to ``pkcs8``) are available.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
     """
     payload = {
         "creation_statements": creation_statements,
@@ -534,13 +533,13 @@ def delete_role(name, static=False, mount="database"):
             salt '*' vault_db.delete_role myrole
 
     name
-        The name of the database role.
+        Name of the database role.
 
     static
         Whether this role is static. Defaults to False.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
     """
     endpoint = f"{mount}/{'static-' if static else ''}roles/{name}"
     try:
@@ -574,7 +573,7 @@ def get_creds(
             salt '*' vault_db.get_creds myrole
 
     name
-        The name of the database role.
+        Name of the database role.
 
     static
         Whether this role is static. Defaults to False.
@@ -615,10 +614,10 @@ def get_creds(
     valid_for
         When using cache, ensure the credentials are valid for at least this
         amount of time, otherwise request new ones.
-        This can be an integer, which will be interpreted as seconds, or a time string
+        This can be an integer, which is interpreted as seconds, or a time string
         using the same format as Vault does:
         Suffix ``s`` for seconds, ``m`` for minuts, ``h`` for hours, ``d`` for days.
-        This will be cached together with the lease and might be used by other
+        This is cached together with the lease and might be used by other
         modules later.
 
     check_server
@@ -627,26 +626,26 @@ def get_creds(
 
     renew_increment
         When using cache and ``valid_for`` results in a renewal attempt, request this
-        amount of time extension on the lease. This will be cached together with the
+        amount of time extension on the lease. This is cached together with the
         lease and might be used by other modules later.
 
     revoke_delay
         When using cache and ``valid_for`` results in a revocation, set the lease
         validity to this value to allow a short amount of delay between the issuance
         of the new lease and the revocation of the old one. Defaults to ``60``.
-        This will be cached together with the lease and might be used by other
+        This is cached together with the lease and might be used by other
         modules later.
 
     meta
-        When using cache, this value will be cached together with the lease. It will
-        be emitted by the ``vault_lease`` beacon module whenever a lease is
+        When using cache, this value is cached together with the lease. It is
+        emitted by the ``vault_lease`` beacon module whenever a lease is
         running out (usually because it cannot be extended further). It is intended
         to support the reactor in deciding what needs to be done in order
         to to reconfigure dependent, Vault-unaware software with newly issued
         credentials. Entirely optional.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
     """
     endpoint = f"{mount}/{'static-' if static else ''}creds/{name}"
 
@@ -831,10 +830,10 @@ def rotate_static_role(name, mount="database"):
             salt '*' vault_db.rotate_static_role mystaticrole
 
     name
-        The name of the database role.
+        Name of the database role.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
     """
     endpoint = f"{mount}/rotate-role/{name}"
     try:

@@ -24,14 +24,14 @@ def warn_until(
     Loosely based on ``salt.utils.versions.warn_until``.
 
     version
-        The version at which the warning turns into an error. Can be specified
+        Version at which the warning turns into an error. Can be specified
         as a string, float, int or iterable with items castable to integers.
 
     message
-        The warning message to show.
+        Warning message to show.
 
     category
-        The warning class to be thrown, by default ``DeprecationWarning``.
+        Warning class to be thrown, by default ``DeprecationWarning``.
     """
     version = _parse_version(version)
     saltext_version = _parse_version(__version__)

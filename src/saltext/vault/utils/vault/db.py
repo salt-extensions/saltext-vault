@@ -141,10 +141,10 @@ def get_plugin_name(name):
 def create_cache_pattern(name=None, mount=None, cache=None, static=None):
     """
     Render a match pattern for operating on cached leases.
-    Unset parameters will result in a ``*`` glob.
+    Unset parameters result in a ``*`` glob.
 
     name
-        The name of the database role.
+        Name of the database role.
 
     static
         Whether the role is static.
@@ -153,7 +153,7 @@ def create_cache_pattern(name=None, mount=None, cache=None, static=None):
         Filter by cache name (refer to get_creds for details).
 
     mount
-        The mount path the associated database backend is mounted to.
+        Mount path the associated database backend is mounted to.
     """
     ptrn = ["db"]
     ptrn.append("*" if mount is None else mount)

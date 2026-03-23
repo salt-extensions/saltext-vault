@@ -122,7 +122,7 @@ def certificate_managed(
         Path or PEM formatted text of the private key used to sign CSR for the certificate.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     ttl
         Specifies the Time To Live value to be used for the validity period of the requested certificate,
@@ -140,10 +140,10 @@ def certificate_managed(
         Encoding to be used for the certificate file. Valid options are ``pem``, ``pkcs7_pem``, ``der``, ``pkcs7_der``. Defaults to ``pem``.
 
     append_ca_chain
-        If set to true will append CA chain to the certificate. Defaults to ``false``.
+        Whether to append CA chain to the certificate. Defaults to ``false``.
 
         .. note::
-            This will append all CA certificates except self-signed (as they shouldn't be in the chain anyway)!
+            This appends all CA certificates except self-signed (as they shouldn't be in the chain anyway)!
 
     sign_verbatim
         If set to true, the resulting certificate follows the CSR exactly.
@@ -297,7 +297,7 @@ def certificate_managed(
 
             if encoding not in ["pem", "pkcs7_pem"]:
                 # file.managed does not support binary contents, so create
-                # an empty file first (makedirs). This will not work with check_cmd!
+                # an empty file first (makedirs). This does not work with check_cmd!
                 file_managed_ret = _file_managed(name, replace=False, **file_args)
                 _add_sub_state_run(ret, file_managed_ret)
                 if not _check_file_ret(file_managed_ret, ret, name):
@@ -325,10 +325,10 @@ def role_managed(name, mount="pki", issuer_ref=None, ttl=None, max_ttl=None, **k
     Ensures PKI role is present and configured as required.
 
     name
-        The name of the role.
+        Name of the role.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     issuer_ref
         Issuer reference for the role. Can be name, id or literal ``default``.
@@ -426,10 +426,10 @@ def role_absent(name, mount="pki"):
     Ensure PKI role is absent.
 
     name
-        The name of the role.
+        Name of the role.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     """
 
