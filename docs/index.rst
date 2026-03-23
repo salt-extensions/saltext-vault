@@ -45,9 +45,10 @@ Found a bug or missing a feature?
   :hidden:
 
   topics/installation
-  topics/migration_from_core
-  topics/basic_configuration
+  topics/quickstart
+  topics/auth_faq
   topics/templating
+  topics/migration_from_core
 
 .. toctree::
   :maxdepth: 2

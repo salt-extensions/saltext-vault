@@ -1,5 +1,5 @@
 (vault-setup)=
-# Basic Configuration
+# Quickstart
 For authenticating on a Vault server, each node needs credentials.
 Currently supported authentication methods are [AppRoles][] and [tokens][].
 
@@ -13,6 +13,10 @@ Issued credentials can either be tokens or AppRoles again.
 It's generally recommended to authenticate with and distribute AppRoles because
 this is more secure and allows for advanced behavior. For simplicity, this
 extension currently defaults to token authentication/issuance though.
+
+For background information, see the [auth FAQ](auth-faq-target),
+specifically the sections on [static auth methods](auth-tradeoff-target) and
+[credential issuance](issuance-tradeoff-target).
 :::
 
 :::{hint}
@@ -369,6 +373,7 @@ Entities are only created when issuing AppRoles, not tokens.
 
 [Entities]: https://developer.hashicorp.com/vault/docs/concepts/identity
 
+(example-config-target)=
 ### Complete examples
 :::{tab} Token
 
@@ -392,6 +397,7 @@ vault:
   policies:
     assign:
       - 'salt_minion'
+      - 'salt_minion_{minion}'
       - 'salt_role_{pillar[roles]}'
   server:
     url: https://vault.example.com:8200
@@ -416,8 +422,154 @@ vault:
   metadata:
     entity:
       minion-id: '{minion}'
-      role: '{pillar[role]}'
+      roles: '{pillar[roles]}'
+  policies:
+    assign:
+      - salt_minion
   server:
     url: https://vault.example.com:8200
 ```
 :::
+
+## Secrets setup
+
+Decide how you want to map minions to authorizations. A common pattern is to create policies
+based on minion IDs and minion roles, as shown in the [example config](example-config-target) above.
+This example setup is continued here.
+
+### Mount the KV backend
+Mount the Key/Value v2 backend to a path, e.g. ``salt``:
+
+```bash
+vault secrets enable -path=salt -version=2 kv
+```
+
+### Create secrets
+Write a secret that is accessible to all minions:
+
+```bash
+vault kv put -mount=salt general/accessible_for_all_minions all_foo=bar
+```
+
+Write a secret that is accessible to any minion that has the ``db`` role:
+
+```bash
+vault kv put -mount=salt roles/db db_foo=baz
+```
+
+Write a secret that is accessible to a specific minion named ``elliott``:
+
+```bash
+vault kv put -mount=salt minions/elliott minion_foo=quux
+```
+
+### Create policies
+Create the policies that map necessary authorizations. The optimal setup
+depends on the {vconf}`issued credential type<issue:type>`
+
+:::{warning}
+If a secret path is used as a minion pillar, the minion **must not have
+write access**, otherwise a core security assumption in Salt is violated.
+:::
+
+:::{important}
+Even if you only intend to use the secrets for minion pillars, you need
+to create minion policies. The master uses these policies to decide
+whether a minion should receive a specific pillar. The master should not
+have access to secret paths itself. For details, see [Pillar impersonation](pillar-impersonation-target).
+:::
+
+:::{tab} Token
+When issuing tokens, you cannot take advantage of minion metadata for templated Vault policies.
+You need to create all policies explicitly (consider automating this):
+
+```bash
+vault policy write salt_minion - <<'EOF'
+path "salt/data/general/*" {
+  capabilities = ["read"]
+}
+EOF
+
+vault policy write salt_role_db - <<'EOF'
+path "salt/data/roles/db" {
+  capabilities = ["read"]
+}
+EOF
+# + other roles as needed
+
+vault policy write salt_minion_elliott - <<'EOF'
+path "salt/data/minions/elliott" {
+  capabilities = ["read"]
+}
+EOF
+# + other minions as needed
+```
+:::
+
+:::{tab} AppRole
+When issuing AppRoles, you can take advantage of minion metadata for templated Vault policies.
+This means a single policy should cover most minions and roles:
+
+```bash
+vault policy write salt_minion - <<'EOF'
+path "salt/data/general" {
+    capabilities = ["read"]
+}
+
+path "salt/data/minions/{{identity.entity.metadata.minion-id}}" {
+    capabilities = ["read"]
+}
+
+path "salt/data/roles/{{identity.entity.metadata.roles__0}}" {
+    capabilities = ["read"]
+}
+
+path "salt/data/roles/{{identity.entity.metadata.roles__1}}" {
+    capabilities = ["read"]
+}
+
+path "salt/data/roles/{{identity.entity.metadata.roles__2}}" {
+    capabilities = ["read"]
+}
+
+path "salt/data/roles/{{identity.entity.metadata.roles__3}}" {
+    capabilities = ["read"]
+}
+EOF
+```
+
+::::{hint}
+See [entity metadata templating](metadata-templating-target) for details, especially
+to understand why the ``roles`` mapping is repeated multiple times.
+::::
+
+### Test access
+
+Now you can test that the minion is able to read all secrets:
+
+```console
+[root@master ~]# salt elliott vault.read_secret salt/general/accessible_for_all_minions
+elliott:
+    ----------
+    all_foo: bar
+[root@master ~]# salt elliott vault.read_secret salt/roles/db
+elliott:
+    ----------
+    db_foo: baz
+[root@master ~]# salt elliott vault.read_secret salt/minions/elliott
+elliott:
+    ----------
+    minion_foo: quux
+```
+
+If this fails, re-issue the minion's token and try again:
+```bash
+salt elliott vault.clear_cache
+```
+
+If it still fails and you are issuing AppRoles, manually sync AppRoles and Entities and try again:
+```bash
+salt-run vault.sync_approles
+salt-run vault.sync_entities
+salt elliott vault.clear_cache
+```
