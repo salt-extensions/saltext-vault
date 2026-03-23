@@ -23,7 +23,7 @@ def present(name, values, sync=False):
     Does not report a diff.
 
     name
-        The path of the secret.
+        Path of the secret.
 
     values
         A mapping of values the secret should expose.
@@ -100,10 +100,10 @@ def absent(name, operation="delete"):
     been made unreadable in some other way.
 
     name
-        The path of the secret.
+        Path of the secret.
 
     operation
-        The operation to perform to remove the secret. Only relevant for KV v2.
+        Operation to perform to remove the secret. Only relevant for KV v2.
         Options are: ``delete`` (meaning: soft-delete), ``destroy`` (meaning delete unrecoverably)
         and ``wipe`` (forget about the secret completely). Defaults to ``delete``.
         KV v1 secrets are always wiped since the backend does not support versioning.

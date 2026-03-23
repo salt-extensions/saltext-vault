@@ -61,7 +61,7 @@ class DurationMixin:
 
         valid_for
             Check whether the entity will still be valid in the future.
-            This can be an integer, which will be interpreted as seconds, or a
+            This can be an integer, which is interpreted as seconds, or a
             time string using the same format as Vault does:
             Suffix ``s`` for seconds, ``m`` for minutes, ``h`` for hours, ``d`` for days.
             Defaults to 0.
@@ -205,8 +205,8 @@ class VaultLease(BaseLease):
         .. versionadded:: 1.1.0
 
     meta
-        Cache arbitrary metadata together with the lease. It will
-        be included in expiry events.
+        Cache arbitrary metadata together with the lease. It is
+        included in expiry events.
 
         .. versionadded:: 1.1.0
     """
@@ -237,7 +237,7 @@ class VaultLease(BaseLease):
 
         valid_for
             Check whether the entity will still be valid in the future.
-            This can be an integer, which will be interpreted as seconds, or a
+            This can be an integer, which is interpreted as seconds, or a
             time string using the same format as Vault does:
             Suffix ``s`` for seconds, ``m`` for minutes, ``h`` for hours, ``d`` for days.
             Defaults to the minimum TTL that was set on the lease
@@ -270,7 +270,7 @@ class VaultToken(UseCountMixin, AccessorMixin, BaseLease):
 
         valid_for
             Check whether the token will still be valid in the future.
-            This can be an integer, which will be interpreted as seconds, or a
+            This can be an integer, which is interpreted as seconds, or a
             time string using the same format as Vault does:
             Suffix ``s`` for seconds, ``m`` for minutes, ``h`` for hours, ``d`` for days.
             Defaults to 0.
@@ -332,7 +332,7 @@ class VaultSecretId(UseCountMixin, AccessorMixin, BaseLease):
 
         valid_for
             Check whether the SecretID will still be valid in the future.
-            This can be an integer, which will be interpreted as seconds, or a
+            This can be an integer, which is interpreted as seconds, or a
             time string using the same format as Vault does:
             Suffix ``s`` for seconds, ``m`` for minutes, ``h`` for hours, ``d`` for days.
             Defaults to 0.
@@ -429,7 +429,7 @@ class LeaseStore:
 
         valid_for
             Ensure the returned lease is valid for at least this amount of time.
-            This can be an integer, which will be interpreted as seconds, or a
+            This can be an integer, which is interpreted as seconds, or a
             time string using the same format as Vault does:
             Suffix ``s`` for seconds, ``m`` for minutes, ``h`` for hours, ``d`` for days.
             Defaults to the minimum TTL that was set on the lease when creating it or 0.
@@ -446,8 +446,8 @@ class LeaseStore:
         renew_increment
             When renewing, request the lease to be valid for this amount of time from
             the current point of time onwards.
-            If unset, will renew the lease by its default validity period and, if
-            the renewed lease does not pass ``valid_for``, will try to renew it
+            If unset, renews the lease by its default validity period and, if
+            the renewed lease does not pass ``valid_for``, tries to renew it
             by ``valid_for``.
 
         renew_blur
@@ -608,7 +608,7 @@ class LeaseStore:
 
         raise_all_errors
             When ``lease`` is a VaultLease and the renewal does not succeed,
-            do not catch exceptions. If this is false, the lease will be returned
+            do not catch exceptions. If this is false, the lease is returned
             unmodified if the exception does not indicate it is invalid (NotFound).
             Defaults to true.
         """
@@ -674,7 +674,7 @@ class LeaseStore:
 
     def revoke(self, lease, delta=None):
         """
-        Revoke a lease. Will also remove the cached lease,
+        Revoke a lease. Also removes the cached lease,
         if it has been requested from this LeaseStore before.
 
         lease
@@ -741,7 +741,7 @@ class LeaseStore:
         Cache a lease.
 
         ckey
-            The cache key the lease should be saved in.
+            Cache key the lease should be saved in.
 
         lease
             A lease ID or VaultLease object to store.

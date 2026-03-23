@@ -623,7 +623,7 @@ def _send_mock():
 def test_vault_api_adapter_pem(server_config, _send_mock):
     """
     Test that the ``verify`` parameter to the client can contain a PEM-encoded certificate
-    which will be used as the sole trust anchor for the Vault URL.
+    which is used as the sole trust anchor for the Vault URL.
     The ``verify`` parameter to ``HTTPAdapter.send`` should be the default (True)
     in that case since it requires a local file path.
     """

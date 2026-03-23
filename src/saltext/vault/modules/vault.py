@@ -42,10 +42,10 @@ def read_secret(path, key=None, metadata=False, default=NOT_SET, version=None):
         }
 
     path
-        The path to the secret, including mount.
+        Path to the secret, including mount.
 
     key
-        The data field at <path> to read. If unspecified, returns the
+        Data field at <path> to read. If unspecified, returns the
         whole dataset.
 
     metadata
@@ -53,11 +53,11 @@ def read_secret(path, key=None, metadata=False, default=NOT_SET, version=None):
         Defaults to False.
 
     default
-        When the path or path/key combination is not found, an exception will
-        be raised, unless a default is provided here.
+        When the path or path/key combination is not found, an exception is raised,
+        unless a default is provided here.
 
     version
-        The version to read. If unset, reads the latest one.
+        Version to read. If unset, reads the latest one.
 
         .. versionadded:: 1.2.0
     """
@@ -103,7 +103,7 @@ def read_secret_meta(path):
         }
 
     path
-        The path to the secret, including mount.
+        Path to the secret, including mount.
     """
     log.debug("Reading Vault secret metadata for %s at %s", __grains__.get("id"), path)
     try:
@@ -138,7 +138,7 @@ def write_secret(path, **kwargs):
         }
 
     path
-        The path to the secret, including mount.
+        Path to the secret, including mount.
     """
     log.debug("Writing vault secrets for %s at %s", __grains__.get("id"), path)
     data = {x: y for x, y in kwargs.items() if not x.startswith("__")}
@@ -165,7 +165,7 @@ def write_raw(path, raw):
     Required policy: see :func:`write_secret`
 
     path
-        The path to the secret, including mount.
+        Path to the secret, including mount.
 
     raw
         Secret data to write to <path>. Has to be a mapping.
@@ -188,7 +188,7 @@ def patch_secret(path, **kwargs):
     .. note::
 
         This works even for older Vault versions, KV v1 and with missing
-        ``patch`` capability, but will use more than one request to simulate
+        ``patch`` capability, but uses more than one request to simulate
         the functionality by issuing a read and update request.
 
         For proper, single-request patching, requires versions of KV v2 that
@@ -198,7 +198,7 @@ def patch_secret(path, **kwargs):
     .. note::
 
         This uses JSON Merge Patch format internally.
-        Keys set to ``null`` (JSON/YAML)/``None`` (Python) will be deleted.
+        Keys set to ``null`` (JSON/YAML)/``None`` (Python) are deleted.
 
     CLI Example:
 
@@ -228,7 +228,7 @@ def patch_secret(path, **kwargs):
         }
 
     path
-        The path to the secret, including mount.
+        Path to the secret, including mount.
     """
     log.debug("Patching vault secrets for %s at %s", __grains__.get("id"), path)
     data = {x: y for x, y in kwargs.items() if not x.startswith("__")}
@@ -244,7 +244,7 @@ def patch_secret(path, **kwargs):
 
 def delete_secret(path, *args, **kwargs):
     """
-    Delete secret at <path>. If <path> is on KV v2, the secret will be soft-deleted.
+    Delete secret at <path>. If <path> is on KV v2, the secret is soft-deleted.
 
     CLI Example:
 
@@ -274,7 +274,7 @@ def delete_secret(path, *args, **kwargs):
         }
 
     path
-        The path to the secret, including mount.
+        Path to the secret, including mount.
 
     all_versions
         .. versionadded:: 1.2.0
@@ -327,7 +327,7 @@ def restore_secret(path, *versions, **kwargs):
         }
 
     path
-        The path to the secret, including mount.
+        Path to the secret, including mount.
 
     all_versions
         Restore all versions of the secret for KV v2.
@@ -375,7 +375,7 @@ def destroy_secret(path, *args, **kwargs):
         }
 
     path
-        The path to the secret, including mount.
+        Path to the secret, including mount.
 
     all_versions
         .. versionadded:: 1.2.0
@@ -459,17 +459,17 @@ def list_secrets(path, default=NOT_SET, keys_only=None):
         }
 
     path
-        The path to the secret, including mount.
+        Path to the secret, including mount.
 
     default
-        When the path is not found, an exception will be raised, unless a default
+        When the path is not found, an exception is raised, unless a default
         is provided here.
 
     keys_only
         .. versionadded:: 1.0.0
 
         This function used to return a dictionary like ``{"keys": ["some/", "some/key"]}``.
-        Setting this to True will only return the list of keys.
+        Setting this to True only returns the list of keys.
         For backwards-compatibility reasons, this currently defaults to False.
         Beginning with version 2 of this extension, the default will change to True.
     """
@@ -508,7 +508,7 @@ def clear_cache(connection=True, session=False):
     """
     .. versionadded:: 1.0.0
 
-    Delete Vault caches. Will ensure the current token and associated leases
+    Delete Vault caches. Ensures the current token and associated leases
     are revoked by default.
 
     The cache is organized in a hierarchy: ``/vault/connection/session/leases``.
@@ -535,7 +535,7 @@ def clear_cache(connection=True, session=False):
         Only clear the cached data scoped to a session. This only includes
         leases and the currently active auth token, but not configuration
         or (AppRole) auth credentials. Defaults to false.
-        Setting this to true will keep the connection cache, regardless
+        Setting this to true keeps the connection cache, regardless
         of ``connection``.
     """
     return vault.clear_cache(__opts__, __context__, connection=connection, session=session)
@@ -583,7 +583,7 @@ def policy_fetch(policy):
         }
 
     policy
-        The name of the policy to fetch.
+        Name of the policy to fetch.
     """
     # there is also "sys/policies/acl/{policy}"
     endpoint = f"sys/policy/{policy}"
@@ -619,7 +619,7 @@ def policy_write(policy, rules):
         }
 
     policy
-        The name of the policy to create/update.
+        Name of the policy to create/update.
 
     rules
         Rules to write, formatted as in-line HCL.
@@ -655,7 +655,7 @@ def policy_delete(policy):
         }
 
     policy
-        The name of the policy to delete.
+        Name of the policy to delete.
     """
     endpoint = f"sys/policy/{policy}"
 

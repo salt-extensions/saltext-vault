@@ -297,7 +297,7 @@ def patch_kv(path, data, opts, context):
 def delete_kv(path, opts, context, versions=None, all_versions=False):
     """
     Delete secret at <path>. For KV v2, versions can be specified,
-    which will be soft-deleted.
+    which is soft-deleted.
     """
     kv, config = get_kv(opts, context, get_config=True)
     try:

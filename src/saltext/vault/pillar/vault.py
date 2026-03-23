@@ -75,12 +75,12 @@ Configuration reference
 .. vconf:: pillar.path
 
 ``path``
-    The path to include in the minion pillars. Can be :ref:`templated <vault-templating>`.
+    Path to include in the minion pillars. Can be :ref:`templated <vault-templating>`.
 
 .. vconf:: pillar.nesting_key
 
 ``nesting_key``
-    The Vault-sourced pillar values are usually merged into the root
+    Vault-sourced pillar values are usually merged into the root
     of the pillar. This option allows you to specify a parent key
     under which all values are nested. If the key contains previous
     values, they are merged.

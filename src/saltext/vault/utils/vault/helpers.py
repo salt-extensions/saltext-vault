@@ -99,7 +99,7 @@ def expand_pattern_lists(pattern, **mappings):
           - web
           - database
 
-    This function will expand into two patterns,
+    This function expands into two patterns,
     ``[by-role/web, by-role/database]``.
 
     Note that this method does not expand any non-list patterns.
@@ -109,9 +109,9 @@ def expand_pattern_lists(pattern, **mappings):
 
     # This function uses a string.Formatter to get all the formatting tokens from
     # the pattern, then recursively replaces tokens whose expanded value is a
-    # list. For a list with N items, it will create N new pattern strings and
+    # list. For a list with N items, it creates N new pattern strings and
     # then continue with the next token. In practice this is expected to not be
-    # very expensive, since patterns will typically involve a handful of lists at
+    # very expensive, since patterns typically involve a handful of lists at
     # most.
 
     for _, field_name, _, _ in f.parse(pattern):
