@@ -329,7 +329,7 @@ vault:
       - salt_minion
       - salt_minion_{minion}
       - salt_role_{pillar[roles]}
-      # While it's possible to use {grains[roles]} here
+      # While it's theoretically possible to use {grains[roles]} here
       # for backwards-compatibility reasons, it's HIGHLY discouraged.
       # The minion reports grains itself, so a compromised minion would
       # be able to assign arbitrary roles to itself.
@@ -512,7 +512,7 @@ This means a single policy should cover most minions and roles:
 
 ```bash
 vault policy write salt_minion - <<'EOF'
-path "salt/data/general" {
+path "salt/data/general/*" {
     capabilities = ["read"]
 }
 
@@ -567,9 +567,12 @@ If this fails, re-issue the minion's token and try again:
 salt elliott vault.clear_cache
 ```
 
-If it still fails and you are issuing AppRoles, manually sync AppRoles and Entities and try again:
+If it still fails and you are issuing AppRoles, manually sync AppRoles and Entities,
+re-issue the minion's SecretID and try again:
 ```bash
 salt-run vault.sync_approles
 salt-run vault.sync_entities
 salt elliott vault.clear_cache
 ```
+
+Lastly, verify that minions without authorization to access these can't.
