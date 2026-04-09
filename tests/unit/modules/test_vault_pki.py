@@ -207,7 +207,7 @@ def test_read_certificate_returns_certificate(query):
 
     ret = vault_pki.read_certificate("00:11:22", mount="mount")
 
-    assert ret == certificate
+    assert ret == {"certificate": certificate, "chain": "", "private_key": ""}
     endpoint = query.call_args[0][1]
     assert endpoint == "mount/cert/00:11:22"
 
@@ -220,7 +220,7 @@ def test_read_certificate_with_chain(query):
 
     ret = vault_pki.read_certificate("00:11:22", include_chain=True)
 
-    assert ret == f"{certificate}{issuer}{root}"
+    assert ret == {"certificate": certificate, "chain": f"{issuer}{root}", "private_key": ""}
 
 
 def test_read_certificate_with_chain_returns_existing_bundle(query):
@@ -232,7 +232,39 @@ def test_read_certificate_with_chain_returns_existing_bundle(query):
 
     ret = vault_pki.read_certificate("00:11:22", include_chain=True)
 
-    assert ret == bundle
+    assert ret == {"certificate": bundle, "chain": "", "private_key": ""}
+
+
+def test_read_certificate_with_private_key(query):
+    certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
+    private_key = "-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----\n"
+    query.return_value = {"data": {"certificate": certificate, "private_key": private_key}}
+
+    ret = vault_pki.read_certificate("00:11:22", include_private_key=True)
+
+    assert ret == {"certificate": certificate, "chain": "", "private_key": private_key}
+
+
+def test_read_certificate_with_chain_and_private_key(query):
+    certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
+    issuer = "-----BEGIN CERTIFICATE-----\nissuer\n-----END CERTIFICATE-----\n"
+    root = "-----BEGIN CERTIFICATE-----\nroot\n-----END CERTIFICATE-----\n"
+    private_key = "-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----\n"
+    query.return_value = {
+        "data": {
+            "certificate": certificate,
+            "ca_chain": [issuer, root],
+            "private_key": private_key,
+        }
+    }
+
+    ret = vault_pki.read_certificate("00:11:22", include_chain=True, include_private_key=True)
+
+    assert ret == {
+        "certificate": certificate,
+        "chain": f"{issuer}{root}",
+        "private_key": private_key,
+    }
 
 
 @pytest.mark.parametrize(

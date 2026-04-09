@@ -494,7 +494,8 @@ def test_read_certificate(vault_pki, private_key):
     signed_certificate = load_cert(ret["certificate"])
     serial = dec2hex(signed_certificate.serial_number)
     ret = vault_pki.read_certificate(serial)
-    read_certificate = load_cert(ret)
+    assert "certificate" in ret
+    read_certificate = load_cert(ret["certificate"])
     assert read_certificate.serial_number == signed_certificate.serial_number
 
 
@@ -512,7 +513,9 @@ def test_read_certificate_with_chain(vault_pki, private_key):
     serial = dec2hex(signed_certificate.serial_number)
     ret = vault_pki.read_certificate(serial, include_chain=True)
 
-    read_certificate, chain = load_cert(ret, load_chain=True)
+    assert "certificate" in ret
+    assert "chain" in ret
+    read_certificate, chain = load_cert(f"{ret['certificate']}{ret['chain']}", load_chain=True)
     assert read_certificate.serial_number == signed_certificate.serial_number
     assert chain
     assert chain[0].subject.rfc4514_string() == "CN=Test Issuer CA"

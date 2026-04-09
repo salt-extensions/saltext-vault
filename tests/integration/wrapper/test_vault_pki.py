@@ -584,7 +584,8 @@ def test_read_certificate(salt_ssh_cli, private_key):
     ret = salt_ssh_cli.run("vault_pki.read_certificate", serial)
     assert ret.returncode == 0
 
-    read_certificate = load_cert(ret.data)
+    assert "certificate" in ret.data
+    read_certificate = load_cert(ret.data["certificate"])
     assert read_certificate.serial_number == signed_certificate.serial_number
 
 
@@ -606,7 +607,11 @@ def test_read_certificate_with_chain(salt_ssh_cli, private_key):
     ret = salt_ssh_cli.run("vault_pki.read_certificate", serial, include_chain=True)
     assert ret.returncode == 0
 
-    read_certificate, chain = load_cert(ret.data, load_chain=True)
+    assert "certificate" in ret.data
+    assert "chain" in ret.data
+    read_certificate, chain = load_cert(
+        f"{ret.data['certificate']}{ret.data['chain']}", load_chain=True
+    )
     assert read_certificate.serial_number == signed_certificate.serial_number
     assert chain
     assert chain[0].subject.rfc4514_string() == "CN=Test Issuer CA"

@@ -748,10 +748,10 @@ def list_certificates(mount="pki"):
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
 
-def read_certificate(serial, mount="pki", include_chain=False):
+def read_certificate(serial, mount="pki", include_chain=False, include_private_key=False):
     """
     Read issued certificate.
-    Returns certificate in PEM format
+    Returns certificate data in PEM format.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-certificate>`__.
 
@@ -773,27 +773,35 @@ def read_certificate(serial, mount="pki", include_chain=False):
         The mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     include_chain
-        If set to true will append the CA chain to the certificate.
+        If set to true will include the CA chain separately in the return data.
+
+    include_private_key
+        If set to true will include the private key in the response if it is
+        present in the Vault response.
+
     """
-    endpoint = f"{mount}/cert/{serial}"
+    if mount == "digicert-pki":
+        endpoint = f"{mount}/certs/{serial}"
+    else:
+        endpoint = f"{mount}/cert/{serial}"
+
 
     try:
         cert_data = vault.query("GET", endpoint, __opts__, __context__)["data"]
         certificate = cert_data["certificate"]
 
-        if not include_chain:
-            return certificate
+        chain = ""
+        if include_chain:
+            ca_chain = cert_data.get("ca_chain") or []
+            if ca_chain and certificate.count("-----BEGIN CERTIFICATE-----") == 1:
+                chain = "".join(cert for cert in ca_chain if cert != certificate)
 
-        ca_chain = cert_data.get("ca_chain") or []
-        if not ca_chain:
-            return certificate
+        return {
+            "certificate": certificate,
+            "chain": chain,
+            "private_key": cert_data.get("private_key", "") if include_private_key else "",
+        }
 
-        # Avoid duplicating certificates in case Vault already returns a bundle.
-        if certificate.count("-----BEGIN CERTIFICATE-----") > 1:
-            return certificate
-        if certificate in ca_chain:
-            return "".join(ca_chain)
-        return "".join([certificate, *ca_chain])
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
