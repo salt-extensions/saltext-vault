@@ -18,7 +18,7 @@ def policy_present(name, rules):
     Ensure a Vault policy with the given name and rules is present.
 
     name
-        The name of the policy
+        Name of the policy
 
     rules
         Rules formatted as in-line HCL
@@ -80,7 +80,7 @@ def policy_absent(name):
     Ensure a Vault policy with the given name and rules is absent.
 
     name
-        The name of the policy
+        Name of the policy
     """
     ret = {"name": name, "changes": {}, "result": True, "comment": ""}
 

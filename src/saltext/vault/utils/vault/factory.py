@@ -129,7 +129,7 @@ def get_authd_client(opts, context, force_local=False, get_config=False):
 def clear_cache(opts, context, ckey=None, connection=True, session=False, force_local=False):
     """
     Clears the Vault cache.
-    Will ensure the current token and associated leases are revoked
+    Ensures the current token and associated leases are revoked
     by default.
 
     It is organized in a hierarchy: ``/vault/connection/session/leases``.
@@ -161,7 +161,7 @@ def clear_cache(opts, context, ckey=None, connection=True, session=False, force_
         Only clear the cached data scoped to a session. This only includes
         leases and the currently active auth token, but not configuration
         or (AppRole) auth credentials. Defaults to false.
-        Setting this to true will keep the connection cache, regardless
+        Setting this to true keeps the connection cache, regardless
         of ``connection``.
 
     force_local
@@ -181,7 +181,7 @@ def clear_cache(opts, context, ckey=None, connection=True, session=False, force_
         or ((connection and not session) and ckey == "config")
     ):
         client, config = _build_revocation_client(opts, context, force_local=force_local)
-        # config and client will both be None if the cached data is invalid
+        # config and client are both None if the cached data is invalid
         if config:
             try:
                 # Don't revoke the only token that is available to us
@@ -514,7 +514,7 @@ def _get_connection_config(cbank, opts, context, force_local=False, pre_flush=Fa
             new_config["auth"]["role_id"] != config["auth"]["role_id"]
             or new_config["auth"]["secret_id"] is not config["auth"]["secret_id"]
         ):
-            # enabling/disabling response wrapping will trigger this as well,
+            # enabling/disabling response wrapping triggers this as well,
             # but that's fine
             raise VaultConfigExpired()
         if new_config["cache"]["backend"] != config["cache"]["backend"]:

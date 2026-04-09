@@ -413,7 +413,7 @@ class VaultAuthCache(LeaseCacheMixin, CommonCache):
 
     def store(self, value):
         """
-        Store an auth credential in cache. Will overwrite possibly existing one.
+        Store an auth credential in cache. Overwrites possibly existing one.
         """
         try:
             value = value.to_dict()
@@ -424,7 +424,7 @@ class VaultAuthCache(LeaseCacheMixin, CommonCache):
     def flush(self, cbank=None):
         """
         Flush the cached auth credentials. If this is a token cache,
-        flushing it will delete the whole session-scoped cache bank.
+        flushing it deletes the whole session-scoped cache bank.
         """
         if self.lease_cls is leases.VaultToken:
             # flush the whole cbank (session-scope) if this is a token cache

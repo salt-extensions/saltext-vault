@@ -42,7 +42,7 @@ def test_policy_present_no_changes(test):
 @pytest.mark.parametrize("test", [False, True])
 def test_policy_present_create(policy_fetch, policy_write, test):
     """
-    Test that when a policy does not exist, it will be created.
+    Test that when a policy does not exist, it is created.
     The function should respect opts["test"].
     """
     policy_fetch.return_value = None
@@ -96,7 +96,7 @@ def test_policy_absent_no_changes(policy_fetch, test):
 @pytest.mark.parametrize("test", [False, True])
 def test_policy_absent_changes(test):
     """
-    Test that when a policy exists, it will be deleted.
+    Test that when a policy exists, it is deleted.
     The function should respect opts["test"].
     """
     delete = Mock(spec=vaultexe.policy_delete)

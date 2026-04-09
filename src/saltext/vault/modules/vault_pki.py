@@ -63,7 +63,7 @@ def list_roles(mount="pki"):
             salt '*' vault_pki.list_roles
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
     endpoint = f"{mount}/roles"
     try:
@@ -87,10 +87,10 @@ def read_role(name, mount="pki"):
             salt '*' vault_pki.read_role
 
     name
-        The name of the role.
+        Name of the role.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
 
     endpoint = f"{mount}/roles/{name}"
@@ -130,13 +130,13 @@ def write_role(
             salt '*' vault_pki.write_role myrole
 
     name
-        The name of the role.
+        Name of the role.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     issuer_ref
-        Name or id of the issuer which will be used with this role. If not set, default issuer will be used.
+        Name or ID of the issuer which should be used with this role. If not set, the default issuer is used.
 
     ttl
         Specifies the Time To Live value to be used for the validity period of the requested certificate,
@@ -174,7 +174,7 @@ def write_role(
         If unset, defaults to ``["DigitalSignature", "KeyAgreement", "KeyEncipherment"]``
 
     no_store
-        If set, certificates issued/signed against this role will not be stored in the storage backend.
+        If set, certificates issued/signed against this role are not stored in the storage backend.
 
     require_cn
         If set to false, makes the common_name field optional while generating a certificate. Defaults to true.
@@ -241,10 +241,10 @@ def delete_role(name, mount="pki"):
             salt '*' vault_pki.delete_role myrole
 
     name
-        The name of the role.
+        Name of the role.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
 
     endpoint = f"{mount}/roles/{name}"
@@ -273,7 +273,7 @@ def list_issuers(mount="pki"):
             salt '*' vault_pki.list_issuers
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
     endpoint = f"{mount}/issuers"
 
@@ -300,11 +300,11 @@ def read_issuer(ref="default", mount="pki"):
             salt '*' vault_pki.read_issuer
 
     ref
-        Reference of the issuer. Can be issuer id, issuer name or literal ``default``
+        Reference of the issuer. Can be issuer ID, issuer name or literal ``default``
         which means default issuer. Defaults to ``default``.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     """
     endpoint = f"{mount}/issuer/{ref}"
@@ -338,11 +338,11 @@ def update_issuer(
             salt '*' vault_pki.update_issuer ref usage=["crl-signing"]
 
     ref
-        Reference of the issuer. Can be issuer id, issuer name or literal ``default``
+        Reference of the issuer. Can be issuer ID, issuer name or literal ``default``
         which means default issuer. Defaults to ``default``.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     manual_chain
         Chain of issuer references to build this issuer's computed CAChain field from, when non-empty.
@@ -414,14 +414,14 @@ def read_issuer_certificate(name="default", mount="pki", include_chain=False):
             salt '*' vault_pki.read_issuer_certificate
 
     name
-        Name of the issuer. Can be issuer id, issuer name or literal ``default``
+        Name of the issuer. Can be issuer ID, issuer name or literal ``default``
         which means default issuer. Defaults to ``default``.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     include_chain
-        If set to true will append the CA chain to the certificate (in case of intermediate issuer)
+        If set to true, appends the CA chain to the certificate (in case of intermediate issuer)
     """
     cert_data = read_issuer(name, mount)
 
@@ -443,7 +443,7 @@ def get_default_issuer(mount="pki"):
             salt '*' vault_pki.get_default_issuer
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
     all_issuers = list_issuers(mount)
 
@@ -467,7 +467,7 @@ def set_default_issuer(name, mount="pki"):
             salt '*' vault_pki.set_default_issuer myca
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
     endpoint = f"{mount}/config/issuers"
     payload = {"default": name}
@@ -493,7 +493,7 @@ def generate_root(
     """
     Generate a new root issuer.
     Returns ``{ "certificate" : "-----BEGIN CERTIFICATE...", "issuer_id": "...", "key_id": "...", }``
-    If type is ``exported`` it will also return the private key.
+    If type is ``exported``, also returns the private key.
 
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#generate-root>`__.
@@ -505,14 +505,14 @@ def generate_root(
             salt '*' vault_pki.generate_root my-root
 
     common_name
-        The common name to be used for the CA
+        Common Name to be used for the CA.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     type
-        Specifies the type of the root to create. If ``exported``, the private key will be returned in the response;
-        if ``internal``, the private key will not be returned and cannot be retrieved later. Defaults to ``internal``.
+        Specifies the type of the root to create. If ``exported``, the private key is returned in the response;
+        if ``internal``, the private key is not returned and cannot be retrieved later. Defaults to ``internal``.
 
     issuer_name
         Provides a name to the specified issuer. The name must be unique across all issuers and not be the reserved value ``default``.
@@ -521,7 +521,7 @@ def generate_root(
         When a new key is created with this request, optionally specifies the name for this. The global ref ``default`` may not be used as a name.
 
     ttl
-        Specifies the requested Time To Live (after which the certificate will be expired). This cannot be larger than the engine's max (or, if not set, the system max).
+        Specifies the requested Time To Live (after which the certificate expires). This cannot be larger than the engine's max (or, if not set, the system max).
 
     key_type
         Specifies the desired key type; must be ``rsa``, ``ed25519`` or ``ec``. Defaults to ``rsa``.
@@ -597,7 +597,7 @@ def delete_key(ref, mount="pki"):
         Ref of the key. Could be name or key_id.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
 
     endpoint = f"{mount}/key/{ref}"
@@ -626,11 +626,11 @@ def delete_issuer(ref, mount="pki", include_key=False):
         Ref of the issuer. Could be name or issuer_id.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     include_key
-        If set to true will also delete the private key if imported.
-        Defaults to false, so private key will be preserved.
+        If set to true, also deletes the private key if imported.
+        Defaults to false, i.e. the private key is preserved.
     """
 
     endpoint = f"{mount}/issuer/{ref}"
@@ -657,7 +657,7 @@ def read_issuer_crl(ref="default", mount="pki", delta=False):
     Get issuer CRL.
 
     .. note::
-        If CA cannot sign CRLs will return None.
+        If CA cannot sign CRLs, returns None.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-issuer-crl>`__.
 
@@ -668,16 +668,16 @@ def read_issuer_crl(ref="default", mount="pki", delta=False):
             salt '*' vault_pki.read_issuer_crl ref
 
     ref
-        Ref of the issuer. Could be name or issuer_id. Defaults to default issuer.
+        Ref of the issuer, i.e. name or issuer_id. Defaults to default issuer.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     delta
-        If set to true, will return delta CRL instead of complete one.
+        If set to true, returns delta CRL instead of complete one.
     """
     # Check if issuer can sign CRLs at all. If not,
-    # there is no point to check for CRL as this will throw error
+    # there is no point to check for CRL as this throws error
     issuer = None
     try:
         issuer = vault.query(
@@ -715,7 +715,7 @@ def list_revoked_certificates(mount="pki"):
             salt '*' vault_pki.list_revoked_certificates
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
     endpoint = f"{mount}/certs/revoked"
 
@@ -738,7 +738,7 @@ def list_certificates(mount="pki"):
             salt '*' vault_pki.list_certificates
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
     endpoint = f"{mount}/certs"
 
@@ -778,7 +778,6 @@ def read_certificate(serial, mount="pki", include_chain=False, include_private_k
     include_private_key
         If set to true will include the private key in the response if it is
         present in the Vault response.
-
     """
     if mount == "digicert-pki":
         endpoint = f"{mount}/certs/{serial}"
@@ -835,7 +834,7 @@ def issue_certificate(
         Common name to be set for the certificate.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     issuer_ref
         Override role's issuer. Can be issuer_name or issuer_id.
@@ -845,14 +844,14 @@ def issue_certificate(
         or list of SANs (``["<type>:<value>"]``).
 
     ttl
-        Specifies the requested Time To Live (after which the certificate will be expired).
+        Specifies the requested Time To Live (after which the certificate expires).
         This cannot be larger than the engine's max (or, if not set, the system max).
 
     format
         Can be either ``pem`` or ``der``. Defaults to ``pem``.
 
     exclude_cn_from_sans
-        If set to true, Common name will not be part of the SANs.
+        If set to true, the Common Name is not part of the SANs.
 
     kwargs
         Any additional parameter accepted by Vault API.
@@ -919,20 +918,20 @@ def sign_certificate(
         Common name to be set for the certificate.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     csr
-        Pass the CSR which will be used for issuing the certificate. Either ``csr`` or ``private_key`` parameter can be set, not both.
+        Pass the CSR which should be used for issuing the certificate. Either ``csr`` or ``private_key`` parameter can be set, not both.
 
     private_key
-        The private key for which certificate should be issued. Can be text or path.
+        Private key for which certificate should be issued. Can be text or path.
         Either ``csr`` or ``private_key`` parameter can be set, not both.
 
         .. note::
             This parameter requires the :py:mod:`x509_v2 execution module <salt.modules.x509_v2>` to be available.
 
     private_key_passphrase
-        The passphrase for the ``private_key`` if encrypted. Not used in case of ``csr``.
+        Passphrase for the ``private_key``, if encrypted. Not used in case of ``csr``.
 
     digest
         Digest to be used for generating the CSR. Not used in case of ``private_key``. Defaults to ``sha256``
@@ -945,7 +944,7 @@ def sign_certificate(
         or list of SANs (``["<type>:<value>"]``).
 
     ttl
-        Specifies the requested Time To Live (after which the certificate will be expired).
+        Specifies the requested Time To Live (after which the certificate be expire).
         This cannot be larger than the engine's max (or, if not set, the system max).
 
     sign_verbatim
@@ -960,7 +959,7 @@ def sign_certificate(
         Can be either ``pem`` or ``der``. Defaults to ``pem``.
 
     exclude_cn_from_sans
-        If set to true, Common name will not be part of the SANs.
+        If set to true, the Common Name is not part of the SANs.
 
     kwargs
         Any additional parameter accepted by Vault API or
@@ -1046,7 +1045,7 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
             This parameter requires the :py:mod:`x509_v2 execution module <salt.modules.x509_v2>` to be available.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
     endpoint = f"{mount}/revoke/"
     payload = {}
@@ -1078,7 +1077,7 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
 def read_urls(mount="pki"):
     """
     Fetch the URLs to be encoded in generated certificates.
-    No URL configuration will be returned until the configuration is set.
+    No URL configuration is returned until the configuration is set.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-urls>`__.
 
@@ -1089,7 +1088,7 @@ def read_urls(mount="pki"):
             salt '*' vault_pki.get_urls
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
     endpoint = f"{mount}/config/urls"
 

@@ -123,7 +123,7 @@ def generate_token(
     Generate a Vault token for minion <minion_id>.
 
     minion_id
-        The ID of the minion that requests a token.
+        ID of the minion that requests a token.
 
     signature
         Cryptographic signature which validates that the request is indeed sent
@@ -206,7 +206,7 @@ def generate_new_token(minion_id, signature, impersonated_by_master=False, issue
     Generate a Vault token for minion <minion_id>.
 
     minion_id
-        The ID of the minion that requests a token.
+        ID of the minion that requests a token.
 
     signature
         Cryptographic signature which validates that the request is indeed sent
@@ -293,7 +293,7 @@ def get_config(
     Return Vault configuration for minion <minion_id>.
 
     minion_id
-        The ID of the minion that requests the configuration.
+        ID of the minion that requests the configuration.
 
     signature
         Cryptographic signature which validates that the request is indeed sent
@@ -364,7 +364,7 @@ def get_role_id(minion_id, signature, impersonated_by_master=False, issue_params
     to generate AppRoles for minions (:vconf:`issue:type`).
 
     minion_id
-        The ID of the minion that requests a role-id.
+        ID of the minion that requests a role-id.
 
     signature
         Cryptographic signature which validates that the request is indeed sent
@@ -461,7 +461,7 @@ def generate_secret_id(minion_id, signature, impersonated_by_master=False, issue
     configured to generate AppRoles for minions (:vconf:`issue:type`).
 
     minion_id
-        The ID of the minion that requests a secret ID.
+        ID of the minion that requests a secret ID.
 
     signature
         Cryptographic signature which validates that the request is indeed sent
@@ -541,7 +541,7 @@ def unseal():
     Unseal the Vault server. Uses keys from the master config :vconf:`keys` .
 
     .. note::
-        This function will send unseal keys until the API returns success.
+        This function sends unseal keys until the API returns success.
 
     CLI Example:
 
@@ -565,11 +565,11 @@ def show_policies(minion_id, refresh_pillar=NOT_SET, expire=None):
     Show the Vault policies that are applied to tokens for the given minion.
 
     minion_id
-        The ID of the minion to show policies for.
+        ID of the minion to show policies for.
 
     refresh_pillar
         Whether to refresh the pillar data when rendering templated policies.
-        None will only refresh when the cached data is unavailable, boolean values
+        None only refreshs when the cached data is unavailable, boolean values
         force one behavior always.
         Defaults to :vconf:`policies:refresh_pillar` or None.
 
@@ -583,7 +583,7 @@ def show_policies(minion_id, refresh_pillar=NOT_SET, expire=None):
 
         When issuing AppRoles to minions, the shown policies are read from Vault
         configuration for the minion's AppRole and thus refresh_pillar/expire
-        will not be honored.
+        is not honored.
 
     CLI Example:
 
@@ -611,14 +611,14 @@ def sync_approles(minions=None, up=False, down=False):
     .. note::
         Only updates existing AppRoles. They are issued during the first request
         for one by the minion.
-        Running this will reset minion overrides, which are reapplied automatically
+        Running this resets minion overrides, which are reapplied automatically
         during the next request for authentication details.
 
     .. note::
         Unlike when issuing tokens, AppRole-associated policies are not regularly
         refreshed automatically. It is advised to schedule regular runs of this function.
 
-    If no parameter is specified, will try to sync AppRoles for all known minions.
+    If no parameter is specified, tries to sync AppRoles for all known minions.
 
     CLI Example:
 
@@ -700,7 +700,7 @@ def sync_entities(minions=None, up=False, down=False):
         This updates associated metadata only. Entities are created only
         when issuing AppRoles to minions (:vconf:`issue:type` == ``approle``).
 
-    If no parameter is specified, will try to sync entities for all known minions.
+    If no parameter is specified, tries to sync entities for all known minions.
 
     CLI Example:
 

@@ -37,10 +37,10 @@ def connection_present(
     Ensure a database connection is present as specified.
 
     name
-        The name of the database connection.
+        Name of the database connection.
 
     plugin
-        The name of the database plugin. Known plugins to this module are:
+        Name of the database plugin. Known plugins to this module are:
         ``cassandra``, ``couchbase``, ``elasticsearch``, ``influxdb``, ``hanadb``, ``mongodb``,
         ``mongodb_atlas``, ``mssql``, ``mysql``, ``oracle``, ``postgresql``, ``redis``,
         ``redis_elasticache``, ``redshift``, ``snowflake``.
@@ -62,8 +62,8 @@ def connection_present(
         See the plugin's API page for more information on support and formatting for this parameter.
 
     password_policy
-        The name of the password policy to use when generating passwords for this database.
-        If not specified, this will use a default policy defined as:
+        Name of the password policy to use when generating passwords for this database.
+        If not specified, this uses a default policy defined as:
         20 characters with at least 1 uppercase, 1 lowercase, 1 number, and 1 dash character.
 
     rotate
@@ -75,12 +75,11 @@ def connection_present(
         different plugin type. Defaults to False.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
 
     kwargs
         Different plugins require different parameters. You need to make sure that you pass them
-        as supplemental keyword arguments. For known plugins, the required arguments will
-        be checked.
+        as supplemental keyword arguments. For known plugins, the required arguments are checked.
     """
     ret = {
         "name": name,
@@ -201,10 +200,10 @@ def connection_absent(name, mount="database"):
     Ensure a database connection is absent.
 
     name
-        The name of the connection.
+        Name of the connection.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
     """
     ret = {"name": name, "result": True, "comment": "", "changes": {}}
 
@@ -256,10 +255,10 @@ def role_present(
     Ensure a regular database role is present as specified.
 
     name
-        The name of the database role.
+        Name of the database role.
 
     connection
-        The name of the database connection this role applies to.
+        Name of the database connection this role applies to.
 
     creation_statements
         Specifies a list of database statements executed to create and configure a user,
@@ -287,7 +286,7 @@ def role_present(
         Availability and formatting depend on the specific plugin.
 
     credential_type
-        Specifies the type of credential that will be generated for the role.
+        Specifies the type of credential that is generated for the role.
         Options include: ``password``, ``rsa_private_key``. Defaults to ``password``.
         See the plugin's API page for credential types supported by individual databases.
 
@@ -298,7 +297,7 @@ def role_present(
         (defaults to ``pkcs8``) are available.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
     """
     ret = {"name": name, "result": True, "comment": "", "changes": {}}
 
@@ -402,13 +401,13 @@ def role_absent(name, static=False, mount="database"):
     Ensure a database role is absent.
 
     name
-        The name of the role.
+        Name of the role.
 
     static
         Whether this role is static. Defaults to False.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
     """
     ret = {"name": name, "result": True, "comment": "", "changes": {}}
 
@@ -456,13 +455,13 @@ def static_role_present(
     Ensure a database Static Role is present as specified.
 
     name
-        The name of the database role.
+        Name of the database role.
 
     connection
-        The name of the database connection this role applies to.
+        Name of the database connection this role applies to.
 
     username
-        The username to manage.
+        Username to manage.
 
     rotation_period
         Specifies the amount of time Vault should wait before rotating the password.
@@ -470,10 +469,10 @@ def static_role_present(
 
     rotation_statements
         Specifies the database statements to be executed to rotate the password for the
-        configured database user. Not every plugin type will support this functionality.
+        configured database user. Not every plugin type supports this functionality.
 
     credential_type
-        Specifies the type of credential that will be generated for the role.
+        Specifies the type of credential that is generated for the role.
         Options include: ``password``, ``rsa_private_key``. Defaults to ``password``.
         See the plugin's API page for credential types supported by individual databases.
 
@@ -484,7 +483,7 @@ def static_role_present(
         (defaults to ``pkcs8``) are available.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
     """
     ret = {"name": name, "result": True, "comment": "", "changes": {}}
 
@@ -594,7 +593,7 @@ def creds_cached(
         for an :ref:`example state to configure a lease together with a beacon <beacon-state-example>`.
 
     name
-        The name of the database role.
+        Name of the database role.
 
     static
         Whether this role is static. Defaults to False.
@@ -613,25 +612,25 @@ def creds_cached(
     valid_for
         Ensure the credentials are valid for at least this amount of time,
         otherwise request new ones.
-        This can be an integer, which will be interpreted as seconds, or a time string
+        This can be an integer, which is interpreted as seconds, or a time string
         using the same format as Vault does:
         Suffix ``s`` for seconds, ``m`` for minuts, ``h`` for hours, ``d`` for days.
         Defaults to ``0``.
 
     renew_increment
         When using cache and ``valid_for`` results in a renewal attempt, request this
-        amount of time extension on the lease. This will be cached together with the
+        amount of time extension on the lease. This is cached together with the
         lease and might be used by other modules later.
 
     revoke_delay
         When using cache and ``valid_for`` results in a revocation, set the lease
         validity to this value to allow a short amount of delay between the issuance
         of the new lease and the revocation of the old one. Defaults to ``60``.
-        This will be cached together with the lease and might be used by other
+        This is cached together with the lease and might be used by other
         modules later.
 
     meta
-        When using cache, this value will be cached together with the lease. It will
+        When using cache, this value is cached together with the lease. It will
         be emitted by the ``vault_lease`` beacon module whenever a lease is
         running out (usually because it cannot be extended further). It is intended
         to support the reactor in deciding what needs to be done in order
@@ -639,7 +638,7 @@ def creds_cached(
         credentials. Entirely optional.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
     """
     ret = {
         "name": name,
@@ -731,7 +730,7 @@ def creds_uncached(
         ``beacon: true`` as a parameter to this state.
 
     name
-        The name of the database role.
+        Name of the database role.
 
     static
         Whether this role is static. Defaults to False.
@@ -742,7 +741,7 @@ def creds_uncached(
         Ignored when ``static`` is true.
 
     mount
-        The mount path the database backend is mounted to. Defaults to ``database``.
+        Mount path the database backend is mounted to. Defaults to ``database``.
     """
     ret = {
         "name": name,
@@ -770,11 +769,11 @@ def mod_beacon(name, sfun=None, static=False, cache=None, mount="database", **kw
     possibly a state.
 
     beacon_interval
-        The interval to run the beacon in. Defaults to 60.
+        Interval to run the beacon in. Defaults to 60.
 
     min_ttl
-        If this minimum TTL on the lease is undercut, the beacon will
-        fire an event. Defaults to 0.
+        If this minimum TTL on the lease is undercut, the beacon
+        fires an event. Defaults to 0.
     """
     ret = {"name": name, "changes": {}, "result": True, "comment": ""}
     supported_funcs = ("creds_cached", "creds_uncached")

@@ -52,7 +52,7 @@ def salt_factories_config():  # pragma: no cover
 def master_config_defaults(vault_port):  # pragma: no cover
     """
     This default configuration ensures the master issues authentication
-    credentials with the correct policies. By default, it will issue
+    credentials with the correct policies. By default, it issues
     tokens with an unlimited number of uses.
     """
     return {
@@ -111,7 +111,7 @@ def minion_config_defaults(vault_port):  # pragma: no cover
     """
     The default minion configuration ensures that the minion works in --local
     mode and that the ``sdbvault`` SDB configuration is present.
-    The vault configuration will not be used when not in masterless mode
+    The vault configuration is not used when not in masterless mode
     without overriding ``vault:config_location`` to ``local``.
     """
     return {

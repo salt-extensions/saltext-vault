@@ -625,6 +625,7 @@ vault:
     allow_minion_override_params: false
     block_minion_requests: false
     type: token
+    wrap: 30s
     approle:
       mount: salt-minions
       params:
@@ -648,7 +649,6 @@ vault:
         period: null
         no_default_policy: false
         renewable: true
-    wrap: 30s
   issue_params: {}
   keys: []
   metadata:
