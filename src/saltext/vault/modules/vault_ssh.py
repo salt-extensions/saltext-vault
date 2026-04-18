@@ -1,8 +1,14 @@
 """
+.. versionadded:: 1.2.0
+
 Manage the Vault (or OpenBao) SSH secret engine, request SSH credentials
 and certificates.
 
-.. versionadded:: 1.2.0
+.. versionadded:: 1.6.0
+    You can specify this module as the ``backend`` parameter to the ``ssh_pki.certificate_managed``
+    state introduced in Salt 3008 for stateful management of Vault-issued certificates.
+
+    See :py:func:`create_certificate <saltext.vault.modules.vault_ssh.create_certificate>` for details.
 
 .. important::
     This module requires the general :ref:`Vault setup <vault-setup>`.
@@ -926,6 +932,298 @@ def generate_key_cert(
         return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
+
+
+def create_certificate(
+    ca_server=None,
+    signing_policy=None,
+    **kwargs,
+):
+    """
+    .. versionadded:: 1.6.0
+
+    Create an OpenSSH certificate and return an encoded version of it.
+    This functions allows this module to be specified as the ``backend`` parameter to the
+    ``ssh_pki.certificate_managed`` state introduced in Salt 3008.
+
+    .. note::
+        The following parameters from ``ssh_pki.create_certificate`` are ignored
+        when using this backend: ``serial_number``, ``not_before``, ``not_after``,
+        ``signing_private_key``, ``signing_private_key_passphrase``, ``copypath``,
+        ``path``, ``overwrite``, ``raw``.
+
+    .. hint::
+        Since this is a compatibility layer, sometimes the parameter names do not
+        describe their expected value.
+
+
+    State example:
+
+    .. code-block:: yaml
+
+       Manage host cert:
+         ssh_pki.certificate_managed:
+           - name: /etc/ssh/host_ed_25519_cert
+           - private_key: /etc/ssh/host_ed25519_key
+           - backend: vault_ssh
+           - signing_policy: ssh_role_name_in_vault
+           - ca_server: mount_name_of_ssh_secret_engine
+           - require:
+             - ssh_pki: /etc/ssh/host_ed25519_key
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault_ssh.create_certificate signing_policy=ssh_role_name private_key='/etc/pki/ssh/my.key'
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        # To issue the certificate (this function)
+        path "<ca_server>/sign/<signing_policy>" {
+            capabilities = ["create", "update"]
+        }
+
+        # When the certificate exists, to check for changes.
+        # This is actually required by `get_signing_policy` below.
+        path "<ca_server>/roles/<signing_policy>" {
+                capabilities = ["read"]
+        }
+
+    ca_server
+        Name of the mount point the SSH secret backend is mounted at.
+        Defaults to ``ssh``.
+
+    signing_policy
+        Name of the SSH role to use for issuance. Required.
+
+        .. important::
+            This needs to be a role with ``key_type`` of ``ca``.
+
+    cert_type
+        Certificate type to generate. Either ``user`` or ``host``.
+        Required if not clear from the Vault role definition
+        (either ``allow_user_certificates`` or ``allow_host_certificates`` set).
+
+    private_key
+        Private key corresponding to the public key the certificate should
+        be issued for. Either this or ``public_key`` is required.
+
+    private_key_passphrase
+        If ``private_key`` is specified and encrypted, the passphrase to decrypt it.
+
+    public_key
+        Public key the certificate should be issued for.
+        Either this or ``private_key`` is required.
+
+    critical_options
+        Mapping of critical option name to option value to set on the certificate.
+        If an option does not take a value, specify it as ``true``.
+
+        If the role's ``allowed_critical_options`` is empty, allows any option to be set.
+        Otherwise, only options present in ``allowed_critical_options`` are set.
+        In contrast to Vault's behavior, a role's ``default_critical_options`` are still set when
+        this parameter is specified. To unset a default option, specify its value as ``false``.
+
+        .. note::
+            Currently, there's no explicit Vault role parameter that forces the value of an extension.
+            It's possible to set a critical option in ``default_critical_options`` and ensure it is absent
+            from ``allowed_critical_options`` though.
+
+    extensions
+        Mapping of extension name to extension value to set on the certificate.
+        If an extension does not take a value, specify it as ``true``.
+
+        If the role's ``allowed_extensions`` is empty, this parameter is ignored.
+        Otherwise, only options present in ``allowed_extensions`` are set.
+        In contrast to Vault's behavior, a role's ``default_extensions`` are still set when
+        this parameter is specified. To unset a default extension, specify its value as ``false``.
+
+        .. note::
+            Currently, there's no explicit Vault role parameter that forces the value of an extension.
+            It's possible to set an extension in ``default_extensions`` and ensure it is absent
+            from ``allowed_extensions`` though.
+
+    valid_principals
+        List of valid principals.
+
+        All specified principals must be in ``allowed_users``/``allowed_domains``.
+        For user certificates, defaults to a role's ``default_user``.
+        For host certificates, this is required.
+
+        .. note::
+            If a role specifies ``allowed_users_template``/``allowed_domains_template``/``allowed_subdomains``,
+            stateful management via ``ssh_pki.certificate_managed`` cannot silently filter invalid principals
+            since the ``ssh_pki`` modules cannot render the templates. Invalid principals result in state failure then.
+
+    all_principals
+        Allow any principals. Defaults to false.
+
+        To truly allow any principals, requires ``*`` in a role's ``valid_principals``.
+        Otherwise, defaults to all valid ones.
+
+        .. note::
+            If a role specifies ``allowed_users_template``/``allowed_domains_template``/``allowed_subdomains``,
+            this defaulting fails since the ``ssh_pki`` modules cannot render the templates.
+
+    key_id
+        Specify a string-valued key ID for the signed public key.
+        When the certificate is used for authentication, this value is
+        logged in plaintext.
+
+        Requires ``allow_user_key_ids`` to be set in the role.
+    """
+    ignored_params = (
+        "signing_private_key",
+        "signing_private_key_passphrase",
+        "serial_number",
+        "not_before",
+        "not_after",
+        "copypath",
+        "path",
+        "overwrite",
+        "raw",
+    )
+    for ignored in ignored_params:
+        if kwargs.get(ignored) is not None:
+            log.warning("Ignoring '%s', this cannot be set for the Vault backend", ignored)
+            kwargs.pop(ignored)
+
+    if not signing_policy:
+        raise SaltInvocationError(
+            "Need 'signing_policy' specified, which actually refers to a role name"
+        )
+
+    if kwargs.get("valid_principals"):
+        kwargs["valid_principals"] = ",".join(kwargs["valid_principals"])
+    elif kwargs.get("all_principals"):
+        kwargs["valid_principals"] = "*"
+    # Otherwise uses default principals if available, or fails
+
+    if kwargs.get("private_key"):
+        pubkey = __salt__["ssh_pki.get_public_key"](
+            kwargs["private_key"], passphrase=kwargs.get("private_key_passphrase")
+        )
+    elif kwargs.get("public_key"):
+        pubkey = __salt__["ssh_pki.get_public_key"](kwargs["public_key"])
+    else:
+        raise SaltInvocationError(
+            "Need a valid public key source, either 'private_key' or 'public_key'"
+        )
+
+    critical_options = {
+        k: "" if v is True else v for k, v in (kwargs.get("critical_options") or {}).items() if v
+    } or None
+    extensions = {
+        k: "" if v is True else v for k, v in (kwargs.get("extensions") or {}).items() if v
+    } or None
+
+    return sign_key(
+        signing_policy,
+        pubkey,
+        ttl=kwargs.get("ttl"),
+        valid_principals=kwargs.get("valid_principals"),
+        cert_type=kwargs.get("cert_type"),
+        key_id=kwargs.get("key_id"),
+        critical_options=critical_options,
+        extensions=extensions,
+        mount=ca_server or "ssh",
+    )["signed_key"]
+
+
+def get_signing_policy(signing_policy, ca_server=None):
+    """
+    Returns an SSH role formatted as a signing policy.
+    Compatibility layer between ``ssh_pki`` and this module.
+    This currently does not support all functionality Vault offers,
+    e.g. dynamic principals (templates/allow_subdomains),
+    so ``ssh_pki.certificate_managed`` might always
+    reissue a certificate in case these options are used.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault_ssh.get_signing_policy www
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<ca_server>/roles/<signing_policy>" {
+                capabilities = ["read"]
+        }
+
+    signing_policy
+        Name of the SSH role to return.
+
+    ca_server
+        Name of the mount point the SSH secret backend is mounted at.
+        Defaults to ``ssh``.
+    """
+    ca_server = ca_server or "ssh"
+    role = read_role(signing_policy, mount=ca_server)
+    if role["key_type"] != "ca":
+        raise SaltInvocationError("The specified Vault role is not a CA role")
+    policy = {"allowed_valid_principals": []}
+
+    user_type = host_type = False
+
+    if role.get("allow_host_certificates"):
+        if role.get("allowed_domains_template") or role.get("allow_subdomains"):
+            # Patterns are unsupported by the current ssh_pki modules.
+            # Ensure the certificate is not always recreated.
+            allowed_domains = ["*"]
+            # TODO: Render basic templates.
+        else:
+            allowed_domains = role.get("allowed_domains", "").split(",")
+        policy["allowed_valid_principals"].extend(allowed_domains)
+        host_type = True
+
+    if role.get("allow_user_certificates"):
+        if role.get("allowed_users_template"):
+            # Patterns are unsupported by the current ssh_pki modules.
+            # Ensure the certificate is not always recreated.
+            allowed_users = ["*"]
+            # TODO: Render basic templates via looking up metadata
+        else:
+            allowed_users = role.get("allowed_users", "").split(",")
+        policy["allowed_valid_principals"].extend(allowed_users)
+        user_type = True
+
+    if "*" in policy["allowed_valid_principals"]:
+        policy.pop("allowed_valid_principals")
+        policy["all_principals"] = True
+
+    if user_type is not host_type:
+        policy["cert_type"] = "user" if user_type else "host"
+
+    # allowed_critical_options defaults to allowing any
+    policy["allowed_critical_options"] = (role.get("allowed_critical_options") or "*").split(",")
+    # allowed_extensions_options defaults to denying all
+    policy["allowed_extensions"] = (role.get("allowed_extensions") or "").split(",")
+    policy["default_critical_options"] = {
+        k: v or True for k, v in role.get("default_critical_options", {}).items()
+    }
+    policy["default_extensions"] = {
+        k: v or True for k, v in role.get("default_extensions", {}).items()
+    }
+    policy["default_valid_principals"] = (
+        [role["default_user"]] if user_type and role.get("default_user") else []
+    )
+
+    if role.get("ttl"):
+        policy["ttl"] = role["ttl"]
+    if role.get("max_ttl"):
+        policy["max_ttl"] = role["max_ttl"]
+
+    if not role.get("allow_user_key_ids"):
+        policy["key_id"] = None
+
+    policy["signing_public_key"] = read_ca(mount=ca_server)
+    return policy
 
 
 def _get_file_or_data(data):

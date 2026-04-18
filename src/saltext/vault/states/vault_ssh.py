@@ -1,7 +1,14 @@
 """
+.. versionadded:: 1.2.0
+
 Manage the Vault (or OpenBao) SSH secret engine.
 
-.. versionadded:: 1.2.0
+.. versionadded:: 1.6.0
+    If you want to manage Vault-issued SSH certificates statefully, you need the
+    ``ssh_pki`` state module introduced in Salt 3008. Specify its ``backend``
+    parameter as ``vault_ssh``.
+
+    See :py:func:`create_certificate <saltext.vault.modules.vault_ssh.create_certificate>` for details.
 
 .. important::
     This module requires the general :ref:`Vault setup <vault-setup>`.
