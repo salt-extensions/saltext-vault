@@ -14,6 +14,9 @@ log = logging.getLogger(__name__)
 
 def _vault_cmd(cmd, textinput=None, raw=False):
     vault_binary = salt.utils.path.which("vault")
+    log.debug("Running Vault cmd: %s", " ".join(cmd))
+    if textinput:
+        log.debug("Vault cmd stdin: %s", textinput)
     proc = subprocess.run(
         [vault_binary] + cmd,
         check=False,
@@ -158,7 +161,7 @@ def vault_delete_approle(name, mount="approle"):
     try:
         _vault_cmd(cmd)
     except RuntimeError as err:
-        pytest.fail(f"Failed to write approle `{name}` at `{mount}`: {err}")
+        pytest.fail(f"Failed to delete approle `{name}` at `{mount}`: {err}")
 
 
 def vault_get_role_id(name, mount="approle"):
@@ -254,10 +257,12 @@ def vault_delete_secret(path, metadata=False):
     return True
 
 
-def vault_delete(path):
+def vault_delete(path, silent=False):
     try:
         ret = _vault_cmd(["delete", "-format=json", path])
     except RuntimeError as err:
+        if silent:
+            return True
         pytest.fail(f"Failed to delete path at `{path}`: {err}")
     try:
         return json.loads(ret.stdout) or True
@@ -298,16 +303,15 @@ def vault_read(path, default=..., raise_errors=False):
 
 
 def vault_write(path, *args, **kwargs):
-    kwargs_ = [f"{k}={v}" for k, v in kwargs.items()]
     cmd = (
         ["write", "-format=json"]
         + (["-f"] if not (args or kwargs) else [])
         + [path]
         + list(args)
-        + kwargs_
+        + ["-"]
     )
     try:
-        ret = _vault_cmd(cmd)
+        ret = _vault_cmd(cmd, textinput=json.dumps(kwargs))
     except RuntimeError as err:
         pytest.fail(f"Failed to write to path at `{path}`: {err}")
     try:
