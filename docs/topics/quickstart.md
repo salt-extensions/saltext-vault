@@ -43,7 +43,7 @@ The following is a non-exhaustive list of points to consider:
   the pillar's trustworthiness degrades to the level of grains. Specifically, if you
   employ the Vault pillar module, a minion must not have write access to its pillar's
   source path.
-* Using AppRole authentication allows the Salt Master to create roles with arbitrary
+* Distributing AppRoles allows the Salt Master to create roles with arbitrary
   policies. A compromised Salt Master can thus escalate its privileges within the
   Vault namespace. In the present, this [cannot be worked around with parameter constraints](https://github.com/hashicorp/vault/issues/8789#issuecomment-1321983227)
   in a sensible way. This may not be a problem if the Salt Master manages the Vault
@@ -475,7 +475,7 @@ write access**, otherwise a core security assumption in Salt is violated.
 :::{important}
 Even if you only intend to use the secrets for minion pillars, you need
 to create minion policies. The master uses these policies to decide
-whether a minion should receive a specific pillar. The master should not
+whether a minion should receive a specific pillar. The master token should not
 have access to secret paths itself. For details, see [Pillar impersonation](pillar-impersonation-target).
 :::
 

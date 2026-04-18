@@ -91,6 +91,6 @@ authenticates to Vault using these and requests the secret.
 
 This means the **master token does not need access to pillar secret paths**, the **minion tokens do**.
 
-This impersonation also happens when ``salt-ssh`` is invoked.
+This impersonation also happens when any Vault execution module is invoked via ``salt-ssh`` (i.e. with {doc}`Wrapper modules </ref/wrapper/index>`).
 
 If the master cannot issue valid credentials to minions, this impersonation fails.
