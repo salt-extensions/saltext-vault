@@ -584,15 +584,14 @@ def test_read_certificate(salt_ssh_cli, private_key):
     ret = salt_ssh_cli.run("vault_pki.read_certificate", serial)
     assert ret.returncode == 0
 
-    assert "certificate" in ret.data
-    read_certificate = load_cert(ret.data["certificate"])
+    read_certificate = load_cert(ret.data)
     assert read_certificate.serial_number == signed_certificate.serial_number
 
 
 @pytest.mark.usefixtures("_check_cryptography")
 @pytest.mark.usefixtures("issuers_setup")
 @pytest.mark.usefixtures("roles_setup")
-def test_read_certificate_with_chain(salt_ssh_cli, private_key):
+def test_read_certificate_full(salt_ssh_cli, private_key):
     ret = salt_ssh_cli.run(
         "vault_pki.sign_certificate",
         "testrole",
@@ -604,13 +603,41 @@ def test_read_certificate_with_chain(salt_ssh_cli, private_key):
     signed_certificate = load_cert(ret.data["certificate"])
 
     serial = dec2hex(signed_certificate.serial_number)
-    ret = salt_ssh_cli.run("vault_pki.read_certificate", serial, include_chain=True)
+    ret = salt_ssh_cli.run("vault_pki.read_certificate_full", serial)
     assert ret.returncode == 0
 
     assert "certificate" in ret.data
-    assert "chain" in ret.data
+    assert "ca_chain" not in ret.data
+    assert "private_key" not in ret.data
+
+    read_certificate = load_cert(ret.data["certificate"])
+    assert read_certificate.serial_number == signed_certificate.serial_number
+
+
+@pytest.mark.usefixtures("_check_cryptography")
+@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("roles_setup")
+def test_read_certificate_full_with_chain(salt_ssh_cli, private_key):
+    ret = salt_ssh_cli.run(
+        "vault_pki.sign_certificate",
+        "testrole",
+        common_name="test.example.com",
+        private_key=private_key,
+    )
+    assert ret.returncode == 0
+    assert "certificate" in ret.data
+    signed_certificate = load_cert(ret.data["certificate"])
+
+    serial = dec2hex(signed_certificate.serial_number)
+    ret = salt_ssh_cli.run("vault_pki.read_certificate_full", serial)
+    assert ret.returncode == 0
+
+    assert "certificate" in ret.data
+    assert "ca_chain" in ret.data
+    assert isinstance(ret.data["ca_chain"], list)
+
     read_certificate, chain = load_cert(
-        f"{ret.data['certificate']}{ret.data['chain']}", load_chain=True
+        f"{ret.data['certificate']}{''.join(ret.data['ca_chain'])}", load_chain=True
     )
     assert read_certificate.serial_number == signed_certificate.serial_number
     assert chain

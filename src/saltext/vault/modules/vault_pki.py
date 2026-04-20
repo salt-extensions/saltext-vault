@@ -748,10 +748,10 @@ def list_certificates(mount="pki"):
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
 
-def read_certificate(serial, mount="pki", include_chain=False, include_private_key=False):
+def read_certificate(serial, mount="pki"):
     """
     Read issued certificate.
-    Returns certificate data in PEM format.
+    Returns certificate in PEM format
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-certificate>`__.
 
@@ -770,36 +770,45 @@ def read_certificate(serial, mount="pki", include_chain=False, include_private_k
         * ``ca_chain`` for the default issuer's CA trust chain.
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
-
-    include_chain
-        If set to true will include the CA chain separately in the return data.
-
-    include_private_key
-        If set to true will include the private key in the response if it is
-        present in the Vault response.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
-    if mount == "digicert-pki":
-        endpoint = f"{mount}/certs/{serial}"
-    else:
-        endpoint = f"{mount}/cert/{serial}"
-
+    endpoint = f"{mount}/cert/{serial}"
 
     try:
-        cert_data = vault.query("GET", endpoint, __opts__, __context__)["data"]
-        certificate = cert_data["certificate"]
+        return vault.query("GET", endpoint, __opts__, __context__)["data"]["certificate"]
+    except vault.VaultException as err:
+        raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
-        chain = ""
-        if include_chain:
-            ca_chain = cert_data.get("ca_chain") or []
-            if ca_chain and certificate.count("-----BEGIN CERTIFICATE-----") == 1:
-                chain = "".join(cert for cert in ca_chain if cert != certificate)
 
-        return {
-            "certificate": certificate,
-            "chain": chain,
-            "private_key": cert_data.get("private_key", "") if include_private_key else "",
-        }
+def read_certificate_full(serial, mount="pki"):
+    """
+    Read issued full certificate.
+    Returns certificate, private key and chain data in PEM format.
+
+    `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-certificate>`__.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+            salt '*' vault_pki.read_certificate_full 7e:85:c5:d1:85:94:9a:46:08:b5:1b:9c:22:cb:35:e5:ea:f3:56:3f
+
+    serial
+        Specifies the serial of the certificate to read. Valid values are:
+
+        * ``<serial>`` for the certificate with the given serial number, in hyphen-separated or colon-separated hexadecimal.
+        * ``ca`` for the default issuer's CA certificate
+        * ``crl`` for the default issuer's CRL
+        * ``ca_chain`` for the default issuer's CA trust chain.
+
+    mount
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
+    """
+
+    endpoint = f"{mount}/cert/{serial}"
+
+    try:
+        return vault.query("GET", endpoint, __opts__, __context__)["data"]
 
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err

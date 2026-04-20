@@ -13,6 +13,8 @@ def configure_loader_modules():
     return {
         vault_pki: {
             "__grains__": {"id": "test-minion"},
+            "__opts__": {},
+            "__context__": {},
         }
     }
 
@@ -201,51 +203,51 @@ def test_generate_root_raise_err_with_default_name():
         vault_pki.generate_root("my root", key_name="default")
 
 
-def test_read_certificate_returns_certificate(query):
+def test_read_certificate_full_returns_certificate(query):
     certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
     query.return_value = {"data": {"certificate": certificate}}
 
-    ret = vault_pki.read_certificate("00:11:22", mount="mount")
+    ret = vault_pki.read_certificate_full("00:11:22", mount="mount")
 
-    assert ret == {"certificate": certificate, "chain": "", "private_key": ""}
+    assert ret == {"certificate": certificate}
     endpoint = query.call_args[0][1]
     assert endpoint == "mount/cert/00:11:22"
 
 
-def test_read_certificate_with_chain(query):
+def test_read_certificate_full_with_chain(query):
     certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
     issuer = "-----BEGIN CERTIFICATE-----\nissuer\n-----END CERTIFICATE-----\n"
     root = "-----BEGIN CERTIFICATE-----\nroot\n-----END CERTIFICATE-----\n"
     query.return_value = {"data": {"certificate": certificate, "ca_chain": [issuer, root]}}
 
-    ret = vault_pki.read_certificate("00:11:22", include_chain=True)
+    ret = vault_pki.read_certificate_full("00:11:22")
 
-    assert ret == {"certificate": certificate, "chain": f"{issuer}{root}", "private_key": ""}
+    assert ret == {"certificate": certificate, "ca_chain": [issuer, root]}
 
 
-def test_read_certificate_with_chain_returns_existing_bundle(query):
+def test_read_certificate_full_with_chain_returns_existing_bundle(query):
     certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
     issuer = "-----BEGIN CERTIFICATE-----\nissuer\n-----END CERTIFICATE-----\n"
     root = "-----BEGIN CERTIFICATE-----\nroot\n-----END CERTIFICATE-----\n"
     bundle = f"{certificate}{issuer}{root}"
     query.return_value = {"data": {"certificate": bundle, "ca_chain": [issuer, root]}}
 
-    ret = vault_pki.read_certificate("00:11:22", include_chain=True)
+    ret = vault_pki.read_certificate_full("00:11:22")
 
-    assert ret == {"certificate": bundle, "chain": "", "private_key": ""}
+    assert ret == {"certificate": bundle, "ca_chain": [issuer, root]}
 
 
-def test_read_certificate_with_private_key(query):
+def test_read_certificate_full_with_private_key(query):
     certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
     private_key = "-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----\n"
     query.return_value = {"data": {"certificate": certificate, "private_key": private_key}}
 
-    ret = vault_pki.read_certificate("00:11:22", include_private_key=True)
+    ret = vault_pki.read_certificate_full("00:11:22")
 
-    assert ret == {"certificate": certificate, "chain": "", "private_key": private_key}
+    assert ret == {"certificate": certificate, "private_key": private_key}
 
 
-def test_read_certificate_with_chain_and_private_key(query):
+def test_read_certificate_full_with_chain_and_private_key(query):
     certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
     issuer = "-----BEGIN CERTIFICATE-----\nissuer\n-----END CERTIFICATE-----\n"
     root = "-----BEGIN CERTIFICATE-----\nroot\n-----END CERTIFICATE-----\n"
@@ -258,11 +260,11 @@ def test_read_certificate_with_chain_and_private_key(query):
         }
     }
 
-    ret = vault_pki.read_certificate("00:11:22", include_chain=True, include_private_key=True)
+    ret = vault_pki.read_certificate_full("00:11:22")
 
     assert ret == {
         "certificate": certificate,
-        "chain": f"{issuer}{root}",
+        "ca_chain": [issuer, root],
         "private_key": private_key,
     }
 
