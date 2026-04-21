@@ -1071,6 +1071,10 @@ def _check_salt_ssh_opts(opts):
         vopts = {}
         vopts.update(opts)
         vopts.update(opts["__master_opts__"])
+        # Salt 3008 OptsDict introduced an issue where the __master_opts__ cachedir
+        # can point to the minion-specific one. The original one is still preserved in _caller_cachedir.
+        if "_caller_cachedir" in opts:
+            vopts["cachedir"] = opts["_caller_cachedir"]
         vopts["id"] = vopts["minion_id"] = opts["id"]
         opts = vopts
     return opts
