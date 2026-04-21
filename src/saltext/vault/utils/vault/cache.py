@@ -56,6 +56,9 @@ def _get_cache_backend(config, opts):
         # cache.Cache does not allow setting the type of cache by param
         local_opts = copy.copy(opts)
         local_opts["cache"] = "localfs"
+        log.debug(
+            "Using localfs cache backend (cachedir: %s)", local_opts.get("cachedir", "<not set>")
+        )
         return salt.cache.factory(local_opts)
     # this should usually resolve to localfs as well on minions,
     # but can be overridden by setting cache in the minion config
@@ -73,10 +76,13 @@ def _get_cache_bank(opts, force_local=False, connection=True, session=False):
         minion_id = opts["grains"]["id"]
     prefix = "vault" if minion_id is None else f"minions/{minion_id}/vault"
     if session:
-        return prefix + "/connection/session"
-    if connection:
-        return prefix + "/connection"
-    return prefix
+        res = prefix + "/connection/session"
+    elif connection:
+        res = prefix + "/connection"
+    else:
+        res = prefix
+    log.debug("Cache bank for %s (force_local: %s): %s", minion_id or "self", force_local, res)
+    return res
 
 
 class CommonCache(ABC):
