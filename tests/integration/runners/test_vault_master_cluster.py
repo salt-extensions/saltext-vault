@@ -1,3 +1,4 @@
+import copy
 import logging
 import subprocess
 
@@ -91,7 +92,7 @@ def cluster_master_1(salt_factories, cluster_pki_path, cluster_cache_path, vault
     }
     factory = salt_factories.salt_master_daemon(
         "127.0.0.1",
-        defaults=vault_master_config,
+        defaults=copy.deepcopy(vault_master_config),
         overrides=config_overrides,
         extra_cli_arguments_after_first_start_failure=["--log-level=info"],
     )
@@ -123,7 +124,7 @@ def cluster_master_2(salt_factories, cluster_master_1, vault_master_config):
         config_overrides[key] = cluster_master_1.config[key]
     factory = salt_factories.salt_master_daemon(
         "127.0.0.2",
-        defaults=vault_master_config,
+        defaults=copy.deepcopy(vault_master_config),
         overrides=config_overrides,
         extra_cli_arguments_after_first_start_failure=["--log-level=info"],
     )
@@ -132,7 +133,7 @@ def cluster_master_2(salt_factories, cluster_master_1, vault_master_config):
 
 
 @pytest.fixture(scope="module")
-def cluster_minion_1(cluster_master_1, vault_master_config):
+def cluster_minion_1(cluster_master_1):
     port = cluster_master_1.config["ret_port"]
     addr = cluster_master_1.config["interface"]
     config_overrides = {
@@ -140,7 +141,7 @@ def cluster_minion_1(cluster_master_1, vault_master_config):
     }
     factory = cluster_master_1.salt_minion_daemon(
         "cluster-minion-1",
-        defaults=vault_master_config,
+        defaults={"open_mode": True, "minion_data_cache": True},
         overrides=config_overrides,
         extra_cli_arguments_after_first_start_failure=["--log-level=info"],
     )
@@ -163,5 +164,13 @@ def test_minion_can_authenticate(salt_call_cli):
 def test_minion_pillar_is_populated_as_expected(salt_call_cli):
     ret = salt_call_cli.run("pillar.items")
     assert ret.returncode == 0
+    if not ret.data or "success" not in ret.data:
+        # Refresh pillar. This seems to be necessary in 3008.
+        log.debug("Refreshing cluster minion pillar, previous was %s", ret.data)
+        ret = salt_call_cli.run("saltutil.refresh_pillar", wait=True)
+        assert ret.returncode == 0
+        ret = salt_call_cli.run("pillar.items")
+        assert ret.returncode == 0
+        log.debug("New pillar after refresh is %s", ret.data)
     assert ret.data
     assert ret.data.get("success") == "yeehaaw"
