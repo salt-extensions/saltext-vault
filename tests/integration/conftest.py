@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 
@@ -38,3 +40,12 @@ def salt_ssh_cli(
         target_host="localhost",
         client_key=str(sshd_config_dir / "client_key"),
     )
+
+
+@pytest.fixture(scope="module")
+def salt_version(minion):
+    ret = minion.salt_call_cli().run("grains.get", "saltversioninfo")
+    assert ret.returncode == 0
+    if os.environ.get("SALT_REQUIREMENT") == "salt==master":
+        return [ret.data[0] + 1, 0]
+    return ret.data
