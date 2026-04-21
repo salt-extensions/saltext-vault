@@ -3,12 +3,15 @@ Several utility functions for the Vault modules
 """
 
 import datetime
+import logging
 import re
 import string
 
 from salt.exceptions import InvalidConfigError
 from salt.exceptions import SaltInvocationError
 from salt.state import STATE_INTERNAL_KEYWORDS as _STATE_INTERNAL_KEYWORDS
+
+log = logging.getLogger(__name__)
 
 SALT_RUNTYPE_MASTER = 0
 SALT_RUNTYPE_MASTER_IMPERSONATING = 1
@@ -20,9 +23,12 @@ SALT_RUNTYPE_MINION_REMOTE = 4
 def _get_salt_run_type(opts):
     if "vault" in opts and opts.get("__role", "minion") == "master":
         if opts.get("minion_id"):
+            log.debug("Salt runtype: impersonating master")
             return SALT_RUNTYPE_MASTER_IMPERSONATING
         if "grains" in opts and "id" in opts["grains"]:
+            log.debug("Salt runtype: peer run master")
             return SALT_RUNTYPE_MASTER_PEER_RUN
+        log.debug("Salt runtype: regular master")
         return SALT_RUNTYPE_MASTER
 
     config_location = opts.get("vault", {}).get("config_location")
@@ -41,7 +47,9 @@ def _get_salt_run_type(opts):
             config_location == "local",
         )
     ):
+        log.debug("Salt runtype: local minion")
         return SALT_RUNTYPE_MINION_LOCAL
+    log.debug("Salt runtype: regular minion")
     return SALT_RUNTYPE_MINION_REMOTE
 
 
