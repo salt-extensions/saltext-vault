@@ -17,8 +17,6 @@ import salt.crypt
 import salt.exceptions
 import salt.pillar
 import salt.utils.data
-import salt.utils.json
-import salt.utils.versions
 from salt.defaults import NOT_SET
 from salt.exceptions import SaltInvocationError
 from salt.exceptions import SaltRunnerError

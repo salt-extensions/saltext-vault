@@ -286,9 +286,7 @@ def container(
             "BAO_DEV_ROOT_TOKEN_ID": "testsecret",
         }
     else:
-        env = {
-            "VAULT_DEV_ROOT_TOKEN_ID": "testsecret",
-        }
+        env = {"VAULT_DEV_ROOT_TOKEN_ID": "testsecret", "SKIP_SETCAP": "1"}
 
     factory = salt_factories.get_container(
         "vault",
