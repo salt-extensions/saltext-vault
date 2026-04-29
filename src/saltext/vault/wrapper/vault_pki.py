@@ -42,6 +42,7 @@ from saltext.vault.modules.vault_pki import list_issuers
 from saltext.vault.modules.vault_pki import list_revoked_certificates
 from saltext.vault.modules.vault_pki import list_roles
 from saltext.vault.modules.vault_pki import read_certificate
+from saltext.vault.modules.vault_pki import read_certificate_full
 from saltext.vault.modules.vault_pki import read_issuer
 from saltext.vault.modules.vault_pki import read_issuer_certificate
 from saltext.vault.modules.vault_pki import read_issuer_crl
@@ -66,6 +67,7 @@ list_issuers = namespaced_function(list_issuers, globals())
 list_revoked_certificates = namespaced_function(list_revoked_certificates, globals())
 list_roles = namespaced_function(list_roles, globals())
 read_certificate = namespaced_function(read_certificate, globals())
+read_certificate_full = namespaced_function(read_certificate_full, globals())
 read_issuer = namespaced_function(read_issuer, globals())
 read_issuer_certificate = namespaced_function(read_issuer_certificate, globals())
 read_issuer_crl = namespaced_function(read_issuer_crl, globals())
