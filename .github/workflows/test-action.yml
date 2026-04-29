@@ -35,7 +35,7 @@ jobs:
 
       - name: Setup Vault
         # renovate:
-        uses: eLco/setup-vault@5d0ddffdfca9650484ae1378dafc376a9ebcd15e  # v1.0.3
+        uses: eLco/setup-vault@1a8cc6f3c818a0e71b6fade4a922eeec95069edf  # v1.0.4
         with:
           vault_version: 1.15.4
 
