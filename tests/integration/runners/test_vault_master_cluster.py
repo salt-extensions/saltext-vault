@@ -1,3 +1,4 @@
+import copy
 import logging
 import subprocess
 
@@ -21,7 +22,9 @@ pytestmark = [
 def vault_master_config(vault_port):
     return {
         "open_mode": True,
-        "ext_pillar": [{"vault": "secret/path/foo"}],
+        "ext_pillar": [
+            {"vault": "secret/path/foo"},
+        ],
         "peer_run": {
             ".*": [
                 "vault.get_config",
@@ -91,7 +94,7 @@ def cluster_master_1(salt_factories, cluster_pki_path, cluster_cache_path, vault
     }
     factory = salt_factories.salt_master_daemon(
         "127.0.0.1",
-        defaults=vault_master_config,
+        defaults=copy.deepcopy(vault_master_config),
         overrides=config_overrides,
         extra_cli_arguments_after_first_start_failure=["--log-level=info"],
     )
@@ -123,7 +126,7 @@ def cluster_master_2(salt_factories, cluster_master_1, vault_master_config):
         config_overrides[key] = cluster_master_1.config[key]
     factory = salt_factories.salt_master_daemon(
         "127.0.0.2",
-        defaults=vault_master_config,
+        defaults=copy.deepcopy(vault_master_config),
         overrides=config_overrides,
         extra_cli_arguments_after_first_start_failure=["--log-level=info"],
     )
@@ -132,7 +135,41 @@ def cluster_master_2(salt_factories, cluster_master_1, vault_master_config):
 
 
 @pytest.fixture(scope="module")
-def cluster_minion_1(cluster_master_1, vault_master_config):
+def cluster_master_3(salt_factories, cluster_master_1, vault_master_config):
+    if salt.utils.platform.is_darwin() or salt.utils.platform.is_freebsd():
+        subprocess.check_output(["ifconfig", "lo0", "alias", "127.0.0.3", "up"])
+
+    config_overrides = {
+        "interface": "127.0.0.3",
+        "cluster_id": "master_cluster",
+        "cluster_peers": [
+            "127.0.0.1",
+            "127.0.0.2",
+        ],
+        "cluster_pki_dir": cluster_master_1.config["cluster_pki_dir"],
+        "cache_dir": cluster_master_1.config["cache_dir"],
+    }
+
+    # Use the same ports for both masters, they are binding to different interfaces
+    for key in (
+        "ret_port",
+        "publish_port",
+    ):
+        config_overrides[key] = cluster_master_1.config[key]
+    factory = salt_factories.salt_master_daemon(
+        "127.0.0.3",
+        defaults=copy.deepcopy(vault_master_config),
+        overrides=config_overrides,
+        extra_cli_arguments_after_first_start_failure=["--log-level=info"],
+    )
+    with factory.started(start_timeout=120):
+        yield factory
+
+
+@pytest.fixture(scope="module")
+def cluster_minion_1(
+    cluster_master_1, cluster_master_2, cluster_master_3
+):  # pylint: disable=unused-argument
     port = cluster_master_1.config["ret_port"]
     addr = cluster_master_1.config["interface"]
     config_overrides = {
@@ -140,7 +177,7 @@ def cluster_minion_1(cluster_master_1, vault_master_config):
     }
     factory = cluster_master_1.salt_minion_daemon(
         "cluster-minion-1",
-        defaults=vault_master_config,
+        defaults={"open_mode": True, "minion_data_cache": True},
         overrides=config_overrides,
         extra_cli_arguments_after_first_start_failure=["--log-level=info"],
     )
@@ -149,19 +186,26 @@ def cluster_minion_1(cluster_master_1, vault_master_config):
 
 
 @pytest.fixture
-def salt_call_cli(cluster_minion_1):
-    return cluster_minion_1.salt_call_cli(timeout=120)
+def salt_cli(
+    cluster_master_1, cluster_master_2, cluster_master_3
+):  # pylint: disable=unused-argument
+    return cluster_master_1.salt_cli(timeout=120)
 
 
-def test_minion_can_authenticate(salt_call_cli):
-    ret = salt_call_cli.run("vault.read_secret", "secret/path/foo")
+def test_minion_can_authenticate(cluster_minion_1, salt_cli):
+    ret = salt_cli.run("vault.read_secret", "secret/path/foo", minion_tgt=cluster_minion_1.id)
     assert ret.returncode == 0
     assert ret.data
     assert ret.data.get("success") == "yeehaaw"
 
 
-def test_minion_pillar_is_populated_as_expected(salt_call_cli):
-    ret = salt_call_cli.run("pillar.items")
+def test_minion_pillar_is_populated_as_expected(cluster_minion_1, salt_cli):
+    ret = salt_cli.run("pillar.items", minion_tgt=cluster_minion_1.id)
     assert ret.returncode == 0
+    if not ret.data or "success" not in ret.data:
+        ret = salt_cli.run("saltutil.refresh_pillar", wait=True, minion_tgt=cluster_minion_1.id)
+        assert ret.returncode == 0
+        ret = salt_cli.run("pillar.items", minion_tgt=cluster_minion_1.id)
+        assert ret.returncode == 0
     assert ret.data
     assert ret.data.get("success") == "yeehaaw"
