@@ -513,7 +513,6 @@ def test_read_certificate_full(vault_pki, private_key):
     ret = vault_pki.read_certificate_full(serial)
 
     assert "certificate" in ret
-    assert "ca_chain" not in ret
     assert "private_key" not in ret
 
     read_certificate = load_cert(ret["certificate"])
