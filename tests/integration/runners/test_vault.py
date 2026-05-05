@@ -245,10 +245,16 @@ class TestVaultPillarPolicyTemplatesWithoutCache:
             yield
 
     @pytest.fixture(autouse=True)
-    def minion_data_cache_absent(self, pillar_salt_run_cli, pillar_salt_minion):
-        ret = pillar_salt_run_cli.run("cache.flush", f"minions/{pillar_salt_minion.id}", "data")
+    def minion_data_cache_absent(self, pillar_salt_run_cli, pillar_salt_minion, salt_version):
+        if salt_version[0] >= 3008:
+            cbank = "pillar"
+            ckey = pillar_salt_minion.id
+        else:
+            cbank = f"minions/{pillar_salt_minion.id}"
+            ckey = "data"
+        ret = pillar_salt_run_cli.run("cache.flush", cbank, ckey)
         assert ret.returncode == 0
-        cached = pillar_salt_run_cli.run("cache.fetch", f"minions/{pillar_salt_minion.id}", "data")
+        cached = pillar_salt_run_cli.run("cache.fetch", cbank, ckey)
         assert cached.returncode == 0
         assert not cached.data
         yield
@@ -366,6 +372,7 @@ class TestVaultPillarPolicyTemplatesWithCache:
         pillar_caching_salt_run_cli,
         pillar_caching_salt_master,
         pillar_caching_salt_minion,
+        salt_version,
     ):
         roles_pillar_new_contents = """
         roles:
@@ -377,15 +384,25 @@ class TestVaultPillarPolicyTemplatesWithCache:
             "roles.sls", roles_pillar_new_contents
         )
 
-        cached = pillar_caching_salt_run_cli.run(
-            "cache.fetch", f"minions/{pillar_caching_salt_minion.id}", "data"
-        )
+        if salt_version[0] >= 3008:
+            cbank = "pillar"
+            ckey = pillar_caching_salt_minion.id
+        else:
+            cbank = f"minions/{pillar_caching_salt_minion.id}"
+            ckey = "data"
+
+        cached = pillar_caching_salt_run_cli.run("cache.fetch", cbank, ckey)
         assert cached.returncode == 0
         assert cached.data
-        assert "pillar" in cached.data
-        assert "grains" in cached.data
-        assert "roles" in cached.data["pillar"]
-        assert cached.data["pillar"]["roles"] == ["minion", "web"]
+        if salt_version[0] >= 3008:
+            assert cached.data
+            pillar_data = cached.data
+        else:
+            assert "pillar" in cached.data
+            assert "grains" in cached.data
+            pillar_data = cached.data["pillar"]
+        assert "roles" in pillar_data
+        assert pillar_data["roles"] == ["minion", "web"]
         with roles_file:
             yield
 

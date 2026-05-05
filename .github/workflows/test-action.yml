@@ -18,6 +18,7 @@ jobs:
           - {salt-version: "3006.23", python-version: "3.10", testing-container: "hashicorp/vault:1.14.8"}
           - {salt-version: "3007.13", python-version: "3.10", testing-container: "hashicorp/vault:latest"}
           - {salt-version: "3007.13", python-version: "3.10", testing-container: "openbao/openbao:latest"}
+          - {salt-version: "3008.x", python-version: "3.10", testing-container: "hashicorp/vault:latest"}
 
     env:
       TESTING_CONTAINER: ${{ matrix.testing-container }}
@@ -101,7 +102,7 @@ jobs:
           path: artifacts/runtests-*.log
 
       - name: Upload Exit Status
-        if: always()
+        if: always() && matrix.salt-version != 'master' && !endsWith(matrix.salt-version, '.x')
         uses: ./.github/actions/upload-exitstatus
         with:
           name: ${{ env.RUNID }}

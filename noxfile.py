@@ -35,6 +35,10 @@ COVERAGE_REQUIREMENT = os.environ.get("COVERAGE_REQUIREMENT") or "coverage==7.13
 SALT_REQUIREMENT = os.environ.get("SALT_REQUIREMENT") or "salt>=3006"
 if SALT_REQUIREMENT == "salt==master":
     SALT_REQUIREMENT = "git+https://github.com/saltstack/salt.git@master"
+elif SALT_REQUIREMENT.endswith(".x"):
+    branch = SALT_REQUIREMENT.split("==", maxsplit=1)[1]
+    SALT_REQUIREMENT = f"git+https://github.com/saltstack/salt.git@{branch}"
+
 
 # Prevent Python from writing bytecode
 os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
