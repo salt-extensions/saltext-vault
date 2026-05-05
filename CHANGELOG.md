@@ -4,6 +4,13 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## 1.5.1 (2026-05-05)
+
+
+### Fixed
+
+- Fixed issued AppRoles unnecessarily being rewritten when config or SecretID were requested by minions and a TTL configuration was set as a time string [#151](https://github.com/salt-extensions/saltext-vault/issues/151)
+
 ## 1.5.0 (2026-03-09)
 
 
