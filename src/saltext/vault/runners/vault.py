@@ -17,8 +17,6 @@ import salt.crypt
 import salt.exceptions
 import salt.pillar
 import salt.utils.data
-import salt.utils.json
-import salt.utils.versions
 from salt.defaults import NOT_SET
 from salt.exceptions import SaltInvocationError
 from salt.exceptions import SaltRunnerError
@@ -29,6 +27,7 @@ from saltext.vault.utils.vault import cache as vcache
 from saltext.vault.utils.vault import factory
 from saltext.vault.utils.vault import helpers
 from saltext.vault.utils.vault.client import VaultClient
+from saltext.vault.utils.vault.helpers import timestring_map
 from saltext.vault.utils.versions import warn_until
 
 log = logging.getLogger(__name__)
@@ -446,9 +445,8 @@ def _approle_params_match(current, issue_params):
     """
     Check if minion-overridable AppRole parameters match
     """
-    req = _parse_issue_params(issue_params)
     for var in set(VALID_PARAMS["approle"]) - set(NO_OVERRIDE_PARAMS["approle"]):
-        if var in req and req[var] != current.get(var, NOT_SET):
+        if var in issue_params and issue_params[var] != current.get(var, NOT_SET):
             return False
     return True
 
@@ -494,12 +492,14 @@ def generate_secret_id(minion_id, signature, impersonated_by_master=False, issue
         if approle_meta is False:
             raise vault.VaultNotFoundError(f"No AppRole found for minion {minion_id}.")
 
+        issue_params_parsed = _parse_issue_params(issue_params)
+
         if helpers._get_salt_run_type(
             __opts__
         ) != helpers.SALT_RUNTYPE_MASTER_IMPERSONATING and not _approle_params_match(
-            approle_meta, issue_params
+            approle_meta, issue_params_parsed
         ):
-            _manage_approle(minion_id, issue_params)
+            _manage_approle(minion_id, issue_params_parsed)
             approle_meta = _lookup_approle_cached(minion_id, refresh=True)
 
         if not approle_meta["bind_secret_id"]:
@@ -1121,6 +1121,9 @@ def _parse_issue_params(params, issue_type=None):
             and params[valid_param] is not None
         ):
             ret[valid_param] = params[valid_param]
+
+    for ttl_param in (param for param in ret if param.endswith("_ttl") or param == "token_period"):
+        ret[ttl_param] = int(timestring_map(ret[ttl_param]))
 
     return ret
 
