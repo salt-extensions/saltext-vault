@@ -106,7 +106,7 @@ def test_generate_token_uses(client):
 
 def test_generate_token_ttl(client):
     # Test ttl
-    expected_ttl = "6h"
+    expected_ttl = 21600
     result = vault.generate_token("test-minion", "signature", ttl=expected_ttl)
     assert result["uses"] == 1
     json_request = {
