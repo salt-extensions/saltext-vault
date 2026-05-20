@@ -9,11 +9,11 @@ import salt.version
 pytest.importorskip("docker")
 
 log = logging.getLogger(__name__)
-salt_version = int(salt.version.__version__.split(".")[0])
+sver = int(salt.version.__version__.split(".")[0])
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.skipif(salt_version < 3007, reason="Master cluster requires Salt 3007+"),
+    pytest.mark.skipif(sver < 3007, reason="Master cluster requires Salt 3007+"),
     pytest.mark.usefixtures("container", "vault_testing_values"),
 ]
 
@@ -199,13 +199,19 @@ def test_minion_can_authenticate(cluster_minion_1, salt_cli):
     assert ret.data.get("success") == "yeehaaw"
 
 
-def test_minion_pillar_is_populated_as_expected(cluster_minion_1, salt_cli):
-    ret = salt_cli.run("pillar.items", minion_tgt=cluster_minion_1.id)
+def test_minion_pillar_is_populated_as_expected(cluster_minion_1, salt_cli, salt_version):
+    if salt_version[0] >= 3008:
+        ret = salt_cli.run("pillar.items", unmask=True, minion_tgt=cluster_minion_1.id)
+    else:
+        ret = salt_cli.run("pillar.items", minion_tgt=cluster_minion_1.id)
     assert ret.returncode == 0
     if not ret.data or "success" not in ret.data:
         ret = salt_cli.run("saltutil.refresh_pillar", wait=True, minion_tgt=cluster_minion_1.id)
         assert ret.returncode == 0
-        ret = salt_cli.run("pillar.items", minion_tgt=cluster_minion_1.id)
+        if salt_version[0] >= 3008:
+            ret = salt_cli.run("pillar.items", unmask=True, minion_tgt=cluster_minion_1.id)
+        else:
+            ret = salt_cli.run("pillar.items", minion_tgt=cluster_minion_1.id)
         assert ret.returncode == 0
     assert ret.data
     assert ret.data.get("success") == "yeehaaw"

@@ -751,12 +751,15 @@ class TestAppRoleIssuance:
         assert ret.data.get("success") == "yeehaaw"
 
     @pytest.mark.usefixtures("entities_synced")
-    def test_minion_pillar_is_populated_as_expected(self, vault_salt_call_cli):
+    def test_minion_pillar_is_populated_as_expected(self, vault_salt_call_cli, salt_version):
         """
         Test that ext_pillar pillar-templated paths are resolved as expectd
         (and that the ACL policy templates work on the Vault side).
         """
-        ret = vault_salt_call_cli.run("pillar.items")
+        if salt_version[0] >= 3008:
+            ret = vault_salt_call_cli.run("pillar.items", unmask=True)
+        else:
+            ret = vault_salt_call_cli.run("pillar.items")
         assert ret.returncode == 0
         assert ret.data
         assert ret.data.get("minion_id_acl_template") == "worked"
