@@ -780,6 +780,53 @@ def read_certificate(serial, mount="pki"):
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
 
+def read_certificate_full(serial, mount="pki"):
+    """
+    Read issued full certificate.
+    Returns certificate, private key and chain data in PEM format.
+
+    `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-certificate>`__.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+            salt '*' vault_pki.read_certificate_full 7e:85:c5:d1:85:94:9a:46:08:b5:1b:9c:22:cb:35:e5:ea:f3:56:3f
+
+    serial
+        Specifies the serial of the certificate to read. Valid values are:
+
+        * ``<serial>`` for the certificate with the given serial number, in hyphen-separated or colon-separated hexadecimal.
+        * ``ca`` for the default issuer's CA certificate
+        * ``crl`` for the default issuer's CRL
+        * ``ca_chain`` for the default issuer's CA trust chain.
+
+    mount
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
+    """
+
+    endpoint = f"{mount}/cert/{serial}"
+
+    try:
+        data = vault.query("GET", endpoint, __opts__, __context__)["data"]
+    except vault.VaultException as err:
+        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+
+    # Vault versions prior to 1.16 do not return ``ca_chain`` from
+    # ``/pki/cert/<serial>``. Back-fill it from the issuer endpoint so the
+    # response shape is consistent across supported Vault/OpenBao releases.
+    if "certificate" in data and "ca_chain" not in data:
+        issuer_ref = data.get("issuer_id") or "default"
+        try:
+            issuer_data = read_issuer(ref=issuer_ref, mount=mount)
+        except CommandExecutionError:
+            issuer_data = None
+        if issuer_data and issuer_data.get("ca_chain"):
+            data["ca_chain"] = issuer_data["ca_chain"]
+
+    return data
+
+
 def issue_certificate(
     role_name,
     common_name,
