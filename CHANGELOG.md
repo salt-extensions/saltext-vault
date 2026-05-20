@@ -4,6 +4,19 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## 1.6.0 (2026-05-20)
+
+
+### Fixed
+
+- Fixed SSH wrappers in 3008.x [#149](https://github.com/salt-extensions/saltext-vault/issues/149)
+- Fixed issued AppRoles unnecessarily being rewritten when config or SecretID were requested by minions and a TTL configuration was set as a time string [#151](https://github.com/salt-extensions/saltext-vault/issues/151)
+
+
+### Added
+
+- Added compatibility for `vault_ssh` to be used as the `backend` for the new `ssh_pki.certificate_managed` state introduced in Salt 3008, making stateful SSH certificate management using Vault-issued certificates possible on Salt 3008+ [#138](https://github.com/salt-extensions/saltext-vault/issues/138)
+
 ## 1.5.0 (2026-03-09)
 
 
