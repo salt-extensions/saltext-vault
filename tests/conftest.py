@@ -293,6 +293,7 @@ def container(
         request.param,
         check_ports=[vault_port],
         container_run_kwargs={
+            "cap_add": ["IPC_LOCK"],
             "ports": {"8200/tcp": vault_port},
             "environment": env,
         },
