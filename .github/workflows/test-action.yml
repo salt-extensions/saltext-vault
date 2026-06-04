@@ -101,7 +101,7 @@ jobs:
           path: artifacts/runtests-*.log
 
       - name: Upload Exit Status
-        if: always()
+        if: always() && matrix.salt-version != 'master' && !endsWith(matrix.salt-version, '.x')
         uses: ./.github/actions/upload-exitstatus
         with:
           name: ${{ env.RUNID }}

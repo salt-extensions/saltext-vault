@@ -286,16 +286,14 @@ def container(
             "BAO_DEV_ROOT_TOKEN_ID": "testsecret",
         }
     else:
-        env = {
-            "VAULT_DEV_ROOT_TOKEN_ID": "testsecret",
-            "SKIP_SETCAP": "1",
-        }
+        env = {"VAULT_DEV_ROOT_TOKEN_ID": "testsecret", "SKIP_SETCAP": "1"}
 
     factory = salt_factories.get_container(
         "vault",
         request.param,
         check_ports=[vault_port],
         container_run_kwargs={
+            "cap_add": ["IPC_LOCK"],
             "ports": {"8200/tcp": vault_port},
             "environment": env,
         },

@@ -161,6 +161,7 @@ class TestSingleUseToken:
         self,
         vault_salt_call_cli,
         caplog,
+        salt_version,
     ):
         """
         Test that the Vault module can fetch multiple secrets during
@@ -170,7 +171,10 @@ class TestSingleUseToken:
         ret = vault_salt_call_cli.run("saltutil.refresh_pillar", wait=True)
         assert ret.returncode == 0
         assert ret.data is True
-        ret = vault_salt_call_cli.run("pillar.items")
+        if salt_version[0] >= 3008:
+            ret = vault_salt_call_cli.run("pillar.items", unmask=True)
+        else:
+            ret = vault_salt_call_cli.run("pillar.items")
         assert ret.returncode == 0
         assert ret.data
         assert "Pillar render error" not in caplog.text
