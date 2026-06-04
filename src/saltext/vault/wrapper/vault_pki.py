@@ -29,6 +29,7 @@ This means:
 
 from salt.utils.functools import namespaced_function
 
+from saltext.vault.modules.vault_pki import _find_signing_issuer
 from saltext.vault.modules.vault_pki import _split_csr_kwargs
 from saltext.vault.modules.vault_pki import _split_sans
 from saltext.vault.modules.vault_pki import delete_issuer
@@ -54,6 +55,7 @@ from saltext.vault.modules.vault_pki import sign_certificate
 from saltext.vault.modules.vault_pki import update_issuer
 from saltext.vault.modules.vault_pki import write_role
 
+_find_signing_issuer = namespaced_function(_find_signing_issuer, globals())
 _split_csr_kwargs = namespaced_function(_split_csr_kwargs, globals())
 _split_sans = namespaced_function(_split_sans, globals())
 delete_issuer = namespaced_function(delete_issuer, globals())
