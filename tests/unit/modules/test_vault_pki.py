@@ -260,7 +260,10 @@ def test_read_certificate_full_with_chain(query):
     certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
     issuer = "-----BEGIN CERTIFICATE-----\nissuer\n-----END CERTIFICATE-----\n"
     root = "-----BEGIN CERTIFICATE-----\nroot\n-----END CERTIFICATE-----\n"
-    query.return_value = {"data": {"certificate": certificate, "ca_chain": [issuer, root]}}
+    query.side_effect = [
+        {"data": {"certificate": certificate, "ca_chain": [issuer, root]}},
+        {"data": {"certificate": issuer, "ca_chain": [issuer, root]}},
+    ]
 
     ret = vault_pki.read_certificate_full("00:11:22")
 
@@ -272,7 +275,10 @@ def test_read_certificate_full_with_chain_returns_existing_bundle(query):
     issuer = "-----BEGIN CERTIFICATE-----\nissuer\n-----END CERTIFICATE-----\n"
     root = "-----BEGIN CERTIFICATE-----\nroot\n-----END CERTIFICATE-----\n"
     bundle = f"{certificate}{issuer}{root}"
-    query.return_value = {"data": {"certificate": bundle, "ca_chain": [issuer, root]}}
+    query.side_effect = [
+        {"data": {"certificate": bundle, "ca_chain": [issuer, root]}},
+        {"data": {"certificate": issuer, "ca_chain": [issuer, root]}},
+    ]
 
     ret = vault_pki.read_certificate_full("00:11:22")
 
@@ -282,7 +288,10 @@ def test_read_certificate_full_with_chain_returns_existing_bundle(query):
 def test_read_certificate_full_with_private_key(query):
     certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
     private_key = "-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----\n"
-    query.return_value = {"data": {"certificate": certificate, "private_key": private_key}}
+    query.side_effect = [
+        {"data": {"certificate": certificate, "private_key": private_key}},
+        {"data": {"certificate": certificate}},
+    ]
 
     ret = vault_pki.read_certificate_full("00:11:22")
 
@@ -294,13 +303,16 @@ def test_read_certificate_full_with_chain_and_private_key(query):
     issuer = "-----BEGIN CERTIFICATE-----\nissuer\n-----END CERTIFICATE-----\n"
     root = "-----BEGIN CERTIFICATE-----\nroot\n-----END CERTIFICATE-----\n"
     private_key = "-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----\n"
-    query.return_value = {
-        "data": {
-            "certificate": certificate,
-            "ca_chain": [issuer, root],
-            "private_key": private_key,
-        }
-    }
+    query.side_effect = [
+        {
+            "data": {
+                "certificate": certificate,
+                "ca_chain": [issuer, root],
+                "private_key": private_key,
+            }
+        },
+        {"data": {"certificate": issuer, "ca_chain": [issuer, root]}},
+    ]
 
     ret = vault_pki.read_certificate_full("00:11:22")
 

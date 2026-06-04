@@ -15,6 +15,13 @@ from salt.exceptions import SaltInvocationError
 from saltext.vault.utils import vault
 from saltext.vault.utils.vault.pki import dec2hex
 
+try:
+    import salt.utils.x509 as x509util
+
+    HAS_X509UTIL = True
+except ImportError:
+    HAS_X509UTIL = False
+
 log = logging.getLogger(__name__)
 
 __virtualname__ = "vault_pki"
@@ -812,19 +819,64 @@ def read_certificate_full(serial, mount="pki"):
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
-    # Vault versions prior to 1.16 do not return ``ca_chain`` from
-    # ``/pki/cert/<serial>``. Back-fill it from the issuer endpoint so the
-    # response shape is consistent across supported Vault/OpenBao releases.
-    if "certificate" in data and "ca_chain" not in data:
-        issuer_ref = data.get("issuer_id") or "default"
+    # Vault may omit issuer_id and the immediate issuer cert from ca_chain.
+    # Resolve the signing issuer via Issuer DN and rebuild a complete chain.
+    if "certificate" in data:
+        # Ensure trailing newline so callers can concatenate certificate
+        # and ca_chain entries without corrupting PEM boundaries.
+        if isinstance(data["certificate"], str) and not data["certificate"].endswith("\n"):
+            data["certificate"] += "\n"
+        issuer_ref = (
+            _find_signing_issuer(data["certificate"], mount=mount)
+            or data.get("issuer_id")
+            or "default"
+        )
         try:
             issuer_data = read_issuer(ref=issuer_ref, mount=mount)
         except CommandExecutionError:
             issuer_data = None
         if issuer_data and issuer_data.get("ca_chain"):
-            data["ca_chain"] = issuer_data["ca_chain"]
+            chain = list(issuer_data["ca_chain"])
+            issuer_cert = issuer_data.get("certificate")
+            if issuer_cert and issuer_cert not in chain:
+                chain.insert(0, issuer_cert)
+            data["ca_chain"] = chain
 
     return data
+
+
+def _find_signing_issuer(leaf_pem, mount="pki"):
+    """
+    Find the configured issuer whose certificate Subject matches the leaf
+    certificate's Issuer DN. Returns the matching ``issuer_id`` or ``None``.
+    """
+    if not HAS_X509UTIL:
+        return None
+    try:
+        leaf = x509util.load_cert(leaf_pem)
+    except (SaltInvocationError, CommandExecutionError):
+        return None
+    leaf_issuer_dn = leaf.issuer.rfc4514_string()
+    try:
+        issuers = list_issuers(mount=mount)
+    except CommandExecutionError:
+        return None
+    if not isinstance(issuers, dict):
+        return None
+    for issuer_id in issuers:
+        try:
+            issuer_data = read_issuer(ref=issuer_id, mount=mount)
+        except CommandExecutionError:
+            continue
+        if not issuer_data or "certificate" not in issuer_data:
+            continue
+        try:
+            issuer_cert = x509util.load_cert(issuer_data["certificate"])
+        except (SaltInvocationError, CommandExecutionError):
+            continue
+        if issuer_cert.subject.rfc4514_string() == leaf_issuer_dn:
+            return issuer_id
+    return None
 
 
 def issue_certificate(
