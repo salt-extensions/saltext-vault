@@ -807,7 +807,6 @@ def read_certificate_full(serial, mount="pki"):
         * ``<serial>`` for the certificate with the given serial number, in hyphen-separated or colon-separated hexadecimal.
         * ``ca`` for the default issuer's CA certificate
         * ``crl`` for the default issuer's CRL
-        * ``ca_chain`` for the default issuer's CA trust chain.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
