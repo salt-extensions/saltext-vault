@@ -858,8 +858,6 @@ def _find_signing_issuer(leaf_pem, mount="pki"):
         issuers = list_issuers(mount=mount)
     except CommandExecutionError:
         return None
-    if not isinstance(issuers, dict):
-        return None
     for issuer_id in issuers:
         try:
             issuer_data = read_issuer(ref=issuer_id, mount=mount)
