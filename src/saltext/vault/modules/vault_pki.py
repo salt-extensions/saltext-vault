@@ -789,8 +789,9 @@ def read_certificate(serial, mount="pki"):
 
 def read_certificate_full(serial, mount="pki"):
     """
-    Read issued full certificate.
-    Returns certificate, private key and chain data in PEM format.
+    .. versionadded:: 1.7.0
+    
+    Get full certificate information as a dictionary, including the certificate (`certificate`) and its CA chain certificates (`ca_chain`, a list of strings) in PEM format.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-certificate>`__.
 
