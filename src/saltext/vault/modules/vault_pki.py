@@ -821,26 +821,23 @@ def read_certificate_full(serial, mount="pki"):
 
     # Vault may omit issuer_id and the immediate issuer cert from ca_chain.
     # Resolve the signing issuer via Issuer DN and rebuild a complete chain.
-    if "certificate" in data:
-        # Ensure trailing newline so callers can concatenate certificate
-        # and ca_chain entries without corrupting PEM boundaries.
-        if isinstance(data["certificate"], str) and not data["certificate"].endswith("\n"):
-            data["certificate"] += "\n"
-        issuer_ref = (
-            _find_signing_issuer(data["certificate"], mount=mount)
-            or data.get("issuer_id")
-            or "default"
-        )
-        try:
-            issuer_data = read_issuer(ref=issuer_ref, mount=mount)
-        except CommandExecutionError:
-            issuer_data = None
-        if issuer_data and issuer_data.get("ca_chain"):
-            chain = list(issuer_data["ca_chain"])
-            issuer_cert = issuer_data.get("certificate")
-            if issuer_cert and issuer_cert not in chain:
-                chain.insert(0, issuer_cert)
-            data["ca_chain"] = chain
+    # Ensure trailing newline so callers can concatenate certificate
+    # and ca_chain entries without corrupting PEM boundaries.
+    if not data["certificate"].endswith("\n"):
+        data["certificate"] += "\n"
+    issuer_ref = (
+        _find_signing_issuer(data["certificate"], mount=mount)
+        or data.get("issuer_id")
+        or "default"
+    )
+    issuer_data = read_issuer(ref=issuer_ref, mount=mount)
+    if not issuer_data:
+        raise CommandExecutionError(f"Failed to lookup issuer `{issuer_ref}`")
+    chain = issuer_data["ca_chain"]
+    issuer_cert = issuer_data["certificate"]
+    if issuer_cert not in chain:
+        chain.insert(0, issuer_cert)
+    data["ca_chain"] = chain
 
     return data
 
