@@ -790,7 +790,7 @@ def read_certificate(serial, mount="pki"):
 def read_certificate_full(serial, mount="pki"):
     """
     .. versionadded:: 1.7.0
-    
+
     Get full certificate information as a dictionary, including the certificate (`certificate`) and its CA chain certificates (`ca_chain`, a list of strings) in PEM format.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-certificate>`__.
@@ -826,9 +826,7 @@ def read_certificate_full(serial, mount="pki"):
     if not data["certificate"].endswith("\n"):
         data["certificate"] += "\n"
     issuer_ref = (
-        _find_signing_issuer(data["certificate"], mount=mount)
-        or data.get("issuer_id")
-        or "default"
+        _find_signing_issuer(data["certificate"], mount=mount) or data.get("issuer_id") or "default"
     )
     issuer_data = read_issuer(ref=issuer_ref, mount=mount)
     if not issuer_data:
