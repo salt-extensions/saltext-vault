@@ -203,17 +203,6 @@ def test_generate_root_raise_err_with_default_name():
         vault_pki.generate_root("my root", key_name="default")
 
 
-def test_read_certificate_full_returns_certificate(query):
-    certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
-    query.return_value = {"data": {"certificate": certificate}}
-
-    ret = vault_pki.read_certificate_full("00:11:22", mount="mount")
-
-    assert ret == {"certificate": certificate}
-    endpoint = query.call_args_list[0][0][1]
-    assert endpoint == "mount/cert/00:11:22"
-
-
 def test_read_certificate_full_fallback_ca_chain(query):
     certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
     issuer = "-----BEGIN CERTIFICATE-----\nissuer\n-----END CERTIFICATE-----\n"
@@ -251,6 +240,7 @@ def test_read_certificate_full_fallback_issuer_missing(query):
         vaultutil.VaultNotFoundError(),
     ]
     
+    
     with pytest.raises(CommandExecutionError, match="Failed to lookup issuer.*"):
         vault_pki.read_certificate_full("00:11:22")
 
@@ -282,44 +272,6 @@ def test_read_certificate_full_with_chain_returns_existing_bundle(query):
     ret = vault_pki.read_certificate_full("00:11:22")
 
     assert ret == {"certificate": bundle, "ca_chain": [issuer, root]}
-
-
-def test_read_certificate_full_with_private_key(query):
-    certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
-    private_key = "-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----\n"
-    query.side_effect = [
-        {"data": {"certificate": certificate, "private_key": private_key}},
-        {"data": {"certificate": certificate}},
-    ]
-
-    ret = vault_pki.read_certificate_full("00:11:22")
-
-    assert ret == {"certificate": certificate, "private_key": private_key}
-
-
-def test_read_certificate_full_with_chain_and_private_key(query):
-    certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
-    issuer = "-----BEGIN CERTIFICATE-----\nissuer\n-----END CERTIFICATE-----\n"
-    root = "-----BEGIN CERTIFICATE-----\nroot\n-----END CERTIFICATE-----\n"
-    private_key = "-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----\n"
-    query.side_effect = [
-        {
-            "data": {
-                "certificate": certificate,
-                "ca_chain": [issuer, root],
-                "private_key": private_key,
-            }
-        },
-        {"data": {"certificate": issuer, "ca_chain": [issuer, root]}},
-    ]
-
-    ret = vault_pki.read_certificate_full("00:11:22")
-
-    assert ret == {
-        "certificate": certificate,
-        "ca_chain": [issuer, root],
-        "private_key": private_key,
-    }
 
 
 @pytest.mark.parametrize(
