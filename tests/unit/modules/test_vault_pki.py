@@ -239,7 +239,7 @@ def test_read_certificate_full_fallback_issuer_missing(query):
         {"data": {"certificate": certificate}},
         vaultutil.VaultNotFoundError(),
     ]
-    
+
     with pytest.raises(CommandExecutionError, match="Failed to lookup issuer.*"):
         vault_pki.read_certificate_full("00:11:22")
 
