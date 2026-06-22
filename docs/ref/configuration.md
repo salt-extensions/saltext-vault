@@ -331,6 +331,11 @@ Configures Vault server details.
 #### url
 URL of your Vault installation. Required.
 
+:::{hint}
+This value can be set inside the minion configuration as well, from where it
+takes precedence.
+:::
+
 :::{vconf} server:verify
 :::
 #### verify
@@ -555,7 +560,7 @@ all Vault modules are broken to prevent an infinite loop.
 ## Minion-only configuration
 
 :::{note}
-In addition to the following minion-only values, {vconf}`auth:token_lifecycle`, {vconf}`server:verify`
+In addition to the following minion-only values, {vconf}`auth:token_lifecycle`, {vconf}`server:verify`, {vconf}`server:url`,
 and {vconf}`client` can be set on the minion as well, even if it pulls its configuration from a master.
 :::
 
