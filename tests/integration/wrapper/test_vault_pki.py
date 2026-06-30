@@ -509,7 +509,7 @@ def test_set_default_issuer(salt_ssh_cli):
 def test_generate_root(salt_ssh_cli):
     ret = salt_ssh_cli.run("vault_pki.list_issuers")
     assert ret.returncode == 0
-    assert ret.data == []
+    assert ret.data == {}
 
     ret = salt_ssh_cli.run(
         "vault_pki.generate_root",
@@ -531,7 +531,7 @@ def test_generate_root(salt_ssh_cli):
 def test_generate_root_exported(salt_ssh_cli):
     ret = salt_ssh_cli.run("vault_pki.list_issuers")
     assert ret.returncode == 0
-    assert ret.data == []
+    assert ret.data == {}
 
     ret = salt_ssh_cli.run(
         "vault_pki.generate_root",
