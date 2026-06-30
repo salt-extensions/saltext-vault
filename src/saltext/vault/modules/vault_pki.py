@@ -289,7 +289,7 @@ def list_issuers(mount="pki"):
             "key_info"
         ]
     except vault.VaultNotFoundError:
-        return []
+        return {}
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
