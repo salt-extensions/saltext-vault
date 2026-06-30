@@ -432,7 +432,7 @@ def test_set_default_issuer(vault_pki):
 @pytest.mark.usefixtures("generated_root")
 def test_generate_root(vault_pki):
     ret = vault_pki.list_issuers()
-    assert ret == []
+    assert ret == {}
 
     ret = vault_pki.generate_root(
         common_name="generated root",
@@ -451,7 +451,7 @@ def test_generate_root(vault_pki):
 @pytest.mark.usefixtures("generated_root")
 def test_generate_root_exported(vault_pki):
     ret = vault_pki.list_issuers()
-    assert ret == []
+    assert ret == {}
 
     ret = vault_pki.generate_root(
         common_name="generated root",
