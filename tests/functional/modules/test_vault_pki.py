@@ -432,7 +432,7 @@ def test_set_default_issuer(vault_pki):
 @pytest.mark.usefixtures("generated_root")
 def test_generate_root(vault_pki):
     ret = vault_pki.list_issuers()
-    assert ret == []
+    assert ret == {}
 
     ret = vault_pki.generate_root(
         common_name="generated root",
@@ -451,7 +451,7 @@ def test_generate_root(vault_pki):
 @pytest.mark.usefixtures("generated_root")
 def test_generate_root_exported(vault_pki):
     ret = vault_pki.list_issuers()
-    assert ret == []
+    assert ret == {}
 
     ret = vault_pki.generate_root(
         common_name="generated root",
@@ -496,3 +496,29 @@ def test_read_certificate(vault_pki, private_key):
     ret = vault_pki.read_certificate(serial)
     read_certificate = load_cert(ret)
     assert read_certificate.serial_number == signed_certificate.serial_number
+
+
+@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("roles_setup")
+def test_read_certificate_full(vault_pki, private_key):
+    ret = vault_pki.sign_certificate(
+        "testrole",
+        common_name="test.example.com",
+        private_key=private_key,
+    )
+    assert "certificate" in ret
+
+    signed_certificate = load_cert(ret["certificate"])
+    serial = dec2hex(signed_certificate.serial_number)
+    ret = vault_pki.read_certificate_full(serial)
+
+    assert "certificate" in ret
+    assert "private_key" not in ret
+    assert "ca_chain" in ret
+
+    ca_chain = ret["ca_chain"]
+    assert isinstance(ca_chain, list)
+    read_certificate, chain = load_cert(f"{ret['certificate']}{''.join(ca_chain)}", load_chain=True)
+    assert read_certificate.serial_number == signed_certificate.serial_number
+    assert chain
+    assert chain[0].subject.rfc4514_string() == "CN=Test Issuer CA"

@@ -509,7 +509,7 @@ def test_set_default_issuer(salt_ssh_cli):
 def test_generate_root(salt_ssh_cli):
     ret = salt_ssh_cli.run("vault_pki.list_issuers")
     assert ret.returncode == 0
-    assert ret.data == []
+    assert ret.data == {}
 
     ret = salt_ssh_cli.run(
         "vault_pki.generate_root",
@@ -531,7 +531,7 @@ def test_generate_root(salt_ssh_cli):
 def test_generate_root_exported(salt_ssh_cli):
     ret = salt_ssh_cli.run("vault_pki.list_issuers")
     assert ret.returncode == 0
-    assert ret.data == []
+    assert ret.data == {}
 
     ret = salt_ssh_cli.run(
         "vault_pki.generate_root",
@@ -586,3 +586,35 @@ def test_read_certificate(salt_ssh_cli, private_key):
 
     read_certificate = load_cert(ret.data)
     assert read_certificate.serial_number == signed_certificate.serial_number
+
+
+@pytest.mark.usefixtures("_check_cryptography")
+@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("roles_setup")
+def test_read_certificate_full(salt_ssh_cli, private_key):
+    ret = salt_ssh_cli.run(
+        "vault_pki.sign_certificate",
+        "testrole",
+        common_name="test.example.com",
+        private_key=private_key,
+    )
+    assert ret.returncode == 0
+    assert "certificate" in ret.data
+    signed_certificate = load_cert(ret.data["certificate"])
+
+    serial = dec2hex(signed_certificate.serial_number)
+    ret = salt_ssh_cli.run("vault_pki.read_certificate_full", serial)
+    assert ret.returncode == 0
+
+    assert "certificate" in ret.data
+    assert "private_key" not in ret.data
+    assert "ca_chain" in ret.data
+    ca_chain = ret.data["ca_chain"]
+    assert isinstance(ca_chain, list)
+
+    read_certificate, chain = load_cert(
+        f"{ret.data['certificate']}{''.join(ca_chain)}", load_chain=True
+    )
+    assert read_certificate.serial_number == signed_certificate.serial_number
+    assert chain
+    assert chain[0].subject.rfc4514_string() == "CN=Test Issuer CA"
