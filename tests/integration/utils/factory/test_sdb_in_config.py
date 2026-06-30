@@ -1,7 +1,6 @@
-import os
-
 import pytest
 
+from tests.support.helpers import PatchedEnviron
 from tests.support.vault import vault_create_secret_id
 from tests.support.vault import vault_delete_approle
 from tests.support.vault import vault_disable_auth_method
@@ -11,12 +10,11 @@ from tests.support.vault import vault_write_approle
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container"),
 ]
 
 
 @pytest.fixture(scope="module")
-def minion_config_overrides():
+def minion_config_overrides(vault_port):
     return {
         "osenv": {"driver": "env"},
         "vault": {
@@ -25,12 +23,15 @@ def minion_config_overrides():
                 "token": "sdb://osenv/VAULT_TOKEN",
             },
             "config_location": "local",
+            "server": {
+                "url": f"http://127.0.0.1:{vault_port}",
+            },
         },
     }
 
 
 @pytest.fixture(scope="module")
-def master_config_overrides():
+def master_config_overrides(vault_port):
     return {
         "osenv": {"driver": "env"},
         "vault": {
@@ -40,12 +41,15 @@ def master_config_overrides():
                 "secret_id": "sdb://osenv/VAULT_SECRETID",
             },
             "config_location": "local",
+            "server": {
+                "url": f"http://127.0.0.1:{vault_port}",
+            },
         },
     }
 
 
 @pytest.fixture(scope="module")
-def approle_configured():
+def approle_configured(container):  # pylint: disable=unused-argument
     vault_enable_auth_method("approle", ["-path=approle"])
     vault_write_approle("sdbrole")
     try:
@@ -59,21 +63,12 @@ def approle_configured():
 
 @pytest.fixture(autouse=True)
 def auth_in_env(approle_configured):
-    prev, os.environ["VAULT_TOKEN"], os.environ["VAULT_ROLEID"], os.environ["VAULT_SECRETID"] = (
-        os.environ.get("VAULT_TOKEN"),
-        "testsecret",
-        approle_configured["role_id"],
-        approle_configured["secret_id"],
-    )
-    try:
+    with PatchedEnviron(
+        VAULT_TOKEN="testsecret",
+        VAULT_ROLEID=approle_configured["role_id"],
+        VAULT_SECRETID=approle_configured["secret_id"],
+    ):
         yield
-    finally:
-        if prev is not None:
-            os.environ["VAULT_TOKEN"] = prev
-        else:
-            os.environ.pop("VAULT_TOKEN")
-        os.environ.pop("VAULT_ROLEID")
-        os.environ.pop("VAULT_SECRETID")
 
 
 def test_sdb_in_config_token(salt_call_cli):
