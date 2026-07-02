@@ -9,16 +9,14 @@ jobs:
   Linux:
     runs-on: ubuntu-24.04
     timeout-minutes: 50
-
     strategy:
       fail-fast: false
-<<<<<<< before updating
-      max-parallel: 6
+      max-parallel: 3
       matrix:
         include:
-          - {salt-version: "3006.23", python-version: "3.10", testing-container: "hashicorp/vault:1.14.8"}
-          - {salt-version: "3007.13", python-version: "3.10", testing-container: "hashicorp/vault:latest"}
-          - {salt-version: "3007.13", python-version: "3.10", testing-container: "openbao/openbao:latest"}
+          - {salt-version: "3006.27", python-version: "3.11", testing-container: "hashicorp/vault:1.14.8"}
+          - {salt-version: "3008.2", python-version: "3.10", testing-container: "openbao/openbao:latest"}
+          - {salt-version: "3008.2", python-version: "3.14", testing-container: "hashicorp/vault:latest"}
 
     env:
       TESTING_CONTAINER: ${{ matrix.testing-container }}
@@ -30,18 +28,7 @@ jobs:
           echo "RUNID=${RUNID}" >> "$GITHUB_ENV"
           echo "Run ID: ${RUNID}"
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-=======
-      max-parallel: 3
-      matrix:
-        include:
-          - {salt-version: "3006.27", python-version: "3.10"}
-          - {salt-version: "3006.27", python-version: "3.11"}
-          - {salt-version: "3008.2", python-version: "3.14"}
-
-    steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
->>>>>>> after updating
         with:
           fetch-depth: 2  # coverage: Issue detecting commit SHA
 
