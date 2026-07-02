@@ -4,6 +4,13 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## 1.7.0 (2026-07-02)
+
+
+### Added
+
+- Added `read_certificate_full` execution function to the `vault_pki` module, returning the certificate, its CA chain and miscellaneous information as a dictionary. [#145](https://github.com/salt-extensions/saltext-vault/issues/145)
+
 ## 1.6.0 (2026-05-20)
 
 
