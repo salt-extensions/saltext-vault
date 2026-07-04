@@ -99,7 +99,7 @@ def set_(key, value, profile=None):  # pylint: disable=unused-argument
 
     curr_data.update(data)
     try:
-        vault.write_kv(path, data, __opts__, __context__)
+        vault.write_kv(path, curr_data, __opts__, __context__)
         return True
     except Exception as err:  # pylint: disable=broad-except
         log.error("Failed to write secret! %s: %s", type(err).__name__, err)
