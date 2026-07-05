@@ -593,7 +593,9 @@ class LeaseStore:
                 raise
             raise VaultNotFoundError(str(err)) from err
 
-    def renew(self, lease, increment=None, raise_all_errors=True, _store=True):
+    def renew(
+        self, lease, increment=None, raise_all_errors=True, force_increment=False, _store=True
+    ):
         """
         Renew a lease.
 
@@ -611,6 +613,11 @@ class LeaseStore:
             do not catch exceptions. If this is false, the lease is returned
             unmodified if the exception does not indicate it is invalid (NotFound).
             Defaults to true.
+
+        force_increment
+            `increment` can have a floor set by lease metadata. This parameter allows
+            to disable the floor and takes `increment` without modification (e.g. for revocations).
+            Defaults to false.
         """
         endpoint = "sys/leases/renew"
         payload = {"lease_id": str(lease)}
@@ -620,7 +627,11 @@ class LeaseStore:
                 raise VaultNotFoundError("Lease is already expired")
         if increment is not None:
             payload["increment"] = int(timestring_map(increment))
-        if isinstance(lease, VaultLease) and lease.renew_increment is not None:
+        if (
+            not force_increment
+            and isinstance(lease, VaultLease)
+            and lease.renew_increment is not None
+        ):
             payload["increment"] = max(
                 int(timestring_map(lease.renew_increment)), payload.get("increment", 0)
             )
@@ -693,7 +704,7 @@ class LeaseStore:
                 delta = 60
         try:
             # 0 would attempt a complete renewal
-            self.renew(lease, increment=delta or 1, _store=False)
+            self.renew(lease, increment=delta or 1, force_increment=True, _store=False)
         except VaultNotFoundError:
             pass
 

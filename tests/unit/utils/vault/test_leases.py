@@ -51,8 +51,12 @@ def store_valid(store, lease, lease_renewed_response):
 @pytest.fixture
 def store_multi(store, lease, lease_renewed_response):
     lease = vleases.VaultLease(**lease)
-    lease_2 = lease.with_renewed(id="foobar", lease_id="foobar")
-    lease_3 = lease.with_renewed(id="barbaz", lease_id="barbaz")
+    lease_2 = lease.with_renewed(
+        id="foobar", lease_id="foobar", min_ttl=None, revoke_delay=None, renew_increment=None
+    )
+    lease_3 = lease.with_renewed(
+        id="barbaz", lease_id="barbaz", min_ttl=None, revoke_delay=None, renew_increment=None
+    )
     leases = {"test_1": lease, "test_12": lease_2, "test_3": lease_3}
     store.cache.exists.side_effect = lambda x, **y: x in leases
     store.cache.get.side_effect = lambda x, **y: leases[x]
@@ -711,6 +715,9 @@ class TestLeaseStore:
             )
         )
 
+    @pytest.mark.parametrize(
+        "lease", ({"min_ttl": 3600, "revoke_delay": 180, "renew_increment": 86400},), indirect=True
+    )
     def test_revoke_cached(self, store_multi, lease):
         """
         Test revoking all cached leases.
@@ -720,7 +727,7 @@ class TestLeaseStore:
             (
                 call(
                     "sys/leases/renew",
-                    payload={"lease_id": lease["id"], "increment": 60},
+                    payload={"lease_id": lease["id"], "increment": 180},
                 ),
                 call(
                     "sys/leases/renew",
