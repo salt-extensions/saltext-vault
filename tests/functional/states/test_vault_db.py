@@ -389,11 +389,8 @@ def testmode(request):
     return request.param
 
 
-@pytest.fixture(params=({},))
-def _cached_creds(request, loaders, roles_setup):  # pylint: disable=unused-argument
-    kwargs = {"name": "testrole", "cache": True}
-    kwargs.update(request.param)
-    ret = loaders.modules.vault_db.get_creds(**kwargs)
+def _cache_creds(loaders, params):
+    ret = loaders.modules.vault_db.get_creds(**params)
     assert ret
     assert "username" in ret
     assert "password" in ret
@@ -405,6 +402,13 @@ def _cached_creds(request, loaders, roles_setup):  # pylint: disable=unused-argu
     # it to check changes in the tests.
     loaders.context.clear()
     return ret
+
+
+@pytest.fixture(params=({},))
+def _cached_creds(request, loaders, roles_setup):  # pylint: disable=unused-argument
+    kwargs = {"name": "testrole", "cache": True}
+    kwargs.update(request.param)
+    return _cache_creds(loaders, kwargs)
 
 
 @pytest.mark.usefixtures("roles_setup")
@@ -481,10 +485,11 @@ def test_creds_cached_renew(testmode, vault_db, modules, _cached_creds):
 
 @pytest.mark.usefixtures("roles_setup")
 @pytest.mark.parametrize("roles_setup", [["testreissuerole"]], indirect=True)
+@pytest.mark.usefixtures("_cached_creds")
 @pytest.mark.parametrize(
     "_cached_creds", ({"name": "testreissuerole", "valid_for": 185},), indirect=True
 )
-def test_creds_cached_reissue(testmode, vault_db, modules, _cached_creds):
+def test_creds_cached_reissue(testmode, vault_db, modules):
     """
     Ensure reissued credentials are reported as such.
     """
@@ -511,10 +516,11 @@ def test_creds_cached_reissue(testmode, vault_db, modules, _cached_creds):
 
 @pytest.mark.usefixtures("roles_setup")
 @pytest.mark.parametrize("roles_setup", [["testreissuerole"]], indirect=True)
+@pytest.mark.usefixtures("_cached_creds")
 @pytest.mark.parametrize(
     "_cached_creds", ({"name": "testreissuerole", "valid_for": 185},), indirect=True
 )
-def test_creds_cached_reissue_only(testmode, vault_db, loaders, _cached_creds):
+def test_creds_cached_reissue_only(testmode, vault_db, loaders):
     """
     Ensure that expired leases are recognized, even if valid_for has not been set.
     """
@@ -540,12 +546,32 @@ def test_creds_cached_reissue_only(testmode, vault_db, loaders, _cached_creds):
     assert (new == old) is testmode
 
 
-def test_creds_uncached(testmode, vault_db, modules, _cached_creds):
+@pytest.mark.usefixtures("_cached_creds")
+def test_creds_uncached(testmode, vault_db, modules):
     ret = vault_db.creds_uncached("testrole", test=testmode)
     assert ret.result is not False
     assert (ret.result is None) is testmode
-    assert ret.changes
+    assert ret.changes == {"revoked": ["db.database.dynamic.testrole.default"]}
     assert "revoked" in ret.changes
+    assert ("would have" in ret.comment) is testmode
+    assert "revoked" in ret.comment
+    after = modules.vault_db.list_cached()
+    assert bool(after) is testmode
+
+
+@pytest.mark.usefixtures("_cached_creds")
+def test_creds_uncached_cache_param(testmode, vault_db, modules, loaders):
+    _cache_creds(
+        loaders, {"name": "testrole", "cache": "other_creds"}
+    )  # create from same role, separate creds
+    ret = vault_db.creds_uncached("testrole", test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert "revoked" in ret.changes
+    assert set(ret.changes["revoked"]) == {
+        "db.database.dynamic.testrole.default",
+        "db.database.dynamic.testrole.other_creds",
+    }
     assert ("would have" in ret.comment) is testmode
     assert "revoked" in ret.comment
     after = modules.vault_db.list_cached()
