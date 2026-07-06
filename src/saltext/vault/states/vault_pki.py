@@ -197,17 +197,21 @@ def certificate_managed(
             _add_sub_state_run(ret, file_managed_test)
             return ret
 
+        file_exists = None
         # handle follow_symlinks
         if __salt__["file.is_link"](name):
             if file_args.get("follow_symlinks", True):
                 name = os.path.realpath(name)
             else:
-                # workaround https://github.com/saltstack/salt/issues/31802
-                __salt__["file.remove"](name)
+                if not __opts__["test"]:
+                    # workaround https://github.com/saltstack/salt/issues/31802
+                    __salt__["file.remove"](name)
                 changes["replaced"] = True
+                file_exists = False
 
         replace = False
-        file_exists = __salt__["file.file_exists"](name)
+        if file_exists is None:
+            file_exists = __salt__["file.file_exists"](name)
 
         if issuer_ref is None:
             issuer_ref = __salt__["vault_pki.read_role"](role_name, mount=mount)["issuer_ref"]
