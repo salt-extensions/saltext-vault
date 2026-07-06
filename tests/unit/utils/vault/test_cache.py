@@ -609,5 +609,5 @@ class TestVaultLeaseCache:
         assert ret is None
         events.assert_called_once_with(
             tag="vault/lease/ckey/expire",
-            data={"valid_for_less": 10, "ttl_left": 6, "meta": lease["meta"]},
+            data={"valid_for_less": 10, "ttl": 6, "meta": lease["meta"]},
         )

@@ -329,7 +329,7 @@ class VaultLeaseCache(LeaseCacheMixin, CommonCache):
                         "valid_for_less": (
                             valid_for if valid_for is not None else err.lease.min_ttl or 0
                         ),
-                        "ttl_left": err.lease.ttl_left,
+                        "ttl": err.lease.ttl_left,
                         "meta": err.lease.meta,
                     },
                 )
