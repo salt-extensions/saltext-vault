@@ -755,12 +755,12 @@ def creds_uncached(
     cached = __salt__["vault_db.list_cached"](name, static=static, cache=cache, mount=mount)
     if not cached:
         return ret
-    ret["changes"]["revoked"] = True
+    ret["changes"]["revoked"] = list(cached)
     if __opts__["test"]:
         ret["result"] = None
         ret["comment"] = "The credentials would have been revoked"
         return ret
-    __salt__["vault_db.clear_cached"](name, static=static, cache=cache or True, mount=mount)
+    __salt__["vault_db.clear_cached"](name, static=static, cache=cache, mount=mount)
     ret["comment"] = "The credentials have been revoked"
     return ret
 
