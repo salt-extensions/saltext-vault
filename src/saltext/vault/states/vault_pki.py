@@ -214,9 +214,11 @@ def certificate_managed(
             file_exists = __salt__["file.file_exists"](name)
 
         if issuer_ref is None:
-            issuer_ref = __salt__["vault_pki.read_role"](role_name, mount=mount)["issuer_ref"]
+            issuer_ref = (__salt__["vault_pki.read_role"](role_name, mount=mount) or {}).get(
+                "issuer_ref"
+            )
             if issuer_ref is None:
-                raise CommandExecutionError(f"role {role_name} does not exists.")
+                raise CommandExecutionError(f"role {role_name} does not exist.")
 
         issuer_info = __salt__["vault_pki.read_issuer"](issuer_ref, mount=mount)
 
@@ -304,7 +306,7 @@ def certificate_managed(
                 # an empty file first (makedirs). This does not work with check_cmd!
                 file_managed_ret = _file_managed(name, replace=False, **file_args)
                 _add_sub_state_run(ret, file_managed_ret)
-                if not _check_file_ret(file_managed_ret, ret, name):
+                if not _check_file_ret(file_managed_ret, ret, file_exists):
                     return ret
                 _safe_atomic_write(name, base64.b64decode(cert), file_args.get("backup", ""))
 
@@ -448,7 +450,7 @@ def role_absent(name, mount="pki"):
         current = __salt__["vault_pki.read_role"](name, mount=mount)
 
         if current is None:
-            ret["comment"] = f"Role `{name}` is already absent."
+            ret["comment"] = f"PKI role `{name}` is already absent."
             return ret
 
         ret["changes"]["deleted"] = name
@@ -460,7 +462,7 @@ def role_absent(name, mount="pki"):
 
         __salt__["vault_pki.delete_role"](name, mount=mount)
 
-        ret["comment"] = f"Connection `{name}` has been deleted."
+        ret["comment"] = f"PKI role `{name}` has been deleted."
 
     except CommandExecutionError as err:
         ret["result"] = False

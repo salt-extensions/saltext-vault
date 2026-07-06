@@ -1052,7 +1052,7 @@ def parse_config(config, validate=True, opts=None, require_token=True):
         if merged["auth"]["method"] == "approle":
             if "role_id" not in merged["auth"]:
                 raise AssertionError("auth:role_id is required for approle auth")
-        elif merged["auth"]["method"] == "token":
+        elif merged["auth"]["method"] in ("token", "wrapped_token"):
             if require_token and "token" not in merged["auth"]:
                 raise AssertionError("auth:token is required for token auth")
         else:
