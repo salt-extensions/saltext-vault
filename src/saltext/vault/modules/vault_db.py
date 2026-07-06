@@ -76,7 +76,7 @@ def fetch_connection(name, mount="database"):
 def write_connection(
     name,
     plugin,
-    version="",
+    version=None,
     verify=True,
     allowed_roles=None,
     root_rotation_statements=None,
@@ -123,6 +123,8 @@ def write_connection(
 
     version
         Specifies the semantic version of the plugin to use for this connection.
+        Set this to the empty string ("") to force resetting to the default value,
+        which lifts any restrictions on the active version.
 
     verify
         Verify the connection during initial configuration. Defaults to True.
