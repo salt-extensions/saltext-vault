@@ -15,6 +15,13 @@ from salt.exceptions import SaltInvocationError
 from saltext.vault.utils import vault
 from saltext.vault.utils.vault.pki import dec2hex
 
+try:
+    import salt.utils.x509 as x509util
+
+    HAS_X509UTIL = True
+except ImportError:
+    HAS_X509UTIL = False
+
 log = logging.getLogger(__name__)
 
 __virtualname__ = "vault_pki"
@@ -282,7 +289,7 @@ def list_issuers(mount="pki"):
             "key_info"
         ]
     except vault.VaultNotFoundError:
-        return []
+        return {}
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
@@ -778,6 +785,91 @@ def read_certificate(serial, mount="pki"):
         return vault.query("GET", endpoint, __opts__, __context__)["data"]["certificate"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
+
+
+def read_certificate_full(serial, mount="pki"):
+    """
+    .. versionadded:: 1.7.0
+
+    Get full certificate information as a dictionary, including the certificate (`certificate`) and its CA chain certificates (`ca_chain`, a list of strings) in PEM format.
+
+    `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-certificate>`__.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+            salt '*' vault_pki.read_certificate_full 7e:85:c5:d1:85:94:9a:46:08:b5:1b:9c:22:cb:35:e5:ea:f3:56:3f
+
+    serial
+        Specifies the serial of the certificate to read. Valid values are:
+
+        * ``<serial>`` for the certificate with the given serial number, in hyphen-separated or colon-separated hexadecimal.
+        * ``ca`` for the default issuer's CA certificate
+        * ``crl`` for the default issuer's CRL
+
+    mount
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
+    """
+
+    endpoint = f"{mount}/cert/{serial}"
+
+    try:
+        data = vault.query("GET", endpoint, __opts__, __context__)["data"]
+    except vault.VaultException as err:
+        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+
+    # Vault may omit issuer_id and the immediate issuer cert from ca_chain.
+    # Resolve the signing issuer via Issuer DN and rebuild a complete chain.
+    # Ensure trailing newline so callers can concatenate certificate
+    # and ca_chain entries without corrupting PEM boundaries.
+    if not data["certificate"].endswith("\n"):
+        data["certificate"] += "\n"
+    issuer_ref = (
+        _find_signing_issuer(data["certificate"], mount=mount) or data.get("issuer_id") or "default"
+    )
+    issuer_data = read_issuer(ref=issuer_ref, mount=mount)
+    if not issuer_data:
+        raise CommandExecutionError(f"Failed to lookup issuer `{issuer_ref}`")
+    chain = issuer_data["ca_chain"]
+    issuer_cert = issuer_data["certificate"]
+    if issuer_cert not in chain:
+        chain.insert(0, issuer_cert)
+    data["ca_chain"] = chain
+
+    return data
+
+
+def _find_signing_issuer(leaf_pem, mount="pki"):
+    """
+    Find the configured issuer whose certificate Subject matches the leaf
+    certificate's Issuer DN. Returns the matching ``issuer_id`` or ``None``.
+    """
+    if not HAS_X509UTIL:
+        return None
+    try:
+        leaf = x509util.load_cert(leaf_pem)
+    except (SaltInvocationError, CommandExecutionError):
+        return None
+    leaf_issuer_dn = leaf.issuer.rfc4514_string()
+    try:
+        issuers = list_issuers(mount=mount)
+    except CommandExecutionError:
+        return None
+    for issuer_id in issuers:
+        try:
+            issuer_data = read_issuer(ref=issuer_id, mount=mount)
+        except CommandExecutionError:
+            continue
+        if not issuer_data or "certificate" not in issuer_data:
+            continue
+        try:
+            issuer_cert = x509util.load_cert(issuer_data["certificate"])
+        except (SaltInvocationError, CommandExecutionError):
+            continue
+        if issuer_cert.subject.rfc4514_string() == leaf_issuer_dn:
+            return issuer_id
+    return None
 
 
 def issue_certificate(
