@@ -123,7 +123,8 @@ def existing_cert(cert_managed, request, roles_setup, ca_setup):  # pylint: disa
     yield args["name"]
 
 
-def _manage(cert_managed, args, exp=True):
+def _manage(cert_managed, args, exp=True, cert_type=None):
+    cert_type = cert_type or args["cert_type"]
     ret = cert_managed(**args)
     cert = None
     assert ret.result is exp
@@ -133,9 +134,7 @@ def _manage(cert_managed, args, exp=True):
     if CERT_CHECK:
         cert = _get_cert(args["name"])
         assert (
-            cert.type == SSHCertificateType.USER
-            if args["cert_type"] == "user"
-            else SSHCertificateType.HOST
+            cert.type == SSHCertificateType.USER if cert_type == "user" else SSHCertificateType.HOST
         )
     return ret, cert
 
@@ -174,21 +173,23 @@ def test_host_basic(cert_managed, host_args):
     _basic(cert_managed, host_args)
 
 
-def _principal_change(cert_managed, args, old, new):
+def _principal_change(cert_managed, args, old, new, typ):
     args["valid_principals"] = [new]
-    ret, cert = _manage(cert_managed, args)
+    ret, cert = _manage(cert_managed, args, cert_type=typ)
     assert ret.changes == {"principals": {"added": [new], "removed": [old]}}
     assert cert.valid_principals == [new.encode()]
 
 
 @pytest.mark.usefixtures("existing_cert")
 def test_user_principal_change(cert_managed, user_args):
-    _principal_change(cert_managed, user_args, "foo", "bar")
+    user_args.pop("cert_type")  # also test autodetermination of cert type
+    _principal_change(cert_managed, user_args, "foo", "bar", "user")
 
 
 @pytest.mark.usefixtures("existing_cert")
 def test_host_principal_change(cert_managed, host_args):
-    _principal_change(cert_managed, host_args, "foo.bar.baz", "foo.bar.quux")
+    host_args.pop("cert_type")  # also test autodetermination of cert type
+    _principal_change(cert_managed, host_args, "foo.bar.baz", "foo.bar.quux", "host")
 
 
 @pytest.mark.usefixtures("existing_cert")
