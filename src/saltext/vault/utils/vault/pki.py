@@ -79,9 +79,11 @@ def check_cert_for_changes(
                 if current_attr:
                     attr = current_attr[0]
                     if kwargs[k] != attr.value:
-                        changes.update({"subject": {k: {"old": attr.value, "new": kwargs[k]}}})
+                        changes.setdefault("subject", {}).update(
+                            {k: {"old": attr.value, "new": kwargs[k]}}
+                        )
                 else:
-                    changes.update({"subject": {k: {"old": "", "new": kwargs[k]}}})
+                    changes.setdefault("subject", {}).update({k: {"old": "", "new": kwargs[k]}})
 
     append_chain = [x509util.load_cert(x) for x in append_chain]
     # Filter self-signed CA, which shouldn't be in the chain.

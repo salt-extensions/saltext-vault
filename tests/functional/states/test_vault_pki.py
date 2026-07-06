@@ -435,6 +435,22 @@ def test_certificate_managed_changed_cn(vault_pki, cert_args):
         ({"ST": "That Street"}, {"ST": "Other Street"}),
         ({"O": "Salt Project"}, {"O": "Salt"}),
         ({"OU": "Salt Extensions"}, {"OU": "Extensions"}),
+        (
+            {
+                "L": "Boston",
+                "C": "US",
+                "ST": "That Street",
+                "O": "Salt Project",
+                "OU": "Salt Extensions",
+            },
+            {
+                "L": "Moscow",
+                "C": "RU",
+                "ST": "Other Street",
+                "O": "Salt",
+                "OU": "Extensions",
+            },
+        ),
     ],
 )
 def test_certificate_managed_changed_subject(vault_pki, cert_args, attr, replace):
@@ -452,6 +468,8 @@ def test_certificate_managed_changed_subject(vault_pki, cert_args, attr, replace
 
     for k, v in replace.items():
         assert k in ret.changes["subject"]
+        assert ret.changes["subject"][k]["old"] == attr[k]
+        assert ret.changes["subject"][k]["new"] == v
         c_attrs = cert.subject.get_attributes_for_oid(NAME_ATTRS_OID[k])
         assert len(c_attrs) == 1
         assert c_attrs[0].value == v
