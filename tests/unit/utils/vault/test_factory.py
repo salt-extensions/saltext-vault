@@ -5,6 +5,7 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
+import salt.cache
 import salt.exceptions
 
 from saltext.vault.utils import vault
@@ -1442,6 +1443,34 @@ def test_clear_cache(ckey, connection, session, cache_factory):
         assert ckey not in context[cbank]
     else:
         assert cbank not in context
+
+
+def test_clear_cache_overridden_cache(cache_factory):
+    """
+    Ensure the localfs cache is cleared when it overrides Salt's configured cache.
+    """
+    opts = {"cache": "redis"}
+    configured_cache = Mock(spec=salt.cache.Cache)
+    configured_cache.contains.return_value = False
+    localfs_cache = Mock(spec=salt.cache.Cache)
+
+    def _build(copts):
+        if copts.get("cache") == "localfs":
+            return localfs_cache
+        if copts.get("cache") == "redis":
+            return configured_cache
+        raise RuntimeError("Unknown cache")
+
+    cache_factory.side_effect = _build
+    cbank = "vault"
+    with patch(
+        "saltext.vault.utils.vault.factory._build_revocation_client", autospec=True
+    ) as revoc:
+        revoc.return_value = (None, None)
+        vault.clear_cache(opts, {}, ckey="foo", connection=False, session=False)
+    configured_cache.flush.assert_not_called()
+    localfs_cache.flush.assert_called_once_with(cbank, "foo")
+    assert opts["cache"] == "redis"
 
 
 @pytest.mark.usefixtures("cache_factory")

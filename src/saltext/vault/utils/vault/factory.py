@@ -231,7 +231,7 @@ def clear_cache(opts, context, ckey=None, connection=True, session=False, force_
 
     # In case the cache driver was overridden for the Vault integration
     local_opts = copy.copy(opts)
-    opts["cache"] = "localfs"
+    local_opts["cache"] = "localfs"
     cache = salt.cache.factory(local_opts)
     return cache.flush(cbank, ckey)
 
