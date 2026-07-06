@@ -535,7 +535,7 @@ def static_role_present(
             connection,
             username,
             rotation_period,
-            rotation_statements=None,
+            rotation_statements=rotation_statements,
             credential_type=credential_type,
             credential_config=credential_config,
             mount=mount,

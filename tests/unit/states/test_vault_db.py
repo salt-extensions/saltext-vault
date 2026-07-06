@@ -106,6 +106,8 @@ def write_static_role_mock(_roles):
         username,
         rotation_period,
         rotation_statements=None,
+        credential_type=None,
+        credential_config=None,
         mount="database",
         **kwargs,
     ):  # pylint: disable=unused-argument
@@ -114,6 +116,8 @@ def write_static_role_mock(_roles):
             "username": username,
             "rotation_period": rotation_period,
             "rotation_statements": rotation_statements or [],
+            "credential_type": credential_type,
+            "credential_config": credential_config,
             # credential_type/_config are only exposed if the DB plugin supports it
         }
         _roles[name] = data
@@ -453,13 +457,16 @@ def test_static_role_already_present(write_static_role_mock):
         ({"connection": "conn2"}, "db_name"),
         ({"username": "bar"}, None),
         ({"rotation_period": 43}, None),
+        ({"rotation_statements": ["do stuff"]}, None),
+        ({"credential_type": "rsa_private_key"}, None),
+        ({"credential_config": {"password_policy": "pass policy"}}, None),
     ),
 )
 def test_static_role_changes(testmode, write_static_role_mock, kwargs, param, _roles):
     write_static_role_mock("role", "conn", "user", 42)
     kwargs = kwargs.copy()
     param = param or next(iter(kwargs))
-    expected_changes = {"old": _roles["role"][param], "new": kwargs[next(iter(kwargs))]}
+    expected_changes = {"old": _roles["role"].get(param), "new": kwargs[next(iter(kwargs))]}
     conn = kwargs.pop("connection", "conn")
     username = kwargs.pop("username", "user")
     rotation_period = kwargs.pop("rotation_period", 42)
