@@ -593,6 +593,11 @@ def show_policies(minion_id, refresh_pillar=NOT_SET, expire=None):
     """
     if _config("issue:type") == "approle":
         meta = _lookup_approle(minion_id)
+        if not meta:
+            raise SaltRunnerError(
+                f"AppRole for minion `{minion_id}`has not been created yet. "
+                "You can use `vault.sync_approles` to force its creation."
+            )
         return meta["token_policies"]
 
     if refresh_pillar == NOT_SET:

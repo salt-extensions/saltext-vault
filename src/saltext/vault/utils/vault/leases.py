@@ -468,8 +468,10 @@ class LeaseStore:
 
             .. versionadded:: 1.1.0
         """
-        if renew_increment is not None and timestring_map(valid_for) > timestring_map(
-            renew_increment
+        if (
+            renew_increment is not None
+            and valid_for is not None
+            and timestring_map(valid_for) > timestring_map(renew_increment)
         ):
             raise VaultInvocationError(
                 "When renew_increment is set, it must be at least valid_for to make sense"

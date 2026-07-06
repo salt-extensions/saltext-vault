@@ -62,7 +62,7 @@ def set_(key, value, profile=None):  # pylint: disable=unused-argument
     Set a key/value pair in the vault service
     """
     if "?" in key:
-        path, key = key.split("?")
+        path, key = key.rsplit("?", 1)
     else:
         path, key = key.rsplit("/", 1)
     data = {key: value}
@@ -112,7 +112,7 @@ def get(key, profile=None):  # pylint: disable=unused-argument
     """
     full_path = key
     if "?" in key:
-        path, key = key.split("?")
+        path, key = key.rsplit("?", 1)
     else:
         path, key = key.rsplit("/", 1)
 

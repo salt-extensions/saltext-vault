@@ -433,6 +433,8 @@ def read_issuer_certificate(name="default", mount="pki", include_chain=False):
         If set to true, appends the CA chain to the certificate (in case of intermediate issuer)
     """
     cert_data = read_issuer(name, mount)
+    if not cert_data:
+        raise CommandExecutionError("Issuer does not exist")
 
     if include_chain:
         return "".join(cert_data["ca_chain"])
@@ -784,7 +786,9 @@ def read_certificate(serial, mount="pki"):
     endpoint = f"{mount}/cert/{serial}"
 
     try:
-        return vault.query("GET", endpoint, __opts__, __context__)["data"]["certificate"]
+        return vault.query("GET", endpoint, __opts__, __context__, is_unauthd=True)["data"][
+            "certificate"
+        ]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
@@ -819,7 +823,7 @@ def read_certificate_full(serial, mount="pki"):
     endpoint = f"{mount}/cert/{serial}"
 
     try:
-        data = vault.query("GET", endpoint, __opts__, __context__)["data"]
+        data = vault.query("GET", endpoint, __opts__, __context__, is_unauthd=True)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
