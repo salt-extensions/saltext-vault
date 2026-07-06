@@ -226,8 +226,8 @@ def role_present_otp(
     }
 
     try:
-        port = int(port) if port else None
-    except TypeError:
+        port = int(port) if port else 22
+    except (TypeError, ValueError):
         ret["result"] = False
         ret["comment"] = "'port' must be castable to an integer"
         return ret
