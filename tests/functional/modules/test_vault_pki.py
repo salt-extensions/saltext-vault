@@ -559,3 +559,12 @@ def test_read_certificate_full(vault_pki, private_key):
     assert read_certificate.serial_number == signed_certificate.serial_number
     assert chain
     assert chain[0].subject.rfc4514_string() == "CN=Test Issuer CA"
+
+
+@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.parametrize("serial", ("ca", "crl", "ca_chain"))
+def test_read_certificate_full_special(serial, vault_pki):
+    ret = vault_pki.read_certificate_full(serial)
+
+    assert "certificate" in ret
+    assert "ca_chain" in ret
