@@ -685,16 +685,16 @@ def read_issuer_crl(ref="default", mount="pki", delta=False):
     """
     # Check if issuer can sign CRLs at all. If not,
     # there is no point to check for CRL as this throws error
-    issuer = None
     try:
         issuer = vault.query(
             "GET", f"{mount}/issuer/{ref}", __opts__, __context__, is_unauthd=False
         )["data"]
+    except vault.VaultServerError as err:
+        if "unable to find PKI issuer" in str(err):
+            return None
+        raise CommandExecutionError(f"{err.__class__}: {err}") from err
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
-
-    if issuer is None:
-        return None
 
     if "crl-signing" not in issuer["usage"].split(","):
         return None

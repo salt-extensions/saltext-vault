@@ -417,6 +417,11 @@ def test_read_issuer_crl(vault_pki):
 
 
 @pytest.mark.usefixtures("issuers_setup")
+def test_read_issuer_crl_missing_issuer(vault_pki):
+    assert vault_pki.read_issuer_crl("missing_issuer") is None
+
+
+@pytest.mark.usefixtures("issuers_setup")
 @pytest.mark.usefixtures("roles_setup")
 def test_revoke_certificate(vault_pki, private_key):
     ret = vault_pki.sign_certificate(
