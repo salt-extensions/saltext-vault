@@ -1096,7 +1096,24 @@ def create_certificate(
             "Need 'signing_policy' specified, which actually refers to a role name"
         )
 
+    ca_server = ca_server or "ssh"
+
+    # Auto-determine cert type, if necessary and possible
+    if not kwargs.get("cert_type"):
+        role = read_role(signing_policy, mount=ca_server)
+        if role["key_type"] != "ca":
+            raise SaltInvocationError("The specified Vault role is not a CA role")
+        user_type = host_type = False
+        host_type = bool(role.get("allow_host_certificates"))
+        user_type = bool(role.get("allow_user_certificates"))
+        if user_type is host_type:
+            raise SaltInvocationError(
+                "Could not determine missing `cert_type` parameter from role definition"
+            )
+        kwargs["cert_type"] = "user" if user_type else "host"
+
     if kwargs.get("valid_principals"):
+        # The ssh_pki module enforces a list here, don't need to account for strings
         kwargs["valid_principals"] = ",".join(kwargs["valid_principals"])
     elif kwargs.get("all_principals"):
         kwargs["valid_principals"] = "*"
@@ -1125,7 +1142,7 @@ def create_certificate(
         pubkey,
         ttl=kwargs.get("ttl"),
         valid_principals=kwargs.get("valid_principals"),
-        cert_type=kwargs.get("cert_type"),
+        cert_type=kwargs["cert_type"],
         key_id=kwargs.get("key_id"),
         critical_options=critical_options,
         extensions=extensions,
