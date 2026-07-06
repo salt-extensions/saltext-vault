@@ -283,11 +283,12 @@ def test_role_present_otp_changes(vault_ssh, iprole, testmode):
         "exclude_cidr_list": None,
     }
     iprole.update(change)
+    iprole.pop("port")  # unset port resets to 22
     iprole.pop("key_type")
     ret = vault_ssh.role_present_otp("iprole", **iprole, test=testmode)
     assert ret.result is (None if testmode else True)
     assert ("would have" in ret.comment) is testmode
-    assert set(ret.changes) == set(change)
+    assert set(ret.changes) == set(change) | {"port"}
     assert ret.changes["default_user"] == {"old": "foobar", "new": "barbaz"}
     assert ret.changes["cidr_list"] == {"added": ["128.0.0.0/1"], "removed": []}
     assert ret.changes["exclude_cidr_list"] == {"added": [], "removed": ["128.0.0.0/1"]}
@@ -296,6 +297,7 @@ def test_role_present_otp_changes(vault_ssh, iprole, testmode):
     assert (new["default_user"] != "barbaz") is testmode
     assert (new["cidr_list"] != "0.0.0.0/1,128.0.0.0/1") is testmode
     assert bool(new["exclude_cidr_list"]) is testmode
+    assert (new["port"] != 22) is testmode
 
 
 @pytest.mark.usefixtures("roles_setup")
