@@ -64,6 +64,25 @@ def test_ext_pillar(read_kv, data):
     assert ext_pillar == data
 
 
+@pytest.mark.parametrize("merge_lists", (None, False, True))
+def test_ext_pillar_merge_lists(read_kv, merge_lists):
+    """
+    Ensure merge_lists works as expected and can override the pillar_merge_lists default
+    """
+    read_kv.side_effect = ({"foo": ["foo"]}, {"foo": ["bar"]})
+    with (
+        patch(
+            "saltext.vault.pillar.vault._get_paths", return_value=["secret/path1", "secret/path2"]
+        ),
+        patch.dict("saltext.vault.pillar.vault.__opts__", {"pillar_merge_lists": True}),
+    ):
+        ext_pillar = vault.ext_pillar("testminion", {}, "secret/path", merge_lists=merge_lists)
+    if merge_lists is False:
+        assert ext_pillar == {"foo": ["bar"]}
+    else:
+        assert ext_pillar == {"foo": ["foo", "bar"]}
+
+
 @pytest.mark.usefixtures("read_kv_not_found")
 def test_ext_pillar_not_found(caplog):
     """
