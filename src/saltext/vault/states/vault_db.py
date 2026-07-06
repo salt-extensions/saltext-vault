@@ -49,6 +49,8 @@ def connection_present(
 
     version
         Specifies the semantic version of the plugin to use for this connection.
+        Set this to the empty string ("") to force resetting to the default value,
+        which lifts any restrictions on the active version.
 
     verify
         Verify the connection during initial configuration. Defaults to True.
