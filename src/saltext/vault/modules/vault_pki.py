@@ -1173,17 +1173,20 @@ def _split_sans(sans) -> tuple[list, list, list, list]:
 
     try:
         if isinstance(sans, list):
-            sans = dict(map(lambda x: x.split(":", 1), sans))
+            dic = {}
+            for typ, val in map(lambda x: x.split(":", 1), sans):
+                dic.setdefault(typ, []).append(val)
+            sans = dic
 
         for k, v in sans.items():
             if k.upper() == "DNS" or k.upper() == "EMAIL":
-                dns_sans.append(v)
+                dns_sans.extend(v)
             elif k.upper() == "IP":
-                ip_sans.append(v)
+                ip_sans.extend(v)
             elif k.upper() == "URI":
-                uri_sans.append(v)
+                uri_sans.extend(v)
             else:
-                other_sans.append(f"{k};UTF8:{v}")
+                other_sans.extend(f"{k};UTF8:{vv}" for vv in v)
     except ValueError as err:
         raise CommandExecutionError(
             f"SAN is not in correct format. Must be in format <type>:<value>: {err}"
