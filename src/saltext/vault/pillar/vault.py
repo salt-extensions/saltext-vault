@@ -188,7 +188,8 @@ def ext_pillar(
         raise InvalidConfigError("Need a Vault path to include in the pillar")
 
     merge_strategy = merge_strategy or __opts__.get("pillar_source_merging_strategy", "smart")
-    merge_lists = merge_lists or __opts__.get("pillar_merge_lists", False)
+    if merge_lists is None:
+        merge_lists = __opts__.get("pillar_merge_lists", False)
 
     vault_pillar = {}
 
