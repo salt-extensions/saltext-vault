@@ -8,6 +8,8 @@ Manage the Vault (or OpenBao) PKI secret engine, request X.509 certificates.
 """
 
 import logging
+from datetime import datetime
+from datetime import timezone
 
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
@@ -791,7 +793,8 @@ def read_certificate_full(serial, mount="pki"):
     """
     .. versionadded:: 1.7.0
 
-    Get full certificate information as a dictionary, including the certificate (`certificate`) and its CA chain certificates (`ca_chain`, a list of strings) in PEM format.
+    Get full certificate information as a dictionary, including the certificate (`certificate`)
+    and its CA chain certificates (`ca_chain`, a list of strings) in PEM format.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-certificate>`__.
 
@@ -807,6 +810,7 @@ def read_certificate_full(serial, mount="pki"):
         * ``<serial>`` for the certificate with the given serial number, in hyphen-separated or colon-separated hexadecimal.
         * ``ca`` for the default issuer's CA certificate
         * ``crl`` for the default issuer's CRL
+        * ``ca_chain`` for the default issuer's CA trust chain.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -819,15 +823,29 @@ def read_certificate_full(serial, mount="pki"):
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
-    # Vault may omit issuer_id and the immediate issuer cert from ca_chain.
-    # Resolve the signing issuer via Issuer DN and rebuild a complete chain.
     # Ensure trailing newline so callers can concatenate certificate
     # and ca_chain entries without corrupting PEM boundaries.
     if not data["certificate"].endswith("\n"):
         data["certificate"] += "\n"
-    issuer_ref = (
-        _find_signing_issuer(data["certificate"], mount=mount) or data.get("issuer_id") or "default"
-    )
+
+    if serial == "ca_chain":
+        return data
+
+    # Vault may omit issuer_id and the immediate issuer cert from ca_chain.
+    # Resolve the signing issuer and rebuild a complete chain.
+    if serial in ("ca", "crl"):
+        # These special values always reference the default issuer
+        issuer_ref = "default"
+    else:
+        # Prefer explicit issuer_id, which is only set for revoked certificates.
+        # Otherwise, iterate over all issuers and find the most fitting one.
+        # Newer Vault versions include authority_key_id in the response, OpenBao does not.
+        issuer_ref = data.get("issuer_id") or _find_signing_issuer(
+            data["certificate"], authority_key_id=data.get("authority_key_id"), mount=mount
+        )
+    # Do not fall back to default issuer, it has been checked already.
+    if not issuer_ref:
+        raise CommandExecutionError("Failed to determine cert issuer")
     issuer_data = read_issuer(ref=issuer_ref, mount=mount)
     if not issuer_data:
         raise CommandExecutionError(f"Failed to lookup issuer `{issuer_ref}`")
@@ -840,10 +858,10 @@ def read_certificate_full(serial, mount="pki"):
     return data
 
 
-def _find_signing_issuer(leaf_pem, mount="pki"):
+def _find_signing_issuer(leaf_pem, authority_key_id=None, mount="pki"):
     """
-    Find the configured issuer whose certificate Subject matches the leaf
-    certificate's Issuer DN. Returns the matching ``issuer_id`` or ``None``.
+    Find the configured issuer whose certificate SubjectKeyIdentifier matches the
+    certificate's AuthorityKeyIdentifier. Returns the matching ``issuer_id`` or ``None``.
     """
     if not HAS_X509UTIL:
         return None
@@ -851,11 +869,22 @@ def _find_signing_issuer(leaf_pem, mount="pki"):
         leaf = x509util.load_cert(leaf_pem)
     except (SaltInvocationError, CommandExecutionError):
         return None
-    leaf_issuer_dn = leaf.issuer.rfc4514_string()
+    if not authority_key_id:
+        try:
+            authority_key_id = leaf.extensions.get_extension_for_class(
+                x509util.cx509.AuthorityKeyIdentifier
+            ).value.key_identifier
+        except x509util.cx509.ExtensionNotFound:
+            return None
+    if not isinstance(authority_key_id, bytes):
+        authority_key_id = bytes.fromhex(authority_key_id.replace(":", ""))
     try:
         issuers = list_issuers(mount=mount)
-    except CommandExecutionError:
+    except CommandExecutionError as err:
+        log.error(str(err), exc_info_on_loglevel=logging.DEBUG)
         return None
+    candidates = []
+    now = datetime.now(tz=timezone.utc)
     for issuer_id in issuers:
         try:
             issuer_data = read_issuer(ref=issuer_id, mount=mount)
@@ -867,8 +896,35 @@ def _find_signing_issuer(leaf_pem, mount="pki"):
             issuer_cert = x509util.load_cert(issuer_data["certificate"])
         except (SaltInvocationError, CommandExecutionError):
             continue
-        if issuer_cert.subject.rfc4514_string() == leaf_issuer_dn:
-            return issuer_id
+        try:
+            issuer_ski = issuer_cert.extensions.get_extension_for_class(
+                x509util.cx509.SubjectKeyIdentifier
+            ).value.key_identifier
+        except x509util.cx509.ExtensionNotFound:
+            continue
+        if issuer_ski != authority_key_id:
+            continue
+        try:
+            leaf.verify_directly_issued_by(issuer_cert)  # requires cryptography >=40
+        except (ValueError, TypeError, x509util.InvalidSignature):
+            continue
+        candidates.append((issuer_id, issuer_data, issuer_cert))
+
+    for predicate in (
+        lambda c: not c[1].get("revoked"),
+        lambda c: c[2].not_valid_after_utc > now >= c[2].not_valid_before_utc,
+    ):
+        filtered = [c for c in candidates if predicate(c)]
+        if filtered:
+            candidates = filtered
+    if len(candidates) > 1:
+        default = read_issuer("default", mount=mount)
+        if default:
+            for cand in candidates:
+                if cand[0] == default["issuer_id"]:
+                    return cand[0]
+    if candidates:
+        return candidates[0][0]
     return None
 
 
