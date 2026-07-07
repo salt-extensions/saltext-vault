@@ -341,32 +341,41 @@ def test_host_principal_existing_all_invalid(cert_managed, host_args):
     _principal_existing_all_invalid(cert_managed, host_args)
 
 
-def _principal_existing_some_valid(cert_managed, args, existing, invalid):
+def _principal_existing_some_valid(cert_managed, args, existing, invalid, new_valid):
     """
     When checking for changes on an existing certificate, invalid principals are
     filtered silently. This is how the regular ssh_pki execution module would behave.
+    This only works because the existing certificate matches the expection.
+    When reiussed, Vault still throws an error, failing the state.
     """
     args["valid_principals"] = [existing, invalid]
     ret, cert = _manage(cert_managed, args)
     assert "correct state" in ret.comment
     assert not ret.changes
     assert cert.valid_principals == [existing.encode()]
+    args["valid_principals"].append(new_valid)
+    ret = _manage(cert_managed, args, False)
+    assert "not a valid value for valid_principals" in ret.comment
 
 
 @pytest.mark.usefixtures("existing_cert")
-@pytest.mark.parametrize("roles_setup", ({"userrole": {"allowed_users": "foo"}},), indirect=True)
+@pytest.mark.parametrize(
+    "roles_setup", ({"userrole": {"allowed_users": "foo,baz"}},), indirect=True
+)
 def test_user_principal_override_existing_some_valid(cert_managed, user_args):
-    _principal_existing_some_valid(cert_managed, user_args, "foo", "bar")
+    _principal_existing_some_valid(cert_managed, user_args, "foo", "bar", "baz")
 
 
 @pytest.mark.usefixtures("existing_cert")
 @pytest.mark.parametrize(
     "roles_setup",
-    ({"hostrole": {"allowed_domains": "foo.bar.baz", "allow_bare_domains": True}},),
+    ({"hostrole": {"allowed_domains": "foo.bar.baz,foo.bar.bar", "allow_bare_domains": True}},),
     indirect=True,
 )
 def test_host_principal_override_existing_some_valid(cert_managed, host_args):
-    _principal_existing_some_valid(cert_managed, host_args, "foo.bar.baz", "foo.bar.quux")
+    _principal_existing_some_valid(
+        cert_managed, host_args, "foo.bar.baz", "foo.bar.quux", "foo.bar.bar"
+    )
 
 
 @pytest.mark.parametrize(
@@ -423,6 +432,61 @@ def test_host_default_principal(cert_managed, host_args, container):
         assert "globally-valid certificate with no principals specified" in ret.comment
     else:
         assert "empty valid principals not allowed by role" in ret.comment
+
+
+def _default_opts_exts_override(cert_managed, args, typ):
+    """
+    Ensure default opts/exts are present in the issued certificate when overrides
+    are specified. This contrasts with Vault's usual behavior of dropping all
+    default_extensions/default_critical_options when values are specified for extensions/critical_options.
+    """
+    args[typ] = {"foobar": "baz", "quux": True}
+    ret, cert = _manage(cert_managed, args)
+    assert ret.changes
+    assert getattr(cert, typ) == {b"foobar": b"baz", b"quux": b"", b"keepme": b""}
+    # ensure idempotency
+    ret, cert = _manage(cert_managed, args)
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.parametrize(
+    "roles_setup",
+    ({"userrole": {"default_critical_options": {"foobar": "foo", "keepme": ""}}},),
+    indirect=True,
+)
+def test_user_default_options_override(cert_managed, user_args):
+    _default_opts_exts_override(cert_managed, user_args, "critical_options")
+
+
+@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.parametrize(
+    "roles_setup",
+    ({"userrole": {"default_extensions": {"foobar": "foo", "keepme": ""}}},),
+    indirect=True,
+)
+def test_user_default_extensions_override(cert_managed, user_args):
+    _default_opts_exts_override(cert_managed, user_args, "extensions")
+
+
+@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.parametrize(
+    "roles_setup",
+    ({"hostrole": {"default_critical_options": {"foobar": "foo", "keepme": ""}}},),
+    indirect=True,
+)
+def test_host_default_options_override(cert_managed, host_args):
+    _default_opts_exts_override(cert_managed, host_args, "critical_options")
+
+
+@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.parametrize(
+    "roles_setup",
+    ({"hostrole": {"default_extensions": {"foobar": "foo", "keepme": ""}}},),
+    indirect=True,
+)
+def test_host_default_extensions_override(cert_managed, host_args):
+    _default_opts_exts_override(cert_managed, host_args, "extensions")
 
 
 def _default_opts_exts_change(cert_managed, args, roles_setup, cert_typ, typ):
@@ -484,7 +548,60 @@ def test_host_default_extensions_change(cert_managed, host_args, roles_setup):
     _default_opts_exts_change(cert_managed, host_args, roles_setup, "host", "extensions")
 
 
-# TODO check handling not allowed opts/exts in state
+def _default_exts_templated(cert_managed, args):
+    """
+    Show that enabling ``default_extensions_template`` works somewhat, but breaks:
+    * merging of default extensions with overrides
+    * idempotency of the state without overrides
+    * implicitly also reaction to changed default_extensions in the role
+    """
+    ret, cert = _manage(cert_managed, args)
+    assert getattr(cert, "extensions") == {b"foobar": b"foo-bar"}
+    # Show non-idempotency
+    ret, cert = _manage(cert_managed, args)
+    assert ret.changes == {"extensions": {"added": [], "changed": [], "removed": ["foobar"]}}
+    assert getattr(cert, "extensions") == {b"foobar": b"foo-bar"}
+    # Show that overrides don't merge with defaults, but the state is at least idempotent then.
+    args["extensions"] = {"new": "value"}
+    ret, cert = _manage(cert_managed, args)
+    assert ret.changes == {"extensions": {"added": ["new"], "changed": [], "removed": ["foobar"]}}
+    assert getattr(cert, "extensions") == {b"new": b"value"}
+    ret, _ = _manage(cert_managed, args)
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.parametrize(
+    "roles_setup",
+    (
+        {
+            "userrole": {
+                "default_extensions_template": True,
+                "default_extensions": {"foobar": "foo-{{identity.entity.metadata.bar}}"},
+            }
+        },
+    ),
+    indirect=True,
+)
+def test_user_default_exts_templated(cert_managed, user_args):
+    _default_exts_templated(cert_managed, user_args)
+
+
+@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.parametrize(
+    "roles_setup",
+    (
+        {
+            "hostrole": {
+                "default_extensions_template": True,
+                "default_extensions": {"foobar": "foo-{{identity.entity.metadata.bar}}"},
+            }
+        },
+    ),
+    indirect=True,
+)
+def test_host_default_exts_templated(cert_managed, host_args):
+    _default_exts_templated(cert_managed, host_args)
 
 
 def _key_id(cert_managed, args, roles_setup, cert_typ):
