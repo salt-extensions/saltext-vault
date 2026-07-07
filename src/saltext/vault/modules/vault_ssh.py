@@ -1032,6 +1032,9 @@ def create_certificate(
             It's possible to set a critical option in ``default_critical_options`` and ensure it is absent
             from ``allowed_critical_options`` though.
 
+        .. important::
+            It's impossible to unset all ``default_critical_options`` without adding others because of Vault's behavior.
+
     extensions
         Mapping of extension name to extension value to set on the certificate.
         If an extension does not take a value, specify it as ``true``.
@@ -1041,10 +1044,18 @@ def create_certificate(
         In contrast to Vault's behavior, a role's ``default_extensions`` are still set when
         this parameter is specified. To unset a default extension, specify its value as ``false``.
 
+        .. important::
+            Enabling ``default_extensions_template`` in a role breaks idempotency of the ``ssh_pki.certificate_managed``
+            state since it cannot render the templates. It also breaks the merging of ``default_extensions``
+            with the passed ``extensions``.
+
         .. note::
             Currently, there's no explicit Vault role parameter that forces the value of an extension.
             It's possible to set an extension in ``default_extensions`` and ensure it is absent
             from ``allowed_extensions`` though.
+
+        .. note::
+            It's impossible to unset all ``default_extensions`` without adding others because of Vault's behavior.
 
     valid_principals
         List of valid principals.
@@ -1052,11 +1063,6 @@ def create_certificate(
         All specified principals must be in ``allowed_users``/``allowed_domains``.
         For user certificates, defaults to a role's ``default_user``.
         For host certificates, this is required.
-
-        .. note::
-            If a role specifies ``allowed_users_template``/``allowed_domains_template``/``allowed_subdomains``,
-            stateful management via ``ssh_pki.certificate_managed`` cannot silently filter invalid principals
-            since the ``ssh_pki`` modules cannot render the templates. Invalid principals result in state failure then.
 
     all_principals
         Allow any principals. Defaults to false.
@@ -1130,12 +1136,34 @@ def create_certificate(
             "Need a valid public key source, either 'private_key' or 'public_key'"
         )
 
-    critical_options = {
-        k: "" if v is True else v for k, v in (kwargs.get("critical_options") or {}).items() if v
-    } or None
-    extensions = {
-        k: "" if v is True else v for k, v in (kwargs.get("extensions") or {}).items() if v
-    } or None
+    # Need to ensure default_critical_options/default_extensions are merged
+    # with the overrides, which is expected by the state module, but not
+    # the way Vault would work. Don't account for allowed options since Vault checks the policy.
+    role = None
+    critical_options = extensions = None
+    if kwargs.get("critical_options"):
+        role = read_role(signing_policy, mount=ca_server)
+        final_opts = role.get("default_critical_options") or {}
+        for opt, optval in kwargs["critical_options"].items():
+            if optval:
+                final_opts[opt] = "" if optval is True else optval
+            else:
+                final_opts.pop(opt, None)
+        critical_options = final_opts
+
+    if kwargs.get("extensions"):
+        role = role or read_role(signing_policy, mount=ca_server)
+        # Cannot render the templates currently, so disable merging
+        if role.get("default_extensions_template"):
+            final_exts = {}
+        else:
+            final_exts = role.get("default_extensions") or {}
+        for ext, extval in kwargs["extensions"].items():
+            if extval:
+                final_exts[ext] = "" if extval is True else extval
+            else:
+                final_exts.pop(ext, None)
+        extensions = final_exts
 
     return sign_key(
         signing_policy,
@@ -1224,9 +1252,17 @@ def get_signing_policy(signing_policy, ca_server=None):
     policy["default_critical_options"] = {
         k: v or True for k, v in role.get("default_critical_options", {}).items()
     }
-    policy["default_extensions"] = {
-        k: v or True for k, v in role.get("default_extensions", {}).items()
-    }
+    if role.get("default_extensions_template"):
+        # We can't render the templates currently, so don't report them.
+        # Merging of the defaults is broken for the same reason, so if one
+        # override is specified, the state is at least idempotent.
+        # Value changes are not shown, only the affected extension,
+        # so it does not matter for visibility of the issue.
+        policy["default_extensions"] = {}
+    else:
+        policy["default_extensions"] = {
+            k: v or True for k, v in role.get("default_extensions", {}).items()
+        }
     policy["default_valid_principals"] = (
         [role["default_user"]] if user_type and role.get("default_user") else []
     )
