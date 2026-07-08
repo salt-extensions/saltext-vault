@@ -4,6 +4,33 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## 1.7.0 (2026-07-08)
+
+
+### Fixed
+
+- Fixed SDB patch fallback when PATCH requests are not allowed
+- Fixed `vault_db.creds_uncached` clearing cached credentials with custom cache key when cache key was not specified
+- Fixed `vault_db.static_role_present` management of `rotation_statements`, which was not passed to Vault, but the failure was alerted about
+- Fixed `vault_pki.certificate_managed` deleting symlinks in test mode when `follow_symlinks` is explicitly set to `false`
+- Fixed an existing DB connection's explicit `plugin_version` being reset when it was not specified in a call to `vault_db.write_connection`
+- Fixed autodetermination of unspecified `cert_type` in `ssh_pki` backend functionality
+- Fixed clearing cache when `vault:cache:backend` overrides Salt's `cache`
+- Fixed exception in `read_issuer_crl` when issuer is missing - now returns `None`, as intended
+- Fixed merging of `default_critical_options` and `default_extensions` with overrides in `ssh_pki` backend
+- Fixed passing multiple entries of the same SAN type in `vault_pki.(issue|sign)_certificate`
+- Fixed reported failure in `vault_ssh.role_present_otp` when `port` was not set. The state application still worked.
+- Fixed reporting of multiple subject element changes in `vault_pki.certificate_managed`
+- Fixed revocation delay of leases with `renew_increment` set
+- Fixed the pillar module's `merge_lists` being ignored when it was set to `false` and Salt's `pillar_merge_lists` was enabled
+- Synchronized event format for `vault/lease/*/expire` between sources to `ttl` - `ttl` and `ttl_left` were both used before, depending on the source of the event
+
+
+### Added
+
+- Added `read_certificate_full` execution function to the `vault_pki` module, returning the certificate, its CA chain and miscellaneous information as a dictionary. [#145](https://github.com/salt-extensions/saltext-vault/issues/145)
+- Added support for rendering identity templates in the `ssh_pki` backend, which fixes idempotency when `default_extensions_template` is enabled. This functionality requires an adjusted policy
+
 ## 1.6.0 (2026-05-20)
 
 
