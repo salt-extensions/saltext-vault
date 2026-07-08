@@ -22,6 +22,7 @@ from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 
 from saltext.vault.utils import vault
+from saltext.vault.utils.vault.exceptions import VaultException
 from saltext.vault.utils.vault.helpers import deserialize_csl
 
 __virtualname__ = "vault_ssh"
@@ -992,6 +993,15 @@ def create_certificate(
                 capabilities = ["read"]
         }
 
+        # When a role has default_extensions_template, it's recommended to allow
+        # read access to a minion's entity to make this work as expected.
+        # If your templates use the ``identity.groups`` namespace, you need to account
+        # for that as well, but groups are not managed by this extension at the moment.
+        # Note: Templating only works when issuing AppRoles.
+        path "identity/entity/id/{{identity.entity.id}}" {
+            capabilities = ["read"]
+        }
+
     ca_server
         Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
@@ -1045,9 +1055,9 @@ def create_certificate(
         this parameter is specified. To unset a default extension, specify its value as ``false``.
 
         .. important::
-            Enabling ``default_extensions_template`` in a role breaks idempotency of the ``ssh_pki.certificate_managed``
-            state since it cannot render the templates. It also breaks the merging of ``default_extensions``
-            with the passed ``extensions``.
+            Enabling ``default_extensions_template`` in a role can break the idempotency of the ``ssh_pki.certificate_managed``
+            state, unless you allow access for a minion to read its entity as instructed above.
+            Similarly, the merging of ``default_extensions`` with the passed ``extensions`` can break as well.
 
         .. note::
             Currently, there's no explicit Vault role parameter that forces the value of an extension.
@@ -1155,7 +1165,24 @@ def create_certificate(
         role = role or read_role(signing_policy, mount=ca_server)
         # Cannot render the templates currently, so disable merging
         if role.get("default_extensions_template"):
-            final_exts = {}
+            rends = {}
+            try:
+                for k, v in role.get("default_extensions", {}).items():
+                    rend = vault.render_identity_template(v, __opts__, __context__)
+                    # None means we failed to render, might be us or the template is invalid.
+                    # Missing values will throw an exception from Vault when generating a cert:
+                    # "no value could be found for one of the template directives"
+                    if rend is not None:
+                        rends[k] = rend
+            except VaultException as err:
+                final_exts = {}
+                log.error(
+                    "Failed rendering default extensions template: %s",
+                    err,
+                    exc_info_on_loglevel=logging.DEBUG,
+                )
+            else:
+                final_exts = rends
         else:
             final_exts = role.get("default_extensions") or {}
         for ext, extval in kwargs["extensions"].items():
@@ -1253,12 +1280,24 @@ def get_signing_policy(signing_policy, ca_server=None):
         k: v or True for k, v in role.get("default_critical_options", {}).items()
     }
     if role.get("default_extensions_template"):
-        # We can't render the templates currently, so don't report them.
-        # Merging of the defaults is broken for the same reason, so if one
-        # override is specified, the state is at least idempotent.
-        # Value changes are not shown, only the affected extension,
-        # so it does not matter for visibility of the issue.
-        policy["default_extensions"] = {}
+        rends = {}
+        try:
+            for k, v in role.get("default_extensions", {}).items():
+                if v == "":
+                    rends[k] = True
+                else:
+                    rend = vault.render_identity_template(v, __opts__, __context__)
+                    if rend is not None:
+                        rends[k] = rend
+        except VaultException as err:
+            policy["default_extensions"] = {}
+            log.error(
+                "Failed rendering default extensions template: %s",
+                err,
+                exc_info_on_loglevel=logging.DEBUG,
+            )
+        else:
+            policy["default_extensions"] = rends
     else:
         policy["default_extensions"] = {
             k: v or True for k, v in role.get("default_extensions", {}).items()

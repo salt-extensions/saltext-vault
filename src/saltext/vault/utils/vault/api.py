@@ -361,6 +361,17 @@ class IdentityApi:
         endpoint = f"identity/entity/name/{name}"
         return self.client.get(endpoint)["data"]
 
+    def read_entity_by_id(self, entity_id):
+        """
+        Read the properties of an entity by its ID.
+        Raises VaultNotFound if the entity does not exist.
+
+        entity_id
+            ID of the entity to read the properties of.
+        """
+        endpoint = f"identity/entity/id/{entity_id}"
+        return self.client.get(endpoint)["data"]
+
     def read_entity_by_alias(self, alias, mount):
         """
         Lookup the properties of an entity by its alias name and mount.

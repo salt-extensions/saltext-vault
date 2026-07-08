@@ -38,13 +38,37 @@ def entity_metadata():
 
 
 @pytest.fixture(scope="module")
-def entity(entity_metadata, container):  # pylint: disable=unused-argument
+def group1_metadata():
+    return {"baz": "baz"}
+
+
+@pytest.fixture(scope="module")
+def group2_metadata():
+    return {"quux": "quux"}
+
+
+@pytest.fixture(scope="module")
+def entity(
+    entity_metadata, group1_metadata, group2_metadata, container
+):  # pylint: disable=unused-argument
     """
     We need an entity with metadata to run principal templating tests.
     """
     # need to depend on container for this fixture to be rerun when parametrizing container
     try:
         entity = vault_write("identity/entity", metadata=entity_metadata)
+        group1 = vault_write(
+            "identity/group",
+            name="group1",
+            metadata=group1_metadata,
+            member_entity_ids=[entity["data"]["id"]],
+        )
+        group2 = vault_write(
+            "identity/group",
+            name="group2",
+            metadata=group2_metadata,
+            member_entity_ids=[entity["data"]["id"]],
+        )
         vault_write("auth/salt-minions/role/foobar", token_policies=["ssh_admin"])
         mount = vault_read("sys/auth/salt-minions")
         role_id = vault_get_role_id("foobar", "salt-minions")
@@ -55,13 +79,27 @@ def entity(entity_metadata, container):  # pylint: disable=unused-argument
             mount_accessor=mount["data"]["accessor"],
         )
         secret_id = vault_create_secret_id("foobar", "salt-minions")
-        yield {"role_id": role_id, "secret_id": secret_id, "entity_id": entity["data"]["id"]}
+        yield {
+            "role_id": role_id,
+            "secret_id": secret_id,
+            "entity_id": entity["data"]["id"],
+            "group1_id": group1["data"]["id"],
+            "group2_id": group2["data"]["id"],
+        }
     finally:
         try:
             vault_delete("identity/entity-alias/id/" + alias["data"]["id"], silent=True)
         except UnboundLocalError:
             pass
         vault_delete("auth/salt-minions/role/foobar", silent=True)
+        try:
+            vault_delete("identity/group/id/" + group1["data"]["id"], silent=True)
+        except UnboundLocalError:
+            pass
+        try:
+            vault_delete("identity/group/id/" + group2["data"]["id"], silent=True)
+        except UnboundLocalError:
+            pass
         try:
             vault_delete("identity/entity/id/" + entity["data"]["id"], silent=True)
         except UnboundLocalError:
@@ -548,60 +586,76 @@ def test_host_default_extensions_change(cert_managed, host_args, roles_setup):
     _default_opts_exts_change(cert_managed, host_args, roles_setup, "host", "extensions")
 
 
-def _default_exts_templated(cert_managed, args):
+def _default_exts_templated(cert_managed, args, cert_typ, roles_setup, entity):
     """
-    Show that enabling ``default_extensions_template`` works somewhat, but breaks:
-    * merging of default extensions with overrides
-    * idempotency of the state without overrides
-    * implicitly also reaction to changed default_extensions in the role
+    Show that enabling ``default_extensions_template`` works because we can render templates.
+    This relies on being able to read one's own entity id.
     """
+    # Ensure we test referencing groups both by name and by id
+    role = roles_setup[
+        f"{cert_typ}role"
+    ].copy()  # Copying because there was leakage between tests somehow
+    role["default_extensions"] = role["default_extensions"].copy()
+    role["default_extensions"][
+        "foobar"
+    ] += f"{{{{identity.groups.ids.{entity['group2_id']}.metadata.quux}}}}"
+    vault_write(f"ssh/roles/{cert_typ}role", **role)
     ret, cert = _manage(cert_managed, args)
-    assert getattr(cert, "extensions") == {b"foobar": b"foo-bar"}
-    # Show non-idempotency
+    assert getattr(cert, "extensions") == {b"foobar": b"foo-bar-baz-quux"}
+    # Show idempotency
     ret, cert = _manage(cert_managed, args)
-    assert ret.changes == {"extensions": {"added": [], "changed": [], "removed": ["foobar"]}}
-    assert getattr(cert, "extensions") == {b"foobar": b"foo-bar"}
-    # Show that overrides don't merge with defaults, but the state is at least idempotent then.
+    assert not ret.changes
+    # When we don't have permission or fail otherwise, we report the wrong changes and are not idempotent,
+    # but the resulting extensions are still fine.
+    # assert ret.changes == {"extensions": {"added": [], "changed": [], "removed": ["foobar"]}}
+    assert getattr(cert, "extensions") == {b"foobar": b"foo-bar-baz-quux"}
+    # Show that overrides merge with defaults.
     args["extensions"] = {"new": "value"}
     ret, cert = _manage(cert_managed, args)
-    assert ret.changes == {"extensions": {"added": ["new"], "changed": [], "removed": ["foobar"]}}
-    assert getattr(cert, "extensions") == {b"new": b"value"}
+    assert ret.changes == {"extensions": {"added": ["new"], "changed": [], "removed": []}}
+    assert getattr(cert, "extensions") == {b"new": b"value", b"foobar": b"foo-bar-baz-quux"}
+    # When we don't have permission or fail otherwise, we don't merge the defaults.
+    # assert ret.changes == {"extensions": {"added": ["new"], "changed": [], "removed": ["foobar"]}}
+    # assert getattr(cert, "extensions") == {b"new": b"value"}
     ret, _ = _manage(cert_managed, args)
     assert not ret.changes
+    # Both ways are consistent here, just that one misses the default
 
 
-@pytest.mark.usefixtures("roles_setup")
 @pytest.mark.parametrize(
     "roles_setup",
     (
         {
             "userrole": {
                 "default_extensions_template": True,
-                "default_extensions": {"foobar": "foo-{{identity.entity.metadata.bar}}"},
+                "default_extensions": {
+                    "foobar": "foo-{{identity.entity.metadata.bar}}-{{identity.groups.names.group1.metadata.baz}}-"
+                },
             }
         },
     ),
     indirect=True,
 )
-def test_user_default_exts_templated(cert_managed, user_args):
-    _default_exts_templated(cert_managed, user_args)
+def test_user_default_exts_templated(cert_managed, user_args, roles_setup, entity):
+    _default_exts_templated(cert_managed, user_args, "user", roles_setup, entity)
 
 
-@pytest.mark.usefixtures("roles_setup")
 @pytest.mark.parametrize(
     "roles_setup",
     (
         {
             "hostrole": {
                 "default_extensions_template": True,
-                "default_extensions": {"foobar": "foo-{{identity.entity.metadata.bar}}"},
+                "default_extensions": {
+                    "foobar": "foo-{{identity.entity.metadata.bar}}-{{identity.groups.names.group1.metadata.baz}}-"
+                },
             }
         },
     ),
     indirect=True,
 )
-def test_host_default_exts_templated(cert_managed, host_args):
-    _default_exts_templated(cert_managed, host_args)
+def test_host_default_exts_templated(cert_managed, host_args, roles_setup, entity):
+    _default_exts_templated(cert_managed, host_args, "host", roles_setup, entity)
 
 
 def _key_id(cert_managed, args, roles_setup, cert_typ):
