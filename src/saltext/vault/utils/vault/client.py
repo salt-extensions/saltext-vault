@@ -516,6 +516,9 @@ class AuthenticatedVaultClient(VaultClient):
 
     def __init__(self, auth, url, **kwargs):
         self.auth = auth
+        self._entity = None
+        self._groups = {"name": {}, "id": {}}
+
         super().__init__(url, **kwargs)
 
     def token_valid(self, valid_for=0, remote=True):
@@ -560,14 +563,14 @@ class AuthenticatedVaultClient(VaultClient):
         endpoint = "auth/token/lookup"
         method = "POST"
         payload = {}
-        if token is None and accessor is None:
-            endpoint += "-self"
-            method = "GET"
         if token is not None:
             payload["token"] = token
         elif accessor is not None:
             endpoint += "-accessor"
             payload["accessor"] = accessor
+        else:
+            endpoint += "-self"
+            method = "GET"
         if raw:
             return self.request_raw(
                 method, endpoint, payload=payload, wrap=False, safe_to_retry=True
@@ -641,6 +644,63 @@ class AuthenticatedVaultClient(VaultClient):
                 raise
             return False
         return True
+
+    def token_entity_id(self):
+        """
+        Get the entity ID of the current token.
+        """
+        tok = self.auth.get_token()
+        if tok.entity_id is not None:
+            return tok.entity_id
+        # This means it has never been set. It should be set during creation,
+        # so this is a migration functionality that should be dropped in a future version.
+        info = self.token_lookup()
+        self.auth.update_token(entity_id=info["entity_id"] or False)
+        return self.auth.get_token().entity_id
+
+    def token_entity(self):
+        """
+        Get the entity data of the token's current entity or None, if it does not have an entity.
+        """
+        if self._entity is None:
+            entity_id = self.token_entity_id()
+            if not entity_id:
+                return None
+            self._entity = self.get(f"identity/entity/id/{entity_id}")["data"]
+        return self._entity
+
+    def token_entity_group(self, gid=None, name=None):
+        """
+        Get the group data of a group the current token belongs to.
+
+        gid
+            Group ID to lookup. Preferred. Either this or name is required.
+
+        name
+            Group name to lookup. Fallback. Either this or gid is required.
+        """
+        entity = self.token_entity()
+        if not entity:
+            return None
+
+        group_ids = entity["group_ids"] or []
+        if gid:
+            if gid not in group_ids:
+                return None
+            if gid not in self._groups["id"]:
+                group = self.get(f"identity/group/id/{gid}")["data"]
+                self._groups["id"][group["id"]] = group
+                self._groups["name"][group["name"]] = group
+            return self._groups["id"][gid]
+        if name:
+            if name not in self._groups["name"]:
+                group = self.get(f"identity/group/name/{name}")["data"]
+                if group["id"] not in group_ids:
+                    return None
+                self._groups["id"][group["id"]] = group
+                self._groups["name"][group["name"]] = group
+            return self._groups["name"][name]
+        raise TypeError("Either `name` or `gid` is required")
 
     def request_raw(
         self,

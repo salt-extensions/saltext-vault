@@ -3,6 +3,8 @@ High-level utility functions for Vault (or OpenBao) interaction
 """
 
 import logging
+import re
+from collections.abc import Mapping
 
 from saltext.vault.utils.vault.auth import InvalidVaultSecretId
 from saltext.vault.utils.vault.auth import InvalidVaultToken
@@ -35,6 +37,8 @@ from saltext.vault.utils.vault.leases import VaultWrappedResponse
 
 log = logging.getLogger(__name__)
 logging.getLogger("requests").setLevel(logging.WARNING)
+
+ACL_TEMPLATING_REGEX = re.compile(r"{{(.+?)}}")
 
 
 def query(
@@ -381,6 +385,159 @@ def list_kv(path, opts, context):
     clear_cache(opts, context)
     kv = get_kv(opts, context)
     return kv.list(path)
+
+
+class LazyIdentityContext(Mapping):
+    """
+    Simulates an identity metadata dictionary. Requests data from Vault
+    once an item is accessed.
+    """
+
+    def __init__(self, client):
+        self.client = client
+        self._entity = None
+        self._group_ids = None
+        self._groups = {"ids": {}, "names": {}}
+
+    def _init_entity(self):
+        entity = self.client.token_entity()
+        if not entity:
+            raise RuntimeError("Current token has no associated entity")
+        self._entity = {
+            "id": entity["id"],
+            "name": entity["name"],
+            "metadata": entity["metadata"] or {},
+            "aliases": {
+                alias["mount_accessor"]: {
+                    "id": alias["id"],
+                    "name": alias["name"],
+                    "metadata": alias["metadata"] or {},
+                    "custom_metadata": alias["custom_metadata"] or {},
+                }
+                for alias in (entity["aliases"] or [])
+            },
+        }
+        self._group_ids = entity["group_ids"] or []
+
+    def _init_group(self, gid=None, name=None):
+        group = self.client.token_entity_group(name=name, gid=gid)
+        if not group:
+            raise RuntimeError(
+                f"Current token has no associated entity or is not part of group {gid or name}"
+            )
+        self._groups["ids"][group["id"]] = {
+            "name": group["name"],
+            "metadata": group["metadata"] or {},
+        }
+        self._groups["names"][group["name"]] = {
+            "id": group["id"],
+            "metadata": group["metadata"] or {},
+        }
+
+    def _init_all_groups(self):
+        if self._group_ids is None:
+            self._init_entity()
+
+        for gid in self._group_ids:
+            if gid not in self._groups["ids"]:
+                self._init_group(gid=gid)
+
+    def _lookup(self, steps, ptr, key):
+        while steps:
+            try:
+                ptr = ptr[steps.pop(0)]
+            except KeyError as err:
+                raise KeyError(key) from err
+        if isinstance(ptr, Mapping):
+            raise KeyError(key)
+        return ptr
+
+    def _lookup_entity(self, parts, key):
+        if self._entity is None:
+            self._init_entity()
+        return self._lookup(parts[2:], self._entity, key)
+
+    def _lookup_groups(self, parts, key):
+        if parts[2] == "ids":
+            if parts[3] not in self._groups["ids"]:
+                self._init_group(gid=parts[3])
+            group = self._groups["ids"][parts[3]]
+        elif parts[2] == "names":
+            if parts[3] not in self._groups["names"]:
+                self._init_group(name=parts[3])
+            group = self._groups["names"][parts[3]]
+        else:
+            raise KeyError(key)
+        return self._lookup(parts[4:], group, key)
+
+    def __getitem__(self, key):
+        try:
+            parts = key.split(".")
+        except AttributeError as err:
+            raise KeyError(key) from err
+        if parts[0] != "identity":
+            raise KeyError(key)
+        if parts[1] == "entity":
+            return self._lookup_entity(parts, key)
+        if parts[1] == "groups":
+            return self._lookup_groups(parts, key)
+        raise KeyError(key)
+
+    def __iter__(self):
+        def _it(ptr, prefix=None):
+            prefix = prefix or []
+            for k, v in ptr.items():
+                if isinstance(v, Mapping):
+                    yield from _it(v, prefix + [k])
+                else:
+                    yield ".".join(prefix + [k])
+
+        if self._entity is None:
+            self._init_entity()
+        yield from _it(self._entity, ["identity", "entity"])
+        self._init_all_groups()
+        yield from _it(self._groups, ["identity", "groups"])
+
+    def __len__(self):
+        return len(dict(self))
+
+
+def render_identity_template(tpl, opts, context):
+    """
+    Render an identity template based on the currently active token.
+    Example: ``foo/{{identity.entity.metadata.bar}}``.
+
+    tpl
+        (Possible) template string.
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
+    """
+    if not _has_identity_template(tpl):
+        return tpl
+
+    # Intentionally use the same client for all requests and crash if auth expires
+    client = get_authd_client(opts, context)
+    ctx = LazyIdentityContext(client)
+
+    def _sub_id(match):
+        tgt = match.group(1).strip()
+        return str(ctx[tgt])
+
+    try:
+        return ACL_TEMPLATING_REGEX.sub(_sub_id, tpl)
+    except (KeyError, RuntimeError):
+        return None
+
+
+def _has_identity_template(tpl):
+    """
+    Check whether a string contains an identity template.
+    """
+    return bool(ACL_TEMPLATING_REGEX.search(tpl))
 
 
 def _check_clear(config, client):

@@ -258,10 +258,11 @@ class VaultToken(UseCountMixin, AccessorMixin, BaseLease):
     Data object representing an authentication token
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, *, entity_id=None, **kwargs):
         if "client_token" in kwargs:
             # Ensure response data from Vault is accepted as well
             kwargs["lease_id"] = kwargs.pop("client_token")
+        self.entity_id = entity_id
         super().__init__(**kwargs)
 
     def is_valid(self, valid_for=0, uses=1):
