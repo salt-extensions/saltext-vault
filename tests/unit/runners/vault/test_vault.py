@@ -101,6 +101,7 @@ def default_config():
         },
         "server": {
             "url": "http://test-vault:8200",
+            "url_alts": ["http://test-vault:8200"],
             "namespace": None,
             "verify": None,
         },
@@ -448,7 +449,15 @@ def test_generate_token_deprecated(ttl, uses, token_serialized, config, validate
             assert "Master is not configured to issue tokens" in caplog.text
 
 
-@pytest.mark.parametrize("config", [{}, {"issue:wrap": False}], indirect=True)
+@pytest.mark.parametrize(
+    "config",
+    [
+        {},
+        {"issue:wrap": False},
+        {"server:url_alts": ["http://test-vault:8200", "http://alt-vault:8200"]},
+    ],
+    indirect=True,
+)
 @pytest.mark.parametrize("issue_params", [None, {"explicit_max_ttl": 120, "num_uses": 3}])
 def test_generate_new_token(
     issue_params, config, validate_signature, token_serialized, wrapped_serialized
@@ -461,7 +470,9 @@ def test_generate_new_token(
             token_serialized["lease_duration"] = issue_params["explicit_max_ttl"]
         if issue_params.get("num_uses") is not None:
             token_serialized["num_uses"] = issue_params["num_uses"]
-    expected = {"server": config("server"), "auth": {}}
+    expected = {"server": config("server").copy(), "auth": {}}
+    if expected["server"]["url_alts"] == [expected["server"]["url"]]:
+        expected["server"].pop("url_alts")
     if config("issue:wrap"):
         expected.update(wrapped_serialized)
         expected.update({"misc_data": {"num_uses": token_serialized["num_uses"]}})
@@ -495,7 +506,15 @@ def test_generate_new_token_refuses_if_not_configured():
     assert "Master does not issue tokens" in res["error"]
 
 
-@pytest.mark.parametrize("config", [{}, {"issue:wrap": False}], indirect=True)
+@pytest.mark.parametrize(
+    "config",
+    [
+        {},
+        {"issue:wrap": False},
+        {"server:url_alts": ["http://test-vault:8200", "http://alt-vault:8200"]},
+    ],
+    indirect=True,
+)
 @pytest.mark.parametrize("issue_params", [None, {"explicit_max_ttl": 120, "num_uses": 3}])
 def test_get_config_token(
     config, validate_signature, token_serialized, wrapped_serialized, issue_params
@@ -513,9 +532,12 @@ def test_get_config_token(
         },
         "cache": config("cache"),
         "client": config("client"),
-        "server": config("server"),
+        "server": config("server").copy(),
         "wrap_info_nested": [],
     }
+
+    if expected["server"]["url_alts"] == [expected["server"]["url"]]:
+        expected["server"].pop("url_alts")
 
     if issue_params is not None:
         if issue_params.get("explicit_max_ttl") is not None:
@@ -615,7 +637,14 @@ def test_get_config_approle(config, validate_signature, wrapped_serialized, issu
 
 @pytest.mark.parametrize(
     "config",
-    [{"issue:type": "approle"}, {"issue:type": "approle", "issue:wrap": False}],
+    [
+        {"issue:type": "approle"},
+        {"issue:type": "approle", "issue:wrap": False},
+        {
+            "issue:type": "approle",
+            "server:url_alts": ["http://test-vault:8200", "http://alt-vault:8200"],
+        },
+    ],
     indirect=True,
 )
 @pytest.mark.parametrize(
@@ -630,11 +659,14 @@ def test_get_role_id(config, validate_signature, wrapped_serialized, issue_param
     """
     Ensure get_role_id returns data in the expected format
     """
-    expected = {"server": config("server"), "data": {}}
+    expected = {"server": config("server").copy(), "data": {}}
     if config("issue:wrap"):
         expected.update(wrapped_serialized)
     else:
         expected["data"].update({"role_id": "test-role-id"})
+    if expected["server"]["url_alts"] == [expected["server"]["url"]]:
+        expected["server"].pop("url_alts")
+
     with patch("saltext.vault.runners.vault._get_role_id", autospec=True) as gen:
 
         def res_or_wrap(*_, **kwargs):  # pylint: disable=unused-argument
@@ -788,7 +820,14 @@ class TestGetRoleId:
 
 @pytest.mark.parametrize(
     "config",
-    [{"issue:type": "approle"}, {"issue:type": "approle", "issue:wrap": False}],
+    [
+        {"issue:type": "approle"},
+        {"issue:type": "approle", "issue:wrap": False},
+        {
+            "issue:type": "approle",
+            "server:url_alts": ["http://test-vault:8200", "http://alt-vault:8200"],
+        },
+    ],
     indirect=True,
 )
 def test_generate_secret_id(
@@ -798,7 +837,7 @@ def test_generate_secret_id(
     Ensure generate_secret_id returns data in the expected format
     """
     expected = {
-        "server": config("server"),
+        "server": config("server").copy(),
         "data": {},
         "misc_data": {"secret_id_num_uses": approle_meta["secret_id_num_uses"]},
     }
@@ -806,6 +845,9 @@ def test_generate_secret_id(
         expected.update(wrapped_serialized)
     else:
         expected["data"].update(secret_id_serialized)
+    if expected["server"]["url_alts"] == [expected["server"]["url"]]:
+        expected["server"].pop("url_alts")
+
     with (
         patch("saltext.vault.runners.vault._get_secret_id", autospec=True) as gen,
         patch(
@@ -855,9 +897,9 @@ def test_generate_secret_id_nonexistent_approle():
 
 @pytest.mark.usefixtures("validate_signature", "config")
 @pytest.mark.parametrize("config", [{"issue:type": "token"}], indirect=True)
-def test_get_secret_id_refuses_if_not_configured():
+def test_generate_secret_id_refuses_if_not_configured():
     """
-    Ensure get_secret_id returns an error if not configured to issue AppRoles
+    Ensure generate_secret_id returns an error if not configured to issue AppRoles
     """
     res = vault.generate_secret_id("test-minion", "sig")
     assert "error" in res

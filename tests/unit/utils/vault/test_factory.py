@@ -1,4 +1,5 @@
 import copy
+import logging
 from unittest.mock import ANY
 from unittest.mock import MagicMock
 from unittest.mock import Mock
@@ -1221,6 +1222,7 @@ class TestQueryMaster:
         publish_runner.return_value = saltutil_runner.return_value = {
             "server": {
                 "url": "http://127.0.0.1:8200",
+                "url_alts": ["http://127.0.0.1:8200"],
                 "verify": None,
                 "namespace": None,
             },
@@ -1228,12 +1230,65 @@ class TestQueryMaster:
         }
         expected_server = {
             "url": "http://127.0.0.1:8200",
+            "url_alts": ["http://127.0.0.1:8200"],
             "verify": "/etc/ssl/certs.pem",
             "namespace": None,
         }
         opts["vault"] = {"server": {"verify": "/etc/ssl/certs.pem"}}
 
-        unauthd_client_mock.get_config.return_value = expected_server
+        unauthd_client_mock.get_config.return_value = expected_server.copy()
+        unauthd_client_mock.unwrap.return_value = role_id_response
+        ret, _ = vfactory._query_master("func", opts, unwrap_client=unauthd_client_mock)
+        assert "Mismatch of cached and reported server data detected" not in caplog.text
+        # ensure the client was not replaced
+        unwrap_client.assert_not_called()
+        unauthd_client_mock.unwrap.assert_called_once()
+        assert ret == {
+            "data": role_id_response["data"],
+            "server": expected_server,
+        }
+
+    def test_query_master_local_url_does_not_interfere_with_expected_server(
+        self,
+        opts,
+        publish_runner,
+        saltutil_runner,
+        wrapped_role_id_response,
+        role_id_response,
+        unwrap_client,
+        unauthd_client_mock,
+        caplog,
+    ):
+        """
+        Ensure that a locally configured url parameter is inserted before
+        checking if there is a config mismatch.
+        """
+        publish_runner.return_value = saltutil_runner.return_value = {
+            "server": {
+                "url": "http://127.0.0.1:8200",
+                "url_alts": [
+                    "http://127.0.0.1:8200",
+                    "http://127.0.0.2:8200",
+                    "http://127.0.0.3:8200",
+                ],
+                "verify": None,
+                "namespace": None,
+            },
+            "wrap_info": wrapped_role_id_response["wrap_info"],
+        }
+        expected_server = {
+            "url": "http://127.0.0.2:8200",
+            "url_alts": [
+                "http://127.0.0.1:8200",
+                "http://127.0.0.2:8200",
+                "http://127.0.0.3:8200",
+            ],
+            "verify": None,
+            "namespace": None,
+        }
+        opts["vault"] = {"server": {"url": "http://127.0.0.2:8200"}}
+
+        unauthd_client_mock.get_config.return_value = expected_server.copy()
         unauthd_client_mock.unwrap.return_value = role_id_response
         ret, _ = vfactory._query_master("func", opts, unwrap_client=unauthd_client_mock)
         assert "Mismatch of cached and reported server data detected" not in caplog.text
@@ -1539,6 +1594,7 @@ def test_clear_cache_clears_client_from_context(ckey, connection, session, clien
                 },
                 "server": {
                     "url": "http://127.0.0.1:8200",
+                    "url_alts": ["http://127.0.0.1:8200"],
                     "namespace": None,
                     "verify": None,
                 },
@@ -1582,6 +1638,7 @@ def test_clear_cache_clears_client_from_context(ckey, connection, session, clien
                 },
                 "server": {
                     "url": "http://127.0.0.1:8200",
+                    "url_alts": ["http://127.0.0.1:8200"],
                     "namespace": None,
                     "verify": None,
                 },
@@ -1639,6 +1696,47 @@ def test_parse_config_respects_local_verify(opts):
     testval = "/etc/ssl/certs/ca-certificates.crt"
     ret = vfactory.parse_config({"server": {"verify": "default"}}, validate=False, opts=opts)
     assert ret["server"]["verify"] == testval
+
+
+@pytest.mark.parametrize(
+    "opts,is_allowed",
+    [
+        ({"vault": {"server": {"url": "https://vault-alt.company.external"}}}, False),
+        ({"vault": {"server": {"url": "https://vault-alt.company.external"}}}, True),
+        ({"vault": {"url": "https://vault-alt.company.external"}}, False),
+        ({"vault": {"url": "https://vault-alt.company.external"}}, True),
+        (
+            {
+                "vault": {
+                    "server": {
+                        "url": "https://vault-alt.company.external",
+                        "url_alts": ["https://vault-alt.company.external"],
+                    }
+                }
+            },
+            False,
+        ),
+    ],
+)
+def test_parse_config_respects_local_url_when_appropriate(opts, is_allowed, caplog):
+    """
+    Ensure locally configured url values are respected, if they are in server:url_alts.
+    """
+    oldval = "https://vault.company.internal"
+    newval = "https://vault-alt.company.external"
+    reported = {
+        "server": {
+            "url": oldval,
+            "url_alts": [newval, oldval] if is_allowed else [oldval],
+        }
+    }
+    with caplog.at_level(logging.WARN):
+        ret = vfactory.parse_config(reported, validate=False, opts=opts)
+    if is_allowed:
+        assert ret["server"]["url"] == newval
+    else:
+        assert ret["server"]["url"] == oldval
+    assert ("Locally configured Vault server URL" in caplog.text) is not is_allowed
 
 
 def test_parse_config_respects_local_client():
