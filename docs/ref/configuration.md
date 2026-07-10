@@ -370,8 +370,9 @@ Vault server. If unset, requests use the CA certificates bundled with `certifi`.
 For details, please see the `requests` documentation on [certificate verification][].
 
 :::{note}
-In addition, this value can be set to a PEM-encoded CA certificate to use as the
-sole trust anchor for certificate chain verification.
+In addition, this value can be set to a concatenation of one or more PEM-encoded
+CA certificates to use as the trust anchor for certificate chain verification
+(i.e. certificate pinning).
 :::
 
 :::{hint}
