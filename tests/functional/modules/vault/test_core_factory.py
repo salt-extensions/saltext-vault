@@ -51,10 +51,14 @@ def test_query(vault, minion):
 def test_get_server_config(vault, minion):
     res = vault.get_server_config()
     assert "url" in res
+    assert "url_alts" in res
     assert "namespace" in res
     assert "verify" in res
     for conf, val in res.items():
-        assert val == minion.config["vault"]["server"].get(conf)
+        default = None
+        if conf == "url_alts":
+            default = [minion.config["vault"]["server"]["url"]]
+        assert val == minion.config["vault"]["server"].get(conf, default)
 
 
 def test_clear_cache(vault, minion_cache):

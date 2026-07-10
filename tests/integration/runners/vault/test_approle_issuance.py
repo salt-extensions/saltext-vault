@@ -187,26 +187,31 @@ def test_minion_token_policies_are_assigned_as_expected(salt_call_cli, minion):
     }
 
 
-@pytest.fixture
-def _missing_auth_cache(minion_conn_cachedir):
+def _clear_auth_cache(minion_conn_cachedir):
     token_cachefile = minion_conn_cachedir / "session" / "__token.p"
     secret_id_cachefile = minion_conn_cachedir / "secret_id.p"
     for file in (secret_id_cachefile, token_cachefile):
         if file.exists():
             file.unlink()
-    yield
 
 
 @pytest.fixture
-def _cache_auth_outdated(
-    _missing_auth_cache, minion_conn_cachedir, vault_port
-):  # pylint: disable=unused-argument
-    vault_url = f"http://127.0.0.1:{vault_port}"
-    config_data = b"\x84\xa4auth\x84\xadapprole_mount\xa7approle\xacapprole_name\xbavault-approle-int-minion-1\xa6method\xa5token\xa9secret_id\xc0\xa5cache\x83\xa7backend\xa4disk\xa6config\xcd\x0e\x10\xa6secret\xa3ttl\xa6client\x86\xabmax_retries\x05\xaebackoff_factor\xcb?\xd3333333\xabbackoff_max\x08\xaebackoff_jitter\xcb?\xf0\x00\x00\x00\x00\x00\x00\xaaretry_post\xc3\xb3respect_retry_after\xc3\xa6server\x83\xa9namespace\xc0\xa6verify\xc0\xa3url"
-    config_data += (len(vault_url) + 160).to_bytes(1, "big") + vault_url.encode()
+def _cache_auth_outdated(minion_conn_cachedir, salt_call_cli):  # pylint: disable=unused-argument
     config_cachefile = minion_conn_cachedir / "config.p"
+    if not config_cachefile.exists():
+        salt_call_cli.run("vault.query", "GET", "auth/token/lookup-self")
+        assert config_cachefile.exists()
+    cached_config = salt.utils.data.decode(salt.utils.msgpack.loads(config_cachefile.read_bytes()))
+    # reset approle config to defaults, make method token
+    cached_config["auth"]["method"] = "token"
+    cached_config["auth"]["approle_mount"] = "approle"
+    cached_config["auth"]["approle_name"] = "salt-master"
+    cached_config["auth"]["secret_id"] = None
+    cached_config["auth"].pop("role_id")
+    config_msgpack = salt.utils.msgpack.dumps(cached_config)
     with salt.utils.files.fopen(config_cachefile, "wb") as f:
-        f.write(config_data)
+        f.write(config_msgpack)
+    _clear_auth_cache(minion_conn_cachedir)
     try:
         yield
     finally:
@@ -228,13 +233,19 @@ def test_auth_method_switch_does_not_break_minion_auth(salt_call_cli, caplog):
 
 
 @pytest.fixture
-def _cache_server_outdated(
-    _missing_auth_cache, minion_conn_cachedir
-):  # pylint: disable=unused-argument
-    config_data = b"\x84\xa4auth\x85\xadapprole_mount\xa7approle\xacapprole_name\xbavault-approle-int-minion-1\xa6method\xa7approle\xa7role_id\xactest-role-id\xa9secret_id\xc3\xa5cache\x83\xa7backend\xa4disk\xa6config\xcd\x0e\x10\xa6secret\xa3ttl\xa6client\x86\xabmax_retries\x05\xaebackoff_factor\xcb?\xd3333333\xabbackoff_max\x08\xaebackoff_jitter\xcb?\xf0\x00\x00\x00\x00\x00\x00\xaaretry_post\xc3\xb3respect_retry_after\xc3\xa6server\x83\xa9namespace\xc0\xa6verify\xc0\xa3url\xb2http://127.0.0.1:8"
+def _cache_server_outdated(minion_conn_cachedir, salt_call_cli):  # pylint: disable=unused-argument
     config_cachefile = minion_conn_cachedir / "config.p"
+    if not config_cachefile.exists():
+        salt_call_cli.run("vault.query", "GET", "auth/token/lookup-self")
+        assert config_cachefile.exists()
+    cached_config = salt.utils.data.decode(salt.utils.msgpack.loads(config_cachefile.read_bytes()))
+    # change server URL
+    cached_config["server"]["url"] = "http://127.0.0.1:8"
+    cached_config["server"]["url_alts"] = ["http://127.0.0.1:8"]
+    config_msgpack = salt.utils.msgpack.dumps(cached_config)
     with salt.utils.files.fopen(config_cachefile, "wb") as f:
-        f.write(config_data)
+        f.write(config_msgpack)
+    _clear_auth_cache(minion_conn_cachedir)
     try:
         yield
     finally:
