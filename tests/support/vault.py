@@ -25,11 +25,19 @@ def _vault_cmd(cmd, textinput=None, raw=False):
         text=True,
     )
 
+    data = None
+    if proc.returncode == 0 and "-format=json" in cmd:
+        try:
+            data = json.loads(proc.stdout)
+        except json.JSONDecodeError:
+            pass
+
     ret = ProcessResult(
         returncode=proc.returncode,
         stdout=proc.stdout,
         stderr=proc.stderr,
         cmdline=proc.args,
+        data=data,
     )
 
     if raw:
@@ -70,8 +78,7 @@ def vault_read_policy(policy):
             return None
         log.debug("Failed to read policy `%s`:\n%s\nSTDERR: %s", policy, ret, ret.stderr)
         pytest.fail(f"Unable to read policy `{policy}`: {ret.stderr or ret.stdout}")
-    res = json.loads(ret.stdout)
-    return res["policy"]
+    return ret.data["policy"]
 
 
 def vault_list_policies():
@@ -79,7 +86,7 @@ def vault_list_policies():
         ret = _vault_cmd(["policy", "list", "-format=json"])
     except RuntimeError as err:
         pytest.fail(f"Unable to list policies: {err}")
-    return json.loads(ret.stdout)
+    return ret.data
 
 
 def vault_delete_policy(policy):
@@ -170,7 +177,7 @@ def vault_get_role_id(name, mount="approle"):
         ret = _vault_cmd(cmd)
     except RuntimeError as err:
         pytest.fail(f"Failed to read role-id for `{name}` at `{mount}`: {err}")
-    return json.loads(ret.stdout)["data"]["role_id"]
+    return ret.data["data"]["role_id"]
 
 
 def vault_create_secret_id(name, mount="approle"):
@@ -179,7 +186,7 @@ def vault_create_secret_id(name, mount="approle"):
         ret = _vault_cmd(cmd)
     except RuntimeError as err:
         pytest.fail(f"Failed to create secret-id for `{name}` at `{mount}`: {err}")
-    return json.loads(ret.stdout)["data"]["secret_id"]
+    return ret.data["data"]["secret_id"]
 
 
 def vault_write_secret(path, **kwargs):
@@ -219,10 +226,9 @@ def vault_read_secret(path):
             return None
         log.debug("Failed to read secret at `%s`:\n%s\nSTDERR: %s", path, ret, ret.stderr)
         pytest.fail(f"Failed to read secret at `{path}`: {ret.stderr or ret.stdout}")
-    res = json.loads(ret.stdout)
-    if "data" in res["data"]:
-        return res["data"]["data"]
-    return res["data"]
+    if "data" in ret.data["data"]:
+        return ret.data["data"]["data"]
+    return ret.data["data"]
 
 
 def vault_list_secrets(path):
@@ -232,7 +238,7 @@ def vault_list_secrets(path):
             return []
         log.debug("Failed to list secrets at `%s`:\n%s\nSTDERR: %s", path, ret, ret.stderr)
         pytest.fail(f"Failed to list secrets at `{path}`: {ret.stderr or ret.stdout}")
-    return json.loads(ret.stdout)
+    return ret.data
 
 
 def vault_delete_secret(path, metadata=False):
@@ -264,10 +270,7 @@ def vault_delete(path, silent=False):
         if silent:
             return True
         pytest.fail(f"Failed to delete path at `{path}`: {err}")
-    try:
-        return json.loads(ret.stdout) or True
-    except json.decoder.JSONDecodeError:
-        return True
+    return ret.data or True
 
 
 def vault_list(path):
@@ -277,7 +280,7 @@ def vault_list(path):
             return []
         log.debug("Failed to list path at `%s`:\n%s\nSTDERR: %s", path, ret, ret.stderr)
         pytest.fail(f"Failed to list path at `{path}`: {ret.stderr or ret.stdout}")
-    return json.loads(ret.stdout)
+    return ret.data
 
 
 def vault_list_detailed(path):
@@ -287,7 +290,7 @@ def vault_list_detailed(path):
             return []
         log.debug("Failed to list path at `%s`:\n%s\nSTDERR: %s", path, ret, ret.stderr)
         pytest.fail(f"Failed to list path at `{path}`: {ret.stderr or ret.stdout}")
-    return json.loads(ret.stdout)["data"]
+    return ret.data["data"]
 
 
 def vault_read(path, default=..., raise_errors=False):
@@ -299,7 +302,7 @@ def vault_read(path, default=..., raise_errors=False):
         if default is not ...:
             return default
         pytest.fail(f"Failed to read path at `{path}`: {err}")
-    return json.loads(ret.stdout)
+    return ret.data
 
 
 def vault_write(path, *args, **kwargs):
@@ -314,10 +317,7 @@ def vault_write(path, *args, **kwargs):
         ret = _vault_cmd(cmd, textinput=json.dumps(kwargs))
     except RuntimeError as err:
         pytest.fail(f"Failed to write to path at `{path}`: {err}")
-    try:
-        return json.loads(ret.stdout) or True
-    except json.decoder.JSONDecodeError:
-        return True
+    return ret.data or True
 
 
 def vault_revoke(lease_id, prefix=False):

@@ -110,6 +110,7 @@ Complete configuration
 """
 
 import logging
+from typing import TYPE_CHECKING
 
 import salt.utils.dictupdate
 from salt.exceptions import InvalidConfigError
@@ -119,7 +120,18 @@ from saltext.vault.utils import vault
 from saltext.vault.utils.vault import helpers
 from saltext.vault.utils.versions import warn_until
 
-log = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from saltext.vault.utils._types import SaltContext
+    from saltext.vault.utils._types import SaltGrains
+    from saltext.vault.utils._types import SaltLogger
+    from saltext.vault.utils._types import SaltOpts
+
+    __opts__: SaltOpts
+    __context__: SaltContext
+    __grains__: SaltGrains
+
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 
 def ext_pillar(
@@ -198,7 +210,9 @@ def ext_pillar(
             vault_pillar_single = vault.read_kv(rendered_path, __opts__, __context__)
         except vault.VaultNotFoundError:
             log.info(
-                "Vault secret not found for: %s", rendered_path, exc_info_on_loglevel=logging.DEBUG
+                "Vault secret not found for: %s",
+                rendered_path,
+                exc_info_on_loglevel=logging.DEBUG,
             )
         except SaltException:
             log.warning(

@@ -299,8 +299,11 @@ def test_vault_client_unwrap_should_raise_appropriate_errors(func, expected, cli
     unwrap/token_lookup should raise exceptions the same way request does
     """
     with pytest.raises(expected):
-        tgt = getattr(client, func)
-        tgt("test-wrapping-token")
+        if func == "unwrap":
+            client.unwrap(wrapped="test-wrapping-token")
+        else:
+            tgt = getattr(client, func)
+            tgt(token="test-wrapping-token")
 
 
 @pytest.mark.usefixtures("req_unwrapping")
@@ -345,7 +348,7 @@ def test_vault_client_token_lookup_returns_data_only(token_lookup_self_response,
     token_lookup should return "data" only, not the whole response payload
     """
     req.return_value = _mock_json_response(token_lookup_self_response)
-    res = client.token_lookup("test-token")
+    res = client.token_lookup(token="test-token")
     assert res == token_lookup_self_response["data"]
 
 
@@ -356,7 +359,7 @@ def test_vault_client_token_lookup_respects_raw(raw, req, client):
     """
     response_data = {"foo": "bar"}
     req.return_value = _mock_json_response({"data": response_data})
-    res = client.token_lookup("test-token", raw=raw)
+    res = client.token_lookup(token="test-token", raw=raw)
     if raw:
         assert res.json() == {"data": response_data}
     else:
@@ -600,12 +603,12 @@ def test_get_expected_creation_path_fails_for_unknown_type():
     Ensure unknown source types result in an exception
     """
     with pytest.raises(salt.exceptions.SaltInvocationError):
-        vclient._get_expected_creation_path("nonexistent")
+        vclient._get_expected_creation_path("nonexistent")  # type: ignore
 
 
 @pytest.fixture
 def _send_mock():
-    with patch("saltext.vault.utils.vault.client.HTTPAdapter.send", autospec=True) as send:
+    with patch("requests.adapters.HTTPAdapter.send", autospec=True) as send:
         send.return_value.is_redirect = False
         yield send
 

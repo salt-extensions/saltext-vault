@@ -4,8 +4,8 @@ This is copied from Salt's testsuite at tests/support/pytest/mysql.py.
 
 import logging
 import time
+from dataclasses import dataclass
 
-import attr
 import pytest
 from pytestskipmarkers.utils import platform
 from saltfactories.utils import random_string
@@ -18,31 +18,36 @@ import docker.errors  # isort:skip pylint:disable=wrong-import-position
 log = logging.getLogger(__name__)
 
 
-@attr.s(kw_only=True, slots=True)
+@dataclass(kw_only=True, slots=True)
 class MySQLImage:
-    name = attr.ib()
-    tag = attr.ib()
-    container_id = attr.ib()
+    name: str
+    tag: str
+    container_id: str
 
     def __str__(self):
         return f"{self.name}:{self.tag}"
 
 
-@attr.s(kw_only=True, slots=True)
+@dataclass(kw_only=True, slots=True)
 class MySQLCombo:
-    mysql_name = attr.ib()
-    mysql_version = attr.ib()
-    mysql_port = attr.ib(default=None)
-    mysql_host = attr.ib(default="%")
-    mysql_user = attr.ib()
-    mysql_passwd = attr.ib()
-    mysql_database = attr.ib(default=None)
-    mysql_root_user = attr.ib(default="root")
-    mysql_root_passwd = attr.ib()
-    container = attr.ib(default=None)
-    container_id = attr.ib()
+    mysql_name: str
+    mysql_version: str
+    mysql_port: int | None = None
+    mysql_host: str = "%"
+    mysql_user: str
+    mysql_passwd: str
+    mysql_database: str | None = None
+    mysql_root_user: str = "root"
+    mysql_root_passwd: str | None = None
+    container: str | None = None
+    container_id: str | None = None
 
-    @container_id.default
+    def __post_init__(self):
+        if self.container_id is None:
+            self.container_id = self._default_container_id()
+        if self.mysql_root_passwd is None:
+            self.mysql_root_passwd = self.mysql_passwd
+
     def _default_container_id(self):
         return random_string(
             "{}-{}-".format(  # pylint: disable=consider-using-f-string
@@ -50,10 +55,6 @@ class MySQLCombo:
                 self.mysql_version,
             )
         )
-
-    @mysql_root_passwd.default
-    def _default_mysql_root_user_passwd(self):
-        return self.mysql_passwd
 
     def get_credentials(self, **kwargs):
         return {

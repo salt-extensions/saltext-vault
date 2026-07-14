@@ -11,10 +11,10 @@ from saltext.vault.utils.vault import pki
 
 
 class CAFixture:
-    def __init__(self, common_name):
+    def __init__(self, common_name: str):
         self.common_name = common_name
-        self.private_key = None
-        self.certificate = None
+        self.private_key: pki.Privkey = None  # type: ignore
+        self.certificate: x509.Certificate = None  # type: ignore
 
     def generate(self):
         one_day = datetime.timedelta(1, 0, 0)

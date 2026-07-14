@@ -5,13 +5,16 @@ Vault (or OpenBao) API client implementation
 import logging
 import random
 import re
+import typing
+from collections.abc import Mapping
+from collections.abc import Sequence
 from itertools import takewhile
 
 import requests
+import requests.adapters
 import salt.exceptions
-from requests.adapters import HTTPAdapter
-from requests.adapters import Retry
 
+from saltext.vault.utils.vault import auth as vauth
 from saltext.vault.utils.vault import leases
 from saltext.vault.utils.vault.exceptions import VaultAuthExpired
 from saltext.vault.utils.vault.exceptions import VaultInvocationError
@@ -34,13 +37,19 @@ except ImportError:
 
     URLLIB3V1 = True
 
+if typing.TYPE_CHECKING:
+    from typing_extensions import Self
+    from urllib3 import response as urllib3response
 
-log = logging.getLogger(__name__)
+    from saltext.vault.utils._types import SaltLogger
+
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 logging.getLogger("requests").setLevel(logging.WARNING)
 
 # This list is not complete at all, but contains
 # the most important paths.
-VAULT_UNAUTHD_PATHS = (
+VAULT_UNAUTHD_PATHS: tuple[str, ...] = (
     "sys/wrapping/lookup",
     "sys/internal/ui/mounts",
     "sys/internal/ui/namespaces",
@@ -73,7 +82,10 @@ MAX_BACKOFF_MAX = 60.0
 MAX_BACKOFF_JITTER = 5.0
 
 
-def _get_expected_creation_path(secret_type, config=None):
+def _get_expected_creation_path(
+    secret_type: typing.Literal["token"] | typing.Literal["secret_id"] | typing.Literal["role_id"],
+    config: Mapping[str, typing.Any] | None = None,
+) -> str:
     if secret_type == "token":
         return r"auth/token/create(/[^/]+)?"
 
@@ -106,20 +118,21 @@ class VaultClient:
 
     def __init__(
         self,
-        url,
-        namespace=None,
-        verify=None,
-        session=None,
-        connect_timeout=DEFAULT_CONNECT_TIMEOUT,
-        read_timeout=DEFAULT_READ_TIMEOUT,
-        max_retries=DEFAULT_MAX_RETRIES,
-        backoff_factor=DEFAULT_BACKOFF_FACTOR,
-        backoff_max=DEFAULT_BACKOFF_MAX,
-        backoff_jitter=DEFAULT_BACKOFF_JITTER,
-        retry_post=DEFAULT_RETRY_POST,
-        respect_retry_after=DEFAULT_RESPECT_RETRY_AFTER,
-        retry_status=DEFAULT_RETRY_STATUS,
-        retry_after_max=DEFAULT_RETRY_AFTER_MAX,
+        url: str,
+        namespace: str | None = None,
+        verify: str | bool | None = None,
+        *,
+        session: requests.Session | None = None,
+        connect_timeout: float | int = DEFAULT_CONNECT_TIMEOUT,
+        read_timeout: float | int = DEFAULT_READ_TIMEOUT,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        backoff_factor: float | int = DEFAULT_BACKOFF_FACTOR,
+        backoff_max: float | int = DEFAULT_BACKOFF_MAX,
+        backoff_jitter: float | int = DEFAULT_BACKOFF_JITTER,
+        retry_post: bool = DEFAULT_RETRY_POST,
+        respect_retry_after: bool = DEFAULT_RESPECT_RETRY_AFTER,
+        retry_status: Sequence[int] | None = DEFAULT_RETRY_STATUS,
+        retry_after_max: int | None = DEFAULT_RETRY_AFTER_MAX,
     ):
         self.url = url
         self.namespace = namespace
@@ -129,14 +142,15 @@ class VaultClient:
         self.read_timeout = read_timeout
 
         # Cap the retry-backoff values somewhat
-        self.max_retries = max(0, min(max_retries, MAX_MAX_RETRIES))
-        self.backoff_factor = max(0, min(backoff_factor, MAX_BACKOFF_FACTOR))
-        self.backoff_max = max(0, min(backoff_max, MAX_BACKOFF_MAX))
-        self.backoff_jitter = max(0, min(backoff_jitter, MAX_BACKOFF_JITTER))
+        self.max_retries = float(max(0, min(max_retries, MAX_MAX_RETRIES)))
+        self.backoff_factor = float(max(0, min(backoff_factor, MAX_BACKOFF_FACTOR)))
+        self.backoff_max = float(max(0, min(backoff_max, MAX_BACKOFF_MAX)))
+        self.backoff_jitter = float(max(0, min(backoff_jitter, MAX_BACKOFF_JITTER)))
         self.retry_post = bool(retry_post)
         self.respect_retry_after = bool(respect_retry_after)
         # urllib3 2.6.3 introduced this parameter and set its default to 21600 (6h). Match that.
         self.retry_after_max = max(0, retry_after_max) if retry_after_max is not None else 21600
+
         self.retry_status = tuple(retry_status) if retry_status is not None else None
 
         retry = VaultRetry(
@@ -146,7 +160,7 @@ class VaultClient:
             backoff_jitter=self.backoff_jitter,
             respect_retry_after_header=self.respect_retry_after,
             retry_after_max=self.retry_after_max,
-            allowed_methods=None if retry_post else Retry.DEFAULT_ALLOWED_METHODS,
+            allowed_methods=None if retry_post else requests.adapters.Retry.DEFAULT_ALLOWED_METHODS,
             raise_on_status=False,
             status_forcelist=self.retry_status,
         )
@@ -166,16 +180,42 @@ class VaultClient:
             # client to be instantiated.
             # We want to keep the TCP connection alive, so we'll modify
             # the adapter in place.
-            adapter = session.get_adapter(url)
+            adapter = typing.cast(VaultAPIAdapter, session.get_adapter(url))
             adapter.max_retries = retry
             adapter.connect_timeout = self.connect_timeout
             adapter.read_timeout = self.read_timeout
         self.session = session
         self._vault_adapter = adapter
 
+    @typing.overload
     def delete(
-        self, endpoint, *, wrap=False, raise_error=True, add_headers=None, safe_to_retry=None
-    ):
+        self,
+        endpoint: str,
+        *,
+        wrap: typing.Literal[False] = False,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+    ) -> typing.Any: ...
+    @typing.overload
+    def delete(
+        self,
+        endpoint: str,
+        *,
+        wrap: int | str,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+    ) -> leases.VaultWrappedResponse: ...
+    def delete(
+        self,
+        endpoint: str,
+        *,
+        wrap: int | str | typing.Literal[False] = False,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+    ) -> typing.Any:
         """
         Wrapper for client.request("DELETE", ...)
         """
@@ -188,7 +228,35 @@ class VaultClient:
             safe_to_retry=safe_to_retry,
         )
 
-    def get(self, endpoint, *, wrap=False, raise_error=True, add_headers=None, safe_to_retry=None):
+    @typing.overload
+    def get(
+        self,
+        endpoint: str,
+        *,
+        wrap: typing.Literal[False] = False,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+    ) -> typing.Any: ...
+    @typing.overload
+    def get(
+        self,
+        endpoint: str,
+        *,
+        wrap: int | str,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+    ) -> leases.VaultWrappedResponse: ...
+    def get(
+        self,
+        endpoint: str,
+        *,
+        wrap: int | str | typing.Literal[False] = False,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+    ) -> typing.Any:
         """
         Wrapper for client.request("GET", ...)
         """
@@ -201,7 +269,35 @@ class VaultClient:
             safe_to_retry=safe_to_retry,
         )
 
-    def list(self, endpoint, *, wrap=False, raise_error=True, add_headers=None, safe_to_retry=None):
+    @typing.overload
+    def list(
+        self,
+        endpoint: str,
+        *,
+        wrap: typing.Literal[False] = False,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+    ) -> typing.Any: ...
+    @typing.overload
+    def list(
+        self,
+        endpoint: str,
+        *,
+        wrap: int | str,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+    ) -> leases.VaultWrappedResponse: ...
+    def list(
+        self,
+        endpoint: str,
+        *,
+        wrap: int | str | typing.Literal[False] = False,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+    ) -> typing.Any:
         """
         Wrapper for client.request("LIST", ...)
         TODO: configuration to enable GET requests with query parameters for LIST?
@@ -215,16 +311,38 @@ class VaultClient:
             safe_to_retry=safe_to_retry,
         )
 
+    @typing.overload
     def post(
         self,
-        endpoint,
-        payload=None,
+        endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
-        wrap=False,
-        raise_error=True,
-        add_headers=None,
-        safe_to_retry=None,
-    ):
+        wrap: typing.Literal[False] = False,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+    ) -> typing.Any: ...
+    @typing.overload
+    def post(
+        self,
+        endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
+        *,
+        wrap: int | str,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+    ) -> leases.VaultWrappedResponse: ...
+    def post(
+        self,
+        endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
+        *,
+        wrap: int | str | typing.Literal[False] = False,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+    ) -> typing.Any:
         """
         Wrapper for client.request("POST", ...)
         """
@@ -238,16 +356,38 @@ class VaultClient:
             safe_to_retry=safe_to_retry,
         )
 
+    @typing.overload
     def put(
         self,
-        endpoint,
-        payload=None,
+        endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
-        wrap=False,
-        raise_error=True,
-        add_headers=None,
-        safe_to_retry=True,
-    ):
+        wrap: typing.Literal[False] = False,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool = True,
+    ) -> typing.Any: ...
+    @typing.overload
+    def put(
+        self,
+        endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
+        *,
+        wrap: int | str,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool = True,
+    ) -> leases.VaultWrappedResponse: ...
+    def put(
+        self,
+        endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
+        *,
+        wrap: int | str | typing.Literal[False] = False,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool = True,
+    ) -> leases.VaultWrappedResponse | typing.Any:
         """
         Also a wrapper for client.request("POST", ...)
         Vault considers POST and PUT to be synonymous.
@@ -263,16 +403,38 @@ class VaultClient:
             safe_to_retry=safe_to_retry,
         )
 
+    @typing.overload
     def patch(
         self,
-        endpoint,
-        payload,
+        endpoint: str,
+        payload: Mapping[typing.Any, typing.Any],
         *,
-        wrap=False,
-        raise_error=True,
-        add_headers=None,
-        safe_to_retry=None,
-    ):
+        wrap: typing.Literal[False] = False,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+    ) -> typing.Any: ...
+    @typing.overload
+    def patch(
+        self,
+        endpoint: str,
+        payload: Mapping[typing.Any, typing.Any],
+        *,
+        wrap: int | str,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+    ) -> leases.VaultWrappedResponse: ...
+    def patch(
+        self,
+        endpoint: str,
+        payload: Mapping[typing.Any, typing.Any],
+        *,
+        wrap: int | str | typing.Literal[False] = False,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+    ) -> typing.Any:
         """
         Wrapper for client.request("PATCH", ...)
         """
@@ -286,18 +448,44 @@ class VaultClient:
             safe_to_retry=safe_to_retry,
         )
 
+    @typing.overload
     def request(
         self,
-        method,
-        endpoint,
-        payload=None,
+        method: str,
+        endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
-        wrap=False,
-        raise_error=True,
-        add_headers=None,
-        safe_to_retry=None,
+        wrap: typing.Literal[False] = False,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
         **kwargs,
-    ):
+    ) -> typing.Any: ...
+    @typing.overload
+    def request(
+        self,
+        method: str,
+        endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
+        *,
+        wrap: int | str,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+        **kwargs,
+    ) -> leases.VaultWrappedResponse: ...
+    def request(
+        self,
+        method: str,
+        endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
+        *,
+        wrap: int | str | typing.Literal[False] = False,
+        raise_error: bool = True,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+        **kwargs,
+    ) -> typing.Any:
         """
         Issue a request against the Vault API.
         Returns boolean when no data was returned, otherwise the decoded json data
@@ -325,15 +513,15 @@ class VaultClient:
 
     def request_raw(
         self,
-        method,
-        endpoint,
-        payload=None,
+        method: str,
+        endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
-        wrap=False,
-        add_headers=None,
-        safe_to_retry=None,
+        wrap: int | str | typing.Literal[False] = False,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
         **kwargs,
-    ):
+    ) -> requests.Response:
         """
         Issue a request against the Vault API. Returns the raw response object.
         """
@@ -345,7 +533,7 @@ class VaultClient:
             headers["Content-Type"] = "application/merge-patch+json"
 
         try:
-            headers.update(add_headers)
+            headers.update(add_headers or {})
         except TypeError:
             pass
 
@@ -364,7 +552,11 @@ class VaultClient:
 
         return res
 
-    def unwrap(self, wrapped, expected_creation_path=None):
+    def unwrap(
+        self,
+        wrapped: leases.VaultWrappedResponse | str,
+        expected_creation_path: Sequence[str] | str | None = None,
+    ) -> typing.Any:
         """
         Unwraps the data associated with a wrapping token.
 
@@ -387,8 +579,11 @@ class VaultClient:
         """
         if expected_creation_path:
             wrap_info = self.wrap_info(wrapped)
-            if not isinstance(expected_creation_path, list):
+            if isinstance(expected_creation_path, str):
                 expected_creation_path = [expected_creation_path]
+            elif not isinstance(expected_creation_path, list):
+                expected_creation_path = [str(path) for path in expected_creation_path]
+            expected_creation_path = typing.cast(list[str], expected_creation_path)
             if not any(re.fullmatch(p, wrap_info["creation_path"]) for p in expected_creation_path):
                 raise VaultUnwrapException(
                     actual=wrap_info["creation_path"],
@@ -409,7 +604,7 @@ class VaultClient:
             self._raise_status(res)
         return res.json()
 
-    def wrap_info(self, wrapped):
+    def wrap_info(self, wrapped: leases.VaultWrappedResponse | str) -> dict[str, typing.Any]:
         """
         Lookup wrapping token meta information.
         """
@@ -417,7 +612,21 @@ class VaultClient:
         add_headers = {"X-Vault-Token": str(wrapped)}
         return self.put(endpoint, wrap=False, add_headers=add_headers)["data"]
 
-    def token_lookup(self, token=None, accessor=None, raw=False):
+    @typing.overload
+    def token_lookup(self, *, token: str, raw: typing.Literal[True]) -> requests.Response: ...
+    @typing.overload
+    def token_lookup(
+        self, *, token: str, raw: typing.Literal[False] = False
+    ) -> dict[str, typing.Any]: ...
+    @typing.overload
+    def token_lookup(self, *, accessor: str, raw: typing.Literal[True]) -> requests.Response: ...
+    @typing.overload
+    def token_lookup(
+        self, *, accessor: str, raw: typing.Literal[False] = False
+    ) -> dict[str, typing.Any]: ...
+    def token_lookup(
+        self, *, token: str | None = None, accessor: str | None = None, raw: bool = False
+    ):
         """
         Lookup token meta information.
 
@@ -457,13 +666,15 @@ class VaultClient:
         self._raise_status(res)
         return res.json()["data"]
 
-    def token_valid(self, valid_for=0, remote=True):  # pylint: disable=unused-argument
+    def token_valid(
+        self, valid_for: int | str = 0, remote: bool = True  # pylint: disable=unused-argument
+    ) -> bool:
         """
         This client does not have a token, hence it's always invalid.
         """
         return False
 
-    def get_config(self):
+    def get_config(self) -> dict[str, typing.Any]:
         """
         Returns Vault server configuration used by this client.
         """
@@ -473,11 +684,11 @@ class VaultClient:
             "verify": self.verify,
         }
 
-    def _get_url(self, endpoint):
+    def _get_url(self, endpoint: str) -> str:
         endpoint = endpoint.strip("/")
         return f"{self.url}/v1/{endpoint}"
 
-    def _get_headers(self, wrap=False):
+    def _get_headers(self, wrap: int | str | typing.Literal[False] = False) -> dict[str, str]:
         headers = {"Content-Type": "application/json", "X-Vault-Request": "true"}
         if self.namespace is not None:
             headers["X-Vault-Namespace"] = self.namespace
@@ -485,7 +696,7 @@ class VaultClient:
             headers["X-Vault-Wrap-TTL"] = str(wrap)
         return headers
 
-    def _raise_status(self, res):
+    def _raise_status(self, res: requests.Response):
         errors = ", ".join(res.json().get("errors", []))
         if res.status_code == 400:
             raise VaultInvocationError(errors)
@@ -512,16 +723,17 @@ class AuthenticatedVaultClient(VaultClient):
     This should be used for most operations.
     """
 
-    auth = None
+    # Need to define some value here for Mock spec
+    auth: vauth.VaultAppRoleAuth | vauth.VaultTokenAuth = None  # type: ignore
 
-    def __init__(self, auth, url, **kwargs):
+    def __init__(self, auth: vauth.VaultAppRoleAuth | vauth.VaultTokenAuth, url: str, **kwargs):
         self.auth = auth
         self._entity = None
         self._groups = {"name": {}, "id": {}}
 
         super().__init__(url, **kwargs)
 
-    def token_valid(self, valid_for=0, remote=True):
+    def token_valid(self, valid_for: int | str = 0, remote: bool = True) -> bool:
         """
         Check whether this client's authentication information is
         still valid.
@@ -544,7 +756,31 @@ class AuthenticatedVaultClient(VaultClient):
                 "Error while looking up self token."
             ) from err
 
-    def token_lookup(self, token=None, accessor=None, raw=False):
+    @typing.overload
+    def token_lookup(  # pylint: disable=arguments-differ
+        self, *, raw: typing.Literal[True]
+    ) -> requests.Response: ...
+    @typing.overload
+    def token_lookup(  # pylint: disable=arguments-differ
+        self, *, raw: typing.Literal[False] = False
+    ) -> dict[str, typing.Any]: ...
+    @typing.overload
+    def token_lookup(self, *, token: str, raw: typing.Literal[True]) -> requests.Response: ...
+    @typing.overload
+    def token_lookup(
+        self, *, token: str, raw: typing.Literal[False] = False
+    ) -> dict[str, typing.Any]: ...
+    @typing.overload
+    def token_lookup(  # pylint: disable=arguments-differ
+        self, *, accessor: str, raw: typing.Literal[True]
+    ) -> requests.Response: ...
+    @typing.overload
+    def token_lookup(  # pylint: disable=arguments-differ
+        self, *, accessor: str, raw: typing.Literal[False] = False
+    ) -> dict[str, typing.Any]: ...
+    def token_lookup(  # pylint: disable=arguments-differ
+        self, token: str | None = None, accessor: str | None = None, raw: bool = False
+    ):
         """
         Lookup token meta information.
 
@@ -579,7 +815,17 @@ class AuthenticatedVaultClient(VaultClient):
             "data"
         ]
 
-    def token_renew(self, increment=None, token=None, accessor=None):
+    @typing.overload
+    def token_renew(self, increment: int | str | None = None) -> dict[str, typing.Any]: ...
+    @typing.overload
+    def token_renew(
+        self, increment: int | str | None = None, *, token: str
+    ) -> dict[str, typing.Any]: ...
+    @typing.overload
+    def token_renew(
+        self, increment: int | str | None = None, *, accessor: str
+    ) -> dict[str, typing.Any]: ...
+    def token_renew(self, increment=None, *, token=None, accessor=None):
         """
         Renew a token.
 
@@ -619,7 +865,15 @@ class AuthenticatedVaultClient(VaultClient):
             self.auth.update_token(res["auth"])
         return res["auth"]
 
-    def token_revoke(self, delta=1, token=None, accessor=None):
+    @typing.overload
+    def token_revoke(self, delta: int | str | None = None) -> typing.Literal[True]: ...
+    @typing.overload
+    def token_revoke(self, delta: int | str | None = None, *, token: str) -> bool: ...
+    @typing.overload
+    def token_revoke(self, delta: int | str | None = None, *, accessor: str) -> bool: ...
+    def token_revoke(
+        self, delta: int | str | None = 1, *, token: str | None = None, accessor: str | None = None
+    ):
         """
         Revoke a token by setting its TTL to 1s.
 
@@ -636,7 +890,12 @@ class AuthenticatedVaultClient(VaultClient):
             Accessor of the token that should be revoked. Optional.
         """
         try:
-            self.token_renew(increment=delta, token=token, accessor=accessor)
+            if token:
+                self.token_renew(increment=delta, token=token)
+            elif accessor:
+                self.token_renew(increment=delta, accessor=accessor)
+            else:
+                raise TypeError("Either token or accessor is required")
         except (VaultPermissionDeniedError, VaultNotFoundError, VaultAuthExpired):
             # if we're trying to revoke ourselves and this happens,
             # the token was already invalid
@@ -645,7 +904,7 @@ class AuthenticatedVaultClient(VaultClient):
             return False
         return True
 
-    def token_entity_id(self):
+    def token_entity_id(self) -> str | typing.Literal[False]:
         """
         Get the entity ID of the current token.
         """
@@ -655,10 +914,10 @@ class AuthenticatedVaultClient(VaultClient):
         # This means it has never been set. It should be set during creation,
         # so this is a migration functionality that should be dropped in a future version.
         info = self.token_lookup()
-        self.auth.update_token(entity_id=info["entity_id"] or False)
-        return self.auth.get_token().entity_id
+        self.auth.update_token({"entity_id": info["entity_id"] or False})
+        return typing.cast(str | typing.Literal[False], self.auth.get_token().entity_id)
 
-    def token_entity(self):
+    def token_entity(self) -> Mapping[str, typing.Any] | None:
         """
         Get the entity data of the token's current entity or None, if it does not have an entity.
         """
@@ -669,7 +928,13 @@ class AuthenticatedVaultClient(VaultClient):
             self._entity = self.get(f"identity/entity/id/{entity_id}")["data"]
         return self._entity
 
-    def token_entity_group(self, gid=None, name=None):
+    @typing.overload
+    def token_entity_group(self, *, gid: str) -> dict[str, typing.Any] | None: ...
+    @typing.overload
+    def token_entity_group(self, *, name: str) -> dict[str, typing.Any] | None: ...
+    def token_entity_group(
+        self, *, gid: str | None = None, name: str | None = None
+    ) -> dict[str, typing.Any] | None:
         """
         Get the group data of a group the current token belongs to.
 
@@ -704,16 +969,16 @@ class AuthenticatedVaultClient(VaultClient):
 
     def request_raw(
         self,
-        method,
-        endpoint,
-        payload=None,
+        method: str,
+        endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
-        wrap=False,
-        add_headers=None,
-        safe_to_retry=None,
-        is_unauthd=False,
+        wrap: int | str | typing.Literal[False] = False,
+        add_headers: dict[str, str] | None = None,
+        safe_to_retry: bool | None = None,
+        is_unauthd: bool = False,
         **kwargs,
-    ):  # pylint: disable=arguments-differ
+    ) -> requests.Response:  # pylint: disable=arguments-differ
         """
         Issue an authenticated request against the Vault API. Returns the raw response object.
         """
@@ -731,13 +996,13 @@ class AuthenticatedVaultClient(VaultClient):
             self.auth.used()
         return ret
 
-    def _get_headers(self, wrap=False):
+    def _get_headers(self, wrap: int | str | typing.Literal[False] = False) -> dict[str, str]:
         headers = super()._get_headers(wrap)
         headers["X-Vault-Token"] = str(self.auth.get_token())
         return headers
 
 
-class VaultAPIAdapter(HTTPAdapter):
+class VaultAPIAdapter(requests.adapters.HTTPAdapter):
     """
     An adapter that
 
@@ -747,10 +1012,20 @@ class VaultAPIAdapter(HTTPAdapter):
           specify it in every request.
     """
 
-    def __init__(self, *args, verify=None, connect_timeout=None, read_timeout=None, **kwargs):
-        ca_cert_data = None
+    max_retries: "VaultRetry"
+
+    def __init__(
+        self,
+        *args,
+        verify: bool | str | None = None,
+        connect_timeout: float | int | None = None,
+        read_timeout: float | int | None = None,
+        **kwargs,
+    ):
+        ca_cert_data: str | None = None
         try:
-            if verify.strip().startswith("-----BEGIN CERTIFICATE"):
+            if verify.strip().startswith("-----BEGIN CERTIFICATE"):  # type: ignore
+                verify = typing.cast(str, verify)
                 ca_cert_data = verify
                 verify = None
         except AttributeError:
@@ -763,10 +1038,10 @@ class VaultAPIAdapter(HTTPAdapter):
 
     def init_poolmanager(
         self,
-        connections,
-        maxsize,
-        block=requests.adapters.DEFAULT_POOLBLOCK,
-        **pool_kwargs,
+        connections: int,
+        maxsize: int,
+        block: bool = requests.adapters.DEFAULT_POOLBLOCK,
+        **pool_kwargs: typing.Any,
     ):
         if self.ca_cert_data is not None:
             ssl_context = create_urllib3_context()
@@ -774,7 +1049,15 @@ class VaultAPIAdapter(HTTPAdapter):
             pool_kwargs["ssl_context"] = ssl_context
         return super().init_poolmanager(connections, maxsize, block=block, **pool_kwargs)
 
-    def send(self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None):
+    def send(
+        self,
+        request: requests.PreparedRequest,
+        stream: bool = False,
+        timeout: float | tuple[float | None, float | None] | None = None,
+        verify: bool | str = True,
+        cert: str | tuple[str, str] | None = None,
+        proxies: dict[str, str] | None = None,
+    ):
         """
         Wrap sending the request to ensure ``verify`` and ``timeout`` is set
         as specified on every request. ``timeout`` can be overridden per request.
@@ -788,7 +1071,7 @@ class VaultAPIAdapter(HTTPAdapter):
         )
 
 
-class VaultRetry(Retry):
+class VaultRetry(requests.adapters.Retry):
     """
     The Vault API responds with HTTP 429 when rate limits have been hit.
     We want to always retry 429, regardless of the HTTP verb and the presence
@@ -800,16 +1083,16 @@ class VaultRetry(Retry):
     quick turnaround.
     """
 
-    PHI = 1.618
-    SQRT5 = 2.236
+    PHI: float = 1.618
+    SQRT5: float = 2.236
 
     def __init__(
         self,
         *args,
-        backoff_jitter=0.0,
-        backoff_max=Retry.DEFAULT_BACKOFF_MAX,
-        retry_after_max=DEFAULT_RETRY_AFTER_MAX,
-        **kwargs,
+        backoff_jitter: float | int = 0.0,
+        backoff_max: float = requests.adapters.Retry.DEFAULT_BACKOFF_MAX,
+        retry_after_max: int | None = DEFAULT_RETRY_AFTER_MAX,
+        **kwargs: typing.Any,
     ):
         """
         For ``urllib3<2``, backport ``backoff_max`` and ``backoff_jitter``.
@@ -824,11 +1107,11 @@ class VaultRetry(Retry):
             kwargs["backoff_jitter"] = backoff_jitter
         super().__init__(*args, **kwargs)
         # urllib3 2.6.3 introduced the same parameter. Avoid having to guess
-        # wheter the parameter is supported by setting it ourselves.
+        # whether the parameter is supported by setting it ourselves.
         self.retry_after_max = retry_after_max
         self.safe_to_retry = None
 
-    def _is_method_retryable(self, method):
+    def _is_method_retryable(self, method: str) -> bool:
         """
         Some API calls can be safely retried, even if their HTTP method is not
         considered idempotent usually (e.g. POST for lookups).
@@ -842,7 +1125,7 @@ class VaultRetry(Retry):
             return self.safe_to_retry
         return super()._is_method_retryable(method)
 
-    def is_retry(self, method, status_code, has_retry_after=False):
+    def is_retry(self, method: str, status_code: int, has_retry_after: bool = False) -> bool:
         """
         HTTP 429 is always retryable (even for POST/PATCH), otherwise fall back
         to the configuration.
@@ -851,7 +1134,7 @@ class VaultRetry(Retry):
             return True
         return super().is_retry(method, status_code, has_retry_after=has_retry_after)
 
-    def get_backoff_time(self):
+    def get_backoff_time(self) -> float:
         """
         When we're retrying HTTP error responses, ensure we don't execute the
         first retry immediately.
@@ -879,7 +1162,7 @@ class VaultRetry(Retry):
             backoff_value += random.random() * self.backoff_jitter
         return float(max(0, min(self.backoff_max, backoff_value)))
 
-    def get_retry_after(self, response):
+    def get_retry_after(self, response: "urllib3response.BaseHTTPResponse") -> float | None:
         """
         The default implementation sleeps for as long as requested
         by the ``Retry-After`` header. We want to limit that somewhat
@@ -895,7 +1178,7 @@ class VaultRetry(Retry):
             return res
         return min(res, self.retry_after_max)
 
-    def new(self, **kw):
+    def new(self, **kw: typing.Any) -> "Self":
         """
         Since we backport some params and introduce a new one,
         ensure all requests use the defined parameters, not the default ones.

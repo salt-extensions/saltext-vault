@@ -9,6 +9,7 @@ leased database credentials.
 """
 
 import logging
+import typing
 from datetime import datetime
 from datetime import timezone
 
@@ -19,7 +20,19 @@ from salt.exceptions import SaltInvocationError
 from saltext.vault.utils import vault
 from saltext.vault.utils.vault import db as vaultdb
 
-log = logging.getLogger(__name__)
+if typing.TYPE_CHECKING:
+    from saltext.vault.utils._types import SaltContext
+    from saltext.vault.utils._types import SaltFunctions
+    from saltext.vault.utils._types import SaltGrains
+    from saltext.vault.utils._types import SaltLogger
+    from saltext.vault.utils._types import SaltOpts
+
+    __opts__: SaltOpts
+    __context__: SaltContext
+    __salt__: SaltFunctions
+    __grains__: SaltGrains
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 
 def list_connections(mount="database"):
@@ -650,6 +663,7 @@ def get_creds(
         Mount path the database backend is mounted to. Defaults to ``database``.
     """
     endpoint = f"{mount}/{'static-' if static else ''}creds/{name}"
+    ckey = creds_cache = None
 
     if cache:
         ckey = f"db.{mount}.{'static' if static else 'dynamic'}.{name}"
@@ -660,8 +674,12 @@ def get_creds(
         creds_cache = vault.get_lease_store(__opts__, __context__)
         cached_creds = creds_cache.get(
             ckey,
-            valid_for=valid_for if valid_for is not NOT_SET else None,
-            revoke=revoke_delay if revoke_delay is not NOT_SET else None,
+            valid_for=typing.cast(
+                int | str | None, valid_for if valid_for is not NOT_SET else None
+            ),
+            revoke=typing.cast(
+                int | str | None, revoke_delay if revoke_delay is not NOT_SET else None
+            ),
             check_server=check_server,
         )
         if cached_creds:
@@ -690,13 +708,17 @@ def get_creds(
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
     lease = vault.VaultLease(
-        min_ttl=valid_for if valid_for is not NOT_SET else None,
-        renew_increment=renew_increment if renew_increment is not NOT_SET else None,
-        revoke_delay=revoke_delay if revoke_delay is not NOT_SET else None,
+        min_ttl=typing.cast(int | str | None, valid_for if valid_for is not NOT_SET else None),
+        renew_increment=typing.cast(
+            int | str | None, renew_increment if renew_increment is not NOT_SET else None
+        ),
+        revoke_delay=typing.cast(
+            int | str | None, revoke_delay if revoke_delay is not NOT_SET else None
+        ),
         meta=meta if meta is not NOT_SET else None,
         **res,
     )
-    if cache:
+    if cache and creds_cache and ckey:
         creds_cache.store(ckey, lease)
     return lease.data
 

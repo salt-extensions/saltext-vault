@@ -172,6 +172,7 @@ class TestGetAuthdClient:
         Ensure a valid client is returned directly without clearing cache.
         """
         client = vault.get_authd_client({}, {}, get_config=get_config)
+        config = None
         if get_config:
             client, config = client
         client.token_valid.assert_called_with(10, remote=False)
@@ -192,6 +193,7 @@ class TestGetAuthdClient:
         clearing cache.
         """
         client = vault.get_authd_client({}, {}, get_config=get_config)
+        config = None
         if get_config:
             client, config = client
         client_invalid.token_valid.assert_called_with(10, remote=False)
@@ -221,6 +223,7 @@ class TestGetAuthdClient:
         new credentials are requested.
         """
         client = vault.get_authd_client({}, {}, get_config=get_config)
+        config = None
         if get_config:
             client, config = client
         client.token_valid.assert_called_with(10, remote=False)
@@ -242,7 +245,7 @@ class TestGetAuthdClient:
         """
 
         def raise_unwrap(*args, **kwargs):
-            raise vfactory.VaultUnwrapException("foo", "bar", "vaulturl", "namespace", "verify")
+            raise vfactory.VaultUnwrapException(["foo"], "bar", "vaulturl", "namespace", "verify")
 
         with patch(
             "saltext.vault.utils.vault.factory._get_event",
@@ -257,7 +260,7 @@ class TestGetAuthdClient:
                     vault.get_authd_client({}, {})
             events.assert_called_once_with(
                 data={
-                    "expected": "foo",
+                    "expected": ["foo"],
                     "actual": "bar",
                     "url": "vaulturl",
                     "namespace": "namespace",
@@ -280,7 +283,7 @@ class TestGetAuthdClient:
         Ensure renewable tokens are renewed when necessary.
         """
         client = vault.get_authd_client({}, {}, get_config=False)
-        client.token_renew.assert_called_once_with(increment=60)
+        client.token_renew.assert_called_once_with(increment=60)  # type: ignore
         clear_cache.assert_not_called()
 
     @pytest.mark.usefixtures("build_unrenewable")
@@ -290,7 +293,7 @@ class TestGetAuthdClient:
         even though the current one would still be valid for some time.
         """
         client = vault.get_authd_client({}, {}, get_config=False)
-        client.token_renew.assert_not_called()
+        client.token_renew.assert_not_called()  # type: ignore
         clear_cache.assert_called_once()
 
     @pytest.mark.usefixtures("build_renewable_max_ttl")
@@ -300,7 +303,7 @@ class TestGetAuthdClient:
         new ttl does not satisfy it.
         """
         client = vault.get_authd_client({}, {}, get_config=False)
-        client.token_renew.assert_called_once_with(increment=60)
+        client.token_renew.assert_called_once_with(increment=60)  # type: ignore
         clear_cache.assert_called_once()
 
 

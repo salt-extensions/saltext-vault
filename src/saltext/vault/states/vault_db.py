@@ -9,6 +9,7 @@ leased database credentials.
 """
 
 import logging
+import typing
 
 from salt.defaults import NOT_SET
 from salt.exceptions import CommandExecutionError
@@ -17,7 +18,21 @@ from salt.exceptions import SaltInvocationError
 from saltext.vault.utils.vault import db as vaultdb
 from saltext.vault.utils.vault.helpers import timestring_map
 
-log = logging.getLogger(__name__)
+if typing.TYPE_CHECKING:
+
+    from saltext.vault.utils._types import SaltContext
+    from saltext.vault.utils._types import SaltFunctions
+    from saltext.vault.utils._types import SaltLogger
+    from saltext.vault.utils._types import SaltOpts
+    from saltext.vault.utils._types import SaltStates
+
+    __opts__: SaltOpts
+    __context__: SaltContext
+    __salt__: SaltFunctions
+    __states__: SaltStates
+
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 
 def connection_present(
@@ -333,6 +348,7 @@ def role_present(
                 continue
             # Strip statements to avoid tripping over final newlines
             if param.endswith("statements"):
+                arg = typing.cast(list[str], arg)
                 arg = [x.rstrip() for x in arg]
                 if param in current:
                     current[param] = [x.rstrip() for x in current[param]]
@@ -653,6 +669,7 @@ def creds_cached(
         name, static=static, cache=cache or True if not static else True, mount=mount
     )
     pp = "issued"
+    info = None
     if cached:
         info = cached[next(iter(cached))]
         if valid_for is NOT_SET:
@@ -660,6 +677,7 @@ def creds_cached(
                 valid_for = info["min_ttl"]
             else:
                 valid_for = None
+        valid_for = typing.cast(int | str | None, valid_for)
         for attr, val in (
             ("min_ttl", valid_for),
             ("renew_increment", renew_increment),
@@ -676,7 +694,7 @@ def creds_cached(
                 ret["changes"][attr] = {"old": info.get(attr), "new": val}
                 pp = "edited"
 
-        current_effective_valid_for = valid_for or 0
+        current_effective_valid_for: int | str = valid_for or 0
         if info["min_ttl"] is not None:
             current_effective_valid_for = max(info["min_ttl"], valid_for or 0)
         if info["expires_in"] <= timestring_map(current_effective_valid_for):
@@ -709,7 +727,7 @@ def creds_cached(
             "Could not find cached credentials after issuing, this is likely a bug"
         )
     # Ensure the reporting is correct.
-    if cached and new_cached[next(iter(cached))]["lease_id"] != info["lease_id"]:
+    if cached and info and new_cached[next(iter(cached))]["lease_id"] != info["lease_id"]:
         pp = "reissued"
         ret["changes"][pp] = True
 

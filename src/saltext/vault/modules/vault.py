@@ -6,6 +6,7 @@ Interface with a Vault (or OpenBao) server and the KV secret backend.
 """
 
 import logging
+from typing import TYPE_CHECKING
 
 from salt.defaults import NOT_SET
 from salt.exceptions import CommandExecutionError
@@ -15,7 +16,19 @@ from salt.exceptions import SaltInvocationError
 from saltext.vault.utils import vault
 from saltext.vault.utils.versions import warn_until
 
-log = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from saltext.vault.utils._types import SaltContext
+    from saltext.vault.utils._types import SaltFunctions
+    from saltext.vault.utils._types import SaltGrains
+    from saltext.vault.utils._types import SaltLogger
+    from saltext.vault.utils._types import SaltOpts
+
+    __opts__: SaltOpts
+    __context__: SaltContext
+    __salt__: SaltFunctions
+    __grains__: SaltGrains
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 
 def read_secret(path, key=None, metadata=False, default=NOT_SET, version=None):

@@ -534,12 +534,14 @@ def client(server_config, request, session):
         auth.is_renewable.return_value = True
         auth.is_valid.return_value = True
         auth.get_token.return_value = token
-    if request.param == "invalid_token":
+    elif request.param == "invalid_token":
         token = request.getfixturevalue(request.param)
         auth = Mock(spec=vauth.VaultTokenAuth)
         auth.is_renewable.return_value = True
         auth.is_valid.return_value = False
         auth.get_token.side_effect = vault.VaultAuthExpired
+    else:
+        raise TypeError(f"Unknown param: {request.param}")
     return vclient.AuthenticatedVaultClient(auth, **server_config, session=session)
 
 

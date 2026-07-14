@@ -9,12 +9,26 @@ Manage Vault (or OpenBao) KV v1/v2 secrets statefully.
 
 import copy
 import logging
+from typing import TYPE_CHECKING
 
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltException
 from salt.exceptions import SaltInvocationError
 
-log = logging.getLogger(__name__)
+if TYPE_CHECKING:
+
+    from saltext.vault.utils._types import SaltContext
+    from saltext.vault.utils._types import SaltFunctions
+    from saltext.vault.utils._types import SaltLogger
+    from saltext.vault.utils._types import SaltOpts
+    from saltext.vault.utils._types import SaltStates
+
+    __opts__: SaltOpts
+    __context__: SaltContext
+    __salt__: SaltFunctions
+    __states__: SaltStates
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 
 def present(name, values, sync=False):

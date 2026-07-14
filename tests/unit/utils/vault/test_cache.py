@@ -9,6 +9,7 @@ import salt.cache
 
 from saltext.vault.utils import vault
 from saltext.vault.utils.vault import cache as vcache
+from saltext.vault.utils.vault import leases as vleases
 
 
 @pytest.fixture
@@ -225,14 +226,14 @@ class TestVaultConfigCache:
         """
         Ensure an uninitialized instance is returned when there is no cache
         """
-        res = vault.cache._get_config_cache({}, {}, cbank, ckey)
+        res = vcache._get_config_cache({}, {}, cbank, ckey)
         assert res.config is None
 
     def test_get_config_context_cached(self, uncached, cbank, ckey, context):
         """
         Ensure cached data in context wins
         """
-        res = vault.cache._get_config_cache({}, context, cbank, ckey)
+        res = vcache._get_config_cache({}, context, cbank, ckey)
         assert res.config == context[cbank][ckey]
         uncached.contains.assert_not_called()
 
@@ -240,7 +241,7 @@ class TestVaultConfigCache:
         """
         Ensure cached data from other sources is respected
         """
-        res = vault.cache._get_config_cache({}, {}, cbank, ckey)
+        res = vcache._get_config_cache({}, {}, cbank, ckey)
         assert res.config == data
         cached.contains.assert_called_once_with(cbank, ckey)
         cached.fetch.assert_called_once_with(cbank, ckey)
@@ -304,6 +305,7 @@ class TestVaultConfigCache:
         unless the configuration has not been initialized.
         Also, it should uninitialize the instance.
         """
+        context_old = None
         if config is None:
             context_old = copy.deepcopy(context)
         cache = vcache.VaultConfigCache(context, cbank, ckey, {}, init_config=config)
@@ -325,7 +327,7 @@ class TestVaultConfigCache:
         """
         Ensure storing config in cache also reloads the instance
         """
-        cache = vcache.VaultConfigCache({}, {}, cbank, ckey)
+        cache = vcache.VaultConfigCache({}, cbank, ckey, {})
         assert cache.config is None
         with patch("saltext.vault.utils.vault.cache.VaultConfigCache._load") as rld:
             with patch("saltext.vault.utils.vault.cache.VaultCache.store") as store:
@@ -550,7 +552,7 @@ class TestVaultLeaseCache:
         """
         Ensure that unavailable cached data is reported as None.
         """
-        cache = vcache.VaultLeaseCache({}, "cbank")
+        cache = vcache.VaultLeaseCache({}, "cbank", lease_cls=vleases.VaultLease)
         res = cache.get("testlease")
         assert res is None
 
@@ -559,7 +561,7 @@ class TestVaultLeaseCache:
         """
         Ensure that cached data that is still valid is returned.
         """
-        cache = vcache.VaultLeaseCache({}, "cbank")
+        cache = vcache.VaultLeaseCache({}, "cbank", lease_cls=vleases.VaultLease)
         res = cache.get("testlease")
         assert res is not None
         assert res == vault.VaultLease(**lease)
@@ -572,7 +574,7 @@ class TestVaultLeaseCache:
         The lease should be returned if it is valid, otherwise only
         the invalid ckey should be flushed and None returned.
         """
-        cache = vcache.VaultLeaseCache({}, "cbank")
+        cache = vcache.VaultLeaseCache({}, "cbank", lease_cls=vleases.VaultLease)
         with patch(
             "saltext.vault.utils.vault.cache.CommonCache._flush",
             autospec=True,
@@ -592,7 +594,7 @@ class TestVaultLeaseCache:
         representation to the store implementation of the parent class.
         """
         lease_ = vault.VaultLease(**lease)
-        cache = vcache.VaultLeaseCache({}, "cbank")
+        cache = vcache.VaultLeaseCache({}, "cbank", lease_cls=vleases.VaultLease)
         with patch("saltext.vault.utils.vault.cache.CommonCache._store_ckey") as store:
             cache.store("ckey", lease_)
             store.assert_called_once_with("ckey", lease_.to_dict())
@@ -604,7 +606,9 @@ class TestVaultLeaseCache:
         Ensure internal flushing is disabled when the object is initialized
         with a reference to an exception class.
         """
-        cache = vcache.VaultLeaseCache({}, "cbank", expire_events=events)
+        cache = vcache.VaultLeaseCache(
+            {}, "cbank", lease_cls=vleases.VaultLease, expire_events=events
+        )
         ret = cache.get("ckey", 10)
         assert ret is None
         events.assert_called_once_with(

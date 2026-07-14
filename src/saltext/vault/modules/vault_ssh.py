@@ -16,6 +16,7 @@ and certificates.
 
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import salt.utils.json
 from salt.exceptions import CommandExecutionError
@@ -25,9 +26,21 @@ from saltext.vault.utils import vault
 from saltext.vault.utils.vault.exceptions import VaultException
 from saltext.vault.utils.vault.helpers import deserialize_csl
 
+if TYPE_CHECKING:
+    from saltext.vault.utils._types import SaltContext
+    from saltext.vault.utils._types import SaltFunctions
+    from saltext.vault.utils._types import SaltGrains
+    from saltext.vault.utils._types import SaltLogger
+    from saltext.vault.utils._types import SaltOpts
+
+    __opts__: SaltOpts
+    __context__: SaltContext
+    __salt__: SaltFunctions
+    __grains__: SaltGrains
+
 __virtualname__ = "vault_ssh"
 
-log = logging.getLogger(__name__)
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 
 def __virtual__():
@@ -120,13 +133,11 @@ def write_role_otp(
     """
     payload = {
         "default_user": default_user,
-        "cidr_list": cidr_list,
-        "allowed_users": allowed_users,
-        "exclude_cidr_list": exclude_cidr_list,
+        "cidr_list": deserialize_csl(cidr_list),
+        "allowed_users": deserialize_csl(allowed_users),
+        "exclude_cidr_list": deserialize_csl(exclude_cidr_list),
         "port": int(port) if port else None,
     }
-    for param in ("allowed_users", "cidr_list", "exclude_cidr_list"):
-        payload[param] = deserialize_csl(payload[param])
     return _write_role(name, "otp", mount=mount, **payload)
 
 
@@ -1119,7 +1130,6 @@ def create_certificate(
         role = read_role(signing_policy, mount=ca_server)
         if role["key_type"] != "ca":
             raise SaltInvocationError("The specified Vault role is not a CA role")
-        user_type = host_type = False
         host_type = bool(role.get("allow_host_certificates"))
         user_type = bool(role.get("allow_user_certificates"))
         if user_type is host_type:

@@ -2,7 +2,12 @@
 Exceptions that are raised by ``saltext.vault`` utilities
 """
 
+import typing
+
 import salt.exceptions
+
+if typing.TYPE_CHECKING:
+    from saltext.vault.utils.vault import leases as vleases
 
 
 class VaultException(salt.exceptions.SaltException):
@@ -16,7 +21,7 @@ class VaultLeaseExpired(VaultException):
     Raised when a cached lease is reported to be expired locally.
     """
 
-    def __init__(self, lease):
+    def __init__(self, lease: "vleases.BaseLease"):
         super().__init__()
         self.lease = lease
 
@@ -42,7 +47,16 @@ class VaultUnwrapException(VaultException):
     This has to be taken seriously as it indicates tampering.
     """
 
-    def __init__(self, expected, actual, url, namespace, verify, *args, **kwargs):
+    def __init__(
+        self,
+        expected: list[str],
+        actual: str,
+        url: str,
+        namespace: str | None,
+        verify: str | bool | None,
+        *args,
+        **kwargs,
+    ):
         msg = (
             "Wrapped response was not created from expected Vault path: "
             f"`{actual}` is not matched by any of `{expected}`.\n"

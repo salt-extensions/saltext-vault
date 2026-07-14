@@ -10,6 +10,7 @@ Manage the Vault (or OpenBao) PKI secret engine and Vault-issued X.509 certifica
 import base64
 import logging
 import os
+from typing import TYPE_CHECKING
 
 import salt.utils.files
 from salt.exceptions import CommandExecutionError
@@ -27,7 +28,22 @@ except ImportError:
     HAS_CRYPTOGRAPHY = False
 
 
-log = logging.getLogger(__name__)
+if TYPE_CHECKING:
+
+    from saltext.vault.utils._types import SaltContext
+    from saltext.vault.utils._types import SaltFunctions
+    from saltext.vault.utils._types import SaltLogger
+    from saltext.vault.utils._types import SaltLow
+    from saltext.vault.utils._types import SaltOpts
+    from saltext.vault.utils._types import SaltStates
+
+    __opts__: SaltOpts
+    __context__: SaltContext
+    __salt__: SaltFunctions
+    __states__: SaltStates
+    __low__: SaltLow
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 __virtualname__ = "vault_pki"
 
@@ -209,7 +225,6 @@ def certificate_managed(
                 changes["replaced"] = True
                 file_exists = False
 
-        replace = False
         if file_exists is None:
             file_exists = __salt__["file.file_exists"](name)
 
@@ -269,6 +284,7 @@ def certificate_managed(
             _add_sub_state_run(ret, file_managed_test)
             return ret
 
+        cert = None
         if changes:
             if not set(changes) - {
                 "ca_chain",

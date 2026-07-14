@@ -5,6 +5,7 @@ Vault-specific cache classes
 import copy
 import logging
 import time
+import typing
 from abc import ABC
 from abc import abstractmethod
 
@@ -12,13 +13,22 @@ import salt.cache
 
 from saltext.vault.utils.vault import helpers
 from saltext.vault.utils.vault import leases
+from saltext.vault.utils.vault.exceptions import VaultAuthExpired
 from saltext.vault.utils.vault.exceptions import VaultConfigExpired
 from saltext.vault.utils.vault.exceptions import VaultLeaseExpired
 
-log = logging.getLogger(__name__)
+if typing.TYPE_CHECKING:
+    from saltext.vault.utils._types import SaltLogger
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 
-def _get_config_cache(opts, context, cbank, ckey="config"):
+def _get_config_cache(
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    cbank: str,
+    ckey: str = "config",
+) -> "VaultConfigCache":
     """
     Factory for VaultConfigCache to get around some
     chicken-and-egg problems
@@ -49,7 +59,9 @@ def _get_config_cache(opts, context, cbank, ckey="config"):
     )
 
 
-def _get_cache_backend(config, opts):
+def _get_cache_backend(
+    config: dict[str, typing.Any], opts: dict[str, typing.Any]
+) -> "salt.cache.Cache | None":
     if config["cache"]["backend"] == "session":
         return None
     if config["cache"]["backend"] in ("localfs", "disk", "file"):
@@ -65,7 +77,13 @@ def _get_cache_backend(config, opts):
     return salt.cache.factory(opts)
 
 
-def _get_cache_bank(opts, force_local=False, connection=True, session=False):
+def _get_cache_bank(
+    opts: dict[str, typing.Any],
+    *,
+    force_local: bool = False,
+    connection: bool = True,
+    session: bool = False,
+) -> str:
     minion_id = None
     # force_local is necessary because pillar compilation would otherwise
     # leak tokens between master and minions
@@ -90,7 +108,14 @@ class CommonCache(ABC):
     Base class that unifies context and other cache backends.
     """
 
-    def __init__(self, context, cbank, cache_backend=None, ttl=None, flush_exception=None):
+    def __init__(
+        self,
+        context: dict[typing.Any, typing.Any],
+        cbank: str,
+        cache_backend: "salt.cache.Cache | None" = None,
+        ttl: int | str | None = None,
+        flush_exception: type[VaultConfigExpired] | type[VaultAuthExpired] | None = None,
+    ):
         self.context = context
         self.cbank = cbank
         self.cache = cache_backend
@@ -101,7 +126,7 @@ class CommonCache(ABC):
     def flush(self):
         raise NotImplementedError()
 
-    def _ckey_exists(self, ckey, flush=True):
+    def _ckey_exists(self, ckey: str, flush: bool = True) -> bool:
         if self.cbank in self.context and ckey in self.context[self.cbank]:
             return True
         if self.cache is not None:
@@ -117,7 +142,7 @@ class CommonCache(ABC):
             return True
         return False
 
-    def _get_ckey(self, ckey, flush=True):
+    def _get_ckey(self, ckey: str, flush: bool = True) -> dict[str, typing.Any] | None:
         if not self._ckey_exists(ckey, flush=flush):
             return None
         if self.cbank in self.context and ckey in self.context[self.cbank]:
@@ -126,14 +151,14 @@ class CommonCache(ABC):
             return self.cache.fetch(self.cbank, ckey) or None  # account for race conditions
         raise RuntimeError("This code path should not have been hit.")
 
-    def _store_ckey(self, ckey, value):
+    def _store_ckey(self, ckey: str, value: dict[str, typing.Any]):
         if self.cache is not None:
             self.cache.store(self.cbank, ckey, value)
         if self.cbank not in self.context:
             self.context[self.cbank] = {}
         self.context[self.cbank][ckey] = value
 
-    def _flush(self, ckey=None):
+    def _flush(self, ckey: str | None = None):
         if not ckey and self.flush_exception is not None:
             # Flushing caches in Vault often requires an orchestrated effort
             # to ensure leases/sessions are terminated instead of left open.
@@ -151,7 +176,7 @@ class CommonCache(ABC):
                 if bank.startswith(self.cbank):
                     self.context.pop(bank)
 
-    def _list(self):
+    def _list(self) -> set[str]:
         ckeys = []
         if self.cbank in self.context:
             ckeys += list(self.context[self.cbank])
@@ -166,7 +191,15 @@ class VaultCache(CommonCache):
     like secret path metadata. Uses a single cache key.
     """
 
-    def __init__(self, context, cbank, ckey, cache_backend=None, ttl=None, flush_exception=None):
+    def __init__(
+        self,
+        context: dict[typing.Any, typing.Any],
+        cbank: str,
+        ckey: str,
+        cache_backend: "salt.cache.Cache | None" = None,
+        ttl: int | str | None = None,
+        flush_exception: type[VaultConfigExpired] | type[VaultAuthExpired] | None = None,
+    ):
         super().__init__(
             context,
             cbank,
@@ -176,25 +209,25 @@ class VaultCache(CommonCache):
         )
         self.ckey = ckey
 
-    def exists(self, flush=True):
+    def exists(self, flush: bool = True) -> bool:
         """
         Check whether data for this domain exists
         """
         return self._ckey_exists(self.ckey, flush=flush)
 
-    def get(self, flush=True):
+    def get(self, flush: bool = True) -> dict[str, typing.Any] | None:
         """
         Return the cached data for this domain or None
         """
         return self._get_ckey(self.ckey, flush=flush)
 
-    def flush(self, cbank=False):
+    def flush(self, cbank: bool = False):
         """
         Flush the cache for this domain
         """
         return self._flush(self.ckey if not cbank else None)
 
-    def store(self, value):
+    def store(self, value: dict[str, typing.Any]):
         """
         Store data for this domain
         """
@@ -208,13 +241,13 @@ class VaultConfigCache(VaultCache):
 
     def __init__(
         self,
-        context,
-        cbank,
-        ckey,
-        opts,
-        cache_backend_factory=_get_cache_backend,
-        init_config=None,
-        flush_exception=None,
+        context: dict[typing.Any, typing.Any],
+        cbank: str,
+        ckey: str,
+        opts: dict[str, typing.Any],
+        cache_backend_factory: "typing.Callable[[dict[str, typing.Any], dict[typing.Any, typing.Any]], salt.cache.Cache | None]" = _get_cache_backend,
+        init_config: dict[str, typing.Any] | None = None,
+        flush_exception: type[VaultConfigExpired] | type[VaultAuthExpired] | None = None,
     ):  # pylint: disable=super-init-not-called
         self.context = context
         self.cbank = cbank
@@ -228,7 +261,7 @@ class VaultConfigCache(VaultCache):
         if init_config is not None:
             self._load(init_config)
 
-    def exists(self, flush=True):
+    def exists(self, flush: bool = True) -> bool:
         """
         Check if a configuration has been loaded and cached
         """
@@ -236,7 +269,7 @@ class VaultConfigCache(VaultCache):
             return False
         return super().exists(flush=flush)
 
-    def get(self, flush=True):
+    def get(self, flush: bool = True) -> dict[str, typing.Any] | None:
         """
         Return the current cached configuration
         """
@@ -244,7 +277,7 @@ class VaultConfigCache(VaultCache):
             return None
         return super().get(flush=flush)
 
-    def flush(self, cbank=True):
+    def flush(self, cbank: bool = True):
         """
         Flush all connection-scoped data
         """
@@ -257,7 +290,7 @@ class VaultConfigCache(VaultCache):
         self.cache = None
         self.ttl = None
 
-    def _load(self, config):
+    def _load(self, config: dict[str, typing.Any]):
         if self.config is not None:
             if (
                 self.config["cache"]["backend"] != "session"
@@ -268,7 +301,7 @@ class VaultConfigCache(VaultCache):
         self.cache = self.cache_backend_factory(self.config, self.opts)
         self.ttl = self.config["cache"]["config"]
 
-    def store(self, value):
+    def store(self, value: dict[str, typing.Any]):
         """
         Reload cache configuration, then store the new Vault configuration,
         overwriting the existing one.
@@ -277,22 +310,33 @@ class VaultConfigCache(VaultCache):
         super().store(value)
 
 
-class LeaseCacheMixin:
+LeaseType = typing.TypeVar("LeaseType", bound=leases.BaseLease)  # pylint: disable=invalid-name
+
+
+class LeaseCacheMixin(typing.Generic[LeaseType]):
     """
     Mixin for auth and lease cache that checks validity
     and acts with hydrated objects
     """
 
-    def __init__(self, *args, **kwargs):
-        self.lease_cls = kwargs.pop("lease_cls", leases.VaultLease)
-        self.expire_events = kwargs.pop("expire_events", None)
+    def __init__(
+        self,
+        *args,
+        lease_cls: type[LeaseType],
+        expire_events: typing.Callable[..., bool] | None = None,
+        **kwargs,
+    ):
+        self.lease_cls = lease_cls
+        self.expire_events = expire_events
         super().__init__(*args, **kwargs)
 
-    def _check_validity(self, lease_data, valid_for=0):
+    def _check_validity(
+        self, lease_data: dict[str, typing.Any], valid_for: int | str = 0
+    ) -> LeaseType | None:
         lease = self.lease_cls(**lease_data)
         try:
             # is_valid on auth classes accounts for duration and uses
-            if lease.is_valid(valid_for):
+            if lease.is_valid(valid_for):  # type: ignore
                 log.debug("Using cached lease.")
                 return lease
         except AttributeError:
@@ -304,14 +348,14 @@ class LeaseCacheMixin:
         return None
 
 
-class VaultLeaseCache(LeaseCacheMixin, CommonCache):
+class VaultLeaseCache(LeaseCacheMixin[LeaseType], CommonCache):
     """
     Handles caching of Vault leases. Supports multiple cache keys.
     Checks whether cached leases are still valid before returning.
     Does not enforce for per-lease ``min_ttl``.
     """
 
-    def get(self, ckey, valid_for=0, flush=True):
+    def get(self, ckey: str, valid_for: int | str = 0, flush: bool = True) -> LeaseType | None:
         """
         Returns valid cached lease data or None.
         Flushes cache if invalid by default.
@@ -330,7 +374,7 @@ class VaultLeaseCache(LeaseCacheMixin, CommonCache):
                             valid_for if valid_for is not None else err.lease.min_ttl or 0
                         ),
                         "ttl": err.lease.ttl_left,
-                        "meta": err.lease.meta,
+                        "meta": getattr(err.lease, "meta", None),
                     },
                 )
             ret = None
@@ -339,30 +383,30 @@ class VaultLeaseCache(LeaseCacheMixin, CommonCache):
             self._flush(ckey)
         return ret
 
-    def store(self, ckey, value):
+    def store(self, ckey: str, value: LeaseType | dict[str, typing.Any]):
         """
         Store a lease in cache
         """
         try:
-            value = value.to_dict()
+            lease_data = value.to_dict()  # type: ignore
         except AttributeError:
-            pass
-        return self._store_ckey(ckey, value)
+            return self._store_ckey(ckey, typing.cast(dict[str, typing.Any], value))
+        return self._store_ckey(ckey, lease_data)
 
-    def exists(self, ckey, flush=True):
+    def exists(self, ckey: str, flush: bool = True) -> bool:
         """
         Check whether a named lease exists in cache. Does not filter invalid ones,
         so fetching a reported one might still return None.
         """
         return self._ckey_exists(ckey, flush=flush)
 
-    def flush(self, ckey=None):
+    def flush(self, ckey: str | None = None):
         """
         Flush the lease cache or a single lease from the lease cache
         """
         return self._flush(ckey)
 
-    def list(self):
+    def list(self) -> set[str]:
         """
         List all cached leases. Does not filter invalid ones,
         so fetching a reported one might still return None.
@@ -370,7 +414,12 @@ class VaultLeaseCache(LeaseCacheMixin, CommonCache):
         return self._list()
 
 
-class VaultAuthCache(LeaseCacheMixin, CommonCache):
+AuthType = typing.TypeVar(  # pylint: disable=invalid-name
+    "AuthType", leases.VaultSecretId, leases.VaultToken
+)
+
+
+class VaultAuthCache(LeaseCacheMixin[AuthType], CommonCache):
     """
     Implements authentication secret-specific caches. Checks whether
     the cached secrets are still valid before returning.
@@ -378,13 +427,13 @@ class VaultAuthCache(LeaseCacheMixin, CommonCache):
 
     def __init__(
         self,
-        context,
-        cbank,
-        ckey,
-        auth_cls,
+        context: dict[typing.Any, typing.Any],
+        cbank: str,
+        ckey: str,
+        auth_cls: type[AuthType],
         cache_backend=None,
-        ttl=None,
-        flush_exception=None,
+        ttl: int | str | None = None,
+        flush_exception: type[VaultConfigExpired] | type[VaultAuthExpired] | None = None,
     ):
         super().__init__(
             context,
@@ -397,13 +446,13 @@ class VaultAuthCache(LeaseCacheMixin, CommonCache):
         self.ckey = ckey
         self.flush_exception = flush_exception
 
-    def exists(self, flush=True):
+    def exists(self, flush: bool = True) -> bool:
         """
         Check whether data for this domain exists
         """
         return self._ckey_exists(self.ckey, flush=flush)
 
-    def get(self, valid_for=0, flush=True):
+    def get(self, valid_for: int | str = 0, flush: bool = True) -> AuthType | None:
         """
         Returns valid cached auth data or None.
         Flushes cache if invalid by default.
@@ -417,17 +466,17 @@ class VaultAuthCache(LeaseCacheMixin, CommonCache):
             self.flush()
         return ret
 
-    def store(self, value):
+    def store(self, value: AuthType | dict[str, typing.Any]):
         """
         Store an auth credential in cache. Overwrites possibly existing one.
         """
         try:
-            value = value.to_dict()
+            new_value = value.to_dict()  # type: ignore
         except AttributeError:
-            pass
-        return self._store_ckey(self.ckey, value)
+            return self._store_ckey(self.ckey, typing.cast(dict[str, typing.Any], value))
+        return self._store_ckey(self.ckey, new_value)
 
-    def flush(self, cbank=None):
+    def flush(self, cbank: str | None = None):
         """
         Flush the cached auth credentials. If this is a token cache,
         flushing it deletes the whole session-scoped cache bank.

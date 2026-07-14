@@ -93,7 +93,9 @@ def private_key(tmp_path_factory):
         encryption_algorithm=serialization.NoEncryption(),
     )
     data = pk_bytes.decode()
-    with pytest.helpers.temp_file("pk.pem", data, tmp_path_factory.mktemp("pki_wrapper")) as pk:
+    with pytest.helpers.temp_file(  # type: ignore
+        "pk.pem", data, tmp_path_factory.mktemp("pki_wrapper")
+    ) as pk:
         yield str(pk)
 
 

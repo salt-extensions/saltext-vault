@@ -9,6 +9,7 @@ _________
 .. autosummary::
     :toctree:
 
+    _types
     vault
     vault.api
     vault.auth

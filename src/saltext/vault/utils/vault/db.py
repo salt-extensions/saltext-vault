@@ -4,9 +4,11 @@ Vault Database helpers
 .. versionadded:: 1.1.0
 """
 
-from salt.utils.immutabletypes import freeze
+import typing
 
-PLUGINS = freeze(
+from salt.utils import immutabletypes
+
+PLUGINS: immutabletypes.ImmutableDict = immutabletypes.freeze(
     {
         "cassandra": {
             "name": "cassandra",
@@ -121,7 +123,7 @@ PLUGINS = freeze(
 )
 
 
-def get_plugin_meta(name):
+def get_plugin_meta(name: str) -> immutabletypes.ImmutableDict:
     """
     Get meta information for a plugin with this name,
     excluding the `-database-plugin` suffix.
@@ -129,7 +131,7 @@ def get_plugin_meta(name):
     return PLUGINS.get(name, PLUGINS["default"])
 
 
-def get_plugin_name(name):
+def get_plugin_name(name: str) -> str:
     """
     Get the name of a plugin as rendered by this module. This is a utility for the state
     module primarily.
@@ -138,7 +140,12 @@ def get_plugin_name(name):
     return f"{plugin_name}-database-plugin"
 
 
-def create_cache_pattern(name=None, mount=None, cache=None, static=None):
+def create_cache_pattern(
+    name: str | None = None,
+    mount: str | None = None,
+    cache: str | typing.Literal[True] | None = None,
+    static: bool | None = None,
+) -> str:
     """
     Render a match pattern for operating on cached leases.
     Unset parameters result in a ``*`` glob.

@@ -8,6 +8,7 @@ Manage the Vault (or OpenBao) PKI secret engine, request X.509 certificates.
 """
 
 import logging
+import typing
 from datetime import datetime
 from datetime import timezone
 
@@ -24,7 +25,20 @@ try:
 except ImportError:
     HAS_X509UTIL = False
 
-log = logging.getLogger(__name__)
+
+if typing.TYPE_CHECKING:
+    from saltext.vault.utils._types import SaltContext
+    from saltext.vault.utils._types import SaltFunctions
+    from saltext.vault.utils._types import SaltGrains
+    from saltext.vault.utils._types import SaltLogger
+    from saltext.vault.utils._types import SaltOpts
+
+    __opts__: SaltOpts
+    __context__: SaltContext
+    __salt__: SaltFunctions
+    __grains__: SaltGrains
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 __virtualname__ = "vault_pki"
 
@@ -1225,7 +1239,7 @@ def read_urls(mount="pki"):
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
 
-def _split_sans(sans) -> tuple[list, list, list, list]:
+def _split_sans(sans) -> tuple[list[str], list[str], list[str], list[str]]:
     dns_sans = []
     ip_sans = []
     uri_sans = []

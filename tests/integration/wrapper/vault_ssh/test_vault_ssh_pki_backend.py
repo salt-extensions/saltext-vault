@@ -214,26 +214,28 @@ def test_host_certificate_managed_no_changes(salt_ssh_cli, host_args):
 
 @pytest.mark.usefixtures("existing_cert")
 def test_user_certificate_managed_renew(salt_ssh_cli, user_args):
+    cert_cur = None
     if CERT_CHECK:
         cert_cur = _get_cert(user_args["name"], "user")
     user_args["certificate_managed"]["ttl_remaining"] = "999d"
     ret = salt_ssh_cli.run("state.apply", "cert", pillar={"args": user_args})
     assert ret.returncode == 0
     assert ret.data[next(iter(ret.data))]["changes"] == {"expiration": True}
-    if CERT_CHECK:
+    if CERT_CHECK and cert_cur:
         cert_new = _get_cert(user_args["name"], "user")
         assert cert_new.serial != cert_cur.serial
 
 
 @pytest.mark.usefixtures("existing_cert")
 def test_host_certificate_managed_renew(salt_ssh_cli, host_args):
+    cert_cur = None
     if CERT_CHECK:
         cert_cur = _get_cert(host_args["name"], "host")
     host_args["certificate_managed"]["ttl_remaining"] = "999d"
     ret = salt_ssh_cli.run("state.apply", "cert", pillar={"args": host_args})
     assert ret.returncode == 0
     assert ret.data[next(iter(ret.data))]["changes"] == {"expiration": True}
-    if CERT_CHECK:
+    if CERT_CHECK and cert_cur:
         cert_new = _get_cert(host_args["name"], "host")
         assert cert_new.serial != cert_cur.serial
 
@@ -249,7 +251,7 @@ def _signed_by(cert, privkey):
     return x509util.is_pair(cert.signature_key(), _get_privkey(privkey))
 
 
-def _get_cert(cert, typ=None):
+def _get_cert(cert, typ=None) -> "SSHCertificate":
     try:
         p = Path(cert)
         if p.exists():

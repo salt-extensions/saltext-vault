@@ -46,7 +46,6 @@ Use it on your test case in case of need. As simple as:
 
 import logging
 import os
-import shutil
 
 import salt.utils.path
 import salt.utils.platform
@@ -68,44 +67,6 @@ def this_user():
     if salt.utils.platform.is_windows():
         return salt.utils.win_functions.get_current_user(with_domain=False)
     return pwd.getpwuid(os.getuid())[0]
-
-
-class RootsDict(dict):
-    def merge(self, data):
-        for key, values in data.items():
-            if key not in self:
-                self[key] = values
-                continue
-            for value in values:
-                if value not in self[key]:
-                    self[key].append(value)
-        return self
-
-    def to_dict(self):
-        return dict(self)
-
-
-def recursive_copytree(source, destination, overwrite=False):
-    for root, dirs, files in os.walk(source):
-        for item in dirs:
-            src_path = os.path.join(root, item)
-            dst_path = os.path.join(destination, src_path.replace(source, "").lstrip(os.sep))
-            if not os.path.exists(dst_path):
-                log.debug("Creating directory: %s", dst_path)
-                os.makedirs(dst_path)
-        for item in files:
-            src_path = os.path.join(root, item)
-            dst_path = os.path.join(destination, src_path.replace(source, "").lstrip(os.sep))
-            if os.path.exists(dst_path) and not overwrite:
-                if os.stat(src_path).st_mtime > os.stat(dst_path).st_mtime:
-                    log.debug("Copying %s to %s", src_path, dst_path)
-                    shutil.copy2(src_path, dst_path)
-            else:
-                if not os.path.isdir(os.path.dirname(dst_path)):
-                    log.debug("Creating directory: %s", os.path.dirname(dst_path))
-                    os.makedirs(os.path.dirname(dst_path))
-                log.debug("Copying %s to %s", src_path, dst_path)
-                shutil.copy2(src_path, dst_path)
 
 
 class RuntimeVars:
@@ -144,13 +105,6 @@ class RuntimeVars:
 
 
 # <---- Helper Methods -----------------------------------------------------------------------------------------------
-
-
-# ----- Global Variables -------------------------------------------------------------------------------------------->
-XML_OUTPUT_DIR = os.environ.get(
-    "SALT_XML_TEST_REPORTS_DIR", os.path.join(paths.TMP, "xml-test-reports")
-)
-# <---- Global Variables ---------------------------------------------------------------------------------------------
 
 
 # ----- Tests Runtime Variables ------------------------------------------------------------------------------------->

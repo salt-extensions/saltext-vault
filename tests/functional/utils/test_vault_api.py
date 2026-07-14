@@ -44,4 +44,4 @@ def approle_api(minion_opts):
 
 
 def test_approle_api_list_empty_mount(approle_api, fresh_auth_mount):
-    assert approle_api.list_approles(fresh_auth_mount) == []
+    assert approle_api.list_approles(mount=fresh_auth_mount) == []

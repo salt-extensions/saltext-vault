@@ -23,7 +23,7 @@ class PatchedEnviron:
     def __init__(self, **kwargs):
         self.cleanup_keys = kwargs.pop("__cleanup__", ())
         self.kwargs = kwargs
-        self.original_environ = None
+        self.original_environ: dict[str, str] | None = None
 
     def __enter__(self):
         self.original_environ = os.environ.copy()
@@ -34,4 +34,4 @@ class PatchedEnviron:
 
     def __exit__(self, *args):
         os.environ.clear()
-        os.environ.update(self.original_environ)
+        os.environ.update(self.original_environ or {})

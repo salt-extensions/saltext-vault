@@ -4,8 +4,10 @@ High-level utility functions for Vault (or OpenBao) interaction
 
 import logging
 import re
+import typing
 from collections.abc import Mapping
 
+from saltext.vault.utils.vault import client as vclient
 from saltext.vault.utils.vault.auth import InvalidVaultSecretId
 from saltext.vault.utils.vault.auth import InvalidVaultToken
 from saltext.vault.utils.vault.auth import LocalVaultSecretId
@@ -35,7 +37,10 @@ from saltext.vault.utils.vault.leases import VaultSecretId
 from saltext.vault.utils.vault.leases import VaultToken
 from saltext.vault.utils.vault.leases import VaultWrappedResponse
 
-log = logging.getLogger(__name__)
+if typing.TYPE_CHECKING:
+    from saltext.vault.utils._types import SaltLogger
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 logging.getLogger("requests").setLevel(logging.WARNING)
 
 ACL_TEMPLATING_REGEX = re.compile(r"{{(.+?)}}")
@@ -387,16 +392,16 @@ def list_kv(path, opts, context):
     return kv.list(path)
 
 
-class LazyIdentityContext(Mapping):
+class LazyIdentityContext(Mapping[str, typing.Any]):
     """
     Simulates an identity metadata dictionary. Requests data from Vault
     once an item is accessed.
     """
 
-    def __init__(self, client):
+    def __init__(self, client: vclient.AuthenticatedVaultClient):
         self.client = client
-        self._entity = None
-        self._group_ids = None
+        self._entity: dict[str, typing.Any] | None = None
+        self._group_ids: list[str] | None = None
         self._groups = {"ids": {}, "names": {}}
 
     def _init_entity(self):
@@ -419,8 +424,19 @@ class LazyIdentityContext(Mapping):
         }
         self._group_ids = entity["group_ids"] or []
 
-    def _init_group(self, gid=None, name=None):
-        group = self.client.token_entity_group(name=name, gid=gid)
+    @typing.overload
+    def _init_group(self, *, gid: str) -> dict[str, typing.Any] | None: ...
+    @typing.overload
+    def _init_group(self, *, name: str) -> dict[str, typing.Any] | None: ...
+    def _init_group(
+        self, *, gid: str | None = None, name: str | None = None
+    ) -> dict[str, typing.Any] | None:
+        if name:
+            group = self.client.token_entity_group(name=name)
+        elif gid:
+            group = self.client.token_entity_group(gid=gid)
+        else:
+            raise TypeError("Need name or gid")
         if not group:
             raise RuntimeError(
                 f"Current token has no associated entity or is not part of group {gid or name}"
@@ -438,7 +454,7 @@ class LazyIdentityContext(Mapping):
         if self._group_ids is None:
             self._init_entity()
 
-        for gid in self._group_ids:
+        for gid in self._group_ids or []:
             if gid not in self._groups["ids"]:
                 self._init_group(gid=gid)
 
