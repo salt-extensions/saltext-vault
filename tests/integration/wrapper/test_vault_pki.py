@@ -10,6 +10,7 @@ from salt.utils.x509 import generate_rsa_privkey
 from salt.utils.x509 import load_cert
 
 from saltext.vault.utils.vault.pki import dec2hex
+from tests.conftest import CONTAINER_TARGETS
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_disable_secret_engine
 from tests.support.vault import vault_enable_secret_engine
@@ -23,6 +24,9 @@ pytest.importorskip("docker")
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
     pytest.mark.usefixtures("container"),
+    pytest.mark.parametrize(
+        "container", (CONTAINER_TARGETS[0],), indirect=True
+    ),  # We only want to check the internal logic, not the API access
 ]
 
 

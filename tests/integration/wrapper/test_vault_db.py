@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from saltfactories.utils import random_string
 
+from tests.conftest import CONTAINER_TARGETS
 from tests.support.mysql import MySQLImage
 from tests.support.mysql import create_mysql_combo  # pylint: disable=unused-import
 from tests.support.mysql import mysql_combo  # pylint: disable=unused-import
@@ -21,6 +22,9 @@ pytest.importorskip("docker")
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
     pytest.mark.usefixtures("container"),
+    pytest.mark.parametrize(
+        "container", (CONTAINER_TARGETS[0],), indirect=True
+    ),  # We only want to check the internal logic, not the API access
 ]
 
 

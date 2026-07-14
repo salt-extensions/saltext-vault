@@ -426,7 +426,7 @@ def _get_role_id(minion_id, issue_params, wrap):
     issue_params_parsed = _parse_issue_params(issue_params)
 
     if approle is False or (
-        helpers._get_salt_run_type(__opts__) != helpers.SALT_RUNTYPE_MASTER_IMPERSONATING
+        helpers.get_salt_run_type(__opts__) != helpers.SALT_RUNTYPE_MASTER_IMPERSONATING
         and not _approle_params_match(approle, issue_params_parsed)
     ):
         # This means the role has to be created/updated first
@@ -509,7 +509,7 @@ def generate_secret_id(minion_id, signature, impersonated_by_master=False, issue
 
         issue_params_parsed = _parse_issue_params(issue_params)
 
-        if helpers._get_salt_run_type(
+        if helpers.get_salt_run_type(
             __opts__
         ) != helpers.SALT_RUNTYPE_MASTER_IMPERSONATING and not _approle_params_match(
             approle_meta, issue_params_parsed

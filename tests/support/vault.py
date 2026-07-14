@@ -305,7 +305,7 @@ def vault_read(path, default=..., raise_errors=False):
     return ret.data
 
 
-def vault_write(path, *args, **kwargs):
+def vault_write(path, *args, _nofail=False, **kwargs):
     cmd = (
         ["write", "-format=json"]
         + (["-f"] if not (args or kwargs) else [])
@@ -314,9 +314,13 @@ def vault_write(path, *args, **kwargs):
         + ["-"]
     )
     try:
-        ret = _vault_cmd(cmd, textinput=json.dumps(kwargs))
+        ret = _vault_cmd(cmd, textinput=json.dumps(kwargs), raw=_nofail)
     except RuntimeError as err:
         pytest.fail(f"Failed to write to path at `{path}`: {err}")
+    if _nofail:
+        if ret.returncode != 0:
+            return None, False
+        return ret.data, True
     return ret.data or True
 
 

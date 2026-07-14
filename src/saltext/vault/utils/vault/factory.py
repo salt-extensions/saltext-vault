@@ -73,7 +73,7 @@ def get_authd_client(
     """
     Returns an AuthenticatedVaultClient that is valid for at least one query.
     """
-    opts = _check_salt_ssh_opts(opts)
+    opts = hlp.check_salt_ssh_opts(opts)
 
     def try_build():
         client = config = None
@@ -200,7 +200,7 @@ def clear_cache(opts, context, ckey=None, connection=True, session=False, force_
         regardless of determined run type. Defaults to false and should not
         be set by anything other than the runner.
     """
-    opts = _check_salt_ssh_opts(opts)
+    opts = hlp.check_salt_ssh_opts(opts)
     cbank = vcache._get_cache_bank(
         opts, connection=connection, session=session, force_local=force_local
     )
@@ -217,7 +217,7 @@ def clear_cache(opts, context, ckey=None, connection=True, session=False, force_
                 # Don't revoke the only token that is available to us
                 if config["auth"]["method"] != "token" or not (
                     force_local
-                    or hlp._get_salt_run_type(opts)
+                    or hlp.get_salt_run_type(opts)
                     in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
                 ):
                     if config["cache"]["clear_attempt_revocation"]:
@@ -227,7 +227,7 @@ def clear_cache(opts, context, ckey=None, connection=True, session=False, force_
                     if (
                         config["cache"]["expire_events"]
                         and not force_local
-                        and hlp._get_salt_run_type(opts)
+                        and hlp.get_salt_run_type(opts)
                         not in (
                             hlp.SALT_RUNTYPE_MASTER_IMPERSONATING,
                             hlp.SALT_RUNTYPE_MASTER_PEER_RUN,
@@ -285,8 +285,8 @@ def update_config(opts, context, keep_session=False):
         significantly.
         Defaults to False.
     """
-    opts = _check_salt_ssh_opts(opts)
-    if hlp._get_salt_run_type(opts) in (
+    opts = hlp.check_salt_ssh_opts(opts)
+    if hlp.get_salt_run_type(opts) in (
         hlp.SALT_RUNTYPE_MASTER,
         hlp.SALT_RUNTYPE_MINION_LOCAL,
     ):
@@ -353,7 +353,7 @@ def _build_authd_client(opts, context, force_local=False):
                 # SecretID is known regardless whether we have a valid token.
                 # For remote sources, we would needlessly request one, so don't.
                 if (
-                    hlp._get_salt_run_type(opts)
+                    hlp.get_salt_run_type(opts)
                     in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
                     or force_local
                 ):
@@ -469,7 +469,7 @@ def _check_upgrade(config, pre_flush=False):
 
 def _get_connection_config(cbank, opts, context, force_local=False, pre_flush=False, update=False):
     if (
-        hlp._get_salt_run_type(opts) in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
+        hlp.get_salt_run_type(opts) in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
         or force_local
     ):
         # only cache config fetched from remote
@@ -601,7 +601,7 @@ def _fetch_secret_id(config, opts, secret_id_cache, unwrap_client, force_local=F
         return secret_id
 
     if (
-        hlp._get_salt_run_type(opts) in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
+        hlp.get_salt_run_type(opts) in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
         or force_local
     ):
         secret_id = _render_sdb(config["auth"]["secret_id"], opts)
@@ -656,7 +656,7 @@ def _fetch_token(config, opts, token_cache, unwrap_client, force_local=False, em
         return token
 
     if (
-        hlp._get_salt_run_type(opts) in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
+        hlp.get_salt_run_type(opts) in (hlp.SALT_RUNTYPE_MASTER, hlp.SALT_RUNTYPE_MINION_LOCAL)
         or force_local
     ):
         token = None
@@ -892,7 +892,7 @@ def get_kv(
     Return an instance of VaultKV, which can be used
     to interact with the ``kv`` backend.
     """
-    opts = _check_salt_ssh_opts(opts)
+    opts = hlp.check_salt_ssh_opts(opts)
     client, config = get_authd_client(opts, context, get_config=True)
     ttl = None
     connection = True
@@ -938,7 +938,7 @@ def get_lease_store(
     Return an instance of LeaseStore, which can be used
     to cache leases and handle operations like renewals and revocations.
     """
-    opts = _check_salt_ssh_opts(opts)
+    opts = hlp.check_salt_ssh_opts(opts)
     client, config = get_authd_client(opts, context, get_config=True)
     session_cbank = vcache._get_cache_bank(opts, session=True)
     expire_events = None
@@ -983,7 +983,7 @@ def get_approle_api(
     """
     Return an instance of AppRoleApi containing an AuthenticatedVaultClient.
     """
-    opts = _check_salt_ssh_opts(opts)
+    opts = hlp.check_salt_ssh_opts(opts)
     client, config = get_authd_client(opts, context, force_local=force_local, get_config=True)
     api = vapi.AppRoleApi(client)
     if get_config:
@@ -1017,7 +1017,7 @@ def get_identity_api(
     """
     Return an instance of IdentityApi containing an AuthenticatedVaultClient.
     """
-    opts = _check_salt_ssh_opts(opts)
+    opts = hlp.check_salt_ssh_opts(opts)
     client, config = get_authd_client(opts, context, force_local=force_local, get_config=True)
     api = vapi.IdentityApi(client)
     if get_config:
@@ -1178,18 +1178,3 @@ def parse_config(
     except AssertionError as err:
         raise salt.exceptions.InvalidConfigError(f"Invalid vault configuration: {err}") from err
     return merged
-
-
-def _check_salt_ssh_opts(opts: dict[str, typing.Any]) -> dict[str, typing.Any]:
-    if "__master_opts__" in opts and "vault" not in opts:
-        # Let's run the same way as during pillar compilation.
-        vopts = {}
-        vopts.update(opts)
-        vopts.update(opts["__master_opts__"])
-        # Salt 3008 OptsDict introduced an issue where the __master_opts__ cachedir
-        # can point to the minion-specific one. The original one is still preserved in _caller_cachedir.
-        if "_caller_cachedir" in opts:
-            vopts["cachedir"] = opts["_caller_cachedir"]
-        vopts["id"] = vopts["minion_id"] = opts["id"]
-        opts = vopts
-    return opts
