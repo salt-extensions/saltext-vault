@@ -87,7 +87,7 @@ def _get_cache_bank(
     minion_id = None
     # force_local is necessary because pillar compilation would otherwise
     # leak tokens between master and minions
-    if not force_local and helpers._get_salt_run_type(opts) in (
+    if not force_local and helpers.get_salt_run_type(opts) in (
         helpers.SALT_RUNTYPE_MASTER_IMPERSONATING,
         helpers.SALT_RUNTYPE_MASTER_PEER_RUN,
     ):

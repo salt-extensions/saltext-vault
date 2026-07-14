@@ -12,6 +12,7 @@ _________
     _types
     vault
     vault.api
+    vault.approle
     vault.auth
     vault.cache
     vault.client

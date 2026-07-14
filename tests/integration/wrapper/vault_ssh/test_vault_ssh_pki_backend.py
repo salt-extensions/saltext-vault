@@ -6,6 +6,8 @@ import pytest
 import salt.utils.x509 as x509util
 from salt.utils.dictupdate import merge_recurse
 
+from tests.conftest import CONTAINER_TARGETS
+
 try:
     from cryptography.hazmat.primitives.serialization import SSHCertificate
     from cryptography.hazmat.primitives.serialization import SSHCertificateType
@@ -21,6 +23,9 @@ pytest.importorskip("docker")
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
     pytest.mark.usefixtures("container", "roles_setup", "ca_setup"),
+    pytest.mark.parametrize(
+        "container", (CONTAINER_TARGETS[0],), indirect=True
+    ),  # We only want to check the internal logic, not the API access
 ]
 
 log = logging.getLogger(__name__)

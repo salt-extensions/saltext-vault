@@ -10,6 +10,7 @@ _______________
     :toctree:
 
     vault
+    vault_approle
     vault_db
     vault_pki
     vault_ssh

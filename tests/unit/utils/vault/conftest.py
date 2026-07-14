@@ -576,9 +576,9 @@ def events():
 
 @pytest.fixture(params=["MASTER", "MASTER_IMPERSONATING", "MINION_LOCAL", "MINION_REMOTE"])
 def salt_runtype(request):
-    runtype = Mock(spec=hlp._get_salt_run_type)
+    runtype = Mock(spec=hlp.get_salt_run_type)
     runtype.return_value = getattr(hlp, f"SALT_RUNTYPE_{request.param}")
-    with patch("saltext.vault.utils.vault.helpers._get_salt_run_type", runtype):
+    with patch("saltext.vault.utils.vault.helpers.get_salt_run_type", runtype):
         yield
 
 

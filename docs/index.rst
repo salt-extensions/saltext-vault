@@ -15,6 +15,7 @@ Currently, you can
 * request, renew and monitor short-lived database credentials
 * manage and issue certificates via the PKI secret engine
 * manage and issue credentials/certificates via the SSH secret engine
+* manage and issue credentials via the AppRole auth backend
 * write your own modules on top of the provided utilities
 
 There's more coming though.

@@ -25,7 +25,7 @@ SALT_RUNTYPE_MINION_LOCAL = 3
 SALT_RUNTYPE_MINION_REMOTE = 4
 
 
-def _get_salt_run_type(
+def get_salt_run_type(
     opts: dict[str, typing.Any],
 ) -> (
     typing.Literal[0]
@@ -64,6 +64,21 @@ def _get_salt_run_type(
         return SALT_RUNTYPE_MINION_LOCAL
     log.debug("Salt runtype: regular minion")
     return SALT_RUNTYPE_MINION_REMOTE
+
+
+def check_salt_ssh_opts(opts: dict[str, typing.Any]) -> dict[str, typing.Any]:
+    if "__master_opts__" in opts and "vault" not in opts:
+        # Let's run the same way as during pillar compilation.
+        vopts = {}
+        vopts.update(opts)
+        vopts.update(opts["__master_opts__"])
+        # Salt 3008 OptsDict introduced an issue where the __master_opts__ cachedir
+        # can point to the minion-specific one. The original one is still preserved in _caller_cachedir.
+        if "_caller_cachedir" in opts:
+            vopts["cachedir"] = opts["_caller_cachedir"]
+        vopts["id"] = vopts["minion_id"] = opts["id"]
+        opts = vopts
+    return opts
 
 
 def iso_to_timestamp(iso_time: str) -> int:
