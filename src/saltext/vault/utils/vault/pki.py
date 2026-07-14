@@ -4,6 +4,7 @@ Vault PKI helpers
 .. versionadded:: 1.1.0
 """
 
+import typing
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -11,24 +12,40 @@ from datetime import timezone
 import salt.utils.x509 as x509util
 from cryptography import x509 as cx509
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ed448
+from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography.hazmat.primitives.asymmetric import rsa
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 
 from saltext.vault.utils.vault.helpers import timestring_map
 
+Privkey: typing.TypeAlias = (
+    ec.EllipticCurvePrivateKey
+    | ed448.Ed448PrivateKey
+    | ed25519.Ed25519PrivateKey
+    | rsa.RSAPrivateKey
+)
+
 
 def check_cert_for_changes(
-    current,
-    issuer,
-    private_key,
+    current: str,
+    issuer: str,
+    private_key: str,
     common_name: str,
-    encoding="pem",
-    common_name_only=False,
-    append_chain=None,
-    private_key_passphrase=None,
-    expire_tolerance=None,
+    encoding: (
+        typing.Literal["pem"]
+        | typing.Literal["pkcs7_pem"]
+        | typing.Literal["der"]
+        | typing.Literal["pkcs7_der"]
+    ) = "pem",
+    common_name_only: bool = False,
+    append_chain: list[str] | str | None = None,
+    private_key_passphrase: str | None = None,
+    expire_tolerance: int | str | None = None,
     **kwargs,
-) -> dict:
+) -> dict[str, typing.Any]:
 
     changes = {}
 
@@ -79,25 +96,27 @@ def check_cert_for_changes(
                 if current_attr:
                     attr = current_attr[0]
                     if kwargs[k] != attr.value:
-                        changes.setdefault("subject", {}).update(
-                            {k: {"old": attr.value, "new": kwargs[k]}}
-                        )
+                        typing.cast(
+                            dict[str, dict[str, dict[str, str]]], changes.setdefault("subject", {})
+                        ).update({k: {"old": attr.value, "new": kwargs[k]}})
                 else:
-                    changes.setdefault("subject", {}).update({k: {"old": "", "new": kwargs[k]}})
+                    typing.cast(
+                        dict[str, dict[str, dict[str, str]]], changes.setdefault("subject", {})
+                    ).update({k: {"old": "", "new": kwargs[k]}})
 
-    append_chain = [x509util.load_cert(x) for x in append_chain]
+    loaded_chain: list[cx509.Certificate] = [x509util.load_cert(x) for x in append_chain]
     # Filter self-signed CA, which shouldn't be in the chain.
-    append_chain = [
+    loaded_chain = [
         cert
-        for cert in append_chain
+        for cert in loaded_chain
         if cert.subject.rfc4514_string() != cert.issuer.rfc4514_string()
     ]
 
-    if not compare_ca_chain(current_chain, append_chain):
+    if not compare_ca_chain(current_chain, loaded_chain):
         changes["ca_chain"] = True
 
     ca = x509util.load_cert(issuer)
-    privkey = x509util.load_privkey(private_key, private_key_passphrase)
+    privkey: Privkey = x509util.load_privkey(private_key, private_key_passphrase)
 
     changes.update(
         compare_cert_signing(
@@ -124,7 +143,9 @@ def check_cert_for_changes(
     return changes
 
 
-def compare_cert_signing(current: cx509.Certificate, signing_ca: cx509.Certificate, private_key):
+def compare_cert_signing(
+    current: cx509.Certificate, signing_ca: cx509.Certificate, private_key: Privkey
+):
     changes = {}
 
     if signing_ca and not x509util.verify_signature(current, signing_ca.public_key()):
@@ -152,7 +173,7 @@ def compare_ca_chain(current: list[cx509.Certificate], new: list[cx509.Certifica
     return True
 
 
-def dec2hex(decval):
+def dec2hex(decval: int | str) -> str:
     """
     Converts decimal values to nicely formatted hex strings
     """
@@ -167,7 +188,7 @@ def dec2hex(decval):
     return _pretty_hex(f"{decval:X}")
 
 
-def _getattr_safe(obj, attr):
+def _getattr_safe(obj: object, attr: str) -> typing.Any:
     try:
         return getattr(obj, attr)
     except AttributeError as err:
@@ -180,7 +201,7 @@ def _getattr_safe(obj, attr):
         ) from err
 
 
-def _pretty_hex(hex_str):
+def _pretty_hex(hex_str: str) -> str:
     """
     Nicely formats hex strings
     """

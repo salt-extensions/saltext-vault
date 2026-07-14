@@ -2,8 +2,13 @@
 Class wrappers for several Vault (or OpenBao) API endpoints
 """
 
+import typing
+from collections.abc import Mapping
+from collections.abc import Sequence
+
 import salt.utils.json
 
+from saltext.vault.utils.vault import client as vclient
 from saltext.vault.utils.vault import leases
 from saltext.vault.utils.vault.exceptions import VaultInvocationError
 from saltext.vault.utils.vault.exceptions import VaultNotFoundError
@@ -19,10 +24,10 @@ class AppRoleApi:
         or a time string like ``1h``.
     """
 
-    def __init__(self, client):
+    def __init__(self, client: vclient.AuthenticatedVaultClient):
         self.client = client
 
-    def list_approles(self, mount="approle"):
+    def list_approles(self, *, mount: str = "approle") -> list[str]:
         """
         List all AppRoles present on the specified mount.
 
@@ -38,7 +43,7 @@ class AppRoleApi:
             # Vault returns 404 instead of an empty list.
             return []
 
-    def read_approle(self, name, mount="approle"):
+    def read_approle(self, name: str, *, mount: str = "approle") -> dict[str, typing.Any]:
         """
         Read the properties of an existing AppRole.
         Raises VaultNotFound if the AppRole does not exist on the mount.
@@ -55,23 +60,28 @@ class AppRoleApi:
 
     def write_approle(
         self,
-        name,
-        bind_secret_id=None,
-        secret_id_bound_cidrs=None,
-        secret_id_num_uses=None,
-        secret_id_ttl=None,
-        local_secret_ids=None,
-        token_ttl=None,
-        token_max_ttl=None,
-        token_policies=None,
-        token_bound_cidrs=None,
-        token_explicit_max_ttl=None,
-        token_no_default_policy=None,
-        token_num_uses=None,
-        token_period=None,
-        token_type=None,
-        mount="approle",
-    ):
+        name: str,
+        *,
+        bind_secret_id: bool | None = None,
+        secret_id_bound_cidrs: Sequence[str] | None = None,
+        secret_id_num_uses: int | None = None,
+        secret_id_ttl: int | str | None = None,
+        local_secret_ids: bool | None = None,
+        token_ttl: int | str | None = None,
+        token_max_ttl: int | str | None = None,
+        token_policies: Sequence[str] | None = None,
+        token_bound_cidrs: Sequence[str] | None = None,
+        token_explicit_max_ttl: int | str | None = None,
+        token_no_default_policy: bool | None = None,
+        token_num_uses: int | None = None,
+        token_period: int | str | None = None,
+        token_type: (
+            typing.Literal["service"] | typing.Literal["batch"] | typing.Literal["default"] | None
+        ) = None,
+        alias_metadata: Mapping[str, str] | None = None,
+        token_strictly_bind_ip: bool | None = None,
+        mount: str = "approle",
+    ) -> typing.Literal[True]:
         """
         Create or update an AppRole.
 
@@ -133,32 +143,63 @@ class AppRoleApi:
         token_type
             Type of token that should be generated (``service``, ``batch`` or ``default``).
 
+        alias_metadata
+            .. versionadded:: 1.8.0
+
+            .. important::
+                Only available on Vault, not OpenBao.
+
+            Map of arbitrary string to arbitrary string that pre-populates the custom metadata
+            of new entity aliases created at login.
+
+        token_strictly_bind_ip
+            .. versionadded:: 1.8.0
+
+            .. important::
+                Only available on OpenBao, not Vault.
+
+            If set, the token will be restricted to the source IP address making the initial login request.
+            This conflicts with ``token_bound_cidrs``.
+
         mount
             Name of the AppRole auth backend mount.
             Defaults to ``approle``.
         """
+        if isinstance(secret_id_bound_cidrs, str):
+            secret_id_bound_cidrs = [secret_id_bound_cidrs]
+        if isinstance(token_policies, str):
+            token_policies = [token_policies]
+        if isinstance(token_bound_cidrs, str):
+            token_bound_cidrs = [token_bound_cidrs]
+
         endpoint = f"auth/{mount}/role/{name}"
         payload = _filter_none(
             {
                 "bind_secret_id": bind_secret_id,
-                "secret_id_bound_cidrs": secret_id_bound_cidrs,
+                "secret_id_bound_cidrs": (
+                    list(secret_id_bound_cidrs) if secret_id_bound_cidrs is not None else None
+                ),
                 "secret_id_num_uses": secret_id_num_uses,
                 "secret_id_ttl": secret_id_ttl,
                 "local_secret_ids": local_secret_ids,
                 "token_ttl": token_ttl,
                 "token_max_ttl": token_max_ttl,
-                "token_policies": token_policies,
-                "token_bound_cidrs": token_bound_cidrs,
+                "token_policies": list(token_policies) if token_policies is not None else None,
+                "token_bound_cidrs": (
+                    list(token_bound_cidrs) if token_bound_cidrs is not None else None
+                ),
                 "token_explicit_max_ttl": token_explicit_max_ttl,
                 "token_no_default_policy": token_no_default_policy,
                 "token_num_uses": token_num_uses,
                 "token_period": token_period,
                 "token_type": token_type,
+                "alias_metadata": dict(alias_metadata) if alias_metadata is not None else None,
+                "token_strictly_bind_ip": token_strictly_bind_ip,
             }
         )
         return self.client.put(endpoint, payload=payload)
 
-    def delete_approle(self, name, mount="approle"):
+    def delete_approle(self, name: str, *, mount: str = "approle") -> typing.Literal[True]:
         """
         Delete an existing AppRole.
         Raises VaultNotFound if the AppRole does not exist on the mount.
@@ -173,7 +214,17 @@ class AppRoleApi:
         endpoint = f"auth/{mount}/role/{name}"
         return self.client.delete(endpoint)
 
-    def read_role_id(self, name, wrap=False, mount="approle"):
+    @typing.overload
+    def read_role_id(
+        self, name: str, *, wrap: typing.Literal[False] = False, mount: str = "approle"
+    ) -> str: ...
+    @typing.overload
+    def read_role_id(
+        self, name: str, *, wrap: int | str, mount: str = "approle"
+    ) -> leases.VaultWrappedResponse: ...
+    def read_role_id(
+        self, name: str, *, wrap: int | str | typing.Literal[False] = False, mount: str = "approle"
+    ):
         """
         Read the associated RoleID of an existing AppRole.
         Raises VaultNotFound if the AppRole does not exist on the mount.
@@ -191,22 +242,48 @@ class AppRoleApi:
             Defaults to ``approle``.
         """
         endpoint = f"auth/{mount}/role/{name}/role-id"
-        role_id = self.client.get(endpoint, wrap=wrap)
         if wrap:
-            return role_id
-        return role_id["data"]["role_id"]
+            return self.client.get(endpoint, wrap=wrap)
+        return self.client.get(endpoint, wrap=False)["data"]["role_id"]
 
+    @typing.overload
     def generate_secret_id(
         self,
-        name,
-        metadata=None,
-        cidr_list=None,
-        token_bound_cidrs=None,
-        num_uses=None,
-        ttl=None,
-        wrap=False,
-        mount="approle",
-    ):
+        name: str,
+        *,
+        wrap: typing.Literal[False] = False,
+        metadata: Mapping[str, str] | None = None,
+        cidr_list: Sequence[str] | None = None,
+        token_bound_cidrs: Sequence[str] | None = None,
+        num_uses: int | None = None,
+        ttl: int | str | None = None,
+        mount: str = "approle",
+    ) -> leases.VaultSecretId: ...
+    @typing.overload
+    def generate_secret_id(
+        self,
+        name: str,
+        *,
+        wrap: int | str,
+        metadata: Mapping[str, str] | None = None,
+        cidr_list: Sequence[str] | None = None,
+        token_bound_cidrs: Sequence[str] | None = None,
+        num_uses: int | None = None,
+        ttl: int | str | None = None,
+        mount: str = "approle",
+    ) -> leases.VaultWrappedResponse: ...
+    def generate_secret_id(
+        self,
+        name: str,
+        *,
+        wrap: int | str | typing.Literal[False] = False,
+        metadata: Mapping[str, str] | None = None,
+        cidr_list: Sequence[str] | None = None,
+        token_bound_cidrs: Sequence[str] | None = None,
+        num_uses: int | None = None,
+        ttl: int | str | None = None,
+        mount: str = "approle",
+    ) -> leases.VaultSecretId | leases.VaultWrappedResponse:
         """
         Generate a SecretID for an existing AppRole.
         Raises VaultNotFound if the AppRole does not exist on the mount.
@@ -250,26 +327,47 @@ class AppRoleApi:
             Name of the AppRole auth backend mount.
             Defaults to ``approle``.
         """
+        if isinstance(cidr_list, str):
+            cidr_list = [cidr_list]
+        if isinstance(token_bound_cidrs, str):
+            token_bound_cidrs = [token_bound_cidrs]
         endpoint = f"auth/{mount}/role/{name}/secret-id"
         if metadata is not None:
-            metadata = salt.utils.json.dumps(metadata)
+            metadata = salt.utils.json.dumps(dict(metadata))
         payload = _filter_none(
             {
                 "metadata": metadata,
-                "cidr_list": cidr_list,
-                "token_bound_cidrs": token_bound_cidrs,
+                "cidr_list": list(cidr_list) if cidr_list is not None else None,
+                "token_bound_cidrs": (
+                    list(token_bound_cidrs) if token_bound_cidrs is not None else None
+                ),
                 "num_uses": num_uses,
                 "ttl": ttl,
             }
         )
-        response = self.client.post(endpoint, payload=payload, wrap=wrap)
         if wrap:
-            return response
+            return self.client.post(endpoint, payload=payload, wrap=wrap)
+        response = self.client.post(endpoint, payload=payload, wrap=False)
         # Sadly, secret_id_num_uses is not part of the information returned, but
         # it can be read with `read_secret_id` using the accessor.
         return leases.VaultSecretId(**response["data"])
 
-    def read_secret_id(self, name, secret_id=None, accessor=None, mount="approle"):
+    @typing.overload
+    def read_secret_id(
+        self, name: str, *, secret_id: str, mount: str = "approle"
+    ) -> dict[str, typing.Any]: ...
+    @typing.overload
+    def read_secret_id(
+        self, name: str, *, accessor: str, mount: str = "approle"
+    ) -> dict[str, typing.Any]: ...
+    def read_secret_id(
+        self,
+        name: str,
+        *,
+        secret_id: str | None = None,
+        accessor: str | None = None,
+        mount: str = "approle",
+    ) -> dict[str, typing.Any]:
         """
         Read properties of an existing SecretID.
         Raises VaultNotFound if the AppRole and/or SecretID does not exist on the mount.
@@ -288,21 +386,36 @@ class AppRoleApi:
             Name of the AppRole auth backend mount.
             Defaults to ``approle``.
         """
-        if not secret_id and not accessor:
-            raise VaultInvocationError("Need either secret_id or accessor to read secret ID.")
         if secret_id:
             endpoint = f"auth/{mount}/role/{name}/secret-id/lookup"
             payload = {"secret_id": str(secret_id)}
-        else:
+        elif accessor:
             endpoint = f"auth/{mount}/role/{name}/secret-id-accessor/lookup"
             payload = {"secret_id_accessor": accessor}
+        else:
+            raise VaultInvocationError("Need either secret_id or accessor to read secret ID.")
         try:
             return self.client.put(endpoint, payload=payload)["data"]
         except TypeError as err:
             # lookup does not raise exceptions, only returns True
             raise VaultNotFoundError() from err
 
-    def destroy_secret_id(self, name, secret_id=None, accessor=None, mount="approle"):
+    @typing.overload
+    def destroy_secret_id(
+        self, name: str, *, secret_id: str, mount: str = "approle"
+    ) -> typing.Literal[True]: ...
+    @typing.overload
+    def destroy_secret_id(
+        self, name: str, *, accessor: str, mount: str = "approle"
+    ) -> typing.Literal[True]: ...
+    def destroy_secret_id(
+        self,
+        name: str,
+        *,
+        secret_id: str | None = None,
+        accessor: str | None = None,
+        mount: str = "approle",
+    ) -> typing.Literal[True]:
         """
         Destroy an existing SecretID.
         Raises VaultNotFound if the AppRole and/or SecretID does not exist on the mount.
@@ -321,14 +434,14 @@ class AppRoleApi:
             Name of the AppRole auth backend mount.
             Defaults to ``approle``.
         """
-        if not secret_id and not accessor:
-            raise VaultInvocationError("Need either secret_id or accessor to destroy secret ID.")
         if secret_id:
             endpoint = f"auth/{mount}/role/{name}/secret-id/destroy"
             payload = {"secret_id": str(secret_id)}
-        else:
+        elif accessor:
             endpoint = f"auth/{mount}/role/{name}/secret-id-accessor/destroy"
             payload = {"secret_id_accessor": accessor}
+        else:
+            raise VaultInvocationError("Need either secret_id or accessor to destroy secret ID.")
         return self.client.post(endpoint, payload=payload)
 
 
@@ -337,10 +450,10 @@ class IdentityApi:
     Wraps the Vault `Identity secret engine API <https://developer.hashicorp.com/vault/api-docs/secret/identity>`_.
     """
 
-    def __init__(self, client):
+    def __init__(self, client: vclient.AuthenticatedVaultClient):
         self.client = client
 
-    def list_entities(self):
+    def list_entities(self) -> list[str]:
         """
         Return a list of the names of all entities known by Vault.
         """
@@ -350,7 +463,7 @@ class IdentityApi:
         except VaultNotFoundError:
             return []
 
-    def read_entity(self, name):
+    def read_entity(self, name: str) -> dict[str, typing.Any]:
         """
         Read the properties of an entity by its name.
         Raises VaultNotFound if the entity does not exist.
@@ -361,7 +474,7 @@ class IdentityApi:
         endpoint = f"identity/entity/name/{name}"
         return self.client.get(endpoint)["data"]
 
-    def read_entity_by_id(self, entity_id):
+    def read_entity_by_id(self, entity_id: str) -> dict[str, typing.Any]:
         """
         Read the properties of an entity by its ID.
         Raises VaultNotFound if the entity does not exist.
@@ -372,7 +485,7 @@ class IdentityApi:
         endpoint = f"identity/entity/id/{entity_id}"
         return self.client.get(endpoint)["data"]
 
-    def read_entity_by_alias(self, alias, mount):
+    def read_entity_by_alias(self, alias: str, mount: str) -> dict[str, typing.Any]:
         """
         Lookup the properties of an entity by its alias name and mount.
         Raises VaultNotFound if the entity does not exist.
@@ -396,7 +509,14 @@ class IdentityApi:
             return entity["data"]
         raise VaultNotFoundError()
 
-    def write_entity(self, name, metadata=None, policies=None, disabled=None):
+    def write_entity(
+        self,
+        name: str,
+        *,
+        metadata: Mapping[str, str] | None = None,
+        policies: list[str] | None = None,
+        disabled: bool | None = None,
+    ) -> dict[str, typing.Any]:
         """
         Create or update an entity by name.
 
@@ -418,14 +538,14 @@ class IdentityApi:
         endpoint = f"identity/entity/name/{name}"
         payload = _filter_none(
             {
-                "metadata": metadata,
+                "metadata": dict(metadata) if metadata is not None else None,
                 "policies": policies,
                 "disabled": disabled,
             }
         )
         return self.client.put(endpoint, payload=payload)
 
-    def delete_entity(self, name):
+    def delete_entity(self, name: str) -> typing.Literal[True]:
         """
         Delete an entity by name.
         Raises VaultNotFound if the entity does not exist.
@@ -436,7 +556,14 @@ class IdentityApi:
         endpoint = f"identity/entity/name/{name}"
         return self.client.delete(endpoint)
 
-    def write_entity_alias(self, name, alias_name, mount, custom_metadata=None):
+    def write_entity_alias(
+        self,
+        name: str,
+        alias_name: str,
+        mount: str,
+        *,
+        custom_metadata: Mapping[str, str] | None = None,
+    ) -> dict[str, typing.Any]:
         """
         Create/update the association between an entity and a specific
         alias of an auth mount.
@@ -466,7 +593,7 @@ class IdentityApi:
             "name": alias_name,
         }
         if custom_metadata is not None:
-            payload["custom_metadata"] = custom_metadata
+            payload["custom_metadata"] = dict(custom_metadata)
 
         for alias in entity["aliases"]:
             # Ensure an existing alias is updated
@@ -475,10 +602,12 @@ class IdentityApi:
                 break
         return self.client.put("identity/entity-alias", payload=payload)
 
-    def _lookup_mount_accessor(self, mount):
+    def _lookup_mount_accessor(self, mount: str) -> str:
         endpoint = f"sys/auth/{mount}"
         return self.client.get(endpoint)["data"]["accessor"]
 
 
-def _filter_none(data):
-    return {k: v for k, v in data.items() if v is not None}
+def _filter_none(
+    data: Mapping[typing.Any, typing.Any], unset: typing.Literal[False] | None = None
+) -> dict[typing.Any, typing.Any]:
+    return {k: v for k, v in data.items() if v is not unset}

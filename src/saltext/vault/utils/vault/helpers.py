@@ -6,12 +6,17 @@ import datetime
 import logging
 import re
 import string
+import typing
 
 from salt.exceptions import InvalidConfigError
 from salt.exceptions import SaltInvocationError
 from salt.state import STATE_INTERNAL_KEYWORDS as _STATE_INTERNAL_KEYWORDS
 
-log = logging.getLogger(__name__)
+if typing.TYPE_CHECKING:
+    from saltext.vault.utils._types import SaltLogger
+
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 SALT_RUNTYPE_MASTER = 0
 SALT_RUNTYPE_MASTER_IMPERSONATING = 1
@@ -20,7 +25,15 @@ SALT_RUNTYPE_MINION_LOCAL = 3
 SALT_RUNTYPE_MINION_REMOTE = 4
 
 
-def _get_salt_run_type(opts):
+def _get_salt_run_type(
+    opts: dict[str, typing.Any],
+) -> (
+    typing.Literal[0]
+    | typing.Literal[1]
+    | typing.Literal[2]
+    | typing.Literal[3]
+    | typing.Literal[4]
+):
     if "vault" in opts and opts.get("__role", "minion") == "master":
         if opts.get("minion_id"):
             log.debug("Salt runtype: impersonating master")
@@ -53,7 +66,7 @@ def _get_salt_run_type(opts):
     return SALT_RUNTYPE_MINION_REMOTE
 
 
-def iso_to_timestamp(iso_time):
+def iso_to_timestamp(iso_time: str) -> int:
     """
     Most endpoints respond with RFC3339-formatted strings
     This is a hacky way to use inbuilt tools only for converting
@@ -87,7 +100,7 @@ def iso_to_timestamp(iso_time):
         return int(datetime.datetime(year, month, day, hour, minute, second, 0, tz).timestamp())
 
 
-def expand_pattern_lists(pattern, **mappings):
+def expand_pattern_lists(pattern: str, **mappings) -> list[str]:
     """
     Expands the pattern for any list-valued mappings, such that for any list of
     length N in the mappings present in the pattern, N copies of the pattern are
@@ -125,7 +138,7 @@ def expand_pattern_lists(pattern, **mappings):
     for _, field_name, _, _ in f.parse(pattern):
         if field_name is None:
             continue
-        value, _ = f.get_field(field_name, None, mappings)
+        value, _ = f.get_field(field_name, (), mappings)
         if isinstance(value, (list, dict)):
             token = f"{{{field_name}}}"
             expanded = [pattern.replace(token, str(elem)) for elem in value]
@@ -136,7 +149,21 @@ def expand_pattern_lists(pattern, **mappings):
     return [pattern]
 
 
-def timestring_map(val, cast=float):
+@typing.overload
+def timestring_map(val: int | float | str, cast: type[int]) -> int: ...
+@typing.overload
+def timestring_map(val: int | float | str, cast: type[float] = float) -> float: ...
+@typing.overload
+def timestring_map(val: int | float | str) -> float: ...
+@typing.overload
+def timestring_map(val: int | float | str | None, cast: type[int]) -> int | None: ...
+@typing.overload
+def timestring_map(val: int | float | str | None) -> float | None: ...
+@typing.overload
+def timestring_map(val: int | float | str | None, cast: type[float] = float) -> float | None: ...
+def timestring_map(
+    val: int | float | str | None, cast: type[float] | type[int] = float
+) -> float | int | None:
     """
     Turn a time string (like ``60m``) into a float with seconds as a unit.
     """
@@ -167,7 +194,7 @@ def timestring_map(val, cast=float):
     raise RuntimeError("This path should not have been hit")
 
 
-def filter_state_internal_kwargs(kwargs):
+def filter_state_internal_kwargs(kwargs: dict[str, typing.Any]) -> dict[str, typing.Any]:
     """
     Removes state-internal kwargs from a kwargs dict.
     """
@@ -176,7 +203,11 @@ def filter_state_internal_kwargs(kwargs):
     return {k: v for k, v in kwargs.items() if k not in ignore}
 
 
-def deserialize_csl(data):
+@typing.overload
+def deserialize_csl(data: None) -> None: ...
+@typing.overload
+def deserialize_csl(data: str | list[str]) -> list[str]: ...
+def deserialize_csl(data: str | list[str] | None) -> list[str] | None:
     """
     Ensure a value is a proper Python list, not a string containing
     a comma-separated list.

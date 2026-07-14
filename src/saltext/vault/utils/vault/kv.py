@@ -3,14 +3,21 @@ Class wrappers for the Key/Value backend
 """
 
 import logging
+import typing
 
+from saltext.vault.utils.vault import cache as vcache
+from saltext.vault.utils.vault import client as vclient
 from saltext.vault.utils.vault.exceptions import VaultException
 from saltext.vault.utils.vault.exceptions import VaultInvocationError
 from saltext.vault.utils.vault.exceptions import VaultNotFoundError
 from saltext.vault.utils.vault.exceptions import VaultPermissionDeniedError
 from saltext.vault.utils.vault.exceptions import VaultUnsupportedOperationError
 
-log = logging.getLogger(__name__)
+if typing.TYPE_CHECKING:
+    from saltext.vault.utils._types import SaltLogger
+
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 
 class VaultKV:
@@ -18,11 +25,13 @@ class VaultKV:
     Interface to Vault secret paths
     """
 
-    def __init__(self, client, metadata_cache):
+    def __init__(self, client: vclient.AuthenticatedVaultClient, metadata_cache: vcache.VaultCache):
         self.client = client
         self.metadata_cache = metadata_cache
 
-    def read(self, path, include_metadata=False, version=None):
+    def read(
+        self, path: str, include_metadata: bool = False, version: str | None = None
+    ) -> dict[str, typing.Any]:
         """
         Read secret data at path.
 
@@ -45,7 +54,7 @@ class VaultKV:
             return ret["data"]
         return ret
 
-    def read_meta(self, path):
+    def read_meta(self, path: str) -> dict[str, typing.Any]:
         """
         Read secret metadata for all versions at path. This is different from
         the metadata returned by read, which pertains only to the most recent
@@ -72,7 +81,7 @@ class VaultKV:
         # on KVv2 (writing the same data twice increases the current version twice).
         return self.client.put(path, payload=data)
 
-    def patch(self, path, data):
+    def patch(self, path: str, data: dict[str, typing.Any]):
         """
         Patch existing data.
         Tries to use a PATCH request, otherwise falls back to updating in memory
@@ -119,7 +128,12 @@ class VaultKV:
             pass
         return patch_in_memory(path, data)
 
-    def delete(self, path, versions=None, all_versions=False):
+    def delete(
+        self,
+        path: str,
+        versions: int | str | list[int | str] | None = None,
+        all_versions: bool = False,
+    ):
         """
         Delete secret path data. For KV v1, this is permanent.
         For KV v2, this only soft-deletes the data.
@@ -152,23 +166,28 @@ class VaultKV:
             if not versions:
                 # No version left to delete
                 return True
-        versions = self._parse_versions(versions)
+        parsed_versions = self._parse_versions(versions)
 
         if v2_info["v2"]:
-            if versions is not None:
+            if parsed_versions is not None:
                 method = "POST"
                 path = v2_info["delete_versions"]
-                payload = {"versions": versions}
+                payload = {"versions": parsed_versions}
                 safe_to_retry = True
             else:
                 # data and delete operations only differ by HTTP verb
                 path = v2_info["data"]
-        elif versions is not None:
+        elif parsed_versions is not None:
             raise VaultInvocationError("Versioning support requires KV v2.")
 
         return self.client.request(method, path, payload=payload, safe_to_retry=safe_to_retry)
 
-    def restore(self, path, versions=None, all_versions=False):
+    def restore(
+        self,
+        path: str,
+        versions: int | str | list[int | str] | None = None,
+        all_versions: bool = False,
+    ):
         """
         .. versionadded:: 1.2.0
 
@@ -201,12 +220,17 @@ class VaultKV:
                 # No version left to destroy
                 raise VaultInvocationError("No secret version to restore.")
 
-        versions = self._parse_versions(versions)
+        parsed_versions = self._parse_versions(versions)
         path = v2_info["undelete"]
-        payload = {"versions": versions}
+        payload = {"versions": parsed_versions}
         return self.client.post(path, payload=payload)
 
-    def destroy(self, path, versions=None, all_versions=False):
+    def destroy(
+        self,
+        path: str,
+        versions: int | str | list[int | str] | None = None,
+        all_versions: bool = False,
+    ):
         """
         Permanently remove version data. Requires KV v2.
 
@@ -244,23 +268,23 @@ class VaultKV:
                 # No version left to destroy
                 return True
 
-        versions = self._parse_versions(versions)
+        parsed_versions = self._parse_versions(versions)
         path = v2_info["destroy"]
-        payload = {"versions": versions}
+        payload = {"versions": parsed_versions}
         return self.client.post(path, payload=payload)
 
-    def _parse_versions(self, versions):
+    def _parse_versions(self, versions: int | str | list[int | str] | None) -> list[int] | None:
         if versions is None:
             return versions
         if not isinstance(versions, list):
             versions = [versions]
         try:
-            versions = [int(x) for x in versions]
+            new_versions = [int(x) for x in versions]
         except ValueError as err:
             raise VaultInvocationError("Versions have to be specified as integers.") from err
-        return versions
+        return new_versions
 
-    def nuke(self, path):
+    def nuke(self, path: str):
         """
         Delete path metadata and version data, including all version history.
         Requires KV v2.
@@ -271,7 +295,7 @@ class VaultKV:
         path = v2_info["metadata"]
         return self.client.delete(path)
 
-    def list(self, path):
+    def list(self, path: str) -> list[str]:
         """
         List keys at path.
         """
@@ -281,7 +305,7 @@ class VaultKV:
 
         return self.client.list(path)["data"]["keys"]
 
-    def is_v2(self, path):
+    def is_v2(self, path: str) -> dict[str, typing.Any]:
         """
         Determines if a given secret path is KV v1 or v2.
         """
@@ -313,7 +337,7 @@ class VaultKV:
             ret["undelete"] = self._v2_the_path(path, path_metadata.get("path", path), "undelete")
         return ret
 
-    def _v2_the_path(self, path, pfilter, ptype="data"):
+    def _v2_the_path(self, path: str, pfilter: str, ptype: str = "data") -> str:
         """
         Given a path, a filter, and a path type, properly inject
         'data' or 'metadata' into the path.
@@ -340,7 +364,7 @@ class VaultKV:
         log.debug(msg)
         return path
 
-    def _get_secret_path_metadata(self, path):
+    def _get_secret_path_metadata(self, path: str) -> dict[str, typing.Any] | None:
         """
         Given a path, query vault to determine mount point, type, and version.
         """

@@ -110,6 +110,7 @@ Configuration reference
 """
 
 import logging
+from typing import TYPE_CHECKING
 
 import salt.utils.beacons
 import salt.utils.dictupdate as dup
@@ -117,8 +118,16 @@ import salt.utils.dictupdate as dup
 from saltext.vault.utils import vault
 from saltext.vault.utils.vault.helpers import timestring_map
 
-log = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from saltext.vault.utils._types import SaltContext
+    from saltext.vault.utils._types import SaltLogger
+    from saltext.vault.utils._types import SaltOpts
 
+    __opts__: SaltOpts
+    __context__: SaltContext
+
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 __virtualname__ = "vault_lease"
 

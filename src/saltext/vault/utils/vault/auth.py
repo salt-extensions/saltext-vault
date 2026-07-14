@@ -3,11 +3,17 @@ Vault authentication models
 """
 
 import logging
+import typing
 
+from saltext.vault.utils.vault import cache as vcache
 from saltext.vault.utils.vault import leases
 from saltext.vault.utils.vault.exceptions import VaultAuthExpired
 
-log = logging.getLogger(__name__)
+if typing.TYPE_CHECKING:
+    from saltext.vault.utils._types import SaltLogger
+    from saltext.vault.utils.vault import client as vclient
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 
 class VaultTokenAuth:
@@ -15,30 +21,34 @@ class VaultTokenAuth:
     Container for authentication tokens
     """
 
-    def __init__(self, cache=None, token=None):
+    def __init__(
+        self,
+        cache: vcache.VaultAuthCache[leases.VaultToken] | None = None,
+        token: leases.VaultToken | dict[str, typing.Any] | None = None,
+    ):
         self.cache = cache
         if token is None and cache is not None:
             token = cache.get()
         if token is None:
             token = InvalidVaultToken()
-        if isinstance(token, dict):
+        if not isinstance(token, leases.VaultToken):
             token = leases.VaultToken(**token)
         self.token = token
 
-    def is_renewable(self):
+    def is_renewable(self) -> bool:
         """
         Check whether the contained token is renewable, which requires it
         to be currently valid for at least two uses and renewable
         """
         return self.token.is_renewable()
 
-    def is_valid(self, valid_for=0):
+    def is_valid(self, valid_for: int | str = 0) -> bool:
         """
         Check whether the contained token is valid
         """
         return self.token.is_valid(valid_for)
 
-    def get_token(self):
+    def get_token(self) -> leases.VaultToken:
         """
         Get the contained token if it is valid, otherwise
         raises VaultAuthExpired
@@ -55,14 +65,14 @@ class VaultTokenAuth:
         if self.token.num_uses != 0:
             self._write_cache()
 
-    def update_token(self, auth):
+    def update_token(self, auth: dict[str, typing.Any]):
         """
         Partially update the contained token (e.g. after renewal)
         """
         self.token = self.token.with_renewed(**auth)
         self._write_cache()
 
-    def replace_token(self, token):
+    def replace_token(self, token: leases.VaultToken):
         """
         Completely replace the contained token with a new one
         """
@@ -82,7 +92,14 @@ class VaultAppRoleAuth:
     Issues tokens from AppRole credentials.
     """
 
-    def __init__(self, approle, client, mount="approle", cache=None, token_store=None):
+    def __init__(
+        self,
+        approle: "VaultAppRole",
+        client: "vclient.VaultClient",
+        mount: str = "approle",
+        cache: vcache.VaultAuthCache[leases.VaultSecretId] | None = None,
+        token_store: VaultTokenAuth | None = None,
+    ):
         self.approle = approle
         self.client = client
         self.mount = mount
@@ -91,21 +108,21 @@ class VaultAppRoleAuth:
             token_store = VaultTokenAuth()
         self.token = token_store
 
-    def is_renewable(self):
+    def is_renewable(self) -> bool:
         """
         Check whether the currently used token is renewable.
         SecretIDs are not renewable anyways.
         """
         return self.token.is_renewable()
 
-    def is_valid(self, valid_for=0):
+    def is_valid(self, valid_for: int | str = 0) -> bool:
         """
         Check whether the contained authentication data can be used
         to issue a valid token
         """
         return self.token.is_valid(valid_for) or self.approle.is_valid(valid_for)
 
-    def get_token(self):
+    def get_token(self) -> leases.VaultToken:
         """
         Return the token issued by the last login, if it is still valid, otherwise
         login with the contained AppRole, if it is valid. Otherwise,
@@ -123,13 +140,13 @@ class VaultAppRoleAuth:
         """
         self.token.used()
 
-    def update_token(self, auth):
+    def update_token(self, auth: dict[str, typing.Any]):
         """
         Partially update the contained token (e.g. after renewal)
         """
         self.token.update_token(auth)
 
-    def _login(self):
+    def _login(self) -> leases.VaultToken:
         log.debug("Vault token expired. Recreating one by authenticating with AppRole.")
         endpoint = f"auth/{self.mount}/login"
         payload = self.approle.payload()
@@ -150,7 +167,7 @@ class VaultAppRoleAuth:
             else:
                 self.cache.flush()
 
-    def _replace_token(self, auth):
+    def _replace_token(self, auth: dict[str, typing.Any]):
         self.token.replace_token(leases.VaultToken(**auth))
 
 
@@ -159,17 +176,17 @@ class VaultAppRole:
     Container that represents an AppRole
     """
 
-    def __init__(self, role_id, secret_id=None):
+    def __init__(self, role_id: str, secret_id: leases.VaultSecretId | None = None):
         self.role_id = role_id
         self.secret_id = secret_id
 
-    def replace_secret_id(self, secret_id):
+    def replace_secret_id(self, secret_id: leases.VaultSecretId):
         """
         Replace the contained SecretID with a new one
         """
         self.secret_id = secret_id
 
-    def is_valid(self, valid_for=0, uses=1):
+    def is_valid(self, valid_for: int | str = 0, uses: int = 1) -> bool:
         """
         Checks whether the contained data can be used to authenticate
         to Vault. SecretIDs might not be required by the server when
@@ -196,7 +213,7 @@ class VaultAppRole:
         if self.secret_id is not None:
             self.secret_id.used()
 
-    def payload(self):
+    def payload(self) -> dict[str, str]:
         """
         Return the payload to use for POST requests using this AppRole
         """
@@ -212,7 +229,7 @@ class LocalVaultSecretId(leases.VaultSecretId):
     Represents a SecretID from local configuration and should not be cached.
     """
 
-    def is_valid(self, valid_for=0, uses=1):  # pylint: disable=unused-argument
+    def is_valid(self, valid_for: int | str = 0, uses: int = 1):  # pylint: disable=unused-argument
         """
         Local SecretIDs are always assumed to be valid until proven otherwise
         """
@@ -229,7 +246,7 @@ class InvalidVaultToken(leases.VaultToken):
         self.use_count = 0
         self.num_uses = 0
 
-    def is_valid(self, valid_for=0, uses=1):  # pylint: disable=unused-argument
+    def is_valid(self, valid_for: int | str = 0, uses: int = 1):  # pylint: disable=unused-argument
         return False
 
 
@@ -241,5 +258,5 @@ class InvalidVaultSecretId(leases.VaultSecretId):
     def __init__(self, *args, **kwargs):  # pylint: disable=super-init-not-called
         pass
 
-    def is_valid(self, valid_for=0, uses=1):  # pylint: disable=unused-argument
+    def is_valid(self, valid_for: int | str = 0, uses: int = 1):  # pylint: disable=unused-argument
         return False

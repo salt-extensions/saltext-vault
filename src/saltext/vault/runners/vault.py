@@ -9,6 +9,7 @@ import base64
 import copy
 import logging
 import os
+import typing
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -17,6 +18,7 @@ import salt.crypt
 import salt.exceptions
 import salt.pillar
 import salt.utils.data
+import salt.utils.minions
 from salt.defaults import NOT_SET
 from salt.exceptions import SaltInvocationError
 from salt.exceptions import SaltRunnerError
@@ -30,7 +32,20 @@ from saltext.vault.utils.vault.client import VaultClient
 from saltext.vault.utils.vault.helpers import timestring_map
 from saltext.vault.utils.versions import warn_until
 
-log = logging.getLogger(__name__)
+if typing.TYPE_CHECKING:
+    import salt._logging.impl
+
+    from saltext.vault.utils._types import SaltContext
+    from saltext.vault.utils._types import SaltLogger
+    from saltext.vault.utils._types import SaltOpts
+    from saltext.vault.utils._types import SaltRunners
+
+    __opts__: SaltOpts
+    __context__: SaltContext
+    __salt__: SaltRunners
+
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 VALID_PARAMS = immutabletypes.freeze(
     {
@@ -1286,20 +1301,26 @@ def _revoke_token(token=None, accessor=None):
     return client.post(endpoint, payload=payload)
 
 
-class LazyPillar(Mapping):
+class LazyPillar(Mapping[typing.Any, typing.Any]):
     """
     Simulates a pillar dictionary. Only compiles the pillar
     once an item is requested.
     """
 
-    def __init__(self, opts, grains, minion_id, extra_minion_data=None):
+    def __init__(
+        self,
+        opts: dict[str, typing.Any],
+        grains: dict[str, typing.Any],
+        minion_id: str,
+        extra_minion_data: dict[str, typing.Any] | None = None,
+    ):
         self.opts = opts
         self.grains = grains
         self.minion_id = minion_id
         self.extra_minion_data = extra_minion_data or {}
-        self._pillar = None
+        self._pillar: dict[typing.Any, typing.Any] | None = None
 
-    def _load(self):
+    def _load(self) -> dict[typing.Any, typing.Any]:
         log.info("Refreshing pillar for vault templating.")
         self._pillar = salt.pillar.get_pillar(
             self.opts,
@@ -1307,18 +1328,22 @@ class LazyPillar(Mapping):
             self.minion_id,
             extra_minion_data=self.extra_minion_data,
         ).compile_pillar()
+        return self._pillar
 
     def __getitem__(self, key):
-        if self._pillar is None:
-            self._load()
-        return self._pillar[key]
+        pillar = self._pillar
+        if pillar is None:
+            pillar = self._load()
+        return pillar[key]
 
     def __iter__(self):
-        if self._pillar is None:
-            self._load()
-        yield from self._pillar
+        pillar = self._pillar
+        if pillar is None:
+            pillar = self._load()
+        yield from pillar
 
     def __len__(self):
-        if self._pillar is None:
-            self._load()
-        return len(self._pillar)
+        pillar = self._pillar
+        if pillar is None:
+            pillar = self._load()
+        return len(pillar)

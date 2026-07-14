@@ -46,13 +46,23 @@ The following options can be set in the profile:
 """
 
 import logging
+from typing import TYPE_CHECKING
 
 import salt.exceptions
 
 from saltext.vault.utils import vault
 from saltext.vault.utils.versions import warn_until
 
-log = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from saltext.vault.utils._types import SaltContext
+    from saltext.vault.utils._types import SaltLogger
+    from saltext.vault.utils._types import SaltOpts
+
+    __opts__: SaltOpts
+    __context__: SaltContext
+
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 __func_alias__ = {"set_": "set"}
 

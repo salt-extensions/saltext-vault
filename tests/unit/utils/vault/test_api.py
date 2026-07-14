@@ -380,7 +380,7 @@ def test_write_approle(approle_api, client):
     """
     Ensure _manage_approle calls the API as expected.
     """
-    policies = {"foo": "bar"}
+    policies = ["foo", "bar"]
     payload = {
         "token_explicit_max_ttl": 9999999999,
         "token_num_uses": 1,

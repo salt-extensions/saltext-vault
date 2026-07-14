@@ -143,6 +143,7 @@ def _multi_lease(request):
 def beacon_config(request, _multi_lease, existing_lease):
     req = request.param.copy()
     datatype = req.pop("leases_type", str if not _multi_lease else list)
+    alt_lease = None
     if _multi_lease:
         alt_lease = request.getfixturevalue("existing_alt_lease")
     data = {}

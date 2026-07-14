@@ -1,4 +1,5 @@
 import logging
+import typing
 from unittest.mock import Mock
 from unittest.mock import call
 from unittest.mock import patch
@@ -88,7 +89,7 @@ def test_vault_lease_creation_time_normalization(creation_time):
     strings that may have a variable number of digits for sub-second precision (0 omitted)
     while datetime.fromisoformat expects exactly 6 digits
     """
-    data = {
+    data: dict[str, typing.Any] = {
         "lease_id": "id",
         "renewable": False,
         "lease_duration": 1337,
@@ -113,7 +114,7 @@ def test_vault_lease_is_valid_accounts_for_time(duration, offset, expected):
     """
     Ensure lease validity is checked correctly and can look into the future
     """
-    data = {
+    data: dict[str, typing.Any] = {
         "lease_id": "id",
         "renewable": False,
         "lease_duration": duration,
@@ -139,7 +140,7 @@ def test_vault_token_is_valid_accounts_for_time(duration, offset, expected):
     """
     Ensure token time validity is checked correctly and can look into the future
     """
-    data = {
+    data: dict[str, typing.Any] = {
         "client_token": "id",
         "renewable": False,
         "lease_duration": duration,
@@ -159,7 +160,7 @@ def test_vault_token_is_valid_accounts_for_num_uses(num_uses, uses, expected):
     """
     Ensure token uses validity is checked correctly
     """
-    data = {
+    data: dict[str, typing.Any] = {
         "client_token": "id",
         "renewable": False,
         "lease_duration": 0,

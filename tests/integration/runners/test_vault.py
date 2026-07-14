@@ -217,8 +217,8 @@ class TestVaultPillarPolicyTemplatesWithoutCache:
         exe_loop_pillar = r"""
         vault_sourced_exe: {{ salt["vault.read_secret"]("secret/path/foo", "vault_sourced") }}
         """
-        top_tempfile = pytest.helpers.temp_file("top.sls", top_file, pillar_state_tree)
-        exe_loop_tempfile = pytest.helpers.temp_file(
+        top_tempfile = pytest.helpers.temp_file("top.sls", top_file, pillar_state_tree)  # type: ignore
+        exe_loop_tempfile = pytest.helpers.temp_file(  # type: ignore
             "exe_loop.sls", exe_loop_pillar, pillar_state_tree
         )
 
@@ -236,8 +236,8 @@ class TestVaultPillarPolicyTemplatesWithoutCache:
         sdb_loop_pillar = r"""
         vault_sourced_sdb: {{ salt["sdb.get"]("sdb://sdbvault/secret/path/foo/vault_sourced") }}
         """
-        top_tempfile = pytest.helpers.temp_file("top.sls", top_file, pillar_state_tree)
-        sdb_loop_tempfile = pytest.helpers.temp_file(
+        top_tempfile = pytest.helpers.temp_file("top.sls", top_file, pillar_state_tree)  # type: ignore
+        sdb_loop_tempfile = pytest.helpers.temp_file(  # type: ignore
             "sdb_loop.sls", sdb_loop_pillar, pillar_state_tree
         )
 
@@ -1138,7 +1138,7 @@ class TestAppRoleIssuanceWithoutSecretId:
                             "bind_secret_id": False,
                             # "at least one constraint should be enabled on the role"
                             # this should be quite secure :)
-                            "token_bound_cidrs": "0.0.0.0/0",
+                            "token_bound_cidrs": ["0.0.0.0/0"],
                             "token_explicit_max_ttl": 1800,
                             "token_num_uses": 0,
                         }

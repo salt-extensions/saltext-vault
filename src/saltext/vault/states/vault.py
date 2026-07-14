@@ -7,10 +7,24 @@ Statefully manage Vault (or OpenBao) policies.
 
 import difflib
 import logging
+from typing import TYPE_CHECKING
 
 from salt.exceptions import CommandExecutionError
 
-log = logging.getLogger(__name__)
+if TYPE_CHECKING:
+
+    from saltext.vault.utils._types import SaltContext
+    from saltext.vault.utils._types import SaltFunctions
+    from saltext.vault.utils._types import SaltLogger
+    from saltext.vault.utils._types import SaltOpts
+    from saltext.vault.utils._types import SaltStates
+
+    __opts__: SaltOpts
+    __context__: SaltContext
+    __salt__: SaltFunctions
+    __states__: SaltStates
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 
 def policy_present(name, rules):

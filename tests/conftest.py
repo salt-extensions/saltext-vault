@@ -216,12 +216,12 @@ def sshd_server(salt_factories, sshd_config_dir):  # pragma: no cover
 @pytest.fixture(scope="module")
 def known_hosts_file(sshd_server, master, salt_factories):  # pragma: no cover
     with (
-        pytest.helpers.temp_file(
+        pytest.helpers.temp_file(  # type: ignore
             "ssh-known-hosts",
             "\n".join(sshd_server.get_host_keys()),
             salt_factories.tmp_root_dir,
         ) as known_hosts_file,
-        pytest.helpers.temp_file(
+        pytest.helpers.temp_file(  # type: ignore
             "master.d/ssh-known-hosts.conf",
             f"known_hosts_file: {known_hosts_file}",
             master.config_dir,
@@ -243,7 +243,7 @@ def salt_ssh_roster_file(
     if salt.utils.platform.is_darwin():
         roster_contents += "  set_path: $PATH:/usr/local/bin/\n"
 
-    with pytest.helpers.temp_file("roster", roster_contents, master.config_dir) as roster_file:
+    with pytest.helpers.temp_file("roster", roster_contents, master.config_dir) as roster_file:  # type: ignore
         yield roster_file
 
 
@@ -316,9 +316,10 @@ def container(
                 break
             ret = ProcessResult(
                 returncode=proc.returncode,
-                stdout=proc.stdout,
-                stderr=proc.stderr,
+                stdout=proc.stdout,  # type: ignore
+                stderr=proc.stderr,  # type: ignore
                 cmdline=proc.args,
+                data=None,
             )
             log.debug("Failed to authenticate against vault:\n%s", ret)
             time.sleep(4)

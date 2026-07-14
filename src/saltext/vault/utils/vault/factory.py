@@ -5,6 +5,7 @@ Salt-Vault integration core functions
 import base64
 import copy
 import logging
+import typing
 
 import salt.cache
 import salt.crypt
@@ -14,6 +15,7 @@ import salt.modules.saltutil
 import salt.utils.context
 import salt.utils.data
 import salt.utils.dictupdate
+import salt.utils.event
 import salt.utils.sdb
 from requests.exceptions import ConnectionError  # pylint: disable=redefined-builtin
 from salt.defaults import NOT_SET
@@ -31,7 +33,10 @@ from saltext.vault.utils.vault.exceptions import VaultException
 from saltext.vault.utils.vault.exceptions import VaultPermissionDeniedError
 from saltext.vault.utils.vault.exceptions import VaultUnwrapException
 
-log = logging.getLogger(__name__)
+if typing.TYPE_CHECKING:
+    from saltext.vault.utils._types import SaltLogger
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 logging.getLogger("requests").setLevel(logging.WARNING)
 
 
@@ -39,7 +44,32 @@ TOKEN_CKEY = "__token"
 CLIENT_CKEY = "_vault_authd_client"
 
 
-def get_authd_client(opts, context, force_local=False, get_config=False):
+@typing.overload
+def get_authd_client(
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    *,
+    force_local: bool = False,
+    get_config: typing.Literal[True],
+) -> tuple[vclient.AuthenticatedVaultClient, dict[str, typing.Any]]: ...
+@typing.overload
+def get_authd_client(
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    *,
+    force_local: bool = False,
+    get_config: typing.Literal[False] = False,
+) -> vclient.AuthenticatedVaultClient: ...
+def get_authd_client(
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    *,
+    force_local: bool = False,
+    get_config: bool = False,
+) -> (
+    vclient.AuthenticatedVaultClient
+    | tuple[vclient.AuthenticatedVaultClient, dict[str, typing.Any]]
+):
     """
     Returns an AuthenticatedVaultClient that is valid for at least one query.
     """
@@ -473,8 +503,8 @@ def _get_connection_config(cbank, opts, context, force_local=False, pre_flush=Fa
         return None, None, None
 
     log.debug("Using new Vault server connection configuration.")
+    issue_params = parse_config(opts.get("vault", {}), validate=False)["issue_params"]
     try:
-        issue_params = parse_config(opts.get("vault", {}), validate=False)["issue_params"]
         new_config, unwrap_client = _query_master(
             "get_config",
             opts,
@@ -649,7 +679,7 @@ def _fetch_token(config, opts, token_cache, unwrap_client, force_local=False, em
             token = token_cache.get()
             if token is None or embedded_token != str(token):
                 # lookup and verify raw token
-                token_info = unwrap_client.token_lookup(embedded_token, raw=True)
+                token_info = unwrap_client.token_lookup(token=embedded_token, raw=True)
                 if token_info.status_code != 200:
                     log.error("Token lookup failed! status code: %d", token_info.status_code)
                     log.debug("The Vault server response was: %s", token_info.text)
@@ -831,7 +861,7 @@ def _query_master(
     )
 
 
-def _get_event(opts):
+def _get_event(opts) -> typing.Callable[..., bool]:
     event = salt.utils.event.get_event(
         opts.get("__role", "minion"), sock_dir=opts["sock_dir"], opts=opts, listen=False
     )
@@ -841,7 +871,23 @@ def _get_event(opts):
     return event.fire_event
 
 
-def get_kv(opts, context, get_config=False):
+@typing.overload
+def get_kv(
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    *,
+    get_config: typing.Literal[True],
+) -> tuple[vkv.VaultKV, dict[str, typing.Any]]: ...
+@typing.overload
+def get_kv(
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    *,
+    get_config: typing.Literal[False] = False,
+) -> vkv.VaultKV: ...
+def get_kv(
+    opts: dict[str, typing.Any], context: dict[typing.Any, typing.Any], *, get_config: bool = False
+) -> vkv.VaultKV | tuple[vkv.VaultKV, dict[str, typing.Any]]:
     """
     Return an instance of VaultKV, which can be used
     to interact with the ``kv`` backend.
@@ -868,7 +914,26 @@ def get_kv(opts, context, get_config=False):
     return kv
 
 
-def get_lease_store(opts, context, get_config=False):
+@typing.overload
+def get_lease_store(
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    *,
+    get_config: typing.Literal[True],
+) -> tuple[vleases.LeaseStore[vleases.VaultLease], dict[str, typing.Any]]: ...
+@typing.overload
+def get_lease_store(
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    *,
+    get_config: typing.Literal[False] = False,
+) -> vleases.LeaseStore[vleases.VaultLease]: ...
+def get_lease_store(
+    opts: dict[str, typing.Any], context: dict[typing.Any, typing.Any], *, get_config: bool = False
+) -> (
+    vleases.LeaseStore[vleases.VaultLease]
+    | tuple[vleases.LeaseStore[vleases.VaultLease], dict[str, typing.Any]]
+):
     """
     Return an instance of LeaseStore, which can be used
     to cache leases and handle operations like renewals and revocations.
@@ -882,6 +947,7 @@ def get_lease_store(opts, context, get_config=False):
     lease_cache = vcache.VaultLeaseCache(
         context,
         session_cbank + "/leases",
+        lease_cls=vleases.VaultLease,
         cache_backend=vcache._get_cache_backend(config, opts),
         expire_events=expire_events,
     )
@@ -891,7 +957,29 @@ def get_lease_store(opts, context, get_config=False):
     return store
 
 
-def get_approle_api(opts, context, force_local=False, get_config=False):
+@typing.overload
+def get_approle_api(
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    *,
+    force_local: bool = False,
+    get_config: typing.Literal[True],
+) -> tuple[vapi.AppRoleApi, dict[str, typing.Any]]: ...
+@typing.overload
+def get_approle_api(
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    *,
+    force_local: bool = False,
+    get_config: typing.Literal[False] = False,
+) -> vapi.AppRoleApi: ...
+def get_approle_api(
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    *,
+    force_local: bool = False,
+    get_config: bool = False,
+) -> vapi.AppRoleApi | tuple[vapi.AppRoleApi, dict[str, typing.Any]]:
     """
     Return an instance of AppRoleApi containing an AuthenticatedVaultClient.
     """
@@ -903,7 +991,29 @@ def get_approle_api(opts, context, force_local=False, get_config=False):
     return api
 
 
-def get_identity_api(opts, context, force_local=False, get_config=False):
+@typing.overload
+def get_identity_api(
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    *,
+    force_local: bool = False,
+    get_config: typing.Literal[True],
+) -> tuple[vapi.IdentityApi, dict[str, typing.Any]]: ...
+@typing.overload
+def get_identity_api(
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    *,
+    force_local: bool = False,
+    get_config: typing.Literal[False] = False,
+) -> vapi.IdentityApi: ...
+def get_identity_api(
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    *,
+    force_local: bool = False,
+    get_config: bool = False,
+) -> vapi.IdentityApi | tuple[vapi.IdentityApi, dict[str, typing.Any]]:
     """
     Return an instance of IdentityApi containing an AuthenticatedVaultClient.
     """
@@ -915,7 +1025,12 @@ def get_identity_api(opts, context, force_local=False, get_config=False):
     return api
 
 
-def parse_config(config, validate=True, opts=None, require_token=True):
+def parse_config(
+    config: dict[str, typing.Any],
+    validate: bool = True,
+    opts: dict[str, typing.Any] | None = None,
+    require_token: bool = True,
+) -> dict[str, typing.Any]:
     """
     Returns a vault configuration dictionary that has all
     keys with defaults. Checks if required data is available.
@@ -1065,7 +1180,7 @@ def parse_config(config, validate=True, opts=None, require_token=True):
     return merged
 
 
-def _check_salt_ssh_opts(opts):
+def _check_salt_ssh_opts(opts: dict[str, typing.Any]) -> dict[str, typing.Any]:
     if "__master_opts__" in opts and "vault" not in opts:
         # Let's run the same way as during pillar compilation.
         vopts = {}

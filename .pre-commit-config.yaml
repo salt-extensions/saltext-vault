@@ -137,6 +137,16 @@ repos:
           - nox==2026.4.10
           - uv==0.11.26  # Makes this hook much faster
 
+  - repo: https://github.com/astral-sh/ty-pre-commit
+    rev: e20b8a0be260b57e3b30f632a3ee8ade65b3dc5d  # v0.0.59
+    hooks:
+      - id: ty
+        alias: typing
+        name: Typecheck Project
+        args:
+          - --isolated
+          - --extra=tests
+
   - repo: https://github.com/Mateusz-Grzelinski/actionlint-py
     rev: 694e2c0dfb4253d51f3c6c54b8f9fec0a16764dc  # v1.7.11.24
     hooks:
