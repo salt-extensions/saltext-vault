@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import shutil
@@ -267,6 +268,23 @@ def vault_environ(vault_port):
         yield
 
 
+@pytest.fixture(scope="module")
+def vault_plugins(tmp_path_factory):
+    vault_plugin_path = tmp_path_factory.mktemp("vault-plugins")
+    # The container process runs unprivileged (e.g. uid 100) and must be able
+    # to lstat plugin files in this bind-mounted dir.
+    vault_plugin_path.chmod(0o755)
+    try:
+        yield vault_plugin_path
+    finally:
+        shutil.rmtree(str(vault_plugin_path), ignore_errors=True)
+
+
+@pytest.fixture(scope="module")
+def vault_config():
+    return {"plugin_directory": "/mnt/plugins"}
+
+
 CONTAINER_TARGETS = os.environ.get(
     "TESTING_CONTAINER", "hashicorp/vault:latest,openbao/openbao:latest"
 ).split(",")
@@ -277,16 +295,21 @@ CONTAINER_TARGETS = os.environ.get(
     params=CONTAINER_TARGETS,
 )
 def container(
-    request, salt_factories, vault_port, vault_environ
+    request, salt_factories, vault_port, vault_environ, vault_plugins, vault_config
 ):  # pylint: disable=unused-argument
     vault_binary = salt.utils.path.which("vault")
 
     if "openbao" in request.param:
         env = {
             "BAO_DEV_ROOT_TOKEN_ID": "testsecret",
+            "BAO_LOCAL_CONFIG": json.dumps(vault_config),
         }
     else:
-        env = {"VAULT_DEV_ROOT_TOKEN_ID": "testsecret", "SKIP_SETCAP": "1"}
+        env = {
+            "VAULT_DEV_ROOT_TOKEN_ID": "testsecret",
+            "SKIP_SETCAP": "1",
+            "VAULT_LOCAL_CONFIG": json.dumps(vault_config),
+        }
 
     factory = salt_factories.get_container(
         "vault",
@@ -296,11 +319,18 @@ def container(
             "cap_add": ["IPC_LOCK"],
             "ports": {"8200/tcp": vault_port},
             "environment": env,
+            "volumes": {
+                str(vault_plugins): {
+                    "bind": vault_config.get("plugin_directory", "/mnt/plugins"),
+                    "mode": "z",
+                }
+            },
         },
         pull_before_start=True,
         skip_on_pull_failure=True,
         skip_if_docker_client_not_connectable=True,
     )
+
     with factory.started() as factory:
         attempts = 0
         while attempts < 3:
@@ -333,6 +363,7 @@ def container(
         vault_write_policy_file("pki_admin")
         vault_write_policy_file("ssh_admin")
         vault_write_policy_file("approle_admin")
+        vault_write_policy_file("plugin_admin")
 
         vault_enable_auth_method("approle", ["-path=salt-minions"])
         vault_enable_secret_engine("kv", ["-version=1", "-path=secret-v1"])
