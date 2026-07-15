@@ -319,6 +319,7 @@ def test_lookup_mount_accessor(client, identity_api, lookup_mount_response):
     assert res == "auth_approle_cafebabe"
 
 
+@pytest.mark.usefixtures("time_stopped")
 @pytest.mark.parametrize("wrap", ["30s", False])
 def test_generate_secret_id(client, wrapped_response, secret_id_response, wrap, approle_api):
     """
@@ -346,6 +347,7 @@ def test_generate_secret_id(client, wrapped_response, secret_id_response, wrap, 
     )
 
 
+@pytest.mark.usefixtures("time_stopped")
 @pytest.mark.parametrize("wrap", ["30s", False])
 def test_read_role_id(client, wrapped_response, wrap, approle_api):
     """
