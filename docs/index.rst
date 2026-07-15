@@ -16,6 +16,7 @@ Currently, you can
 * manage and issue certificates via the PKI secret engine
 * manage and issue credentials/certificates via the SSH secret engine
 * manage and issue credentials via the AppRole auth backend
+* manage Vault plugins and plugin versions
 * write your own modules on top of the provided utilities
 
 There's more coming though.

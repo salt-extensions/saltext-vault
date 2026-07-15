@@ -334,3 +334,91 @@ def vault_revoke(lease_id, prefix=False):
     except RuntimeError as err:
         pytest.fail(f"Failed to revoke lease `{lease_id}`: {err}")
     return True
+
+
+def vault_plugin_list(flt=None):
+    return [
+        plugin
+        for plugin in vault_read("sys/plugins/catalog")["data"]["detailed"]
+        if not flt or flt(plugin)
+    ]
+
+
+def vault_plugin_read(plugin_type, name, version=None, *, _nofail=False, **_):
+    cmd = ["plugin", "info", "-format=json"]
+    if version:
+        cmd += [f"-version={version}"]
+    cmd += [plugin_type, name]
+    try:
+        ret = _vault_cmd(cmd).data
+    except RuntimeError as err:
+        if _nofail:
+            return False
+        pytest.fail(f"Failed to read {plugin_type} plugin {name}: {err}")
+    # Make output more similar to read endpoint for easier assertions
+    ret.pop("deprecation_status", None)
+    if "oci_image" in ret and not ret["oci_image"]:
+        ret.pop("oci_image")
+    if "runtime" in ret and not ret["runtime"]:
+        ret.pop("runtime")
+    return ret
+
+
+def vault_plugin_register(
+    plugin_type,
+    name,
+    *,
+    sha256=None,
+    command=None,
+    args=None,
+    env=None,
+    version=None,
+    oci_image=None,
+    runtime=None,
+    download=False,
+):
+    endpoint = f"sys/plugins/catalog/{plugin_type}/{name}"
+    payload = {}
+    if sha256 is not None:
+        payload["sha256"] = sha256
+    if command is not None:
+        payload["command"] = command
+    if args is not None:
+        payload["args"] = args
+    if env is not None:
+        payload["env"] = env
+    if version is not None:
+        payload["version"] = version
+    if oci_image is not None:
+        payload["oci_image"] = oci_image
+    if runtime is not None:
+        payload["runtime"] = runtime
+    if download:
+        payload["download"] = download
+    return vault_write(endpoint, **payload)
+
+
+def vault_plugin_deregister(plugin_type, name, version=None):
+    cmd = ["plugin", "deregister"]
+    if version:
+        cmd += [f"-version={version}"]
+    cmd += [plugin_type, name]
+    try:
+        _vault_cmd(cmd)
+    except RuntimeError as err:
+        pytest.fail(f"Failed to deregister {plugin_type} plugin {name}: {err}")
+    return True
+
+
+def vault_plugin_pin(plugin_type, name, version):
+    return vault_write(f"sys/plugins/pins/{plugin_type}/{name}", version=version)
+
+
+def vault_plugin_show_pin(plugin_type, name):
+    return vault_read(
+        f"sys/plugins/pins/{plugin_type}/{name}", default={"data": {"version": False}}
+    )["data"]["version"]
+
+
+def vault_plugin_unpin(plugin_type, name):
+    return vault_delete(f"sys/plugins/pins/{plugin_type}/{name}")

@@ -13,4 +13,5 @@ _______________
     vault_approle
     vault_db
     vault_pki
+    vault_plugin
     vault_ssh
