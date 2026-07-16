@@ -33,8 +33,6 @@ from saltext.vault.utils.vault.helpers import timestring_map
 from saltext.vault.utils.versions import warn_until
 
 if typing.TYPE_CHECKING:
-    import salt._logging.impl
-
     from saltext.vault.utils._types import SaltContext
     from saltext.vault.utils._types import SaltLogger
     from saltext.vault.utils._types import SaltOpts

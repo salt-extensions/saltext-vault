@@ -246,7 +246,7 @@ class TestGetOrSetHashSingleUseToken:
     def test_sdb_get_or_set_hash_single_use_token(self, vault_salt_call_cli, secret_mount):
         """
         Test that sdb.get_or_set_hash works with uses=1.
-        Issue #60779
+        Salt core issue #60779
         """
         ret = vault_salt_call_cli.run(
             "sdb.get_or_set_hash",
