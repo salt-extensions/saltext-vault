@@ -3,6 +3,11 @@ name: Testing
 
 on:
   workflow_call:
+    inputs:
+      changed-files:
+        required: true
+        type: string
+        description: JSON string of array of all changed files. Used for optimizing PR CI runtimes.
 
 jobs:
 
@@ -59,10 +64,14 @@ jobs:
 
       - name: Test
         env:
+          # Assume this list is not too long for an env var (around 2**16 bytes on Linux, half that on Windows)
+          CHANGED_FILES: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'test:full') && inputs.changed-files || '' }}
           SALT_REQUIREMENT: salt==${{ matrix.salt-version }}
           SKIP_REQUIREMENTS_INSTALL: true
-        run: |
-          nox --force-color -e tests-3 -- -vv --instafail tests/
+        run: >-
+          nox --force-color -e tests-3 -- -vv --instafail
+          ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'test:full') && '--changed-files --allow-empty-runs' || '' }}
+          tests/
 
       - name: Create CodeCov Flags
         if: always()
@@ -147,11 +156,14 @@ jobs:
       - name: Test
         shell: bash
         env:
+          CHANGED_FILES: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'test:full') && inputs.changed-files || '' }}
           SALT_REQUIREMENT: salt==${{ matrix.salt-version }}
           SKIP_REQUIREMENTS_INSTALL: true
-        run: |
-          export PATH="/C/Program Files (x86)/Windows Kits/10/bin/10.0.18362.0/x64;$PATH"
-          nox --force-color -e tests-3 -- -vv --instafail tests/
+        run: >-
+          export PATH="/C/Program Files (x86)/Windows Kits/10/bin/10.0.18362.0/x64;$PATH";
+          nox --force-color -e tests-3 -- -vv --instafail
+          ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'test:full') && '--changed-files --allow-empty-runs' || '' }}
+          tests/
 
       - name: Create CodeCov Flags
         if: always()
@@ -232,10 +244,13 @@ jobs:
 
       - name: Test
         env:
+          CHANGED_FILES: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'test:full') && inputs.changed-files || '' }}
           SALT_REQUIREMENT: salt==${{ matrix.salt-version }}
           SKIP_REQUIREMENTS_INSTALL: true
-        run: |
-          nox --force-color -e tests-3 -- -vv --instafail tests/
+        run: >-
+          nox --force-color -e tests-3 -- -vv --instafail
+          ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'test:full') && '--changed-files --allow-empty-runs' || '' }}
+          tests/
 
       - name: Create CodeCov Flags
         if: always()

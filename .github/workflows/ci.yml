@@ -25,8 +25,11 @@ jobs:
   test:
     name: Test
     needs:
+      - get-changed-files
       - pre-commit
     uses: ./.github/workflows/test-action.yml
+    with:
+      changed-files: ${{ needs.get-changed-files.outputs.changed-files-json }}
 
   docs:
     name: Docs
