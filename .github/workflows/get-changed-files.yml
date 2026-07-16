@@ -5,6 +5,9 @@ on:
       changed-files:
         description: "Changed file JSON output from dorny/paths-filter"
         value: ${{ jobs.get-changed-files.outputs.changed-files }}
+      changed-files-json:
+        description: "Changed file JSON output from dorny/paths-filter"
+        value: ${{ jobs.get-changed-files.outputs.changed-files-json }}
 
 permissions:
   contents: read  # for dorny/paths-filter to fetch a list of changed files
@@ -16,6 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       changed-files: ${{ toJSON(steps.changed-files.outputs) }}
+      changed-files-json: ${{ steps.changed-files-json.outputs.all_files }}
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
@@ -51,3 +55,13 @@ jobs:
 
       - name: Echo Changed Files Output
         run: echo "${{ toJSON(steps.changed-files.outputs) }}"
+
+      - name: Get All Changed Files As JSON
+        id: changed-files-json
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
+        with:
+          token: ${{ github.token }}
+          list-files: json
+          filters: |-
+            all:
+              - added|deleted|modified: '**'
