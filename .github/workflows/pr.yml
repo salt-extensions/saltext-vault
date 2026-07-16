@@ -3,9 +3,17 @@ name: Pull Request
 
 on:
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled  # Need to trigger a re-run when test:full label is added
 
 jobs:
   call_central_workflow:
+    if: >-
+      github.event.action != 'labeled' ||
+      github.event.label.name == 'test:full'
     name: CI
     uses: ./.github/workflows/ci.yml
     permissions:
