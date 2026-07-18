@@ -449,7 +449,9 @@ def test_reload_named(vault_plugin):
     assert isinstance(res, str)
 
 
+@pytest.mark.usefixtures("secret_mounts")
+@pytest.mark.parametrize("secret_mounts", [("ssh", "database")], indirect=True)
 def test_reload_mounts(vault_plugin):
-    res = vault_plugin.reload_mounts(["secret-v1", "salt"], globally=True)
+    res = vault_plugin.reload_mounts(["ssh", "database"], globally=True)
     assert res
     assert isinstance(res, str)

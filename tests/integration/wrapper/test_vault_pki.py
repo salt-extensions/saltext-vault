@@ -12,8 +12,6 @@ from salt.utils.x509 import load_cert
 from saltext.vault.utils.vault.pki import dec2hex
 from tests.conftest import CONTAINER_TARGETS
 from tests.support.vault import vault_delete
-from tests.support.vault import vault_disable_secret_engine
-from tests.support.vault import vault_enable_secret_engine
 from tests.support.vault import vault_list
 from tests.support.vault import vault_list_detailed
 from tests.support.vault import vault_read
@@ -23,7 +21,8 @@ pytest.importorskip("docker")
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container"),
+    pytest.mark.usefixtures("container", "secret_mounts"),
+    pytest.mark.parametrize("secret_mounts", ("pki",), indirect=True),
     pytest.mark.parametrize(
         "container", (CONTAINER_TARGETS[0],), indirect=True
     ),  # We only want to check the internal logic, not the API access
@@ -99,13 +98,6 @@ def private_key(tmp_path_factory):
         "pk.pem", data, tmp_path_factory.mktemp("pki_wrapper")
     ) as pk:
         yield str(pk)
-
-
-@pytest.fixture(scope="module", autouse=True)
-def pki_engine(container):  # pylint: disable=unused-argument
-    assert vault_enable_secret_engine("pki")
-    yield
-    assert vault_disable_secret_engine("pki")
 
 
 @pytest.fixture(params=[["testrole"]])

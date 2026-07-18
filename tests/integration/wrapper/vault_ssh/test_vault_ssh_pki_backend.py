@@ -22,7 +22,8 @@ pytest.importorskip("docker")
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "roles_setup", "ca_setup"),
+    pytest.mark.usefixtures("container", "secret_mounts", "roles_setup", "ca_setup"),
+    pytest.mark.parametrize("secret_mounts", ("ssh",), indirect=True),
     pytest.mark.parametrize(
         "container", (CONTAINER_TARGETS[0],), indirect=True
     ),  # We only want to check the internal logic, not the API access

@@ -628,11 +628,13 @@ def test_reload_named(vault_plugin, auth_plugin, container):
         assert res is False
 
 
+@pytest.mark.usefixtures("secret_mounts")
+@pytest.mark.parametrize("secret_mounts", [("ssh", "database")], indirect=True)
 def test_reload_mounts(vault_plugin):
     res = vault_plugin.reload_mounts("auth/salt-minions")
     assert res
     assert isinstance(res, str)
-    res = vault_plugin.reload_mounts(["secret-v1", "salt"], globally=True)
+    res = vault_plugin.reload_mounts(["ssh", "database"], globally=True)
     assert res
     assert isinstance(res, str)
     with pytest.raises(

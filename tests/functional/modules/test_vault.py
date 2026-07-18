@@ -16,6 +16,12 @@ pytest.importorskip("docker")
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
+    pytest.mark.usefixtures("secret_mounts"),
+    pytest.mark.parametrize(
+        "secret_mounts",
+        [[("kv", "secret-v1", "-version=1"), ("kv", "secret", "-version=2")]],
+        indirect=True,
+    ),
 ]
 
 log = logging.getLogger(__name__)

@@ -3,7 +3,6 @@ import logging
 import pytest
 
 from tests.conftest import CONTAINER_TARGETS
-from tests.support.vault import vault_delete_secret
 from tests.support.vault import vault_list_secrets
 from tests.support.vault import vault_read_secret
 
@@ -13,7 +12,7 @@ log = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "pillar_base", "vault_secrets"),
+    pytest.mark.usefixtures("container", "pillar_base", "secret_mounts", "vault_secrets"),
     pytest.mark.parametrize(
         "container", (CONTAINER_TARGETS[0],), indirect=True
     ),  # We only want to check the internal logic, not the API access
@@ -41,14 +40,6 @@ def pillar_defaults():
             }
         }
     }
-
-
-@pytest.fixture(scope="module", autouse=True)
-def _cleanup(container):  # pylint: disable=unused-argument
-    try:
-        yield
-    finally:
-        vault_delete_secret("secret/test/write", metadata=True)
 
 
 @pytest.fixture(scope="module")

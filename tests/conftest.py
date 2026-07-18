@@ -20,6 +20,7 @@ from saltext.vault import PACKAGE_ROOT
 from tests.support.files_mapping import CHANGED_FILES_MAP
 from tests.support.files_mapping import REPO_ROOT
 from tests.support.helpers import PatchedEnviron
+from tests.support.vault import vault_disable_secret_engine
 from tests.support.vault import vault_enable_auth_method
 from tests.support.vault import vault_enable_secret_engine
 from tests.support.vault import vault_write_policy_file
@@ -289,13 +290,13 @@ def vault_port():
     return ports.get_unused_localhost_port()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def vault_environ(vault_port):
     with PatchedEnviron(VAULT_ADDR=f"http://127.0.0.1:{vault_port}"):
         yield
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def vault_plugins(tmp_path_factory):
     vault_plugin_path = tmp_path_factory.mktemp("vault-plugins")
     # The container process runs unprivileged (e.g. uid 100) and must be able
@@ -307,7 +308,7 @@ def vault_plugins(tmp_path_factory):
         shutil.rmtree(str(vault_plugin_path), ignore_errors=True)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def vault_config():
     return {"plugin_directory": "/mnt/plugins"}
 
@@ -318,7 +319,7 @@ CONTAINER_TARGETS = os.environ.get(
 
 
 @pytest.fixture(
-    scope="module",
+    scope="session",
     params=CONTAINER_TARGETS,
 )
 def container(
@@ -393,9 +394,39 @@ def container(
         vault_write_policy_file("plugin_admin")
 
         vault_enable_auth_method("approle", ["-path=salt-minions"])
-        vault_enable_secret_engine("kv", ["-version=1", "-path=secret-v1"])
-        vault_enable_secret_engine("kv", ["-version=2", "-path=salt"])
+        # get rid of default mount so we can ensure state does not leak between test modules
+        vault_disable_secret_engine("secret")
         yield request.param
+
+
+@pytest.fixture(scope="module", params=((("kv", "secret", "-version=2"),),))
+def secret_mounts(request, container):  # pylint: disable=unused-argument
+    mounts = []
+
+    def _cleanup():
+        for path in mounts:
+            vault_disable_secret_engine(path)
+
+    params = request.param
+    if isinstance(params, str):
+        params = [params]
+    try:
+        for mount in params:
+            if isinstance(mount, str):
+                engine, path, options = mount, mount, ()
+            else:
+                try:
+                    engine, path, options = mount[0], mount[1], mount[2]
+                except IndexError:
+                    engine, path, options = mount[0], mount[1], ()
+            vault_enable_secret_engine(engine, path=path, options=options)
+            mounts.append(path)
+    except Exception:  # pylint: disable=broad-except
+        _cleanup()
+    try:
+        yield
+    finally:
+        _cleanup()
 
 
 @pytest.fixture(scope="session")

@@ -2,8 +2,6 @@ import pytest
 
 from tests.conftest import CONTAINER_TARGETS
 from tests.support.vault import vault_delete
-from tests.support.vault import vault_disable_secret_engine
-from tests.support.vault import vault_enable_secret_engine
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write
@@ -123,13 +121,6 @@ def ec_priv_file(ec_priv, tmp_path):
     path = tmp_path / "ec"
     path.write_text(ec_priv)
     return str(path)
-
-
-@pytest.fixture(scope="module", autouse=True)
-def ssh_engine(container):  # pylint: disable=unused-argument
-    assert vault_enable_secret_engine("ssh")
-    yield
-    assert vault_disable_secret_engine("ssh")
 
 
 @pytest.fixture(params=(("userrole", "hostrole", "iprole"),))
