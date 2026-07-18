@@ -326,7 +326,7 @@ def test_generate_secret_id(client, wrapped_response, secret_id_response, wrap, 
     Ensure generate_secret_id calls the API as expected.
     """
 
-    def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
+    def res_or_wrap(*_, **kwargs):  # pylint: disable=unused-argument
         if kwargs.get("wrap"):
             return vault.VaultWrappedResponse(**wrapped_response["wrap_info"])
         return secret_id_response
@@ -354,7 +354,7 @@ def test_read_role_id(client, wrapped_response, wrap, approle_api):
     Ensure read_role_id calls the API as expected.
     """
 
-    def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
+    def res_or_wrap(*_, **kwargs):  # pylint: disable=unused-argument
         if kwargs.get("wrap"):
             return vault.VaultWrappedResponse(**wrapped_response["wrap_info"])
         return {"data": {"role_id": "test-role-id"}}

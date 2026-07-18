@@ -508,7 +508,7 @@ def req_any(req, request):
 
 @pytest.fixture
 def req_unwrapping(wrapped_role_id_lookup_response, role_id_response, req):
-    req.side_effect = lambda method, url, **kwargs: (
+    req.side_effect = lambda _method, url, **_: (
         _mock_json_response(wrapped_role_id_lookup_response)
         if url.endswith("sys/wrapping/lookup")
         else _mock_json_response(role_id_response)
@@ -535,7 +535,7 @@ def client(server_config, request, session):
         auth.is_valid.return_value = True
         auth.get_token.return_value = token
     elif request.param == "invalid_token":
-        token = request.getfixturevalue(request.param)
+        request.getfixturevalue(request.param)
         auth = Mock(spec=vauth.VaultTokenAuth)
         auth.is_renewable.return_value = True
         auth.is_valid.return_value = False

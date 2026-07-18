@@ -130,7 +130,7 @@ def issuers_setup(request, root_issuer_setup):  # pylint: disable=unused-argumen
         all_issuers = vault_list_detailed("pki/issuers")
         issuers_names = []
         if len(all_issuers) > 0:
-            issuers_names = [v["issuer_name"] for k, v in all_issuers["key_info"].items()]
+            issuers_names = [v["issuer_name"] for v in all_issuers["key_info"].values()]
         for issuer_name in request.param:
             if issuer_name in issuers_names:
                 vault_delete(f"pki/issuer/{issuer_name}")

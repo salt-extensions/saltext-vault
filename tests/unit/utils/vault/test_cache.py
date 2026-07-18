@@ -346,7 +346,7 @@ class TestVaultConfigCache:
             cbank,
             ckey,
             {},
-            cache_backend_factory=lambda *args: cached,
+            cache_backend_factory=lambda *_: cached,
             flush_exception=vault.VaultConfigExpired,
             init_config=config,
         )
@@ -364,7 +364,7 @@ class TestVaultConfigCache:
             cbank,
             ckey,
             {},
-            cache_backend_factory=lambda *args: cached_outdated,
+            cache_backend_factory=lambda *_: cached_outdated,
             flush_exception=vault.VaultConfigExpired,
             init_config=config,
         )

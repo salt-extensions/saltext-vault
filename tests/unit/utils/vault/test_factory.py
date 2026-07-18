@@ -244,7 +244,7 @@ class TestGetAuthdClient:
         warning about the potential tampering
         """
 
-        def raise_unwrap(*args, **kwargs):
+        def raise_unwrap(*_, **__):
             raise vfactory.VaultUnwrapException(["foo"], "bar", "vaulturl", "namespace", "verify")
 
         with patch(
@@ -346,7 +346,7 @@ class TestBuildAuthdClient:
         # mocked when _cache is called
         vauth_cache = vcache.VaultAuthCache
 
-        def _cache(context, cbank, ckey, *args, **kwargs):  # pylint: disable=unused-argument
+        def _cache(_context, _cbank, ckey, *_, **__):  # pylint: disable=unused-argument
             token = Mock(spec=vauth_cache)
             token.get.return_value = None
             approle = Mock(spec=vauth_cache)
@@ -374,7 +374,7 @@ class TestBuildAuthdClient:
         conn_config.return_value = (test_remote_config, None, Mock())
         (
             client,
-            config,  # pylint: disable=unused-variable
+            _config,  # pylint: disable=unused-variable
         ) = vfactory._build_authd_client({}, {})
         assert client.token_valid(remote=False)
         if test_remote_config["auth"]["method"] == "approle":
