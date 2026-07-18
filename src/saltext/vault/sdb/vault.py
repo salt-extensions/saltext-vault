@@ -104,7 +104,8 @@ def set_(key, value, profile=None):  # pylint: disable=unused-argument
             curr_data = vault.read_kv(path, __opts__, __context__)
             vault.patch_kv(path, data, __opts__, __context__)
             return True
-        except (vault.VaultNotFoundError, vault.VaultPermissionDeniedError):
+        except (vault.VaultNotFoundError, vault.VaultPermissionDeniedError, vault.VaultAuthExpired):
+            # We're catching VaultAuthExpired in case num_uses of the token is 1 and we cannot PATCH in a single request.
             pass
 
     curr_data.update(data)
