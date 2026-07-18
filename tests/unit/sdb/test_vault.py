@@ -1,7 +1,3 @@
-"""
-Test case for the vault SDB module
-"""
-
 from unittest.mock import ANY
 from unittest.mock import patch
 

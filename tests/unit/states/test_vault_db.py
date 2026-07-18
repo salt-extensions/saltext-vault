@@ -18,7 +18,7 @@ def _roles():
 
 @pytest.fixture
 def delete_connection_mock(_conns):
-    def _del(name, **kwargs):  # pylint: disable=unused-argument
+    def _del(name, **_):  # pylint: disable=unused-argument
         _conns.pop(name, None)
         return True
 
@@ -27,7 +27,7 @@ def delete_connection_mock(_conns):
 
 @pytest.fixture
 def delete_role_mock(_roles):
-    def _del(name, **kwargs):  # pylint: disable=unused-argument
+    def _del(name, **_):  # pylint: disable=unused-argument
         _roles.pop(name, None)
         return True
 
@@ -36,12 +36,12 @@ def delete_role_mock(_roles):
 
 @pytest.fixture
 def fetch_connection_mock(_conns):
-    return Mock(spec=vault_db_exe.fetch_connection, side_effect=lambda x, **kwargs: _conns.get(x))
+    return Mock(spec=vault_db_exe.fetch_connection, side_effect=lambda x, **_: _conns.get(x))
 
 
 @pytest.fixture
 def fetch_role_mock(_roles):
-    return Mock(spec=vault_db_exe.fetch_role, side_effect=lambda x, **kwargs: _roles.get(x))
+    return Mock(spec=vault_db_exe.fetch_role, side_effect=lambda x, **_: _roles.get(x))
 
 
 @pytest.fixture
@@ -109,7 +109,7 @@ def write_static_role_mock(_roles):
         credential_type=None,
         credential_config=None,
         mount="database",
-        **kwargs,
+        **_,
     ):  # pylint: disable=unused-argument
         data = {
             "db_name": connection,

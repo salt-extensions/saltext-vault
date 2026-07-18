@@ -59,8 +59,8 @@ def store_multi(store, lease, lease_renewed_response):
         id="barbaz", lease_id="barbaz", min_ttl=None, revoke_delay=None, renew_increment=None
     )
     leases = {"test_1": lease, "test_12": lease_2, "test_3": lease_3}
-    store.cache.exists.side_effect = lambda x, **y: x in leases
-    store.cache.get.side_effect = lambda x, **y: leases[x]
+    store.cache.exists.side_effect = lambda x, **_: x in leases
+    store.cache.get.side_effect = lambda x, **_: leases[x]
     store.cache.list.return_value = list(leases)
     store.client.post.return_value = lease_renewed_response
     return store

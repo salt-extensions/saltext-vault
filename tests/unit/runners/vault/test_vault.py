@@ -280,7 +280,7 @@ def identity_api():
 
 @pytest.fixture
 def client_token(client, token_response, wrapped_response):  # pylint: disable=unused-argument
-    def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
+    def res_or_wrap(*_, **kwargs):  # pylint: disable=unused-argument
         if kwargs.get("wrap"):
             return vaultutil.VaultWrappedResponse(**wrapped_response["wrap_info"])
         return token_response
@@ -340,9 +340,7 @@ def policies(request, policies_default):
 
 @pytest.fixture
 def metadata(request, metadata_entity_default, metadata_secret_default):
-    def _get_metadata(
-        minion_id, metadata_patterns, *args, **kwargs
-    ):  # pylint: disable=unused-argument
+    def _get_metadata(minion_id, metadata_patterns, *_, **__):  # pylint: disable=unused-argument
         if getattr(request, "param", None) is not None:
             return request.param
         if "saltstack-jid" not in metadata_patterns:
@@ -472,7 +470,7 @@ def test_generate_new_token(
 
     with patch("saltext.vault.runners.vault._generate_token", autospec=True) as gen:
 
-        def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
+        def res_or_wrap(*_, **kwargs):  # pylint: disable=unused-argument
             if kwargs.get("wrap"):
                 return wrapped_serialized, token_serialized["num_uses"]
             return token_serialized, token_serialized["num_uses"]
@@ -537,7 +535,7 @@ def test_get_config_token(
 
     with patch("saltext.vault.runners.vault._generate_token", autospec=True) as gen:
 
-        def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
+        def res_or_wrap(*_, **kwargs):  # pylint: disable=unused-argument
             if kwargs.get("wrap"):
                 return wrapped_serialized, token_serialized["num_uses"]
             return token_serialized, token_serialized["num_uses"]
@@ -601,7 +599,7 @@ def test_get_config_approle(config, validate_signature, wrapped_serialized, issu
 
     with patch("saltext.vault.runners.vault._get_role_id", autospec=True) as gen:
 
-        def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
+        def res_or_wrap(*_, **kwargs):  # pylint: disable=unused-argument
             if kwargs.get("wrap"):
                 return wrapped_serialized
             return "test-role-id"
@@ -639,7 +637,7 @@ def test_get_role_id(config, validate_signature, wrapped_serialized, issue_param
         expected["data"].update({"role_id": "test-role-id"})
     with patch("saltext.vault.runners.vault._get_role_id", autospec=True) as gen:
 
-        def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
+        def res_or_wrap(*_, **kwargs):  # pylint: disable=unused-argument
             if kwargs.get("wrap"):
                 return wrapped_serialized
             return "test-role-id"
@@ -820,7 +818,7 @@ def test_generate_secret_id(
         ) as lookup_approle,
     ):
 
-        def res_or_wrap(*args, **kwargs):  # pylint: disable=unused-argument
+        def res_or_wrap(*_, **kwargs):  # pylint: disable=unused-argument
             if kwargs.get("wrap"):
                 res = Mock(spec=vaultutil.VaultWrappedResponse)
                 res.serialize_for_minion.return_value = wrapped_serialized
@@ -945,7 +943,7 @@ def test_get_policies(expected, grains, pillar):
     ):
         with patch(
             "saltext.vault.utils.vault.helpers.expand_pattern_lists",
-            Mock(side_effect=lambda x, *args, **kwargs: [x]),
+            Mock(side_effect=lambda x, *_, **__: [x]),
         ):
             res = vault._get_policies("test-minion", refresh_pillar=False)
             assert res == expected
@@ -969,7 +967,7 @@ def test_get_policies_does_not_render_pillar_unnecessarily(config, grains, pilla
         get_minion_data.return_value = (None, grains, None)
         with patch(
             "saltext.vault.utils.vault.helpers.expand_pattern_lists",
-            Mock(side_effect=lambda x, *args, **kwargs: [x]),
+            Mock(side_effect=lambda x, *_, **__: [x]),
         ):
             with patch("salt.pillar.get_pillar", autospec=True) as get_pillar:
                 get_pillar.return_value.compile_pillar.return_value = pillar
@@ -995,7 +993,7 @@ def test_get_policies_for_nonexisting_minions(expected):
         get_minion_data.return_value = (None, None, None)
         with patch(
             "saltext.vault.utils.vault.helpers.expand_pattern_lists",
-            Mock(side_effect=lambda x, *args, **kwargs: [x]),
+            Mock(side_effect=lambda x, *_, **__: [x]),
         ):
             res = vault._get_policies("test-minion", refresh_pillar=False)
             assert res == expected
@@ -1043,7 +1041,7 @@ def test_get_metadata(metadata_patterns, expected, pillar):
         get_minion_data.return_value = (None, None, pillar)
         with patch(
             "saltext.vault.utils.vault.helpers.expand_pattern_lists",
-            Mock(side_effect=lambda x, *args, **kwargs: [x]),
+            Mock(side_effect=lambda x, *_, **__: [x]),
         ):
             res = vault._get_metadata("test-minion", metadata_patterns, refresh_pillar=False)
             assert res == expected
@@ -1079,7 +1077,7 @@ def test_get_metadata_list_conflict():
         with patch(
             "saltext.vault.utils.vault.helpers.expand_pattern_lists", autospec=True
         ) as expand:
-            expand.side_effect = lambda x, *args, **kwargs: ["foo", "bar"] if "pillar" in x else [x]
+            expand.side_effect = lambda x, *_, **__: ["foo", "bar"] if "pillar" in x else [x]
             res = vault._get_metadata(
                 "test-minion",
                 {"salt_role": "salt_role_{pillar[roles]}", "salt_role__1": "wat"},

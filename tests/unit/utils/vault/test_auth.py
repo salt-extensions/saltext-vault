@@ -203,11 +203,11 @@ def test_approle_auth_is_valid(token, approle):
     Test that is_valid reports true when either the token
     or the secret ID is valid
     """
-    token = Mock(spec=vleases.VaultToken)
-    token.is_valid.return_value = token
-    approle = Mock(spec=vleases.VaultSecretId)
-    approle.is_valid.return_value = approle
-    auth = vauth.VaultAppRoleAuth(approle, None, token_store=token)  # type: ignore
+    token_mock = Mock(spec=vleases.VaultToken)
+    token_mock.is_valid.return_value = token
+    approle_mock = Mock(spec=vleases.VaultSecretId)
+    approle_mock.is_valid.return_value = approle
+    auth = vauth.VaultAppRoleAuth(approle_mock, None, token_store=token_mock)  # type: ignore
     assert auth.is_valid() is (token or approle)
 
 
