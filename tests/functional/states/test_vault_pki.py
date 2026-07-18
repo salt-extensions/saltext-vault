@@ -5,8 +5,6 @@ from salt.utils.x509 import generate_rsa_privkey
 from salt.utils.x509 import load_cert
 
 from tests.support.vault import vault_delete
-from tests.support.vault import vault_disable_secret_engine
-from tests.support.vault import vault_enable_secret_engine
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write
@@ -15,7 +13,8 @@ pytest.importorskip("docker")
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container"),
+    pytest.mark.usefixtures("container", "secret_mounts"),
+    pytest.mark.parametrize("secret_mounts", ("pki",), indirect=True),
 ]
 
 
@@ -227,13 +226,6 @@ def cert_args(tmp_path, private_key):
         "ttl": "30m",
         "ttl_remaining": 0,
     }
-
-
-@pytest.fixture(scope="module", autouse=True)
-def pki_engine(container):  # pylint: disable=unused-argument
-    assert vault_enable_secret_engine("pki")
-    yield
-    assert vault_disable_secret_engine("pki")
 
 
 @pytest.fixture(scope="module")

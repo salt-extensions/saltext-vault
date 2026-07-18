@@ -6,8 +6,6 @@ from tests.support.mysql import create_mysql_combo  # pylint: disable=unused-imp
 from tests.support.mysql import mysql_combo  # pylint: disable=unused-import
 from tests.support.mysql import mysql_container  # pylint: disable=unused-import
 from tests.support.vault import vault_delete
-from tests.support.vault import vault_disable_secret_engine
-from tests.support.vault import vault_enable_secret_engine
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
 from tests.support.vault import vault_revoke
@@ -17,7 +15,8 @@ pytest.importorskip("docker")
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container"),
+    pytest.mark.usefixtures("container", "secret_mounts"),
+    pytest.mark.parametrize("secret_mounts", ("database",), indirect=True),
 ]
 
 
@@ -84,13 +83,6 @@ def testdb(mysql_container, container_host_ref):
         "username": "root",
         "password": mysql_container.mysql_passwd,
     }
-
-
-@pytest.fixture(scope="module", autouse=True)
-def db_engine(container):  # pylint: disable=unused-argument
-    assert vault_enable_secret_engine("database")
-    yield
-    assert vault_disable_secret_engine("database")
 
 
 @pytest.fixture

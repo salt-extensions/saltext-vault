@@ -15,7 +15,12 @@ log = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "pillar_base", "vault_secrets"),
+    pytest.mark.usefixtures("container", "pillar_base", "secret_mounts", "vault_secrets"),
+    pytest.mark.parametrize(
+        "secret_mounts",
+        [[("kv", "salt", "-version=2"), ("kv", "secret", "-version=2")]],
+        indirect=True,
+    ),
     pytest.mark.parametrize(
         "container", (CONTAINER_TARGETS[0],), indirect=True
     ),  # We only want to check the internal logic, not the API access

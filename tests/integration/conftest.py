@@ -80,7 +80,9 @@ def vault_secrets_defaults():
 
 
 @pytest.fixture(scope="class")
-def vault_secrets(vault_secrets_defaults, container):  # pylint: disable=unused-argument
+def vault_secrets(
+    secret_mounts, vault_secrets_defaults, container
+):  # pylint: disable=unused-argument
     secrets_data = copy.deepcopy(vault_secrets_defaults)
     for path, data in secrets_data.items():
         vault_write_secret(path, **data)
@@ -142,7 +144,9 @@ def pillar_override(master, minion, request, pillar_defaults):
 
 
 @pytest.fixture(scope="module")
-def _vault_pillar_data(vault_pillar_defaults, container):  # pylint: disable=unused-argument
+def _vault_pillar_data(
+    vault_pillar_defaults, container, secret_mounts
+):  # pylint: disable=unused-argument
     pillar_data = copy.deepcopy(vault_pillar_defaults)
     for path, data in pillar_data.items():
         vault_write_secret(path, **data)

@@ -1,8 +1,6 @@
 import pytest
 
 from tests.support.vault import vault_delete
-from tests.support.vault import vault_disable_secret_engine
-from tests.support.vault import vault_enable_secret_engine
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write
@@ -11,7 +9,8 @@ pytest.importorskip("docker")
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container"),
+    pytest.mark.usefixtures("container", "secret_mounts"),
+    pytest.mark.parametrize("secret_mounts", ("ssh",), indirect=True),
 ]
 
 
@@ -80,13 +79,6 @@ def ec_pub_file(ec_pub, tmp_path):
     path = tmp_path / "ec.pub"
     path.write_text(ec_pub)
     return str(path)
-
-
-@pytest.fixture(scope="module", autouse=True)
-def ssh_engine(container):  # pylint: disable=unused-argument
-    assert vault_enable_secret_engine("ssh")
-    yield
-    assert vault_disable_secret_engine("ssh")
 
 
 @pytest.fixture

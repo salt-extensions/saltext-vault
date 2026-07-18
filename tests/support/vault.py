@@ -96,9 +96,15 @@ def vault_delete_policy(policy):
         pytest.fail(f"Unable to delete policy `{policy}`: {err}")
 
 
-def vault_enable_secret_engine(name, options=None):
+def vault_enable_secret_engine(name, path=None, options=None):
     if options is None:
         options = []
+    elif isinstance(options, str):
+        options = [options]
+    elif not isinstance(options, list):
+        options = list(options)
+    if path is not None:
+        options.append(f"-path={path}")
     try:
         ret = _vault_cmd(["secrets", "enable"] + options + [name])
     except RuntimeError as err:

@@ -14,7 +14,8 @@ except ImportError:
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container"),
+    pytest.mark.usefixtures("container", "secret_mounts"),
+    pytest.mark.parametrize("secret_mounts", ("ssh",), indirect=True),
 ]
 
 
