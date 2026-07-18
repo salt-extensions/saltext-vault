@@ -1,6 +1,12 @@
+import copy
+import json
 import os
+from contextlib import ExitStack
 
 import pytest
+
+from tests.support.vault import vault_delete_secret
+from tests.support.vault import vault_write_secret
 
 
 @pytest.fixture(scope="module")
@@ -49,3 +55,133 @@ def salt_version(minion):
     if os.environ.get("SALT_REQUIREMENT") == "salt==master":
         return [ret.data[0] + 1, 0]
     return ret.data
+
+
+@pytest.fixture(scope="module")
+def pillar_defaults():
+    """
+    When using the pillar_base fixture, set pillar values for the default minion.
+    Expects a mapping of sls file name (without .sls suffix) to data it should
+    contain. The top file is created automatically, if not set.
+
+    By default, ensures the pillar is refreshed on the minion.
+    Return a tuple of False, {...} to not refresh it.
+    """
+    return {}
+
+
+@pytest.fixture(scope="module")
+def vault_pillar_defaults():
+    """
+    When using the pillar_base fixture, set secret values early,
+    before the pillar is first refreshed. Ensures Vault-sourced pillars are present
+    in the initial minion data cache without having to refresh it multiple times.
+    """
+    return {}
+
+
+@pytest.fixture(scope="module")
+def vault_secrets_defaults():
+    """
+    Set vault KV secrets by requiring the `vault_secrets` fixture and redefining
+    this fixture inside your module.
+    """
+    return {}
+
+
+@pytest.fixture(scope="class")
+def vault_secrets(vault_secrets_defaults, container):  # pylint: disable=unused-argument
+    secrets_data = copy.deepcopy(vault_secrets_defaults)
+    for path, data in secrets_data.items():
+        vault_write_secret(path, **data)
+    try:
+        yield
+    finally:
+        for path in secrets_data:
+            vault_delete_secret(path, metadata=True)
+
+
+@pytest.fixture(scope="module")
+def pillar_base(pillar_defaults, minion, master, _vault_pillar_data):
+    """
+    Module-scoped fixture to create pillars.
+    """
+    files, refresh = _pillar_files(pillar_defaults, minion)
+    with ExitStack() as stack:
+        for pillar, contents in files:
+            stack.enter_context(master.pillar_tree.base.temp_file(pillar, contents))
+        if refresh:
+            ret = minion.salt_call_cli().run("saltutil.refresh_pillar", wait=True)
+            assert ret.returncode == 0
+            assert ret.data is True
+        yield
+
+
+@pytest.fixture
+def pillar_override(master, minion, request, pillar_defaults):
+    """
+    Function-scoped fixture to override pillars. Restored after function has run.
+    """
+    files, refresh = _pillar_files(pillar_defaults, minion, request)
+    moved = []
+    try:
+        with ExitStack() as stack:
+            for pillar, contents in files:
+                path = master.pillar_tree.base.write_path / pillar
+                #
+                if path.exists():
+                    num = 0
+                    while path.with_suffix(f".{num}").exists():
+                        num += 1
+                    tgt = path.with_suffix(f".{num}")
+                    path.rename(tgt)
+                    moved.append((path, tgt))
+                stack.enter_context(master.pillar_tree.base.temp_file(pillar, contents))
+            if refresh:
+                ret = minion.salt_call_cli().run("saltutil.refresh_pillar", wait=True)
+                assert ret.returncode == 0
+                assert ret.data is True
+            yield
+    finally:
+        for orig, bak in moved:
+            bak.rename(orig)
+        if refresh:
+            ret = minion.salt_call_cli().run("saltutil.refresh_pillar", wait=True)
+            assert ret.returncode == 0
+            assert ret.data is True
+
+
+@pytest.fixture(scope="module")
+def _vault_pillar_data(vault_pillar_defaults, container):  # pylint: disable=unused-argument
+    pillar_data = copy.deepcopy(vault_pillar_defaults)
+    for path, data in pillar_data.items():
+        vault_write_secret(path, **data)
+    try:
+        yield
+    finally:
+        for path in pillar_data:
+            vault_delete_secret(path, metadata=True)
+
+
+def _pillar_files(pillar_defaults, minion, request=None):
+    try:
+        refresh, pillar_defaults = pillar_defaults[0], pillar_defaults[1]
+    except KeyError:
+        refresh = True
+    if request:
+        overrides = getattr(request, "param", {})
+        try:
+            refresh, overrides = overrides[0], overrides[1]
+        except KeyError:
+            pass
+    else:
+        overrides = {}
+    defs = pillar_defaults.copy()
+    defs.update(overrides)
+    if defs and "top" not in defs:
+        top = {"base": {minion.id: list(defs)}}
+        defs["top"] = top
+    files = []
+    for sls_name, sls_contents in defs.items():
+        files.append((f"{sls_name}.sls", json.dumps(sls_contents).replace("%ID", minion.id)))
+    return files, refresh
