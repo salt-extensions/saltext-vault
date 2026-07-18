@@ -21,21 +21,6 @@ log = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="module")
-def minion_config_overrides(vault_port):
-    return {
-        "vault": {
-            "auth": {
-                "method": "token",
-                "token": "testsecret",
-            },
-            "server": {
-                "url": f"http://127.0.0.1:{vault_port}",
-            },
-        }
-    }
-
-
-@pytest.fixture(scope="module")
 def _secret_plugin(vault_plugins):
     name = "foo_secret"
     path = vault_plugins / name

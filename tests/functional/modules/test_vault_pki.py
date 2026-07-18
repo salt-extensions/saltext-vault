@@ -26,24 +26,11 @@ pytestmark = [
 
 
 @pytest.fixture(scope="module")
-def minion_config_overrides(vault_port):
-    return {
-        "features": {
-            "x509_v2": True,
-        },
-        "vault": {
-            "auth": {
-                "method": "token",
-                "token": "testsecret",
-            },
-            "cache": {
-                "backend": "disk",  # ensure a persistent cache is available for get_creds
-            },
-            "server": {
-                "url": f"http://127.0.0.1:{vault_port}",
-            },
-        },
-    }
+def minion_config_overrides(salt_version):
+    if salt_version[0] < 3008:
+        # Need to enable x509_v2 explicitly on Salt <3008
+        return {"features": {"x509_v2": True}}
+    return {}
 
 
 @pytest.fixture

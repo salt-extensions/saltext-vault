@@ -18,24 +18,20 @@ pytestmark = [
 
 
 @pytest.fixture(scope="module")
-def minion_config_overrides(vault_port):
+def minion_config_overrides():
     return {
         "osenv": {"driver": "env"},
         "vault": {
             "auth": {
-                "method": "token",
                 "token": "sdb://osenv/VAULT_TOKEN",
             },
             "config_location": "local",
-            "server": {
-                "url": f"http://127.0.0.1:{vault_port}",
-            },
         },
     }
 
 
 @pytest.fixture(scope="module")
-def master_config_overrides(vault_port):
+def master_config_overrides():
     return {
         "osenv": {"driver": "env"},
         "vault": {
@@ -43,10 +39,6 @@ def master_config_overrides(vault_port):
                 "method": "approle",
                 "role_id": "sdb://osenv/VAULT_ROLEID",
                 "secret_id": "sdb://osenv/VAULT_SECRETID",
-            },
-            "config_location": "local",
-            "server": {
-                "url": f"http://127.0.0.1:{vault_port}",
             },
         },
     }

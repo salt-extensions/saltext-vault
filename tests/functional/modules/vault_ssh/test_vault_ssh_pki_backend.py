@@ -107,12 +107,17 @@ def entity(
 
 
 @pytest.fixture(scope="module")
-def minion_config_overrides(minion_config_overrides, entity):
-    minion_config_overrides["vault"]["auth"]["method"] = "approle"
-    minion_config_overrides["vault"]["auth"]["role_id"] = entity["role_id"]
-    minion_config_overrides["vault"]["auth"]["secret_id"] = entity["secret_id"]
-    minion_config_overrides["vault"]["auth"]["approle_mount"] = "salt-minions"
-    return minion_config_overrides
+def minion_config_overrides(entity):
+    return {
+        "vault": {
+            "auth": {
+                "method": "approle",
+                "role_id": entity["role_id"],
+                "secret_id": entity["secret_id"],
+                "approle_mount": "salt-minions",
+            }
+        }
+    }
 
 
 @pytest.fixture

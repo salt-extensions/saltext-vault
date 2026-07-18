@@ -22,18 +22,11 @@ pytestmark = [
 
 
 @pytest.fixture(scope="module")
-def minion_config_overrides(vault_port):
+def minion_config_overrides():
     return {
         "vault": {
-            "auth": {
-                "method": "token",
-                "token": "testsecret",
-            },
             "cache": {
                 "backend": "disk",  # ensure a persistent cache is available for get_secret_id
-            },
-            "server": {
-                "url": f"http://127.0.0.1:{vault_port}",
             },
         }
     }

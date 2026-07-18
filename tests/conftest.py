@@ -13,6 +13,7 @@ import salt.utils.path
 import salt.utils.platform
 from pytestshellutils.utils import ports
 from pytestshellutils.utils.processes import ProcessResult
+from salt.version import __version_info__ as SALT_VERSION
 from saltfactories.utils import random_string
 
 from saltext.vault import PACKAGE_ROOT
@@ -263,6 +264,24 @@ def sshd_config_dir(salt_factories):  # pragma: no cover
         yield config_dir
     finally:
         shutil.rmtree(str(config_dir), ignore_errors=True)
+
+
+@pytest.fixture(scope="session")
+def salt_version():
+    """
+    Get the version of the current Salt installation.
+    Note that this only reports the version of the Salt installed in the test venv,
+    which is the usual case. It does not account for integration test-specific features
+    of pytest-salt-factories.
+    """
+    # Just report the installed version. To do this properly in integration tests,
+    # we would have to use a minion and run grains.get saltversioninfo, but that requires
+    # instantiating a master and minion specifically for this fixture or dropping the scope
+    # to "module", which would mean it could not be used for any fixtures that need to run
+    # before daemons are initialized.
+    if os.environ.get("SALT_REQUIREMENT") == "salt==master":
+        return (SALT_VERSION[0] + 1, 0)
+    return tuple(SALT_VERSION)
 
 
 @pytest.fixture(scope="session")

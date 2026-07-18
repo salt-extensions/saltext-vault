@@ -19,13 +19,9 @@ log = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="module")
-def master_config_overrides(vault_port):
+def master_config_overrides():
     return {
         "vault": {
-            "auth": {
-                "method": "token",
-                "token": "testsecret",
-            },
             "issue": {
                 "type": "approle",
                 "approle": {
@@ -35,9 +31,6 @@ def master_config_overrides(vault_port):
                     }
                 },
                 "allow_minion_override_params": True,
-            },
-            "server": {
-                "url": f"http://127.0.0.1:{vault_port}",
             },
         }
     }

@@ -31,24 +31,6 @@ def state_tree_prod(tmp_path_factory):  # pragma: no cover
 
 
 @pytest.fixture(scope="module")
-def minion_config_defaults():  # pragma: no cover
-    """
-    Functional test modules can provide this fixture to tweak the default
-    configuration dictionary passed to the minion factory
-    """
-    return {}
-
-
-@pytest.fixture(scope="module")
-def minion_config_overrides():  # pragma: no cover
-    """
-    Functional test modules can provide this fixture to tweak the configuration
-    overrides dictionary passed to the minion factory
-    """
-    return {}
-
-
-@pytest.fixture(scope="module")
 def minion_opts(
     salt_factories,
     minion_id,
@@ -76,24 +58,6 @@ def minion_opts(
         overrides=minion_config_overrides,
     )
     return factory.config.copy()
-
-
-@pytest.fixture(scope="module")
-def master_config_defaults():  # pragma: no cover
-    """
-    Functional test modules can provide this fixture to tweak the default
-    configuration dictionary passed to the master factory
-    """
-    return {}
-
-
-@pytest.fixture(scope="module")
-def master_config_overrides():  # pragma: no cover
-    """
-    Functional test modules can provide this fixture to tweak the configuration
-    overrides dictionary passed to the master factory
-    """
-    return {}
 
 
 @pytest.fixture(scope="module")
