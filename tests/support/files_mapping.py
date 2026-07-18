@@ -13,7 +13,7 @@ CHANGED_FILES_MAP = (
             "noxfile.py",
             "pyproject.toml",
             "CHANGELOG.md",
-            f"{TESTS_DIR}/conftest.py",
+            f"{TESTS_DIR_REL}/conftest.py",
             f"{PACKAGE_ROOT_REL}/utils/vault/__init__.py",
             f"{PACKAGE_ROOT_REL}/utils/vault/auth.py",
             f"{PACKAGE_ROOT_REL}/utils/vault/cache.py",
