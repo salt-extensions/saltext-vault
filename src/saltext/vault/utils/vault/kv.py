@@ -370,21 +370,23 @@ class VaultKV:
         """
         cache_content = self.metadata_cache.get() or {}
 
-        ret = None
-        if path.startswith(tuple(cache_content.keys())):
+        try:
+            ret = next(v for k, v in cache_content.items() if path.startswith(k + "/") or path == k)
             log.debug("Found cached metadata for %s", path)
-            ret = next(v for k, v in cache_content.items() if path.startswith(k))
-        else:
-            log.debug("Fetching metadata for %s", path)
-            try:
-                endpoint = f"sys/internal/ui/mounts/{path}"
-                res = self.client.get(endpoint)
-                if "data" in res:
-                    log.debug("Got metadata for %s", path)
-                    cache_content[path] = ret = res["data"]
-                    self.metadata_cache.store(cache_content)
-                else:
-                    raise VaultException("Unexpected response to metadata query.")
-            except Exception as err:  # pylint: disable=broad-except
-                log.error("Failed to get secret metadata %s: %s", type(err).__name__, err)
+            return ret
+        except StopIteration:
+            pass
+        log.debug("Fetching metadata for %s", path)
+        ret = None
+        try:
+            endpoint = f"sys/internal/ui/mounts/{path}"
+            res = self.client.get(endpoint)
+            if "data" in res:
+                log.debug("Got metadata for %s", path)
+                cache_content[path] = ret = res["data"]
+                self.metadata_cache.store(cache_content)
+            else:
+                raise VaultException("Unexpected response to metadata query.")
+        except Exception as err:  # pylint: disable=broad-except
+            log.error("Failed to get secret metadata %s: %s", type(err).__name__, err)
         return ret

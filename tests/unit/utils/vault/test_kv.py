@@ -365,6 +365,35 @@ def test_vault_kv_is_v2_cached(kv_meta_cached, expected, request):
     assert res == expected
 
 
+def test_vault_kv_is_v2_cached_prefix_needs_to_be_fully_formed(
+    kvv1_meta_response, kvv2_meta_response
+):
+    """
+    Ensure that for cached metadata to be found valid for a path, the prefix's
+    final segment must match a complete path segment of the lookup path.
+    If not, a cached value for e.g. a KV v2 mount named ``secret`` could interfere
+    with a lookup for a KV v1 mount named ``secret-v1`` (specifically the root path).
+    """
+    cache = Mock(spec=vcache.VaultCache)
+    client = Mock(spec=vclient.AuthenticatedVaultClient)
+    kvv1_meta_response["data"]["path"] = "secret-v1/"
+    client.get.return_value = kvv1_meta_response
+    cache.get.return_value = {"secret": kvv2_meta_response["data"]}
+    kv = vkv.VaultKV(client, cache)
+
+    res = kv.is_v2("secret-v1")
+    assert res == {
+        "v2": False,
+        "data": "secret-v1",
+        "metadata": "secret-v1",
+        "delete": "secret-v1",
+        "type": "kv",
+    }
+    cache.get.assert_called_once()
+    cache.store.assert_called_once()
+    client.get.assert_called_once()
+
+
 class TestKVV1:
     """
     Tests version 1 Vault KV
