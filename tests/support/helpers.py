@@ -11,8 +11,11 @@ Test support helpers
 
 import logging
 import os
+from unittest.mock import patch
 
 import salt.exceptions
+from saltfactories.utils.functional import PATCH_TARGET
+from saltfactories.utils.functional import Loaders
 
 log = logging.getLogger(__name__)
 
@@ -95,3 +98,153 @@ class WrapperFuncProxy:
             raise self.exc(ret.data.split(":", maxsplit=1)[1].lstrip())
         assert ret.returncode == 0
         return ret.data
+
+
+class ExtendedLoaders(Loaders):
+    """
+    Provide more module types for functional tests.
+    Also supports master options for runner tests.
+    """
+
+    def __init__(self, opts, loaded_base_name=None):
+        self._master = opts.get("__role", "minion") == "master"
+        self._beacons = self._runners = self._pillars = self._sdb = None
+        self._initializing = True
+        super().__init__(opts, loaded_base_name=loaded_base_name)
+        self._initializing = False
+
+    @property
+    def modules(self):
+        """
+        The execution or runner modules loaded by the salt loader, depending on
+        the passed-in opts (specifically ``opts["__role"]``).
+        """
+        if self._master:
+            # Need to patch this to return runners because the base class calls
+            # self.modules.saltutil.sync_all in __init__ and we want to be DRY.
+            if self._initializing:
+                return self.runners
+            # We could load a MasterMinion
+            raise NotImplementedError
+        return super().modules
+
+    @property
+    def grains(self):
+        if self._master:
+            # We could load a MasterMinion
+            return {"id": self.opts["id"]}
+        return super().grains
+
+    @property
+    def pillar(self):
+        if self._master:
+            # We could load a MasterMinion
+            raise NotImplementedError
+        return super().pillar
+
+    def refresh_pillar(self):
+        if not self._master:
+            super().refresh_pillar()
+
+    @property
+    def states(self):
+        if self._master:
+            # We could load a MasterMinion like the orchestrate runner
+            raise NotImplementedError
+        return super().states
+
+    @property
+    def beacons(self):
+        """
+        The beacon modules loaded by the salt loader.
+        """
+        if self._master:
+            raise NotImplementedError
+
+        # Do not move these deferred imports. It allows running against a Salt
+        # onedir build in salt's repo checkout.
+        import salt.loader  # pylint: disable=import-outside-toplevel
+
+        if self._beacons is None:
+            self._beacons = salt.loader.beacons(
+                self.opts,
+                functions=self.modules,
+                context=self.context,
+                loaded_base_name=self.loaded_base_name,
+            )
+        return self._beacons
+
+    @property
+    def runners(self):
+        """
+        The runner modules loaded by the salt loader.
+        """
+        if not self._master:
+            raise NotImplementedError
+
+        # Do not move these deferred imports. It allows running against a Salt
+        # onedir build in salt's repo checkout.
+        import salt.loader  # pylint: disable=import-outside-toplevel
+
+        # Unlike with execution modules, do not hydrate the state runner returns (not necessary atm)
+        if self._runners is None:
+            self._runners = salt.loader.runner(
+                self.opts,
+                utils=self.utils,
+                context=self.context,
+                loaded_base_name=self.loaded_base_name,
+            )
+        return self._runners
+
+    @property
+    def pillars(self):
+        """
+        The pillar modules loaded by the salt loader.
+        """
+        # Do not move these deferred imports. It allows running against a Salt
+        # onedir build in salt's repo checkout.
+        import salt.pillar  # pylint: disable=import-outside-toplevel
+
+        if self._pillars is None:
+            with patch(PATCH_TARGET, self.loaded_base_name):
+                self._pillars = salt.pillar.get_pillar(
+                    self.opts,
+                    self.grains,
+                    self.opts["id"],
+                    saltenv=self.opts["saltenv"],
+                    pillarenv=self.opts.get("pillarenv"),
+                ).ext_pillars
+        return self._pillars
+
+    @property
+    def sdb(self):
+        """
+        The sdb modules loaded by the salt loader.
+        Note that functional tests can also access modules.config/runners.config
+        as well as modules.sdb/runners.sdb, which should be tested primarily.
+        """
+        # Do not move these deferred imports. It allows running against a Salt
+        # onedir build in salt's repo checkout.
+        import salt.loader  # pylint: disable=import-outside-toplevel
+
+        if self._sdb is None:
+            self._sdb = salt.loader.sdb(
+                self.opts,
+                functions=self.modules,
+                utils=self.utils,
+                loaded_base_name=self.loaded_base_name,
+            )
+        return self._sdb
+
+    def reload_all(self):
+        """
+        Reload all loaders.
+        """
+        for attr in ("_beacons", "_runners", "_pillars", "_sdb"):
+            if (_loader := getattr(self, attr)) is not None:
+                _loader.clean_modules()
+                _loader.clear()
+                setattr(self, attr, None)
+        super().reload_all()
+        if self._master:
+            self.opts.pop("grains", None)

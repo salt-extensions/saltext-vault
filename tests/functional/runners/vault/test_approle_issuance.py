@@ -73,16 +73,16 @@ def reset_approles():
 
 
 @pytest.fixture(autouse=True)
-def vault(runners, loaders):
+def vault(runners, master_loaders):
     runner = runners.vault
     with patch.object(
-        sys.modules[f"{loaders.loaded_base_name}.ext.runners.vault"], "_validate_signature"
+        sys.modules[f"{master_loaders.loaded_base_name}.ext.runners.vault"], "_validate_signature"
     ):
         yield runner
 
 
 def test_get_config_and_generate_secret_id_do_not_rewrite_approle_with_timestring_config(
-    vault, loaders
+    vault, master_loaders
 ):
     """
     The Vault server always reports seconds in ttl config values.
@@ -92,7 +92,7 @@ def test_get_config_and_generate_secret_id_do_not_rewrite_approle_with_timestrin
     _get_config(vault, "foobar")
     # make _manage_approle raise an exception if called
     with patch.object(
-        sys.modules[f"{loaders.loaded_base_name}.ext.runners.vault"],
+        sys.modules[f"{master_loaders.loaded_base_name}.ext.runners.vault"],
         "_manage_approle",
         side_effect=RuntimeError,
     ):

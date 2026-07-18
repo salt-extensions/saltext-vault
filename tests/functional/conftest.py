@@ -2,7 +2,8 @@ import logging
 import shutil
 
 import pytest
-from saltfactories.utils.functional import Loaders
+
+from tests.support.helpers import ExtendedLoaders
 
 log = logging.getLogger(__name__)
 
@@ -91,17 +92,23 @@ def master_opts(
 
 @pytest.fixture(scope="module")
 def loaders(minion_opts):  # pragma: no cover
-    return Loaders(minion_opts, loaded_base_name=f"{__name__}.loaded")
+    return ExtendedLoaders(minion_opts, loaded_base_name=f"{__name__}.loaded")
+
+
+@pytest.fixture(scope="module")
+def master_loaders(master_opts):  # pragma: no cover
+    return ExtendedLoaders(master_opts, loaded_base_name=f"{__name__}.master.loaded")
 
 
 @pytest.fixture(autouse=True)
-def reset_loaders_state(loaders):  # pragma: no cover
+def reset_loaders_state(loaders, master_loaders):  # pragma: no cover
     try:
         # Run the tests
         yield
     finally:
         # Reset the loaders state
         loaders.reset_state()
+        master_loaders.reset_state()
 
 
 @pytest.fixture(scope="module")
