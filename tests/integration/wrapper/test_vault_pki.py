@@ -31,13 +31,8 @@ pytestmark = [
 
 
 @pytest.fixture(scope="module")
-def master_config_overrides():
-    return {
-        "ssh_minion_opts": {
-            "features": {
-                "x509_v2": True,
-            },
-        },
+def master_config_overrides(salt_version):
+    opts = {
         "vault": {
             "policies": {
                 "assign": [
@@ -47,6 +42,9 @@ def master_config_overrides():
             },
         },
     }
+    if salt_version[0] < 3008:
+        opts["ssh_minion_opts"] = {"features": {"x509_v2": True}}
+    return opts
 
 
 @pytest.fixture(scope="module")
