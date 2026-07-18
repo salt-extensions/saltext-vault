@@ -19,6 +19,21 @@ pytestmark = [
 
 
 @pytest.fixture(scope="module")
+def master_config_overrides():
+    return {
+        "vault": {
+            "issue": {
+                "token": {
+                    "params": {
+                        "num_uses": 1,
+                    }
+                }
+            },
+        }
+    }
+
+
+@pytest.fixture(scope="module")
 def minion_config_overrides():
     return {
         "sdbvault": {
