@@ -107,7 +107,9 @@ def master_config_overrides():  # pragma: no cover
 @pytest.fixture(scope="module")
 def master(salt_factories, master_config_defaults, master_config_overrides):  # pragma: no cover
     return salt_factories.salt_master_daemon(
-        random_string("master-"), defaults=master_config_defaults, overrides=master_config_overrides
+        random_string("master-", uppercase=False),
+        defaults=master_config_defaults,
+        overrides=master_config_overrides,
     )
 
 
@@ -147,7 +149,9 @@ def minion_config_overrides():  # pragma: no cover
 @pytest.fixture(scope="module")
 def minion(master, minion_config_defaults, minion_config_overrides):  # pragma: no cover
     return master.salt_minion_daemon(
-        random_string("minion-"), defaults=minion_config_defaults, overrides=minion_config_overrides
+        random_string("minion-", uppercase=False),
+        defaults=minion_config_defaults,
+        overrides=minion_config_overrides,
     )
 
 

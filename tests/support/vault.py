@@ -242,6 +242,12 @@ def vault_list_secrets(path):
 
 
 def vault_delete_secret(path, metadata=False):
+    """
+    Delete secret.
+    Does not fail if the secret does not exist.
+    Does not fail when trying to delete metadata on KV v1.
+    Ensures the secret cannot be read, no need to check.
+    """
     try:
         ret = _vault_cmd(["kv", "delete", path])
     except RuntimeError:
