@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 from salt.defaults import NOT_SET
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltException
-from salt.exceptions import SaltInvocationError
 
 from saltext.vault.utils import vault
 from saltext.vault.utils.versions import warn_until
@@ -58,16 +57,16 @@ def read_secret(path, key=None, metadata=False, default=NOT_SET, version=None):
         Path to the secret, including mount.
 
     key
-        Data field at <path> to read. If unspecified, returns the
-        whole dataset.
+        Field of secret at ``path`` to read.
+        If unspecified, returns the whole dataset.
 
     metadata
-        If using KV v2 backend, display full results, including metadata.
-        Defaults to False.
+        If ``path`` is on a KV v2 backend, display full results, including metadata.
+        Only respected if ``key`` is not set. Defaults to False.
 
     default
-        When the path or path/key combination is not found, an exception is raised,
-        unless a default is provided here.
+        Instead of raising an exception, return this value when ``path``
+        is not found or the secret at ``path`` does not contain ``key``.
 
     version
         Version to read. If unset, reads the latest one.
@@ -255,7 +254,7 @@ def patch_secret(path, **kwargs):
         return False
 
 
-def delete_secret(path, *args, **kwargs):
+def delete_secret(path, *args, all_versions=False):
     """
     Delete secret at <path>. If <path> is on KV v2, the secret is soft-deleted.
 
@@ -301,10 +300,6 @@ def delete_secret(path, *args, **kwargs):
         For KV v2, you can specify versions to soft-delete as supplemental
         positional arguments.
     """
-    all_versions = kwargs.pop("all_versions", False)
-    unknown_kwargs = tuple(x for x in kwargs if not x.startswith("_"))
-    if unknown_kwargs:
-        raise SaltInvocationError(f"Passed unknown keyword arguments: {' '.join(unknown_kwargs)}")
     log.debug("Deleting vault secrets for %s in %s", __grains__.get("id"), path)
     if args:
         log.debug(f"Affected versions: {' '.join(str(x) for x in args)}")
@@ -317,7 +312,7 @@ def delete_secret(path, *args, **kwargs):
         return False
 
 
-def restore_secret(path, *versions, **kwargs):
+def restore_secret(path, *versions, all_versions=False):
     """
     .. versionadded:: 1.2.0
 
@@ -351,10 +346,6 @@ def restore_secret(path, *versions, **kwargs):
     If no version is specified, tries to restore the latest version, and if
     the latest version has not been deleted, fails.
     """
-    all_versions = kwargs.pop("all_versions", False)
-    unknown_kwargs = tuple(x for x in kwargs if not x.startswith("_"))
-    if unknown_kwargs:
-        raise SaltInvocationError(f"Passed unknown keyword arguments: {' '.join(unknown_kwargs)}")
     log.debug("Restoring vault secrets for %s in %s", __grains__.get("id"), path)
 
     try:
@@ -365,9 +356,10 @@ def restore_secret(path, *versions, **kwargs):
         raise CommandExecutionError(f"{err.__class__.__name__}: {err}") from err
 
 
-def destroy_secret(path, *args, **kwargs):
+def destroy_secret(path, *args, all_versions=False):
     """
     Destroy specified secret versions at <path>. Only supported on Vault KV v2.
+    This makes a secret version unrecoverable.
 
     CLI Example:
 
@@ -393,7 +385,7 @@ def destroy_secret(path, *args, **kwargs):
     all_versions
         .. versionadded:: 1.2.0
 
-        Delete all versions of the secret for KV v2.
+        Destroy all versions of the secret for KV v2.
         Can only be passed as a keyword argument.
         Defaults to false.
 
@@ -403,10 +395,6 @@ def destroy_secret(path, *args, **kwargs):
 
         If no version was specified, defaults to the most recent one.
     """
-    all_versions = kwargs.pop("all_versions", False)
-    unknown_kwargs = tuple(x for x in kwargs if not x.startswith("_"))
-    if unknown_kwargs:
-        raise SaltInvocationError(f"Passed unknown keyword arguments: {' '.join(unknown_kwargs)}")
     log.debug("Destroying vault secrets for %s in %s", __grains__.get("id"), path)
     if args:
         log.debug(f"Affected versions: {' '.join(str(x) for x in args)}")
@@ -747,6 +735,10 @@ def update_config(keep_session=False):
 
     Attempt to update the cached configuration without clearing the
     currently active Vault session.
+
+    .. note::
+        This is only relevant on minions that receive issued credentials
+        from the master. On locally configured minions, this does nothing.
 
     CLI Example:
 

@@ -6,8 +6,6 @@ See there for documentation.
 .. versionadded:: 1.8.0
 """
 
-from salt.utils.functools import namespaced_function
-
 from saltext.vault.modules.vault_approle import clear_cached
 from saltext.vault.modules.vault_approle import delete
 from saltext.vault.modules.vault_approle import destroy_secret_id
@@ -18,6 +16,7 @@ from saltext.vault.modules.vault_approle import list_cached
 from saltext.vault.modules.vault_approle import lookup_secret_id
 from saltext.vault.modules.vault_approle import read
 from saltext.vault.modules.vault_approle import write
+from saltext.vault.utils.functools import namespaced_function
 
 globals_dict = globals()
 

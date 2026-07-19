@@ -10,6 +10,7 @@ _________
     :toctree:
 
     _types
+    functools
     vault
     vault.api
     vault.approle

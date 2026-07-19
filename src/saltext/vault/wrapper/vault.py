@@ -4,8 +4,6 @@ SSH wrapper for the :py:mod:`vault <saltext.vault.modules.vault>` execution modu
 See there for documentation.
 """
 
-from salt.utils.functools import namespaced_function
-
 from saltext.vault.modules.vault import clear_cache
 from saltext.vault.modules.vault import clear_token_cache
 from saltext.vault.modules.vault import delete_secret
@@ -25,6 +23,7 @@ from saltext.vault.modules.vault import update_config
 from saltext.vault.modules.vault import wipe_secret
 from saltext.vault.modules.vault import write_raw
 from saltext.vault.modules.vault import write_secret
+from saltext.vault.utils.functools import namespaced_function
 
 globals_dict = globals()
 

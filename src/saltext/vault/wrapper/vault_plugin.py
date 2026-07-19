@@ -4,8 +4,6 @@ SSH wrapper for the :py:mod:`vault_plugin <saltext.vault.modules.vault_plugin>` 
 See there for documentation.
 """
 
-from salt.utils.functools import namespaced_function
-
 from saltext.vault.modules.vault_plugin import _check_type
 from saltext.vault.modules.vault_plugin import _list_all_filtered
 from saltext.vault.modules.vault_plugin import _list_pins_filtered
@@ -22,6 +20,7 @@ from saltext.vault.modules.vault_plugin import reload
 from saltext.vault.modules.vault_plugin import reload_mounts
 from saltext.vault.modules.vault_plugin import reload_named
 from saltext.vault.modules.vault_plugin import unpin
+from saltext.vault.utils.functools import namespaced_function
 
 globals_dict = globals()
 

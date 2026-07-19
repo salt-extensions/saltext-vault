@@ -4,8 +4,6 @@ SSH wrapper for the :py:mod:`vault_ssh <saltext.vault.modules.vault_ssh>` execut
 See there for documentation.
 """
 
-from salt.utils.functools import namespaced_function
-
 from saltext.vault.modules.vault_ssh import _get_file_or_data
 from saltext.vault.modules.vault_ssh import _write_role
 from saltext.vault.modules.vault_ssh import create_ca
@@ -25,6 +23,7 @@ from saltext.vault.modules.vault_ssh import sign_key
 from saltext.vault.modules.vault_ssh import write_role_ca
 from saltext.vault.modules.vault_ssh import write_role_otp
 from saltext.vault.modules.vault_ssh import write_zeroaddr_roles
+from saltext.vault.utils.functools import namespaced_function
 
 globals_dict = globals()
 

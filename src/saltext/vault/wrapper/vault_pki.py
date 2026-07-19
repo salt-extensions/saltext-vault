@@ -27,8 +27,6 @@ This means:
             x509_v2: true
 """
 
-from salt.utils.functools import namespaced_function
-
 from saltext.vault.modules.vault_pki import _find_signing_issuer
 from saltext.vault.modules.vault_pki import _split_csr_kwargs
 from saltext.vault.modules.vault_pki import _split_sans
@@ -54,6 +52,7 @@ from saltext.vault.modules.vault_pki import set_default_issuer
 from saltext.vault.modules.vault_pki import sign_certificate
 from saltext.vault.modules.vault_pki import update_issuer
 from saltext.vault.modules.vault_pki import write_role
+from saltext.vault.utils.functools import namespaced_function
 
 globals_dict = globals()
 
