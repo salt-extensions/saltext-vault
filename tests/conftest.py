@@ -1,3 +1,4 @@
+import copy
 import fnmatch
 import json
 import logging
@@ -24,6 +25,7 @@ from tests.support.vault import vault_disable_secret_engine
 from tests.support.vault import vault_enable_auth_method
 from tests.support.vault import vault_enable_secret_engine
 from tests.support.vault import vault_write_policy_file
+from tests.support.vault import vault_write_secret
 
 try:
     import pwd
@@ -427,6 +429,25 @@ def secret_mounts(request, container):  # pylint: disable=unused-argument
         yield
     finally:
         _cleanup()
+
+
+@pytest.fixture(scope="module")
+def vault_secrets_defaults():
+    """
+    Set vault KV secrets by requiring the `vault_secrets` fixture and redefining
+    this fixture inside your module.
+    """
+    return {}
+
+
+@pytest.fixture(scope="module")
+def vault_secrets(
+    secret_mounts, vault_secrets_defaults, container
+):  # pylint: disable=unused-argument
+    secrets_data = copy.deepcopy(vault_secrets_defaults)
+    for path, data in secrets_data.items():
+        vault_write_secret(path, **data)
+    # Don't need to cleanup, mounts are removed
 
 
 @pytest.fixture(scope="session")

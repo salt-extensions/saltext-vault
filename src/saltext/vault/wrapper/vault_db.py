@@ -4,8 +4,6 @@ SSH wrapper for the :py:mod:`vault_db <saltext.vault.modules.vault_db>` executio
 See there for documentation.
 """
 
-from salt.utils.functools import namespaced_function
-
 from saltext.vault.modules.vault_db import _write_role
 from saltext.vault.modules.vault_db import clear_cached
 from saltext.vault.modules.vault_db import delete_connection
@@ -23,6 +21,7 @@ from saltext.vault.modules.vault_db import rotate_static_role
 from saltext.vault.modules.vault_db import write_connection
 from saltext.vault.modules.vault_db import write_role
 from saltext.vault.modules.vault_db import write_static_role
+from saltext.vault.utils.functools import namespaced_function
 
 globals_dict = globals()
 

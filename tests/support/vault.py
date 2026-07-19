@@ -224,8 +224,11 @@ def vault_write_secret_file(path, data_name):
     return True
 
 
-def vault_read_secret(path):
-    ret = _vault_cmd(["kv", "get", "-format=json", path], raw=True)
+def vault_read_secret(path, *, version=None):
+    options = ["-format=json"]
+    if version:
+        options.append(f"-version={version}")
+    ret = _vault_cmd(["kv", "get"] + options + [path], raw=True)
 
     if ret.returncode != 0:
         if "No value found at" in ret.stderr:
@@ -234,6 +237,17 @@ def vault_read_secret(path):
         pytest.fail(f"Failed to read secret at `{path}`: {ret.stderr or ret.stdout}")
     if "data" in ret.data["data"]:
         return ret.data["data"]["data"]
+    return ret.data["data"]
+
+
+def vault_read_secret_metadata(path):
+    ret = _vault_cmd(["kv", "metadata", "get", "-format=json", path], raw=True)
+
+    if ret.returncode != 0:
+        if "No value found at" in ret.stderr:
+            return None
+        log.debug("Failed to read secret metadata at `%s`:\n%s\nSTDERR: %s", path, ret, ret.stderr)
+        pytest.fail(f"Failed to read secret metadata at `{path}`: {ret.stderr or ret.stdout}")
     return ret.data["data"]
 
 
@@ -247,7 +261,7 @@ def vault_list_secrets(path):
     return ret.data
 
 
-def vault_delete_secret(path, *, metadata=False, recursive=False):
+def vault_delete_secret(path, *, metadata=False, recursive=False, versions=None):
     """
     Delete secret.
     Does not fail if the secret does not exist.
@@ -256,21 +270,40 @@ def vault_delete_secret(path, *, metadata=False, recursive=False):
     """
     if recursive:
         for child in vault_list_secrets(path):
-            vault_delete_secret(f"{path}/{child}", metadata=metadata, recursive=True)
+            vault_delete_secret(
+                f"{path}/{child}", metadata=metadata, recursive=True, versions=versions
+            )
     if "/" not in path:
         if not recursive:
             pytest.fail(
                 "Cannot delete mount. Specify recursive=True if you intend to delete all secrets"
             )
         return
+    options = []
+    if versions:
+        if metadata:
+            pytest.fail("metadata and versions arguments exclude each other")
+        if not isinstance(versions, list):
+            versions = [versions]
+        options.append(f"-versions={','.join(str(ver) for ver in versions)}")
     try:
-        ret = _vault_cmd(["kv", "delete", path])
+        ret = _vault_cmd(["kv", "delete"] + options + [path])
     except RuntimeError:
         pytest.fail(f"Failed to delete secret at `{path}`")
 
-    if vault_read_secret(path) is not None:
-        log.debug("Failed to delete secret at `%s`:\n%s\nSTDERR: %s", path, ret, ret.stderr)
-        pytest.fail(f"Failed to delete secret at `{path}`: {ret.stderr or ret.stdout}")
+    versions = versions or [None]
+    for version in versions:
+        if vault_read_secret(path, version=version) is not None:
+            log.debug(
+                "Failed to delete secret%s at `%s`:\n%s\nSTDERR: %s",
+                f" version {version}" if version else "",
+                path,
+                ret,
+                ret.stderr,
+            )
+            pytest.fail(
+                f"Failed to delete secret{(' version ' + str(version)) if version else ''} at `{path}`: {ret.stderr or ret.stdout}"
+            )
 
     if not metadata:
         return True
@@ -281,6 +314,32 @@ def vault_delete_secret(path, *, metadata=False, recursive=False):
             "Failed to delete secret metadata at `%s`:\n%s\nSTDERR: %s", path, ret, ret.stderr
         )
         pytest.fail(f"Failed to delete secret metadata at `{path}`: {ret.stderr or ret.stdout}")
+    return True
+
+
+def vault_destroy_secret(path, versions):
+    options = []
+    if not isinstance(versions, list):
+        versions = [versions]
+    options.append(f"-versions={','.join(str(ver) for ver in versions)}")
+    try:
+        ret = _vault_cmd(["kv", "destroy"] + options + [path])
+    except RuntimeError:
+        pytest.fail(f"Failed to destroy secret at `{path}`")
+
+    for version in versions:
+        if vault_read_secret(path, version=version) is not None:
+            log.debug(
+                "Failed to destroy secret%s at `%s`:\n%s\nSTDERR: %s",
+                f" version {version}" if version else "",
+                path,
+                ret,
+                ret.stderr,
+            )
+            pytest.fail(
+                f"Failed to destroy secret{(' version ' + str(version)) if version else ''} at `{path}`: {ret.stderr or ret.stdout}"
+            )
+
     return True
 
 

@@ -71,29 +71,6 @@ def vault_pillar_defaults():
 
 
 @pytest.fixture(scope="module")
-def vault_secrets_defaults():
-    """
-    Set vault KV secrets by requiring the `vault_secrets` fixture and redefining
-    this fixture inside your module.
-    """
-    return {}
-
-
-@pytest.fixture(scope="class")
-def vault_secrets(
-    secret_mounts, vault_secrets_defaults, container
-):  # pylint: disable=unused-argument
-    secrets_data = copy.deepcopy(vault_secrets_defaults)
-    for path, data in secrets_data.items():
-        vault_write_secret(path, **data)
-    try:
-        yield
-    finally:
-        for path in secrets_data:
-            vault_delete_secret(path, metadata=True)
-
-
-@pytest.fixture(scope="module")
 def pillar_base(pillar_defaults, minion, master, _vault_pillar_data):
     """
     Module-scoped fixture to create pillars.
