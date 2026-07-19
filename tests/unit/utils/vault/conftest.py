@@ -473,13 +473,15 @@ def lease_lookup_response():
 
 
 @pytest.fixture
-def session():
-    return Mock(spec=requests.Session)
+def http_session():
+    sess = Mock(spec=requests.Session)
+    sess.get_adapter.return_value = Mock(spec=vclient.VaultAPIAdapter)
+    return sess
 
 
 @pytest.fixture
-def req(session):
-    yield session.request
+def req(http_session):
+    yield http_session.request
 
 
 @pytest.fixture
@@ -525,9 +527,9 @@ def unauthd_client_mock(server_config, request):
 
 
 @pytest.fixture(params=[None, "valid_token"])
-def client(server_config, request, session):
+def client(server_config, request, http_session):
     if request.param is None:
-        return vclient.VaultClient(**server_config, session=session)
+        return vclient.VaultClient(**server_config, session=http_session)
     if request.param == "valid_token":
         token = request.getfixturevalue(request.param)
         auth = Mock(spec=vauth.VaultTokenAuth)
@@ -542,7 +544,7 @@ def client(server_config, request, session):
         auth.get_token.side_effect = vault.VaultAuthExpired
     else:
         raise TypeError(f"Unknown param: {request.param}")
-    return vclient.AuthenticatedVaultClient(auth, **server_config, session=session)
+    return vclient.AuthenticatedVaultClient(auth, **server_config, session=http_session)
 
 
 @pytest.fixture

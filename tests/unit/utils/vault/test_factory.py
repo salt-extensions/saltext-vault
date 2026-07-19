@@ -1477,24 +1477,27 @@ def test_clear_cache_overridden_cache(cache_factory):
 
 
 @pytest.mark.usefixtures("cache_factory")
+@pytest.mark.parametrize("client", ["valid_token"], indirect=True)
 @pytest.mark.parametrize("ckey", ["token", None])
 @pytest.mark.parametrize("connection", [True, False])
 @pytest.mark.parametrize("session", [True, False])
-def test_clear_cache_clears_client_from_context(ckey, connection, session):
+def test_clear_cache_clears_client_from_context(ckey, connection, session, client):
     """
-    Ensure the cached client is removed when the connection cache is altered only
+    Ensure the cached client is removed when any cache is altered that affects it
     """
-    cbank = "vault/connection"
-    context = {cbank: {vfactory.CLIENT_CKEY: "foo"}}
+    cbank = "vault/connection/session"
+    context = {cbank: {vfactory.CLIENT_CKEY: (client, {"config": True})}}
     with patch(
         "saltext.vault.utils.vault.factory._build_revocation_client", autospec=True
     ) as revoc:
         revoc.return_value = (None, None)
         vault.clear_cache({}, context, ckey=ckey, connection=connection, session=session)
-    if session or (not connection and ckey):
+    if session and ckey:
         assert vfactory.CLIENT_CKEY in context.get(cbank, {})
+        client.session.close.assert_not_called()
     else:
         assert vfactory.CLIENT_CKEY not in context.get(cbank, {})
+        client.session.close.assert_called_once()
 
 
 @pytest.mark.parametrize(
