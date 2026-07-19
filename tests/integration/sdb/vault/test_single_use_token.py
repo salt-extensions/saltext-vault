@@ -3,7 +3,6 @@ import logging
 import pytest
 
 from tests.conftest import CONTAINER_TARGETS
-from tests.support.vault import vault_delete_secret
 
 pytest.importorskip("docker")
 
@@ -40,22 +39,6 @@ def master_config_overrides():
     }
 
 
-@pytest.fixture(params=("secret", "secret-v1"))
-def secret_mount(request):
-    return request.param
-
-
-@pytest.fixture
-def _get_or_set_absent(secret_mount):
-    secret = f"{secret_mount}/test/sdb_get_or_set_hash"
-    vault_delete_secret(secret, metadata=True)
-    try:
-        yield
-    finally:
-        vault_delete_secret(secret, metadata=True)
-
-
-@pytest.mark.usefixtures("_get_or_set_absent")
 def test_sdb_get_or_set_hash_single_use_token(salt_call_cli, secret_mount):
     """
     Test that sdb.get_or_set_hash works with uses=1.

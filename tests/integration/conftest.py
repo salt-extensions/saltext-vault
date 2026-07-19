@@ -98,7 +98,7 @@ def pillar_base(pillar_defaults, minion, master, _vault_pillar_data):
     """
     Module-scoped fixture to create pillars.
     """
-    files, refresh = _pillar_files(pillar_defaults, minion)
+    files, refresh = _pillar_files(pillar_defaults, minion.id)
     with ExitStack() as stack:
         for pillar, contents in files:
             stack.enter_context(master.pillar_tree.base.temp_file(pillar, contents))
@@ -114,7 +114,7 @@ def pillar_override(master, minion, request, pillar_defaults):
     """
     Function-scoped fixture to override pillars. Restored after function has run.
     """
-    files, refresh = _pillar_files(pillar_defaults, minion, request)
+    files, refresh = _pillar_files(pillar_defaults, minion.id, request)
     moved = []
     try:
         with ExitStack() as stack:
@@ -157,7 +157,7 @@ def _vault_pillar_data(
             vault_delete_secret(path, metadata=True)
 
 
-def _pillar_files(pillar_defaults, minion, request=None):
+def _pillar_files(pillar_defaults, target, request=None):
     try:
         refresh, pillar_defaults = pillar_defaults[0], pillar_defaults[1]
     except KeyError:
@@ -173,9 +173,9 @@ def _pillar_files(pillar_defaults, minion, request=None):
     defs = pillar_defaults.copy()
     defs.update(overrides)
     if defs and "top" not in defs:
-        top = {"base": {minion.id: list(defs)}}
+        top = {"base": {target: list(defs)}}
         defs["top"] = top
     files = []
     for sls_name, sls_contents in defs.items():
-        files.append((f"{sls_name}.sls", json.dumps(sls_contents).replace("%ID", minion.id)))
+        files.append((f"{sls_name}.sls", json.dumps(sls_contents).replace("%ID", target)))
     return files, refresh

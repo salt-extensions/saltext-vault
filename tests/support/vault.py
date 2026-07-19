@@ -247,13 +247,22 @@ def vault_list_secrets(path):
     return ret.data
 
 
-def vault_delete_secret(path, metadata=False):
+def vault_delete_secret(path, *, metadata=False, recursive=False):
     """
     Delete secret.
     Does not fail if the secret does not exist.
     Does not fail when trying to delete metadata on KV v1.
     Ensures the secret cannot be read, no need to check.
     """
+    if recursive:
+        for child in vault_list_secrets(path):
+            vault_delete_secret(f"{path}/{child}", metadata=metadata, recursive=True)
+    if "/" not in path:
+        if not recursive:
+            pytest.fail(
+                "Cannot delete mount. Specify recursive=True if you intend to delete all secrets"
+            )
+        return
     try:
         ret = _vault_cmd(["kv", "delete", path])
     except RuntimeError:

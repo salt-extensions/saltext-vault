@@ -47,11 +47,6 @@ def minion_config_overrides():
     }
 
 
-@pytest.fixture(params=("secret", "secret-v1"))
-def secret_mount(request):
-    return request.param
-
-
 def test_sdb_set(salt_call_cli, secret_mount):
     # Write to an empty path
     ret = salt_call_cli.run(
@@ -65,13 +60,8 @@ def test_sdb_set(salt_call_cli, secret_mount):
     )
     assert ret.returncode == 0
     assert ret.data is True
-    # Ensure the first value is still there
-    ret = salt_call_cli.run("sdb.get", uri=f"sdb://sdbvault/{secret_mount}/test/test_sdb_patch/foo")
+    # Ensure all values are still present
+    ret = salt_call_cli.run("sdb.get", uri=f"sdb://sdbvault/{secret_mount}/test/test_sdb_patch")
     assert ret.returncode == 0
     assert ret.data
-    assert ret.data == "bar"
-    # Ensure the second value was written
-    ret = salt_call_cli.run("sdb.get", uri=f"sdb://sdbvault/{secret_mount}/test/test_sdb_patch/bar")
-    assert ret.returncode == 0
-    assert ret.data
-    assert ret.data == "baz"
+    assert ret.data == {"foo": "bar", "bar": "baz"}
