@@ -67,7 +67,7 @@ log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 __func_alias__ = {"set_": "set"}
 
 
-def set_(key, value, profile=None):  # pylint: disable=unused-argument
+def set_(key, value, profile=None):
     """
     Set a key/value pair in the vault service
     """
