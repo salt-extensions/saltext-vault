@@ -90,18 +90,20 @@ def get_authd_client(
         return client, config, retry
 
     cbank = vcache._get_cache_bank(opts, force_local=force_local)
+    session_cbank = cbank + "/session"
     retry = False
     client = config = None
 
     # First, check if an already initialized instance is available
     # and still valid
-    if cbank in context and CLIENT_CKEY in context[cbank]:
+    if session_cbank in context and CLIENT_CKEY in context[session_cbank]:
         log.debug("Fetching client instance and config from context")
-        client, config = context[cbank][CLIENT_CKEY]
+        client, config = context[session_cbank][CLIENT_CKEY]
         if not client.token_valid(remote=False):
             log.debug("Cached client instance was invalid")
+            client.session.close()
             client = config = None
-            context[cbank].pop(CLIENT_CKEY)
+            context[session_cbank].pop(CLIENT_CKEY)
 
     # Otherwise, try to build one from possibly cached data
     if client is None or config is None:
@@ -147,9 +149,9 @@ def get_authd_client(
                 "honored because fresh tokens are issued with less ttl. Continuing anyways."
             )
 
-    if cbank not in context:
-        context[cbank] = {}
-    context[cbank][CLIENT_CKEY] = (client, config)
+    if session_cbank not in context:
+        context[session_cbank] = {}
+    context[session_cbank][CLIENT_CKEY] = (client, config)
 
     if get_config:
         return client, config
@@ -204,6 +206,7 @@ def clear_cache(opts, context, ckey=None, connection=True, session=False, force_
     cbank = vcache._get_cache_bank(
         opts, connection=connection, session=session, force_local=force_local
     )
+    session_cbank = vcache._get_cache_bank(opts, session=True, force_local=force_local)
     if (
         not ckey
         or (not (connection or session) and ckey == "connection")
@@ -241,19 +244,27 @@ def clear_cache(opts, context, ckey=None, connection=True, session=False, force_
                     f"{type(err).__name__}: {err}"
                 )
 
+    # Unless we're clearing a specific session ckey that does not affect the current client,
+    # ensure the client is removed from context and its HTTP session is closed.
+    if (
+        (not session or not ckey or ckey == CLIENT_CKEY)
+        and session_cbank in context
+        and CLIENT_CKEY in context[session_cbank]
+    ):
+        client, _ = context[session_cbank].pop(CLIENT_CKEY)
+        client.session.close()
+        del client
+
     if cbank in context:
         if ckey is None:
             context.pop(cbank)
         else:
             context[cbank].pop(ckey, None)
-            if connection and not session:
-                # Ensure the active client gets recreated after altering the connection cache
-                context[cbank].pop(CLIENT_CKEY, None)
 
     # also remove sub-banks from context to mimic cache behavior
     if ckey is None:
-        for bank in list(context):
-            if bank.startswith(cbank):
+        for bank in tuple(context):
+            if bank.startswith(cbank + "/"):
                 context.pop(bank)
     cache = salt.cache.factory(opts)
     if cache.contains(cbank, ckey):
