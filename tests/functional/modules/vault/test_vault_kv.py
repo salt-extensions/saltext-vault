@@ -247,26 +247,26 @@ def test_read_secret_meta_destroyed(vault, existing_secret_destroyed):
 def test_restore_secret(vault, existing_secret_deleted):
     ret = vault.restore_secret(existing_secret_deleted)
     assert ret is True
-    ret = vault.read_secret(existing_secret_deleted)
-    assert ret["password"] == "hunter1"
+    curr = vault_read_secret(existing_secret_deleted)
+    assert curr["password"] == "hunter1"
 
 
 def test_restore_secret_version(vault, existing_secret_deleted):
     ret = vault.restore_secret(existing_secret_deleted, 1)
     assert ret is True
-    ret = vault.read_secret(existing_secret_deleted, version=1)
-    assert ret["password"] == "bar"
-    ret = vault.read_secret(existing_secret_deleted, version=2, default="__deleted__")
-    assert ret == "__deleted__"
+    curr = vault_read_secret(existing_secret_deleted, version=1)
+    assert curr["password"] == "bar"
+    curr = vault_read_secret(existing_secret_deleted, version=2)
+    assert curr is None
 
 
 def test_restore_secret_all_versions(vault, existing_secret_all_deleted):
     ret = vault.restore_secret(existing_secret_all_deleted, all_versions=True)
     assert ret is True
-    ret = vault.read_secret(existing_secret_all_deleted, version=1)
-    assert ret["password"] == "bar"
-    ret = vault.read_secret(existing_secret_all_deleted)
-    assert ret["password"] == "hunter1"
+    curr = vault_read_secret(existing_secret_all_deleted, version=1)
+    assert curr["password"] == "bar"
+    curr = vault_read_secret(existing_secret_all_deleted, version=2)
+    assert curr["password"] == "hunter1"
 
 
 def test_restore_secret_latest_not_deleted(vault, existing_secret_version):
@@ -278,10 +278,10 @@ def test_restore_secret_latest_not_deleted(vault, existing_secret_version):
 def test_delete_secret_latest(vault, existing_secret_version):
     res = vault.delete_secret(existing_secret_version)
     assert res is True
-    ret = vault.read_secret(existing_secret_version, version=1)
+    ret = vault_read_secret(existing_secret_version, version=1)
     assert ret["password"] == "bar"
-    ret = vault.read_secret(existing_secret_version, version=2, default="__deleted__")
-    assert ret == "__deleted__"
+    ret = vault_read_secret(existing_secret_version, version=2)
+    assert ret is None
 
 
 def test_delete_secret_version(vault, existing_secret_version):
@@ -315,20 +315,12 @@ def test_delete_secret_all_versions_latest_deleted_already(vault, existing_secre
     assert ret == "__deleted__"
 
 
-def test_destroy_secret(vault, existing_secret_version):
-    assert vault.destroy_secret(existing_secret_version) is True
-    ret = vault.read_secret(existing_secret_version, default="__destroyed__")
-    assert ret == "__destroyed__"
-    ret = vault.read_secret(existing_secret_version, version=1)
-    assert ret["password"] == "bar"
-
-
 def test_destroy_secret_latest(vault, existing_secret_version):
     assert vault.destroy_secret(existing_secret_version) is True
-    ret = vault.read_secret(existing_secret_version, version=1)
+    ret = vault_read_secret(existing_secret_version)
+    assert ret is None
+    ret = vault_read_secret(existing_secret_version, version=1)
     assert ret["password"] == "bar"
-    ret = vault.read_secret(existing_secret_version, default="__destroyed__")
-    assert ret == "__destroyed__"
 
 
 def test_destroy_secret_versions(vault, existing_secret_version):
