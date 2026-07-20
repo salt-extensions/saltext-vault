@@ -214,7 +214,7 @@ class ExtendedLoaders(Loaders):
                     self.opts["id"],
                     saltenv=self.opts["saltenv"],
                     pillarenv=self.opts.get("pillarenv"),
-                ).ext_pillars
+                ).ext_pillars._dict
         return self._pillars
 
     @property

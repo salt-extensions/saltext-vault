@@ -135,8 +135,8 @@ log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 
 def ext_pillar(
-    minion_id,  # pylint: disable=W0613
-    pillar,  # pylint: disable=W0613
+    minion_id,
+    pillar,
     path=None,
     nesting_key=None,
     merge_strategy=None,
@@ -166,11 +166,8 @@ def ext_pillar(
                 "as its parameter, without the `path=` prefix."
             ),
         )
-    elif path is not None:
+    elif path:
         comps = path.split()
-        if not comps:
-            log.error('"%s" is not a valid Vault ext_pillar config', path)
-            return {}
         if len(comps) > 1:
             warn_until(
                 2,
