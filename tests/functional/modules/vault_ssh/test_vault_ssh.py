@@ -145,9 +145,9 @@ def test_create_ca_with_keys(vault_ssh, ec_pub, ec_priv_file):
 
 
 @pytest.mark.usefixtures("ca_setup")
-def test_read_ca(vault_ssh, ec_pub):
+def test_read_ca(vault_ssh, ca_pub):
     res = vault_ssh.read_ca()
-    assert res == ec_pub
+    assert res == ca_pub
 
 
 @pytest.mark.usefixtures("ca_setup")

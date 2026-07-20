@@ -76,7 +76,8 @@ class WrapperFuncProxy:
                 my_module.foo("foo")
     """
 
-    def __init__(self, salt_ssh_cli, exc=salt.exceptions.CommandExecutionError):
+    def __init__(self, mod, salt_ssh_cli, exc=salt.exceptions.CommandExecutionError):
+        self.mod = mod
         self.salt_ssh_cli = salt_ssh_cli
         self.exc = exc
 
@@ -85,7 +86,7 @@ class WrapperFuncProxy:
         return self
 
     def __call__(self, *args, _expect_fail=False, **kwargs):
-        ret = self.salt_ssh_cli.run(f"vault_plugin.{self.func}", *args, **kwargs)
+        ret = self.salt_ssh_cli.run(f"{self.mod}.{self.func}", *args, **kwargs)
         if _expect_fail is True:
             assert ret.returncode > 0
             return ret

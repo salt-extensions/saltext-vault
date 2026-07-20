@@ -339,7 +339,7 @@ def test_get_creds_cached(vault_db, _cached_creds):
 
 
 @pytest.mark.usefixtures("roles_setup")
-def test_get_creds_cached__multiple(vault_db):
+def test_get_creds_cached_multiple(vault_db):
     ret = vault_db.get_creds("testrole", cache="one")
     assert ret
     assert "username" in ret
