@@ -198,9 +198,9 @@ def vault_create_secret_id(name, mount="approle"):
 
 
 def vault_write_secret(path, **kwargs):
-    cmd = ["kv", "put", path] + [f"{k}={v}" for k, v in kwargs.items()]
+    cmd = ["kv", "put", path, "-"]
     try:
-        ret = _vault_cmd(cmd)
+        ret = _vault_cmd(cmd, textinput=json.dumps(kwargs))
     except RuntimeError as err:
         pytest.fail(f"Failed to write secret at `{path}`: {err}")
 
