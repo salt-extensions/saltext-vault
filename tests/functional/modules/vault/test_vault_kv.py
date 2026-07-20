@@ -159,32 +159,32 @@ def test_patch_secret(vault, secret_mount):
 
 
 @pytest.fixture
-def existing_secret(container):  # pylint: disable=unused-argument
+def existing_secret(secret_mounts):  # pylint: disable=unused-argument
     secret_key = "secret/versions/" + random_string("test", uppercase=False)
     vault_write_secret(secret_key, user="foo", password="bar")
     return secret_key
 
 
 @pytest.fixture
-def existing_secret_version(existing_secret, vault):  # pylint: disable=unused-argument
+def existing_secret_version(existing_secret):
     vault_write_secret(existing_secret, user="foo", password="hunter1")
     return existing_secret
 
 
 @pytest.fixture
-def existing_secret_deleted(existing_secret_version, vault):  # pylint: disable=unused-argument
+def existing_secret_deleted(existing_secret_version):
     vault_delete_secret(existing_secret_version)
     return existing_secret_version
 
 
 @pytest.fixture
-def existing_secret_destroyed(existing_secret_version, vault):  # pylint: disable=unused-argument
+def existing_secret_destroyed(existing_secret_version):
     vault_destroy_secret(existing_secret_version, 2)
     return existing_secret_version
 
 
 @pytest.fixture
-def existing_secret_all_deleted(existing_secret_version, vault):  # pylint: disable=unused-argument
+def existing_secret_all_deleted(existing_secret_version):
     vault_delete_secret(existing_secret_version, versions=[1, 2])
     return existing_secret_version
 

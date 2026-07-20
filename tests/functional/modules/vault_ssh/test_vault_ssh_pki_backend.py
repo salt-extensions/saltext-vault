@@ -19,13 +19,16 @@ except ImportError:
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts", "ca_setup", "roles_setup"),
+    pytest.mark.usefixtures(
+        "container", "secret_mounts", "vault_policies", "ca_setup", "roles_setup"
+    ),
     pytest.mark.parametrize("secret_mounts", ("ssh",), indirect=True),
+    pytest.mark.parametrize("vault_policies", ("ssh_admin",), indirect=True),
 ]
 
 
 @pytest.fixture(scope="module", autouse=True)
-def check_ssh_pki_available(loaders):
+def _check_ssh_pki_available(loaders):
     try:
         loaders.states.ssh_pki
     except AttributeError:
@@ -50,7 +53,7 @@ def group2_metadata():
 
 @pytest.fixture(scope="module")
 def entity(
-    entity_metadata, group1_metadata, group2_metadata, container
+    entity_metadata, group1_metadata, group2_metadata, container, master_approle_mount
 ):  # pylint: disable=unused-argument
     """
     We need an entity with metadata to run principal templating tests.
@@ -70,16 +73,16 @@ def entity(
             metadata=group2_metadata,
             member_entity_ids=[entity["data"]["id"]],
         )
-        vault_write("auth/salt-minions/role/foobar", token_policies=["ssh_admin"])
-        mount = vault_read("sys/auth/salt-minions")
-        role_id = vault_get_role_id("foobar", "salt-minions")
+        vault_write(f"auth/{master_approle_mount}/role/foobar", token_policies=["ssh_admin"])
+        mount = vault_read(f"sys/auth/{master_approle_mount}")
+        role_id = vault_get_role_id("foobar", master_approle_mount)
         alias = vault_write(
             "identity/entity-alias",
             name=role_id,
             canonical_id=entity["data"]["id"],
             mount_accessor=mount["data"]["accessor"],
         )
-        secret_id = vault_create_secret_id("foobar", "salt-minions")
+        secret_id = vault_create_secret_id("foobar", master_approle_mount)
         yield {
             "role_id": role_id,
             "secret_id": secret_id,
@@ -92,7 +95,7 @@ def entity(
             vault_delete("identity/entity-alias/id/" + alias["data"]["id"], silent=True)
         except UnboundLocalError:
             pass
-        vault_delete("auth/salt-minions/role/foobar", silent=True)
+        vault_delete(f"auth/{master_approle_mount}/role/foobar", silent=True)
         try:
             vault_delete("identity/group/id/" + group1["data"]["id"], silent=True)
         except UnboundLocalError:
@@ -108,14 +111,14 @@ def entity(
 
 
 @pytest.fixture(scope="module")
-def minion_config_overrides(entity):
+def minion_config_overrides(entity, master_approle_mount):
     return {
         "vault": {
             "auth": {
                 "method": "approle",
                 "role_id": entity["role_id"],
                 "secret_id": entity["secret_id"],
-                "approle_mount": "salt-minions",
+                "approle_mount": master_approle_mount,
             }
         }
     }

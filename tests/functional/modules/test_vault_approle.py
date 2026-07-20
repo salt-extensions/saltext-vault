@@ -43,7 +43,7 @@ def testrole():
 @pytest.fixture(scope="module", autouse=True)
 def approle_auth(container):  # pylint: disable=unused-argument
     name = random_string("approle-test", uppercase=False)
-    assert vault_enable_auth_method("approle", [f"-path={name}"])
+    assert vault_enable_auth_method("approle", name)
     try:
         yield name
     finally:

@@ -12,14 +12,14 @@ pytest.importorskip("docker")
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container"),
+    pytest.mark.usefixtures("container", "master_approle_mount"),
 ]
 
 log = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="module")
-def master_config_overrides():
+def master_config_overrides(master_approle_mount):  # pylint: disable=unused-argument
     return {
         "vault": {
             "issue": {
@@ -36,8 +36,8 @@ def master_config_overrides():
     }
 
 
-def _get_approle(name):
-    return vault_read(f"auth/salt-minions/role/{name}", raise_errors=True)["data"]
+def _get_approle(name, mount):
+    return vault_read(f"auth/{mount}/role/{name}", raise_errors=True)["data"]
 
 
 def _get_config(vault, name, impersonated_by_master=False, issue_params=None):
@@ -64,12 +64,12 @@ def _generate_secret_id(vault, name, impersonated_by_master=False, issue_params=
 
 
 @pytest.fixture(autouse=True)
-def reset_approles():
-    for approle in vault_list("auth/salt-minions/role"):
-        vault_delete_approle(approle, mount="salt-minions")
+def reset_approles(master_approle_mount):
+    for approle in vault_list(f"auth/{master_approle_mount}/role"):
+        vault_delete_approle(approle, mount=master_approle_mount)
     yield
-    for approle in vault_list("auth/salt-minions/role"):
-        vault_delete_approle(approle, mount="salt-minions")
+    for approle in vault_list(f"auth/{master_approle_mount}/role"):
+        vault_delete_approle(approle, mount=master_approle_mount)
 
 
 @pytest.fixture(autouse=True)
@@ -100,10 +100,12 @@ def test_get_config_and_generate_secret_id_do_not_rewrite_approle_with_timestrin
         _generate_secret_id(vault, "foobar")
 
 
-def test_get_config_and_generate_secret_id_rewrite_approle_when_necessary(vault):
+def test_get_config_and_generate_secret_id_rewrite_approle_when_necessary(
+    vault, master_approle_mount
+):
     _get_config(vault, "foobar", issue_params={"secret_id_ttl": "1d"})
-    approle = _get_approle("foobar")
+    approle = _get_approle("foobar", master_approle_mount)
     assert approle["secret_id_ttl"] == 86400
     _generate_secret_id(vault, "foobar", issue_params={"secret_id_ttl": "1h"})
-    approle = _get_approle("foobar")
+    approle = _get_approle("foobar", master_approle_mount)
     assert approle["secret_id_ttl"] == 3600

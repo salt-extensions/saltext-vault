@@ -11,7 +11,7 @@ log = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts"),
+    pytest.mark.usefixtures("container", "secret_mounts", "vault_policies"),
     pytest.mark.parametrize(
         "secret_mounts",
         [[("kv", "secret-v1", "-version=1"), ("kv", "secret", "-version=2")]],

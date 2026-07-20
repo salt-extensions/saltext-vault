@@ -46,7 +46,7 @@ def master_config_overrides():
 
 @pytest.fixture(scope="module")
 def approle_configured(container):  # pylint: disable=unused-argument
-    vault_enable_auth_method("approle", ["-path=approle"])
+    vault_enable_auth_method("approle", "approle")
     vault_write_approle("sdbrole")
     try:
         role_id = vault_get_role_id("sdbrole")

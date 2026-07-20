@@ -132,9 +132,11 @@ def vault_disable_secret_engine(path):
     pytest.fail(f"Could not disable secret engine at path `{path}`: {ret.stderr or ret.stdout}")
 
 
-def vault_enable_auth_method(name, options=None, **kwargs):
+def vault_enable_auth_method(name, path=None, options=None, **kwargs):
     if options is None:
         options = []
+    if path is not None:
+        options.append(f"-path={path}")
     cmd = ["auth", "enable"] + options + [name] + [f"{k}={v}" for k, v in kwargs.items()]
     try:
         ret = _vault_cmd(cmd)

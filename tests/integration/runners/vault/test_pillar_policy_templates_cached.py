@@ -11,7 +11,7 @@ log = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts", "pillar_base"),
+    pytest.mark.usefixtures("container", "pillar_base", "secret_mounts", "vault_policies"),
     pytest.mark.parametrize(
         "container", (CONTAINER_TARGETS[0],), indirect=True
     ),  # We only want to check the internal logic, not the API access
@@ -53,7 +53,7 @@ def minion_config_overrides():
 
 
 @pytest.fixture(scope="module")
-def vault_pillar_defaults():
+def vault_pillar_defaults(vault_policies):  # pylint: disable=unused-argument
     return {"secret/path/foo": {"vault_sourced": "fail"}}
 
 
@@ -83,6 +83,7 @@ def minion_data_cache_outdated(
         pillar_data = cached.data["pillar"]
     assert "roles" in pillar_data
     assert pillar_data["roles"] == ["minion", "web"]
+    assert "vault_sourced" in pillar_data
 
     new_roles = {"roles": ["minion", "web", "fresh"]}
     with master.pillar_tree.base.temp_file("roles.sls", json.dumps(new_roles)):

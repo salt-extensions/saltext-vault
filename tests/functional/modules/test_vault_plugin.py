@@ -604,7 +604,8 @@ def test_reload(vault_plugin, secret_plugin, container):
     assert isinstance(res, str)
 
 
-@pytest.mark.usefixtures("plugins_registered")
+@pytest.mark.usefixtures("plugins_registered", "secret_mounts")
+@pytest.mark.parametrize("secret_mounts", [("ssh", "database")], indirect=True)
 @pytest.mark.parametrize(
     "plugins_registered",
     (
@@ -615,7 +616,7 @@ def test_reload(vault_plugin, secret_plugin, container):
     indirect=True,
 )
 def test_reload_named(vault_plugin, auth_plugin, container):
-    res = vault_plugin.reload_named("approle")
+    res = vault_plugin.reload_named("ssh")
     assert res
     assert isinstance(res, str)
     res = vault_plugin.reload_named(auth_plugin["name"], globally=True)
@@ -631,7 +632,7 @@ def test_reload_named(vault_plugin, auth_plugin, container):
 @pytest.mark.usefixtures("secret_mounts")
 @pytest.mark.parametrize("secret_mounts", [("ssh", "database")], indirect=True)
 def test_reload_mounts(vault_plugin):
-    res = vault_plugin.reload_mounts("auth/salt-minions")
+    res = vault_plugin.reload_mounts("ssh")
     assert res
     assert isinstance(res, str)
     res = vault_plugin.reload_mounts(["ssh", "database"], globally=True)
