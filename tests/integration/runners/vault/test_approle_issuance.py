@@ -15,7 +15,14 @@ log = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "pillar_base", "secret_mounts", "vault_secrets"),
+    pytest.mark.usefixtures(
+        "container",
+        "master_approle_mount",
+        "pillar_base",
+        "secret_mounts",
+        "vault_policies",
+        "vault_secrets",
+    ),
     pytest.mark.parametrize(
         "secret_mounts",
         [[("kv", "salt", "-version=2"), ("kv", "secret", "-version=2")]],
@@ -28,7 +35,7 @@ pytestmark = [
 
 
 @pytest.fixture(scope="module")
-def master_config_overrides():
+def master_config_overrides(master_approle_mount):  # pylint: disable=unused-argument
     return {
         # ensure approles/entities are generated during pillar rendering
         "ext_pillar": [

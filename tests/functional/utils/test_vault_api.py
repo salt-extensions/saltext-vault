@@ -16,7 +16,7 @@ pytestmark = [
 @pytest.fixture
 def fresh_auth_mount():
     name = random_string("fresh-mount", uppercase=False)
-    vault_enable_auth_method("approle", [f"-path={name}"])
+    vault_enable_auth_method("approle", name)
     try:
         yield name
     finally:

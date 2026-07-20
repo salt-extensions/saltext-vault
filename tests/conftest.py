@@ -21,6 +21,8 @@ from saltext.vault import PACKAGE_ROOT
 from tests.support.files_mapping import CHANGED_FILES_MAP
 from tests.support.files_mapping import REPO_ROOT
 from tests.support.helpers import PatchedEnviron
+from tests.support.vault import vault_delete_policy
+from tests.support.vault import vault_disable_auth_method
 from tests.support.vault import vault_disable_secret_engine
 from tests.support.vault import vault_enable_auth_method
 from tests.support.vault import vault_enable_secret_engine
@@ -386,16 +388,6 @@ def container(
         else:
             pytest.fail("Failed to login to vault")
 
-        vault_write_policy_file("salt_master")
-        vault_write_policy_file("salt_minion")
-        vault_write_policy_file("database_admin")
-        vault_write_policy_file("policy_admin")
-        vault_write_policy_file("pki_admin")
-        vault_write_policy_file("ssh_admin")
-        vault_write_policy_file("approle_admin")
-        vault_write_policy_file("plugin_admin")
-
-        vault_enable_auth_method("approle", ["-path=salt-minions"])
         # get rid of default mount so we can ensure state does not leak between test modules
         vault_disable_secret_engine("secret")
         yield request.param
@@ -426,7 +418,7 @@ def secret_mounts(request, container):  # pylint: disable=unused-argument
     except Exception:  # pylint: disable=broad-except
         _cleanup()
     try:
-        yield
+        yield tuple(mounts)
     finally:
         _cleanup()
 
@@ -448,6 +440,41 @@ def vault_secrets(
     for path, data in secrets_data.items():
         vault_write_secret(path, **data)
     # Don't need to cleanup, mounts are removed
+
+
+@pytest.fixture(scope="module")
+def master_approle_mount(request, container):  # pylint: disable=unused-argument
+    mount = getattr(request, "param", "salt-minions")
+    assert vault_enable_auth_method("approle", mount)
+    try:
+        yield mount
+    finally:
+        assert vault_disable_auth_method(mount)
+
+
+@pytest.fixture(scope="module", params=[()])
+def vault_policies(container, master_config_overrides, request):  # pylint: disable=unused-argument
+    policies = request.param
+    if not policies:
+        policies = [
+            policy
+            for policy in master_config_overrides.get("vault", {})
+            .get("policies", {})
+            .get("assign", ["salt_minion"])
+            if "{" not in policy
+        ]
+    elif isinstance(policies, str):
+        policies = [policies]
+    else:
+        policies = list(policies)
+    for policy_file in policies:
+        vault_write_policy_file(policy_file)
+
+    try:
+        yield tuple(policies)
+    finally:
+        for policy_file in policies:
+            vault_delete_policy(policy_file)
 
 
 @pytest.fixture(scope="session")

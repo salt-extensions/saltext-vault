@@ -129,8 +129,10 @@ def vault_pki(modules):
 
 @pytest.fixture
 def generated_root():
-    yield
-    vault_delete("pki/issuer/generated-root")
+    try:
+        yield
+    finally:
+        vault_delete("pki/issuer/generated-root")
 
 
 @pytest.mark.usefixtures("roles_setup")
