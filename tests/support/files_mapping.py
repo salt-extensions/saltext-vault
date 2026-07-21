@@ -65,6 +65,10 @@ CHANGED_FILES_MAP = (
             "tests/*/*/*{mod_name}/test_*.py",
         ),
     ),
+    (  # functools util affects all wrappers
+        rf"{PACKAGE_ROOT_REL}/utils/functools\.py",
+        ("tests/*/wrapper/*.py",),
+    ),
     (  # other non-vault utils like types/version
         rf"{PACKAGE_ROOT_REL}/utils/(?P<mod_name>\w+?)\.py",
         (
@@ -86,6 +90,7 @@ CHANGED_FILES_MAP = (
             "tests/*/wrapper/vault/test_*.py",
             "tests/*/utils*/test_factory.py",
             "tests/*/utils*/factory/test_*.py",
+            "tests/functional/test_argspec_works.py",
         ),
     ),
     (  # execution module changes affect states and wrappers
@@ -97,6 +102,7 @@ CHANGED_FILES_MAP = (
             "tests/*/states/{mod_name}/test_*.py",
             "tests/*/wrapper/test_{mod_name}.py",
             "tests/*/wrapper/{mod_name}/test_*.py",
+            "tests/functional/test_argspec_works.py",
         ),
     ),
     (  # other modules usually just affect themselves
@@ -104,6 +110,7 @@ CHANGED_FILES_MAP = (
         (
             "tests/*/{mod_type}/test_{mod_name}.py",
             "tests/*/{mod_type}/{mod_name}/test_*.py",
+            "tests/functional/test_argspec_works.py",
         ),
     ),
     (
