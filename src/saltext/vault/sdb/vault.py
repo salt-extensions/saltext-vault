@@ -92,7 +92,7 @@ def set_(key, value, profile=None):
                 ),
             )
             patch = False
-        except RuntimeError:
+        except RuntimeError:  # pragma: no cover
             patch = True
 
     if patch:
