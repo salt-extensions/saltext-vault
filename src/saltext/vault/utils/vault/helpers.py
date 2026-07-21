@@ -206,7 +206,7 @@ def timestring_map(
     raw *= 24
     if unit == "d":
         return cast(raw)
-    raise RuntimeError("This path should not have been hit")
+    raise RuntimeError("This path should not have been hit")  # pragma: no cover
 
 
 def filter_state_internal_kwargs(kwargs: dict[str, typing.Any]) -> dict[str, typing.Any]:

@@ -149,7 +149,7 @@ class CommonCache(ABC):
             return self.context[self.cbank][ckey]
         if self.cache is not None:
             return self.cache.fetch(self.cbank, ckey) or None  # account for race conditions
-        raise RuntimeError("This code path should not have been hit.")
+        raise RuntimeError("This code path should not have been hit.")  # pragma: no cover
 
     def _store_ckey(self, ckey: str, value: dict[str, typing.Any]):
         if self.cache is not None:

@@ -487,7 +487,7 @@ def list_secrets(path, default=NOT_SET, keys_only=None):
                 ),
             )
             keys_only = False
-        except RuntimeError:
+        except RuntimeError:  # pragma: no cover
             keys_only = True
 
     log.debug("Listing vault secret keys for %s in %s", __grains__.get("id"), path)
