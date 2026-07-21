@@ -431,7 +431,10 @@ def lint_tests_pre_commit(session):
 def _get_docs_env(session):
     env = {}
     if not os.getenv("PYENCHANT_LIBRARY_PATH"):
-        if sys.platform == "darwin" and platform.processor() == "arm":
+        if (
+            sys.platform == "darwin"
+            and platform.processor() == "arm"  # pylint: disable=comparison-with-callable
+        ):
             try:
                 # Ensure docs build works on Apple Silicon, where the default
                 # Homebrew lib path is not autodiscovered.
