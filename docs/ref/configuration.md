@@ -331,6 +331,36 @@ Configures Vault server details.
 #### url
 URL of your Vault installation. Required.
 
+::::{hint}
+This value can be set inside the minion configuration as well, from where it takes precedence.
+The new URL must be listed in the master's {vconf}`url_alts <server:url_alts>` to take effect.
+
+:::{versionadded} 1.8.0
+:::
+::::
+
+:::{vconf} server:url_alts
+:::
+#### url_alts
+:::{versionadded} 1.8.0
+:::
+A list of alternative URLs the Vault installation is reachable at, e.g. for minions that cannot
+use the default {vconf}`url <server:url>` because of network segmentation.
+
+Only relevant in the master configuration. Minions may override
+{vconf}`url <server:url>` in their local configuration, but only with one of
+the URLs in this list; other values are ignored and a warning is logged.
+
+This restriction keeps the master configuration the single source of truth
+for the endpoints that Vault credentials issued by the master are presented to.
+
+All listed URLs must therefore belong to the same Vault installation
+{vconf}`url <server:url>` points to.
+
+:::{important}
+This list is not (yet) used as a fallback when the selected {vconf}`url <server:url>` is unreachable.
+:::
+
 :::{vconf} server:verify
 :::
 #### verify
@@ -340,8 +370,9 @@ Vault server. If unset, requests use the CA certificates bundled with `certifi`.
 For details, please see the `requests` documentation on [certificate verification][].
 
 :::{note}
-In addition, this value can be set to a PEM-encoded CA certificate to use as the
-sole trust anchor for certificate chain verification.
+In addition, this value can be set to a concatenation of one or more PEM-encoded
+CA certificates to use as the trust anchor for certificate chain verification
+(i.e. certificate pinning).
 :::
 
 :::{hint}
@@ -355,6 +386,9 @@ takes precedence.
 Optional [Vault namespace][]. Used with Vault Enterprise.
 
 ## Master-only configuration
+In addition to the previously-mentioned {vconf}`server:url_alts`, the following
+configuration values only have an effect if specified in the master configuration:
+
 :::{vconf} issue
 :::
 ### `issue`
@@ -557,6 +591,8 @@ all Vault modules are broken to prevent an infinite loop.
 :::{note}
 In addition to the following minion-only values, {vconf}`auth:token_lifecycle`, {vconf}`server:verify`
 and {vconf}`client` can be set on the minion as well, even if it pulls its configuration from a master.
+With some restrictions (valid values are configured on the master via {vconf}`server:url_alts`),
+this also applies to {vconf}`server:url`.
 :::
 
 :::{vconf} config_location
@@ -666,6 +702,7 @@ vault:
     refresh_pillar: null
   server:
     url: <required, e. g. https://vault.example.com:8200>
+    url_alts: []
     namespace: null
     verify: null
 ```

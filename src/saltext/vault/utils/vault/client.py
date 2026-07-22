@@ -110,7 +110,7 @@ def _get_expected_creation_path(
     )
 
 
-class VaultClient:
+class VaultClient:  # pylint: disable=too-many-instance-attributes
     """
     Unauthenticated client for the Vault API.
     Base class for authenticated client.
@@ -133,6 +133,10 @@ class VaultClient:
         respect_retry_after: bool = DEFAULT_RESPECT_RETRY_AFTER,
         retry_status: Sequence[int] | None = DEFAULT_RETRY_STATUS,
         retry_after_max: int | None = DEFAULT_RETRY_AFTER_MAX,
+        url_alts: Sequence[str] | None = None,
+        # Drop unknown kwargs to ensure future additions to server/client config
+        # don't break clients running older releases.
+        **_,
     ):
         self.url = url
         self.namespace = namespace
@@ -152,6 +156,7 @@ class VaultClient:
         self.retry_after_max = max(0, retry_after_max) if retry_after_max is not None else 21600
 
         self.retry_status = tuple(retry_status) if retry_status is not None else None
+        self.url_alts = tuple(url_alts or (url,))
 
         retry = VaultRetry(
             total=self.max_retries,
@@ -680,6 +685,7 @@ class VaultClient:
         """
         return {
             "url": self.url,
+            "url_alts": list(self.url_alts),
             "namespace": self.namespace,
             "verify": self.verify,
         }

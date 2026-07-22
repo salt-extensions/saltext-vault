@@ -475,6 +475,11 @@ def _check_upgrade(config, pre_flush=False):
         if not pre_flush:
             return True
         config["client"] = {}
+    # introduced in v1.8.0
+    if "url_alts" not in config["server"]:
+        if not pre_flush:
+            return True
+        config["server"]["url_alts"] = [config["server"]["url"]]
     return False
 
 
@@ -547,7 +552,11 @@ def _get_connection_config(cbank, opts, context, force_local=False, pre_flush=Fa
         "server": new_config["server"],
     }
     if update and config:
-        if new_config["server"] != config["server"]:
+        if (
+            new_config["server"]["url"] != config["server"]["url"]
+            or new_config["server"]["namespace"] != config["server"]["namespace"]
+            or new_config["server"]["verify"] != config["server"]["verify"]
+        ):
             raise VaultConfigExpired()
         if new_config["auth"]["method"] != config["auth"]["method"]:
             raise VaultConfigExpired()
@@ -751,27 +760,35 @@ def _query_master(
             raise salt.exceptions.CommandExecutionError(result)
 
         config_expired = False
-        expected_server = None
 
         if result.get("expire_cache", False):
             log.info("Master requested Vault config expiration.")
             config_expired = True
 
         if "server" in result:
-            # Ensure locally overridden verify parameter does not
-            # always invalidate cache.
-            reported_server = parse_config(result["server"], validate=False, opts=opts)["server"]
+            # Ensure locally overridden url/verify parameters do not always invalidate cache.
+            reported_server = parse_config({"server": result["server"]}, validate=False, opts=opts)[
+                "server"
+            ]
             result.update({"server": reported_server})
 
         if unwrap_client is not None:
             expected_server = unwrap_client.get_config()
+            # url_alts is currently only used to specify a list of URLs minions can override the URL with locally.
+            # In the future, could be used as a failover when the primary server:url is unreachable.
+            # Either way, changing it should not cause a complete config refresh and re-authentication.
+            expected_server.pop("url_alts")
+            received_server = result.get("server", {}).copy()
+            received_server.pop("url_alts", None)
 
-        if expected_server is not None and result.get("server") != expected_server:
-            log.info("Mismatch of cached and reported server data detected. Invalidating cache.")
-            # make sure to fetch wrapped data anyways for security reasons
-            config_expired = True
-            unwrap_expected_creation_path = None
-            unwrap_client = None
+            if received_server != expected_server:
+                log.info(
+                    "Mismatch of cached and reported server data detected. Invalidating cache."
+                )
+                # make sure to fetch wrapped data anyways for security reasons
+                config_expired = True
+                unwrap_expected_creation_path = None
+                unwrap_client = None
 
         # This is used to augment some vault responses with data fetched by the master
         # e.g. secret_id_num_uses
@@ -1121,6 +1138,7 @@ def parse_config(
             "refresh_pillar": None,
         },
         "server": {
+            "url_alts": [],
             "namespace": None,
             "verify": None,
         },
@@ -1159,6 +1177,20 @@ def parse_config(
         )
     if opts is not None and "vault" in opts:
         local_config = opts["vault"]
+        # Respect locally configured url parameter, if url in url_alts
+        if local_url := (local_config.get("url") or local_config.get("server", {}).get("url")):
+            if merged["server"].get("url") == local_url:
+                pass
+            elif local_url in merged["server"]["url_alts"]:
+                merged["server"]["url"] = local_url
+            else:
+                log.warning(
+                    "Locally configured Vault server URL in vault:server:url is not allowed by master. "
+                    "Add it to the master's vault:server:url_alts. "
+                    "Offending URL: `%s` Allowed: %s",
+                    local_url,
+                    ",".join(merged["server"]["url_alts"] or [merged["server"].get("url", "")]),
+                )
         # Respect locally configured verify parameter
         if local_config.get("verify", NOT_SET) != NOT_SET:
             merged["server"]["verify"] = local_config["verify"]
@@ -1171,6 +1203,8 @@ def parse_config(
         if local_config.get("client"):
             merged["client"] = {**merged["client"], **local_config["client"]}
 
+    if "url" in merged["server"] and merged["server"]["url"] not in merged["server"]["url_alts"]:
+        merged["server"]["url_alts"] = [merged["server"]["url"]] + merged["server"]["url_alts"]
     if not validate:
         return merged
 

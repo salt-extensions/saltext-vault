@@ -245,7 +245,7 @@ def generate_new_token(minion_id, signature, impersonated_by_master=False, issue
             return {"expire_cache": True, "error": "Master does not issue tokens."}
 
         ret = {
-            "server": _config("server"),
+            "server": _get_server_config(),
             "auth": {},
         }
 
@@ -339,7 +339,7 @@ def get_config(
             },
             "cache": _config("cache"),
             "client": _config("client"),
-            "server": _config("server"),
+            "server": _get_server_config(),
             "wrap_info_nested": [],
         }
         wrap = _config("issue:wrap")
@@ -404,7 +404,7 @@ def get_role_id(minion_id, signature, impersonated_by_master=False, issue_params
             return {"expire_cache": True, "error": "Master does not issue AppRoles."}
 
         ret = {
-            "server": _config("server"),
+            "server": _get_server_config(),
             "data": {},
         }
 
@@ -522,7 +522,7 @@ def generate_secret_id(minion_id, signature, impersonated_by_master=False, issue
             }
 
         ret = {
-            "server": _config("server"),
+            "server": _get_server_config(),
             "data": {},
         }
 
@@ -1284,6 +1284,14 @@ def _get_master_client():
     # minions since the opts dict cannot be used to distinguish master from
     # minion in that case
     return vault.get_authd_client(__opts__, __context__, force_local=True)
+
+
+def _get_server_config() -> dict[str, typing.Any]:
+    server = _config("server")
+    if "url_alts" in server and (not server["url_alts"] or server["url_alts"] == [server["url"]]):
+        # Ensure backwards-compatibility with minions running older releases.
+        server.pop("url_alts")
+    return server
 
 
 def _revoke_token(token=None, accessor=None):

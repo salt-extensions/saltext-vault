@@ -114,6 +114,7 @@ def config_defaults():
             "refresh_pillar": None,
         },
         "server": {
+            "url_alts": [],
             "namespace": None,
             "verify": None,
         },
@@ -124,6 +125,7 @@ def config_defaults():
 def server_config(request):
     conf = {
         "url": "http://127.0.0.1:8200",
+        "url_alts": ["http://127.0.0.1:8200"],
         "namespace": None,
         "verify": None,
     }
