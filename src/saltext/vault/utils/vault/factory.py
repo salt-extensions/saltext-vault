@@ -1170,6 +1170,9 @@ def parse_config(
         # and client config
         if local_config.get("client"):
             merged["client"] = {**merged["client"], **local_config["client"]}
+        # also server to connect to
+        if local_config.get("server", {}).get("url", NOT_SET) != NOT_SET:
+            merged["server"]["url"] = local_config["server"]["url"]
 
     if not validate:
         return merged
