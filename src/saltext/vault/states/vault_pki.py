@@ -12,11 +12,11 @@ import logging
 import os
 from typing import TYPE_CHECKING
 
-import salt.utils.files
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 
 from saltext.vault.utils.vault.helpers import filter_state_internal_kwargs
+from saltext.vault.utils.vault.helpers import safe_atomic_write
 from saltext.vault.utils.vault.helpers import timestring_map
 from saltext.vault.utils.vault.pki import check_cert_for_changes
 
@@ -324,7 +324,12 @@ def certificate_managed(
                 _add_sub_state_run(ret, file_managed_ret)
                 if not _check_file_ret(file_managed_ret, ret, file_exists):
                     return ret
-                _safe_atomic_write(name, base64.b64decode(cert), file_args.get("backup", ""))
+                safe_atomic_write(
+                    name,
+                    base64.b64decode(cert),
+                    __salt__["config.backup_mode"](file_args.get("backup", "")),
+                    __opts__["cachedir"],
+                )
 
         if not changes or encoding in ["pem", "pkcs7_pem"]:
             replace = bool(encoding in ["pem", "pkcs7_pem"] and changes)
@@ -521,20 +526,6 @@ def _file_managed(name, test=None, **kwargs):
     test = test or __opts__["test"]
     res = __salt__["state.single"]("file.managed", name, test=test, **kwargs)
     return res[next(iter(res))]
-
-
-def _safe_atomic_write(dst, data, backup):
-    """
-    Create a temporary file with only user r/w perms and atomically
-    copy it to the destination, honoring ``backup``.
-    """
-    tmp = salt.utils.files.mkstemp(prefix=salt.utils.files.TEMPFILE_PREFIX)
-    with salt.utils.files.fopen(tmp, "wb") as tmp_:
-        tmp_.write(data)
-    salt.utils.files.copyfile(
-        tmp, dst, __salt__["config.backup_mode"](backup), __opts__["cachedir"]
-    )
-    salt.utils.files.safe_rm(tmp)
 
 
 def _check_file_ret(fret, ret, current):

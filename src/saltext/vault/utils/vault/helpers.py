@@ -2,12 +2,17 @@
 Several utility functions for the Vault modules
 """
 
+import base64
 import datetime
 import logging
 import re
 import string
 import typing
+from collections.abc import Mapping
+from types import EllipsisType
 
+import salt.utils.atomicfile
+import salt.utils.files
 from salt.exceptions import InvalidConfigError
 from salt.exceptions import SaltInvocationError
 from salt.state import STATE_INTERNAL_KEYWORDS as _STATE_INTERNAL_KEYWORDS
@@ -239,3 +244,125 @@ def deserialize_csl(data: str | list[str] | None) -> list[str] | None:
     except TypeError:
         pass
     raise SaltInvocationError(f"Expected a comma-separated string list or a list, got {type(data)}")
+
+
+K = typing.TypeVar("K")
+V = typing.TypeVar("V")
+
+
+@typing.overload
+def filter_unset(
+    data: Mapping[K, V | None],
+    unset: None = None,
+) -> dict[K, V]: ...
+
+
+@typing.overload
+def filter_unset(
+    data: Mapping[K, V | EllipsisType],
+    unset: EllipsisType,
+) -> dict[K, V]: ...
+
+
+@typing.overload
+def filter_unset(
+    data: Mapping[K, V],
+    unset: object,
+) -> dict[K, V]: ...
+
+
+def filter_unset(
+    data: Mapping[K, V],
+    unset: object = None,
+) -> dict[K, object]:
+    return {k: v for k, v in data.items() if v is not unset}
+
+
+def try_base64(data: str | bytes) -> tuple[bytes, bool]:
+    """
+    Given a string or bytes input, check if it is valid Base64
+    and decode it if so. Otherwise, return the raw bytes.
+
+    Returns a tuple of output, was_base64.
+    """
+    if isinstance(data, str):
+        try:
+            data = data.encode("ascii", "strict")
+        except UnicodeEncodeError:
+            return data.encode("utf-8"), False  # type: ignore
+    elif isinstance(data, bytes):
+        pass
+    else:
+        raise TypeError("try_base64 only works with strings and bytes")  # pragma: no cover
+    try:
+        decoded = base64.b64decode(data)
+        if base64.b64encode(decoded) == data.replace(b"\n", b""):
+            return decoded, True
+        return data, False
+    except (TypeError, ValueError):
+        return data, False
+
+
+def x_of(*, _min=1, _max=1, _predicate=bool, **kwargs):
+    num_set = sum(map(_predicate, kwargs.values()))
+    if _min <= num_set <= _max:
+        return
+
+    num_words = ("zero", "one", "two", "three", "four", "five", "six")
+
+    def join(params, char=",", last="or"):
+        ret = (char + " ").join(f"`{param}`" for param in params)
+        if last and len(params) > 1:
+            ret = f" {last}".join(ret.rsplit(char, maxsplit=1))
+        return ret
+
+    if _min == _max == 1:
+        if num_set == 0:
+            msg = "Either " + join(kwargs) + " is required"
+        elif len(kwargs) == 2:
+            msg = "Either " + join(kwargs) + " is required (exclusive)"
+        else:
+            msg = "Only specify either " + join(kwargs) + " (exclusive)"
+    elif num_set < _min:
+        msg = f"At least {num_words[_min]} of " + join(kwargs) + " must be passed"
+    else:
+        msg = f"At most {num_words[_max]} of " + join(kwargs) + " can be specified"
+    raise SaltInvocationError(msg)
+
+
+def one_of(*, _predicate=bool, **kwargs):
+    return x_of(_predicate=_predicate, **kwargs)
+
+
+try:
+    safe_atomic_write = salt.utils.atomicfile.safe_atomic_write
+except AttributeError:
+    # Polyfill for <3008
+
+    def safe_atomic_write(dst, data, backup_mode="", cachedir=""):
+        """
+        Create a temporary file with only user r/w perms, write the
+        data and atomically copy it to the destination. Supports the
+        Salt file backup mechanism.
+
+        dst
+            The path to write to.
+
+        data
+            String or bytes of data to write.
+
+        backup_mode
+            Optional parameter to override the configured
+            :ref:`backup mode <file-state-backups>` explicitly.
+
+        cachedir
+            Optional parameter to override the configured
+            cachedir explicitly. Backups are written into
+            a subdirectory of this path called ``file_backup``.
+        """
+        mode = "wb" if isinstance(data, bytes) else "w"
+        tmp = salt.utils.files.mkstemp(prefix=salt.utils.files.TEMPFILE_PREFIX)
+        with salt.utils.files.fopen(tmp, mode) as tmp_:
+            tmp_.write(data)
+        salt.utils.files.copyfile(tmp, dst, backup_mode, cachedir)
+        salt.utils.files.safe_rm(tmp)

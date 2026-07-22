@@ -12,6 +12,7 @@ _____________
     vault
     vault_approle
     vault_db
+    vault_gpg
     vault_pki
     vault_plugin
     vault_secret
