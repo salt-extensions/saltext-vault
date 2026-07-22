@@ -80,6 +80,7 @@ class WrapperFuncProxy:
         self.mod = mod
         self.salt_ssh_cli = salt_ssh_cli
         self.exc = exc
+        self.func = None
 
     def __getattr__(self, attr):
         self.func = attr
@@ -99,6 +100,9 @@ class WrapperFuncProxy:
             raise self.exc(ret.data.split(":", maxsplit=1)[1].lstrip())
         assert ret.returncode == 0
         return ret.data
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}<{self.mod}.{self.func or '*'}>"
 
 
 class ExtendedLoaders(Loaders):

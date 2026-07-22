@@ -17,6 +17,7 @@ Currently, you can
 * manage and issue credentials/certificates via the SSH secret engine
 * manage and issue credentials via the AppRole auth backend
 * manage Vault plugins and plugin versions
+* manage GPG keys, sign, decrypt and verify messages
 * write your own modules on top of the provided utilities
 
 There's more coming though.

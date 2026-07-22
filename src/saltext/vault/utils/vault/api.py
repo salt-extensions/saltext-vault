@@ -9,6 +9,7 @@ from collections.abc import Sequence
 import salt.utils.json
 
 from saltext.vault.utils.vault import client as vclient
+from saltext.vault.utils.vault import helpers
 from saltext.vault.utils.vault import leases
 from saltext.vault.utils.vault.exceptions import VaultInvocationError
 from saltext.vault.utils.vault.exceptions import VaultNotFoundError
@@ -173,7 +174,7 @@ class AppRoleApi:
             token_bound_cidrs = [token_bound_cidrs]
 
         endpoint = f"auth/{mount}/role/{name}"
-        payload = _filter_none(
+        payload = helpers.filter_unset(
             {
                 "bind_secret_id": bind_secret_id,
                 "secret_id_bound_cidrs": (
@@ -334,7 +335,7 @@ class AppRoleApi:
         endpoint = f"auth/{mount}/role/{name}/secret-id"
         if metadata is not None:
             metadata = salt.utils.json.dumps(dict(metadata))
-        payload = _filter_none(
+        payload = helpers.filter_unset(
             {
                 "metadata": metadata,
                 "cidr_list": list(cidr_list) if cidr_list is not None else None,
@@ -536,7 +537,7 @@ class IdentityApi:
             tokens cannot be used, but are not revoked. Defaults to false.
         """
         endpoint = f"identity/entity/name/{name}"
-        payload = _filter_none(
+        payload = helpers.filter_unset(
             {
                 "metadata": dict(metadata) if metadata is not None else None,
                 "policies": policies,
@@ -605,9 +606,3 @@ class IdentityApi:
     def _lookup_mount_accessor(self, mount: str) -> str:
         endpoint = f"sys/auth/{mount}"
         return self.client.get(endpoint)["data"]["accessor"]
-
-
-def _filter_none(
-    data: Mapping[typing.Any, typing.Any], unset: typing.Literal[False] | None = None
-) -> dict[typing.Any, typing.Any]:
-    return {k: v for k, v in data.items() if v is not unset}

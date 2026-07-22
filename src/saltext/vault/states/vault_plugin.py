@@ -32,7 +32,7 @@ log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 __virtualname__ = "vault_plugin"
 
 
-def __virtual():
+def __virtual__():
     return __virtualname__
 
 

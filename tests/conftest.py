@@ -486,6 +486,28 @@ def container_host_ref():
     return os.environ.get("CONTAINER_HOST_REF", "172.17.0.1")
 
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "requires_salt(major, minor?): mark test to only run on Salt versions equal to or higher than <major>.<minor or 0>",
+    )
+
+
+def pytest_runtest_setup(item):
+    requires_salt_marker = item.get_closest_marker("requires_salt")
+    if requires_salt_marker is not None:
+        if len(requires_salt_marker.args) not in (1, 2) or requires_salt_marker.kwargs:
+            raise pytest.UsageError(
+                "The 'requires_salt' marker only accepts one or two positional arguments"
+            )
+        try:
+            major, minor = int(requires_salt_marker.args[0]), int(requires_salt_marker.args[1])
+        except IndexError:
+            major, minor = int(requires_salt_marker.args[0]), 0
+        if (major, minor) > SALT_VERSION:
+            pytest.skip(reason=f"Requires at least Salt {major}.{minor}")
+
+
 def pytest_addoption(parser):
     test_selection_group = parser.getgroup("Tests Selection")
     test_selection_group.addoption(
