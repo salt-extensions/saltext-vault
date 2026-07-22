@@ -4,6 +4,22 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## 1.8.0 (2026-07-22)
+
+
+### Fixed
+
+- Fixed KV lookup failures in very specific situations when a KV v1 mount has the full name of a KV v2 mount as a prefix
+- Fixed `sdb.set` with SDB module and single-use tokens issued by the master when the `patch` option was enabled in the profile
+- Fixed clearing session cache not invalidating active client in context, which could reintroduce stale data into permanent cache or cause unexpected permission issues during long-running contexts
+
+
+### Added
+
+- Added `vault_approle` execution, state and wrapper modules to manage and utilize the AppRole auth backend
+- Added `vault_gpg` execution, state and wrapper modules to interface with the custom plugin `[LeSuisse/vault-gpg-plugin](https://github.com/LeSuisse/vault-gpg-plugin/)`. It's now possible to generate, manage, import and export GPG keys and sign, decrypt and verify data.
+- Added `vault_plugin` execution, state and wrapper modules to manage plugins and pinned versions
+
 ## 1.7.0 (2026-07-08)
 
 
