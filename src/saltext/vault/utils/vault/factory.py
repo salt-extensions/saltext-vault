@@ -521,6 +521,11 @@ def _get_connection_config(cbank, opts, context, force_local=False, pre_flush=Fa
             opts,
             issue_params=issue_params or None,
             config_only=update,
+            unwrap_expected_creation_path=lambda config, key: (
+                vclient._get_expected_creation_path(key.split(":")[-1], config)
+                if (key in ("auth:role_id", "auth:token"))
+                else None
+            ),
         )
     except VaultConfigExpired as err:
         # Make sure to still work with old peer_run configuration
@@ -788,11 +793,19 @@ def _query_master(
                     wrapped = result
                 if not wrapped or "wrap_info" not in wrapped:
                     continue
+
+                expected_creation_path = None
+                if unwrap_expected_creation_path:
+                    if isinstance(unwrap_expected_creation_path, str):
+                        expected_creation_path = unwrap_expected_creation_path
+                    else:
+                        expected_creation_path = unwrap_expected_creation_path(result, key)
+
                 wrapped_response = vleases.VaultWrappedResponse(**wrapped["wrap_info"])
                 try:
                     unwrapped_response = unwrap_client.unwrap(
                         wrapped_response,
-                        expected_creation_path=unwrap_expected_creation_path,
+                        expected_creation_path=expected_creation_path,
                     )
                 except VaultUnwrapException as err:
                     err.event_data.update({"func": f"vault.{func}"})
