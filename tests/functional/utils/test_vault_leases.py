@@ -43,6 +43,7 @@ def lease(request):
         "data": {"username": "u", "password": "p"},
         "lease_duration": 3600,
         "expire_time": round(time.time()) + (600 if valid else -600),
+        "renewable": True,
     }
     defaults.update(overrides)
     return vleases.VaultLease(**defaults)  # type: ignore

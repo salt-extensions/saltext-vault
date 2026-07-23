@@ -707,6 +707,13 @@ def get_creds(
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
+    if static:
+        # Static role credentials are not associated with a lease and are
+        # rotated server-side on a schedule. The response's data.ttl reports
+        # the remaining time until the next scheduled rotation, which limits
+        # the validity of the returned credentials.
+        res["lease_duration"] = res["data"].get("ttl", 0)
+
     lease = vault.VaultLease(
         min_ttl=typing.cast(int | str | None, valid_for if valid_for is not NOT_SET else None),
         renew_increment=typing.cast(
