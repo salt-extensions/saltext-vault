@@ -105,19 +105,22 @@ def auth_info():
     info = {}
     info["token"] = client.get("auth/token/lookup-self")["data"]
     if _config("auth:method") == "approle":
-        try:
-            info["secret_id"] = _get_approle_api().read_secret_id(
-                _config("auth:approle_name"),
-                mount=_config("auth:approle_mount"),
-                secret_id=str(client.auth.approle.secret_id),
-            )
-        except vault.VaultPermissionDeniedError:
-            info["secret_id"] = (
-                "Permission denied, allow API `create`, `update` access to "
-                f"`auth/{_config('auth:approle_mount')}"
-                f"/role/{_config('auth:approle_name')}/secret-id/lookup` "
-                "to view info"
-            )
+        if client.auth.approle.secret_id:
+            try:
+                info["secret_id"] = _get_approle_api().read_secret_id(
+                    _config("auth:approle_name"),
+                    mount=_config("auth:approle_mount"),
+                    secret_id=str(client.auth.approle.secret_id),
+                )
+            except vault.VaultPermissionDeniedError:
+                info["secret_id"] = (
+                    "Permission denied, allow API `create`, `update` access to "
+                    f"`auth/{_config('auth:approle_mount')}"
+                    f"/role/{_config('auth:approle_name')}/secret-id/lookup` "
+                    "to view info"
+                )
+        else:
+            info["secret_id"] = None
     return info
 
 
@@ -608,7 +611,7 @@ def show_policies(minion_id, refresh_pillar=NOT_SET, expire=None):
         meta = _lookup_approle(minion_id)
         if not meta:
             raise SaltRunnerError(
-                f"AppRole for minion `{minion_id}`has not been created yet. "
+                f"AppRole for minion `{minion_id}` has not been created yet. "
                 "You can use `vault.sync_approles` to force its creation."
             )
         return meta["token_policies"]
