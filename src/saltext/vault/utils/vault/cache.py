@@ -173,7 +173,7 @@ class CommonCache(ABC):
         # also remove sub-banks from context to mimic cache behavior
         if ckey is None:
             for bank in list(self.context):
-                if bank.startswith(self.cbank):
+                if bank.startswith(self.cbank + "/"):
                     self.context.pop(bank)
 
     def _list(self) -> set[str]:
