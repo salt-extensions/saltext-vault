@@ -746,6 +746,8 @@ def list_revoked_certificates(mount="pki"):
 
     try:
         return vault.query("LIST", endpoint, __opts__, __context__)["data"]["keys"]
+    except vault.VaultNotFoundError:
+        return []
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
@@ -769,6 +771,8 @@ def list_certificates(mount="pki"):
 
     try:
         return vault.query("LIST", endpoint, __opts__, __context__)["data"]["keys"]
+    except vault.VaultNotFoundError:
+        return []
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 

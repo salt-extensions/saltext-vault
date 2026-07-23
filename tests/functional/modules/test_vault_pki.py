@@ -10,6 +10,8 @@ from salt.utils.x509 import load_cert
 
 from saltext.vault.utils.vault.pki import dec2hex
 from tests.support.vault import vault_delete
+from tests.support.vault import vault_disable_secret_engine
+from tests.support.vault import vault_enable_secret_engine
 from tests.support.vault import vault_list
 from tests.support.vault import vault_list_detailed
 from tests.support.vault import vault_read
@@ -497,6 +499,33 @@ def test_list_certificates(vault_pki, private_key):
     all_certs = [serial.upper() for serial in vault_pki.list_certificates()]
 
     assert serial in all_certs
+
+
+@pytest.fixture
+def empty_pki_mount():
+    # The module-scoped pki mount retains issued certificates,
+    # so use a separate mount to test empty listing.
+    assert vault_enable_secret_engine("pki", "pki-empty")
+    try:
+        yield "pki-empty"
+    finally:
+        vault_disable_secret_engine("pki-empty")
+
+
+def test_list_certificates_empty(vault_pki, empty_pki_mount):
+    """
+    A mount without any issued certificates should yield an empty list,
+    not a not-found error.
+    """
+    assert vault_pki.list_certificates(mount=empty_pki_mount) == []
+
+
+def test_list_revoked_certificates_empty(vault_pki, empty_pki_mount):
+    """
+    A mount without any revoked certificates should yield an empty list,
+    not a not-found error.
+    """
+    assert vault_pki.list_revoked_certificates(mount=empty_pki_mount) == []
 
 
 @pytest.mark.usefixtures("issuers_setup")
