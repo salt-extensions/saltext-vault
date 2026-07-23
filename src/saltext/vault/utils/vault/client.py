@@ -537,6 +537,7 @@ class VaultClient:
         except TypeError:
             pass
 
+        # Not thread-safe!
         self._vault_adapter.max_retries.safe_to_retry = safe_to_retry
 
         try:
@@ -907,6 +908,37 @@ class AuthenticatedVaultClient(VaultClient):
                 raise
             return False
         return True
+
+    def unwrap(
+        self,
+        wrapped: leases.VaultWrappedResponse | str,
+        expected_creation_path: Sequence[str] | str | None = None,
+    ) -> typing.Any:
+        """
+        Unwraps the data associated with a wrapping token.
+
+        wrapped
+            Wrapping token to unwrap
+
+        expected_creation_path
+            Regex expression or list of expressions that should fully match the
+            wrapping token creation path. At least one match is required.
+            Defaults to None, which skips the check.
+
+            .. note::
+                This check prevents tampering with wrapping tokens, which are
+                valid for one request only. Usually, if an attacker sniffs a wrapping
+                token, there are two unwrapping requests, causing an audit warning.
+                If the attacker can issue a new wrapping token and insert it into the
+                response instead, this warning would be silenced. Assuming they do not
+                possess the permissions to issue a wrapping token from the correct
+                endpoint, checking the creation path makes this kind of attack obvious.
+        """
+        res = super().unwrap(wrapped, expected_creation_path=expected_creation_path)
+        # Ensure unwrapping with an authenticated client deducts a token use.
+        # A token use is not deducted if the request fails.
+        self.auth.used()
+        return res
 
     def token_entity_id(self) -> str | typing.Literal[False]:
         """
