@@ -20,6 +20,7 @@ from saltfactories.utils import random_string
 from saltext.vault import PACKAGE_ROOT
 from tests.support.files_mapping import CHANGED_FILES_MAP
 from tests.support.files_mapping import REPO_ROOT
+from tests.support.files_mapping import TESTS_DIR_REL
 from tests.support.helpers import PatchedEnviron
 from tests.support.vault import vault_delete_policy
 from tests.support.vault import vault_disable_auth_method
@@ -518,6 +519,14 @@ def pytest_addoption(parser):
         help=("Only run tests that are likely to be affected by changed files"),
     )
 
+    test_selection_group.addoption(
+        "--changed-tests",
+        dest="changed_tests",
+        action="store_true",
+        default=False,
+        help=("Only run modified test files"),
+    )
+
     custom_exit = parser.getgroup("Custom Exit Code")
     custom_exit.addoption(
         "--allow-empty-runs",
@@ -530,12 +539,74 @@ def pytest_addoption(parser):
 @pytest.hookimpl(trylast=True, wrapper=True)
 def pytest_collection_modifyitems(config, items):
     yield
-    if not config.getoption("--changed-files"):
-        return
+    run_changed_files(config, items)
+    run_changed_tests(config, items)
 
+
+def run_changed_tests(config, items):
+    if not config.getoption("--changed-tests"):
+        return
     terminal_reporter = config.pluginmanager.getplugin("terminalreporter")
     terminal_reporter.ensure_newline()
-    terminal_reporter.section("Changed Files Test Selection (--changed)", sep=">")
+    terminal_reporter.section("Changed Tests Selection (--changed-tests)", sep=">")
+
+    changed = _get_git_modified(terminal_reporter)
+    if changed is None:
+        return
+
+    selected = []
+    deselected = []
+
+    for item in items:
+        itempath = Path(str(item.fspath)).resolve().relative_to(REPO_ROOT)
+        if (
+            str(itempath) in changed
+            and itempath.is_relative_to(TESTS_DIR_REL)
+            and itempath.suffix == ".py"
+            and itempath.stem != "conftest"
+        ):
+            selected.append(item)
+        else:
+            deselected.append(item)
+
+    items[:] = selected
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+    terminal_reporter.section("Changed Tests Selection End (--changed-tests)", sep="<")
+
+
+def _get_git_modified(terminal_reporter):
+    try:
+        modified = subprocess.check_output(["git", "diff", "-z", "--name-only"], text=True)
+    except subprocess.CalledProcessError as err:
+        if terminal_reporter:
+            terminal_reporter.write_line(
+                f"Failed to get changed files from git: {err}", bold=True, red=True
+            )
+            terminal_reporter.write_line(err.stderr)
+        return
+    try:
+        created = subprocess.check_output(
+            ["git", "ls-files", "-z", "--others", "--exclude-standard"], text=True
+        )
+    except subprocess.CalledProcessError as err:
+        if terminal_reporter:
+            terminal_reporter.write_line(
+                f"Failed to get unstaged files from git: {err}", bold=True, red=True
+            )
+            terminal_reporter.write_line(err.stderr)
+        return
+    return (modified.rstrip("\0").split("\0") if modified else []) + (
+        created.rstrip("\0").split("\0") if created else []
+    )
+
+
+def run_changed_files(config, items):
+    if not config.getoption("--changed-files"):
+        return
+    terminal_reporter = config.pluginmanager.getplugin("terminalreporter")
+    terminal_reporter.ensure_newline()
+    terminal_reporter.section("Changed Files Test Selection (--changed-files)", sep=">")
 
     if os.environ.get("CI"):
         if changed_files := os.environ.get("CHANGED_FILES"):
@@ -571,27 +642,9 @@ def pytest_collection_modifyitems(config, items):
                 )
                 return
     else:
-        try:
-            modified = subprocess.check_output(["git", "diff", "-z", "--name-only"], text=True)
-        except subprocess.CalledProcessError as err:
-            terminal_reporter.write_line(
-                f"Failed to get changed files from git: {err}", bold=True, red=True
-            )
-            terminal_reporter.write_line(err.stderr)
+        changed = _get_git_modified(terminal_reporter)
+        if changed is None:
             return
-        try:
-            created = subprocess.check_output(
-                ["git", "ls-files", "-z", "--others", "--exclude-standard"], text=True
-            )
-        except subprocess.CalledProcessError as err:
-            terminal_reporter.write_line(
-                f"Failed to get unstaged files from git: {err}", bold=True, red=True
-            )
-            terminal_reporter.write_line(err.stderr)
-            return
-        changed = (modified.rstrip("\0").split("\0") if modified else []) + (
-            created.rstrip("\0").split("\0") if created else []
-        )
 
     selected_test_globs = set()
 
@@ -643,7 +696,7 @@ def pytest_collection_modifyitems(config, items):
 
     else:
         terminal_reporter.write_line("Nothing was deselected")
-    terminal_reporter.section("Changed Files Test Selection End (--changed)", sep="<")
+    terminal_reporter.section("Changed Files Test Selection End (--changed-files)", sep="<")
 
 
 @pytest.hookimpl(trylast=True)
