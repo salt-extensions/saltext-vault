@@ -36,6 +36,7 @@ def test_vault_client_request_raw_url(endpoint, client, req):
         expected_url,
         headers=ANY,
         json=None,
+        params=None,
     )
 
 
@@ -51,6 +52,7 @@ def test_vault_client_request_raw_kwargs_passthrough(client, req):
         ANY,
         headers=ANY,
         json=ANY,
+        params=ANY,
         allow_redirects=False,
         cert="/etc/certs/client.pem",
     )
