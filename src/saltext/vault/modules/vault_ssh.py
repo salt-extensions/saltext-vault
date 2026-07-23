@@ -1,8 +1,8 @@
 """
-.. versionadded:: 1.2.0
-
 Manage the Vault (or OpenBao) SSH secret engine, request SSH credentials
 and certificates.
+
+.. versionadded:: 1.2.0
 
 .. versionadded:: 1.6.0
     You can specify this module as the ``backend`` parameter to the ``ssh_pki.certificate_managed``
@@ -1260,7 +1260,7 @@ def get_signing_policy(signing_policy, ca_server=None):
             allowed_domains = ["*"]
             # TODO: Render basic templates.
         else:
-            allowed_domains = role.get("allowed_domains", "").split(",")
+            allowed_domains = deserialize_csl(role.get("allowed_domains", ""))
         policy["allowed_valid_principals"].extend(allowed_domains)
         host_type = True
 
@@ -1271,7 +1271,7 @@ def get_signing_policy(signing_policy, ca_server=None):
             allowed_users = ["*"]
             # TODO: Render basic templates via looking up metadata
         else:
-            allowed_users = role.get("allowed_users", "").split(",")
+            allowed_users = deserialize_csl(role.get("allowed_users", ""))
         policy["allowed_valid_principals"].extend(allowed_users)
         user_type = True
 
@@ -1283,9 +1283,11 @@ def get_signing_policy(signing_policy, ca_server=None):
         policy["cert_type"] = "user" if user_type else "host"
 
     # allowed_critical_options defaults to allowing any
-    policy["allowed_critical_options"] = (role.get("allowed_critical_options") or "*").split(",")
+    policy["allowed_critical_options"] = deserialize_csl(
+        role.get("allowed_critical_options") or "*"
+    )
     # allowed_extensions_options defaults to denying all
-    policy["allowed_extensions"] = (role.get("allowed_extensions") or "").split(",")
+    policy["allowed_extensions"] = deserialize_csl(role.get("allowed_extensions") or "")
     policy["default_critical_options"] = {
         k: v or True for k, v in role.get("default_critical_options", {}).items()
     }

@@ -10,6 +10,8 @@ from salt.utils.x509 import load_cert
 
 from saltext.vault.utils.vault.pki import dec2hex
 from tests.support.vault import vault_delete
+from tests.support.vault import vault_disable_secret_engine
+from tests.support.vault import vault_enable_secret_engine
 from tests.support.vault import vault_list
 from tests.support.vault import vault_list_detailed
 from tests.support.vault import vault_read
@@ -216,8 +218,8 @@ def test_issue_certificate(vault_pki):
     assert "test.example.com" in dns_sans
     assert any(str(ip) == "1.2.3.4" for ip in ip_sans)
     assert any(str(ip) == "5.6.7.8" for ip in ip_sans)
-    assert any(uri == "https://foo.bar" for uri in uri_sans)
-    assert any(uri == "https://bar.baz" for uri in uri_sans)
+    assert "https://foo.bar" in uri_sans
+    assert "https://bar.baz" in uri_sans
     assert any(
         other.type_id.dotted_string == "1.2.3.4" and other.value == b"\x0c\x0fsome identifier"
         for other in other_sans
@@ -226,6 +228,52 @@ def test_issue_certificate(vault_pki):
         other.type_id.dotted_string == "2.3.4.5" and other.value == b"\x0c\x15some other identifier"
         for other in other_sans
     )
+
+
+@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.parametrize("value_is_list", (False, True))
+def test_issue_certificate_with_dict_alt_names(vault_pki, value_is_list):
+    alt_names = {
+        "DNS": "test2.example.com",
+        "IP": "1.2.3.4",
+        "URI": "https://foo.bar",
+        "1.2.3.4": "some identifier",
+    }
+    if value_is_list:
+        alt_names["DNS"] = [alt_names["DNS"], "test3.example.com"]
+        alt_names["IP"] = [alt_names["IP"], "2.3.4.5"]
+        alt_names["URI"] = [alt_names["URI"], "https://bar.baz"]
+        alt_names["1.2.3.4"] = [alt_names["1.2.3.4"], "some other identifier"]
+    ret = vault_pki.issue_certificate(
+        role_name="testrole",
+        common_name="test.example.com",
+        ttl="2h",
+        alt_names=alt_names,
+    )
+    assert "certificate" in ret
+    certificate = load_cert(ret["certificate"])
+    san = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+    dns_sans = san.value.get_values_for_type(x509.DNSName)
+    ip_sans = san.value.get_values_for_type(x509.IPAddress)
+    uri_sans = san.value.get_values_for_type(x509.UniformResourceIdentifier)
+    other_sans = san.value.get_values_for_type(x509.OtherName)
+    assert "test2.example.com" in dns_sans
+    assert any(str(ip) == "1.2.3.4" for ip in ip_sans)
+    assert "https://foo.bar" in uri_sans
+    assert any(
+        other.type_id.dotted_string == "1.2.3.4" and other.value == b"\x0c\x0fsome identifier"
+        for other in other_sans
+    )
+    if value_is_list:
+        assert "test3.example.com" in dns_sans
+        assert any(str(ip) == "2.3.4.5" for ip in ip_sans)
+        assert "https://bar.baz" in uri_sans
+        assert any(
+            other.type_id.dotted_string == "1.2.3.4"
+            and other.value == b"\x0c\x15some other identifier"
+            for other in other_sans
+        )
 
 
 @pytest.mark.usefixtures("issuers_setup")
@@ -252,6 +300,54 @@ def test_sign_certificate_with_private_key(vault_pki, private_key):
     assert certificate.not_valid_after_utc - run_time > timedelta(hours=1)
     assert "test2.example.com" in dns_sans
     assert "test.example.com" in dns_sans
+
+
+@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.parametrize("sans_as_list", (False, True))
+def test_sign_certificate_with_dict_alt_names(vault_pki, private_key, sans_as_list):
+    alt_names = {
+        "DNS": "test2.example.com",
+        "IP": "1.2.3.4",
+        "URI": "https://foo.bar",
+        # "1.2.3.4": "some identifier",  # otherName is currently not supported by x509_v2
+    }
+    if sans_as_list:
+        alt_names["DNS"] = [alt_names["DNS"], "test3.example.com"]
+        alt_names["IP"] = [alt_names["IP"], "2.3.4.5"]
+        alt_names["URI"] = [alt_names["URI"], "https://bar.baz"]
+        # alt_names["1.2.3.4"] = [alt_names["1.2.3.4"], "some other identifier"]
+    ret = vault_pki.sign_certificate(
+        "testrole",
+        common_name="test.example.com",
+        private_key=private_key,
+        ttl="2h",
+        alt_names=alt_names,
+    )
+    assert "certificate" in ret
+    certificate = load_cert(ret["certificate"])
+    san = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+    dns_sans = san.value.get_values_for_type(x509.DNSName)
+    ip_sans = san.value.get_values_for_type(x509.IPAddress)
+    uri_sans = san.value.get_values_for_type(x509.UniformResourceIdentifier)
+    # other_sans = san.value.get_values_for_type(x509.OtherName)
+    assert "test2.example.com" in dns_sans
+    assert "test.example.com" in dns_sans
+    assert any(str(ip) == "1.2.3.4" for ip in ip_sans)
+    assert "https://foo.bar" in uri_sans
+    # assert any(
+    #     other.type_id.dotted_string == "1.2.3.4" and other.value == b"\x0c\x0fsome identifier"
+    #     for other in other_sans
+    # )
+    if sans_as_list:
+        assert "test3.example.com" in dns_sans
+        assert any(str(ip) == "2.3.4.5" for ip in ip_sans)
+        assert "https://bar.baz" in uri_sans
+        # assert any(
+        #     other.type_id.dotted_string == "1.2.3.4"
+        #     and other.value == b"\x0c\x15some other identifier"
+        #     for other in other_sans
+        # )
 
 
 @pytest.mark.usefixtures("issuers_setup")
@@ -497,6 +593,33 @@ def test_list_certificates(vault_pki, private_key):
     all_certs = [serial.upper() for serial in vault_pki.list_certificates()]
 
     assert serial in all_certs
+
+
+@pytest.fixture
+def empty_pki_mount():
+    # The module-scoped pki mount retains issued certificates,
+    # so use a separate mount to test empty listing.
+    assert vault_enable_secret_engine("pki", "pki-empty")
+    try:
+        yield "pki-empty"
+    finally:
+        vault_disable_secret_engine("pki-empty")
+
+
+def test_list_certificates_empty(vault_pki, empty_pki_mount):
+    """
+    A mount without any issued certificates should yield an empty list,
+    not a not-found error.
+    """
+    assert vault_pki.list_certificates(mount=empty_pki_mount) == []
+
+
+def test_list_revoked_certificates_empty(vault_pki, empty_pki_mount):
+    """
+    A mount without any revoked certificates should yield an empty list,
+    not a not-found error.
+    """
+    assert vault_pki.list_revoked_certificates(mount=empty_pki_mount) == []
 
 
 @pytest.mark.usefixtures("issuers_setup")

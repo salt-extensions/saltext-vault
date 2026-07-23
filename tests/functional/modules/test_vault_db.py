@@ -464,6 +464,68 @@ def test_renew_cached(vault_db):
 
 
 @pytest.mark.usefixtures("role_static_setup")
+def test_get_creds_static_cached_refreshed_after_rotation(vault_db):
+    """
+    Static role credentials are only valid until the next scheduled rotation
+    (reported in the response's ``data.ttl``, bounded by ``rotation_period``).
+    Ensure cached static credentials are not reported as valid indefinitely:
+    when they cannot satisfy ``valid_for``, they must be refetched from the
+    server instead of being served stale.
+    """
+    ret = vault_db.get_creds("teststaticrole", static=True, cache=True)
+    assert ret
+    assert "password" in ret
+    # Rotate out-of-band, invalidating the cached password server-side.
+    vault_write("database/rotate-role/teststaticrole")
+    # The cached credentials can never be valid longer than the rotation
+    # period (86400 here), so requesting a higher validity must force a
+    # refetch, which picks up the rotated password.
+    ret_new = vault_db.get_creds("teststaticrole", static=True, cache=True, valid_for=172800)
+    assert ret_new
+    assert ret_new["password"] != ret["password"]
+
+
+@pytest.mark.usefixtures("role_static_setup")
+def test_list_cached_static(vault_db):
+    """
+    Cached static creds should be reported with their actual validity
+    (time until the next rotation), not as immediately expired.
+    """
+    ret = vault_db.get_creds("teststaticrole", static=True, cache=True)
+    assert ret
+    cached = vault_db.list_cached()
+    ckey = "db.database.static.teststaticrole.default"
+    assert ckey in cached
+    assert not cached[ckey]["expired"]
+    assert 0 < cached[ckey]["expires_in"] <= 86400
+
+
+@pytest.mark.usefixtures("role_static_setup")
+def test_get_creds_static_cached_check_server(vault_db):
+    """
+    Static creds are not associated with a lease, so ``check_server``
+    must not crash trying to look one up.
+    """
+    ret = vault_db.get_creds("teststaticrole", static=True, cache=True)
+    assert ret
+    ret_new = vault_db.get_creds("teststaticrole", static=True, cache=True, check_server=True)
+    assert ret_new
+    assert ret_new["password"] == ret["password"]
+
+
+@pytest.mark.usefixtures("role_static_setup")
+def test_clear_cached_static(vault_db):
+    """
+    Cached static creds are not associated with a lease, but should
+    still be flushed cleanly.
+    """
+    assert vault_db.get_creds("teststaticrole", static=True, cache=True)
+    assert vault_db.list_cached()
+    assert vault_db.clear_cached() is True
+    assert not vault_db.list_cached()
+
+
+@pytest.mark.usefixtures("role_static_setup")
 def test_rotate_static_role(vault_db):
     ret = vault_db.get_creds("teststaticrole", static=True, cache=False)
     assert ret

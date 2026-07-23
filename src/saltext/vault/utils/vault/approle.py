@@ -169,8 +169,9 @@ class SecretIdStore:
             Flush the cache key if the SecretID does not exist.
         """
         try:
-            _, mount, role_name, _ = ckey.split(".")
-        except TypeError as err:
+            # The cache name at the end can contain the separator itself
+            _, mount, role_name, _ = ckey.split(".", 3)
+        except ValueError as err:
             raise VaultInvocationError(f"Invalid cache key `{ckey}`") from err
         try:
             meta = self.api.read_secret_id(role_name, accessor=secid.accessor, mount=mount)
@@ -236,7 +237,8 @@ class SecretIdStore:
         """
         failed = []
         for ckey, secid in self._list_cached_secids(match=match, flush=True):
-            _, mount, name, _ = ckey.split(".")
+            # The cache name at the end can contain the separator itself
+            _, mount, name, _ = ckey.split(".", 3)
             try:
                 self.destroy(name, secid, mount=mount)
             except VaultPermissionDeniedError:
@@ -249,6 +251,7 @@ class SecretIdStore:
 
         if failed:
             raise VaultException(f"Failed deleting some SecretIDs: {list(failed)}")
+        return True
 
     def store(self, ckey: str, secid: vleases.VaultSecretId):
         """

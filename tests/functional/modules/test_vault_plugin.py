@@ -589,6 +589,49 @@ def test_plugin_deregister(vault_plugin, secret_plugin, auth_plugin, db_plugin):
     "plugins_registered",
     (
         {
+            "secret_plugin": ["v9.0.0+custom"],
+        },
+    ),
+    indirect=True,
+)
+def test_get_config_with_build_metadata_version(vault_plugin, secret_plugin):
+    """
+    Semver build metadata contains a ``+``, which must be URL-encoded
+    when passed as a query parameter, otherwise it is decoded as a space.
+    """
+    res = vault_plugin.get_config("secret", secret_plugin["name"], version="v9.0.0+custom")
+    _ = res.pop("declarative", None), res.pop("oci", None)
+    expected = vault_plugin_read("secret", secret_plugin["name"], version="v9.0.0+custom")
+    assert res == expected
+
+
+@pytest.mark.usefixtures("plugins_registered")
+@pytest.mark.parametrize(
+    "plugins_registered",
+    (
+        {
+            "secret_plugin": ["v9.0.0+custom"],
+        },
+    ),
+    indirect=True,
+)
+def test_deregister_with_build_metadata_version(vault_plugin, secret_plugin):
+    """
+    Semver build metadata contains a ``+``, which must be URL-encoded
+    when passed as a query parameter, otherwise it is decoded as a space
+    and the (idempotent) deregistration reports success without having
+    removed the plugin version.
+    """
+    res = vault_plugin.deregister("secret", secret_plugin["name"], version="v9.0.0+custom")
+    assert res is True
+    assert vault_plugin_read(**secret_plugin, version="v9.0.0+custom", _nofail=True) is False
+
+
+@pytest.mark.usefixtures("plugins_registered")
+@pytest.mark.parametrize(
+    "plugins_registered",
+    (
+        {
             "secret_plugin": ["9.2.3"],
         },
     ),

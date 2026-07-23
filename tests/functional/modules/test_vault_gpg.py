@@ -369,6 +369,11 @@ def test_export_public_key(vault_gpg, gpg_mount, existing_key):
     assert res.startswith("-----BEGIN PGP PUBLIC")
 
 
+def test_export_public_key_missing(vault_gpg, gpg_mount):
+    with pytest.raises(CommandExecutionError):
+        vault_gpg.export_public_key("missing_key", mount=gpg_mount)
+
+
 @pytest.mark.parametrize("existing_key", (True,), indirect=True)
 def test_export_public_key_to_file(vault_gpg, gpg_mount, existing_key, tmp_path):
     dst = tmp_path / "subdir" / "exported.pub"

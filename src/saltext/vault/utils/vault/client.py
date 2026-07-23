@@ -191,6 +191,7 @@ class VaultClient:
     def delete(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: typing.Literal[False] = False,
         raise_error: bool = True,
@@ -201,6 +202,7 @@ class VaultClient:
     def delete(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: int | str,
         raise_error: bool = True,
@@ -210,6 +212,7 @@ class VaultClient:
     def delete(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: int | str | typing.Literal[False] = False,
         raise_error: bool = True,
@@ -218,10 +221,14 @@ class VaultClient:
     ) -> typing.Any:
         """
         Wrapper for client.request("DELETE", ...)
+
+        ``payload`` is interpreted as query parameters, which are
+        URL-encoded automatically.
         """
         return self.request(
             "DELETE",
             endpoint,
+            payload=payload,
             wrap=wrap,
             raise_error=raise_error,
             add_headers=add_headers,
@@ -232,6 +239,7 @@ class VaultClient:
     def get(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: typing.Literal[False] = False,
         raise_error: bool = True,
@@ -242,6 +250,7 @@ class VaultClient:
     def get(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: int | str,
         raise_error: bool = True,
@@ -251,6 +260,7 @@ class VaultClient:
     def get(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: int | str | typing.Literal[False] = False,
         raise_error: bool = True,
@@ -259,10 +269,14 @@ class VaultClient:
     ) -> typing.Any:
         """
         Wrapper for client.request("GET", ...)
+
+        ``payload`` is interpreted as query parameters, which are
+        URL-encoded automatically.
         """
         return self.request(
             "GET",
             endpoint,
+            payload=payload,
             wrap=wrap,
             raise_error=raise_error,
             add_headers=add_headers,
@@ -273,6 +287,7 @@ class VaultClient:
     def list(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: typing.Literal[False] = False,
         raise_error: bool = True,
@@ -283,6 +298,7 @@ class VaultClient:
     def list(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: int | str,
         raise_error: bool = True,
@@ -292,6 +308,7 @@ class VaultClient:
     def list(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: int | str | typing.Literal[False] = False,
         raise_error: bool = True,
@@ -301,10 +318,14 @@ class VaultClient:
         """
         Wrapper for client.request("LIST", ...)
         TODO: configuration to enable GET requests with query parameters for LIST?
+
+        ``payload`` is interpreted as query parameters, which are
+        URL-encoded automatically.
         """
         return self.request(
             "LIST",
             endpoint,
+            payload=payload,
             wrap=wrap,
             raise_error=raise_error,
             add_headers=add_headers,
@@ -527,16 +548,24 @@ class VaultClient:
         """
         url = self._get_url(endpoint)
         headers = self._get_headers(wrap)
+        params = kwargs.pop("params", None)
         if method.upper() == "PATCH":
             # PATCH always requires JSON patch content-type, so
             # just replace it.
             headers["Content-Type"] = "application/merge-patch+json"
+        elif method.upper() in ("GET", "LIST", "DELETE") and payload is not None:
+            # These requests don't have a body. Interpret the payload as
+            # query parameters, which are URL-encoded automatically.
+            params = (params or {}).copy()
+            params.update(payload)
+            payload = None
 
         try:
             headers.update(add_headers or {})
         except TypeError:
             pass
 
+        # Not thread-safe!
         self._vault_adapter.max_retries.safe_to_retry = safe_to_retry
 
         try:
@@ -545,6 +574,7 @@ class VaultClient:
                 url,
                 headers=headers,
                 json=payload,
+                params=params,
                 **kwargs,
             )
         finally:
@@ -811,9 +841,13 @@ class AuthenticatedVaultClient(VaultClient):
             return self.request_raw(
                 method, endpoint, payload=payload, wrap=False, safe_to_retry=True
             )
-        return self.request(method, endpoint, payload=payload, wrap=False, safe_to_retry=True)[
+        ret = self.request(method, endpoint, payload=payload, wrap=False, safe_to_retry=True)[
             "data"
         ]
+        if not (token or accessor):
+            # Sync our token info while we're at it
+            self.auth.update_token(data=ret)
+        return ret
 
     @typing.overload
     def token_renew(self, increment: int | str | None = None) -> dict[str, typing.Any]: ...
@@ -862,7 +896,7 @@ class AuthenticatedVaultClient(VaultClient):
         res = self.post(endpoint, payload=payload)
 
         if token is None and accessor is None:
-            self.auth.update_token(res["auth"])
+            self.auth.update_token(auth=res["auth"])
         return res["auth"]
 
     @typing.overload
@@ -895,7 +929,7 @@ class AuthenticatedVaultClient(VaultClient):
             elif accessor:
                 self.token_renew(increment=delta, accessor=accessor)
             else:
-                raise TypeError("Either token or accessor is required")
+                self.token_renew(increment=delta)
         except (VaultPermissionDeniedError, VaultNotFoundError, VaultAuthExpired):
             # if we're trying to revoke ourselves and this happens,
             # the token was already invalid
@@ -903,6 +937,37 @@ class AuthenticatedVaultClient(VaultClient):
                 raise
             return False
         return True
+
+    def unwrap(
+        self,
+        wrapped: leases.VaultWrappedResponse | str,
+        expected_creation_path: Sequence[str] | str | None = None,
+    ) -> typing.Any:
+        """
+        Unwraps the data associated with a wrapping token.
+
+        wrapped
+            Wrapping token to unwrap
+
+        expected_creation_path
+            Regex expression or list of expressions that should fully match the
+            wrapping token creation path. At least one match is required.
+            Defaults to None, which skips the check.
+
+            .. note::
+                This check prevents tampering with wrapping tokens, which are
+                valid for one request only. Usually, if an attacker sniffs a wrapping
+                token, there are two unwrapping requests, causing an audit warning.
+                If the attacker can issue a new wrapping token and insert it into the
+                response instead, this warning would be silenced. Assuming they do not
+                possess the permissions to issue a wrapping token from the correct
+                endpoint, checking the creation path makes this kind of attack obvious.
+        """
+        res = super().unwrap(wrapped, expected_creation_path=expected_creation_path)
+        # Ensure unwrapping with an authenticated client deducts a token use.
+        # A token use is not deducted if the request fails.
+        self.auth.used()
+        return res
 
     def token_entity_id(self) -> str | typing.Literal[False]:
         """
@@ -914,7 +979,7 @@ class AuthenticatedVaultClient(VaultClient):
         # This means it has never been set. It should be set during creation,
         # so this is a migration functionality that should be dropped in a future version.
         info = self.token_lookup()
-        self.auth.update_token({"entity_id": info["entity_id"] or False})
+        self.auth.update_token(data={"entity_id": info["entity_id"] or False})
         return typing.cast(str | typing.Literal[False], self.auth.get_token().entity_id)
 
     def token_entity(self) -> Mapping[str, typing.Any] | None:

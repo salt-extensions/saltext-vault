@@ -105,19 +105,22 @@ def auth_info():
     info = {}
     info["token"] = client.get("auth/token/lookup-self")["data"]
     if _config("auth:method") == "approle":
-        try:
-            info["secret_id"] = _get_approle_api().read_secret_id(
-                _config("auth:approle_name"),
-                mount=_config("auth:approle_mount"),
-                secret_id=str(client.auth.approle.secret_id),
-            )
-        except vault.VaultPermissionDeniedError:
-            info["secret_id"] = (
-                "Permission denied, allow API `create`, `update` access to "
-                f"`auth/{_config('auth:approle_mount')}"
-                f"/role/{_config('auth:approle_name')}/secret-id/lookup` "
-                "to view info"
-            )
+        if client.auth.approle.secret_id:
+            try:
+                info["secret_id"] = _get_approle_api().read_secret_id(
+                    _config("auth:approle_name"),
+                    mount=_config("auth:approle_mount"),
+                    secret_id=str(client.auth.approle.secret_id),
+                )
+            except vault.VaultPermissionDeniedError:
+                info["secret_id"] = (
+                    "Permission denied, allow API `create`, `update` access to "
+                    f"`auth/{_config('auth:approle_mount')}"
+                    f"/role/{_config('auth:approle_name')}/secret-id/lookup` "
+                    "to view info"
+                )
+        else:
+            info["secret_id"] = None
     return info
 
 
@@ -608,7 +611,7 @@ def show_policies(minion_id, refresh_pillar=NOT_SET, expire=None):
         meta = _lookup_approle(minion_id)
         if not meta:
             raise SaltRunnerError(
-                f"AppRole for minion `{minion_id}`has not been created yet. "
+                f"AppRole for minion `{minion_id}` has not been created yet. "
                 "You can use `vault.sync_approles` to force its creation."
             )
         return meta["token_policies"]
@@ -893,23 +896,41 @@ def clear_cache(master=True, minions=True):
         for pillar compilation as well as AppRole metadata and
         rendered policies for credential issuance.
         Defaults to true. Set this to a list of minion IDs to only clear
-        cached data pertaining to thse minions.
+        cached data pertaining to these minions.
     """
+    # We need the config to know which backend needs to be cleared
+    # for pillar compilation.
     config, _, _ = factory._get_connection_config("vault", __opts__, __context__, force_local=True)
-    cache = vcache._get_cache_backend(config, __opts__)
+    # Regular cache used by all client contexts. Can be the one in __opts__["cache"] or "localfs" or None (just context)
+    client_cache = vcache._get_cache_backend(config, __opts__)
 
-    if cache is None:
-        log.info("Vault cache clearance was requested, but no persistent cache is configured")
+    if master and client_cache:
+        log.debug("Clearing master client Vault cache")
+        vault.clear_cache(__opts__, __context__, force_local=True)
+
+    if not minions:
         return True
 
-    if master:
-        log.debug("Clearing master Vault cache")
-        cache.flush("vault")
-    if minions:
-        for minion in cache.list("minions"):
+    if client_cache:
+        # First, clear cached config/auth/KV metadata per impersonated minion.
+        # Using vault.clear_cache ensures tokens are revoked and the context is cleared.
+        for minion in client_cache.list("minions"):
             if minions is True or (isinstance(minions, list) and minion in minions):
-                log.debug(f"Clearing master Vault cache for minion {minion}")
-                cache.flush(f"minions/{minion}/vault")
+                log.debug(f"Clearing master client Vault cache for minion {minion}")
+                minion_opts = __opts__.copy()
+                minion_opts["minion_id"] = minion
+                minion_opts["grains"] = {"id": minion}
+                # Clear the whole cache. This might already get rid of the runner cache.
+                vault.clear_cache(minion_opts, __context__, connection=False)
+
+    # Cache of AppRole metadata and rendered policies.
+    # Might already be cleared if it's the same backend as the client one.
+    runner_cache = salt.cache.factory(__opts__)
+    for minion in runner_cache.list("minions"):
+        if minions is True or (isinstance(minions, list) and minion in minions):
+            log.debug(f"Clearing master Vault cache for minion {minion}")
+            runner_cache.flush(f"minions/{minion}/vault")
+
     return True
 
 
