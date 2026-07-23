@@ -1146,7 +1146,11 @@ def sign_certificate(
     # CSR in place.
     if private_key is not None:
         if isinstance(alt_names, dict):
-            alt_names = [f"{k}:{v}" for k, v in alt_names.items()]
+            alt_names = [
+                f"{k}:{vv}"
+                for k, v in alt_names.items()
+                for vv in ([v] if isinstance(v, str) else v)
+            ]
 
         if alt_names:
             csr_args["subjectAltName"] = alt_names
@@ -1257,6 +1261,8 @@ def _split_sans(sans) -> tuple[list[str], list[str], list[str], list[str]]:
             sans = dic
 
         for k, v in sans.items():
+            if isinstance(v, str):
+                v = [v]
             if k.upper() == "DNS" or k.upper() == "EMAIL":
                 dns_sans.extend(v)
             elif k.upper() == "IP":
