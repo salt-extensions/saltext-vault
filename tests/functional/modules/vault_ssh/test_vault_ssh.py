@@ -244,5 +244,24 @@ def test_generate_key_cert_host(vault_ssh, container):
         assert cert.valid_principals == [b"foo.bar.biz"]
 
 
+@pytest.mark.usefixtures("ca_setup", "roles_setup")
+@pytest.mark.parametrize(
+    "roles_setup",
+    ({"userrole": {"allowed_users": "", "allowed_extensions": ""}},),
+    indirect=True,
+)
+def test_get_signing_policy_with_empty_role_lists(vault_ssh):
+    """
+    Unset ``allowed_users``/``allowed_extensions`` mean deny all.
+    Ensure they are not translated into a list containing a single
+    empty string, which is truthy and contains a phantom principal/
+    extension.
+    """
+    policy = vault_ssh.get_signing_policy("userrole")
+    assert "" not in policy.get("allowed_valid_principals", [])
+    assert "" not in policy.get("allowed_extensions", [])
+    assert policy.get("all_principals") is not True
+
+
 def load_cert(data):
     return load_ssh_public_identity(data.encode())
