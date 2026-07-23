@@ -403,14 +403,13 @@ def get_config(plugin_type, name, version=None):
     """
     plugin_type = _check_type(plugin_type)
     endpoint = f"sys/plugins/catalog/{plugin_type}/{name}"
-    if version:
-        endpoint += f"?version={version}"
     try:
         return vault.query(
             "GET",
             endpoint,
             __opts__,
             __context__,
+            payload={"version": version} if version else None,
         )["data"]
     except vault.VaultNotFoundError as err:
         if version is not None:
@@ -439,13 +438,13 @@ def get_config(plugin_type, name, version=None):
     except SaltException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
-    endpoint = f"sys/plugins/catalog/{plugin_type}/{name}?version={best_version}"
     try:
         return vault.query(
             "GET",
             endpoint,
             __opts__,
             __context__,
+            payload={"version": best_version},
         )["data"]
     except SaltException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
@@ -592,10 +591,14 @@ def deregister(plugin_type, name, version=None):
     """
     plugin_type = _check_type(plugin_type)
     endpoint = f"sys/plugins/catalog/{plugin_type}/{name}"
-    if version:
-        endpoint += f"?version={version}"
     try:
-        vault.query("DELETE", endpoint, __opts__, __context__)
+        vault.query(
+            "DELETE",
+            endpoint,
+            __opts__,
+            __context__,
+            payload={"version": version} if version else None,
+        )
         return True
     except SaltException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err

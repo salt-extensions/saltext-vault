@@ -191,6 +191,7 @@ class VaultClient:
     def delete(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: typing.Literal[False] = False,
         raise_error: bool = True,
@@ -201,6 +202,7 @@ class VaultClient:
     def delete(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: int | str,
         raise_error: bool = True,
@@ -210,6 +212,7 @@ class VaultClient:
     def delete(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: int | str | typing.Literal[False] = False,
         raise_error: bool = True,
@@ -218,10 +221,14 @@ class VaultClient:
     ) -> typing.Any:
         """
         Wrapper for client.request("DELETE", ...)
+
+        ``payload`` is interpreted as query parameters, which are
+        URL-encoded automatically.
         """
         return self.request(
             "DELETE",
             endpoint,
+            payload=payload,
             wrap=wrap,
             raise_error=raise_error,
             add_headers=add_headers,
@@ -232,6 +239,7 @@ class VaultClient:
     def get(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: typing.Literal[False] = False,
         raise_error: bool = True,
@@ -242,6 +250,7 @@ class VaultClient:
     def get(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: int | str,
         raise_error: bool = True,
@@ -251,6 +260,7 @@ class VaultClient:
     def get(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: int | str | typing.Literal[False] = False,
         raise_error: bool = True,
@@ -259,10 +269,14 @@ class VaultClient:
     ) -> typing.Any:
         """
         Wrapper for client.request("GET", ...)
+
+        ``payload`` is interpreted as query parameters, which are
+        URL-encoded automatically.
         """
         return self.request(
             "GET",
             endpoint,
+            payload=payload,
             wrap=wrap,
             raise_error=raise_error,
             add_headers=add_headers,
@@ -273,6 +287,7 @@ class VaultClient:
     def list(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: typing.Literal[False] = False,
         raise_error: bool = True,
@@ -283,6 +298,7 @@ class VaultClient:
     def list(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: int | str,
         raise_error: bool = True,
@@ -292,6 +308,7 @@ class VaultClient:
     def list(
         self,
         endpoint: str,
+        payload: Mapping[typing.Any, typing.Any] | None = None,
         *,
         wrap: int | str | typing.Literal[False] = False,
         raise_error: bool = True,
@@ -301,10 +318,14 @@ class VaultClient:
         """
         Wrapper for client.request("LIST", ...)
         TODO: configuration to enable GET requests with query parameters for LIST?
+
+        ``payload`` is interpreted as query parameters, which are
+        URL-encoded automatically.
         """
         return self.request(
             "LIST",
             endpoint,
+            payload=payload,
             wrap=wrap,
             raise_error=raise_error,
             add_headers=add_headers,
@@ -527,10 +548,17 @@ class VaultClient:
         """
         url = self._get_url(endpoint)
         headers = self._get_headers(wrap)
+        params = kwargs.pop("params", None)
         if method.upper() == "PATCH":
             # PATCH always requires JSON patch content-type, so
             # just replace it.
             headers["Content-Type"] = "application/merge-patch+json"
+        elif method.upper() in ("GET", "LIST", "DELETE") and payload is not None:
+            # These requests don't have a body. Interpret the payload as
+            # query parameters, which are URL-encoded automatically.
+            params = (params or {}).copy()
+            params.update(payload)
+            payload = None
 
         try:
             headers.update(add_headers or {})
@@ -546,6 +574,7 @@ class VaultClient:
                 url,
                 headers=headers,
                 json=payload,
+                params=params,
                 **kwargs,
             )
         finally:
