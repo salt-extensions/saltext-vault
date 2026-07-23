@@ -295,10 +295,26 @@ def test_get_secret_id_cached_valid_for_reissue(
     assert ret_new != _cached_approle["id"]
 
 
+@pytest.mark.usefixtures("roles_setup")
+def test_get_secret_id_cached_name_with_dots(vault_approle, approle_auth):
+    """
+    Custom cache names are documented as arbitrary strings, so they
+    can contain dots. Ensure such entries can be retrieved from cache
+    and cleared again.
+    """
+    ret = vault_approle.get_secret_id("testrole", cache="with.dots", mount=approle_auth)
+    assert ret
+    assert isinstance(ret, str)
+    ret_new = vault_approle.get_secret_id("testrole", cache="with.dots", mount=approle_auth)
+    assert ret_new == ret
+    vault_approle.clear_cached(cache="with.dots", mount=approle_auth)
+    assert not vault_approle.list_cached(mount=approle_auth)
+
+
 @pytest.mark.usefixtures("_cached_approle")
 def test_clear_cached(vault_approle, approle_auth):
     assert f"secid.{approle_auth}.testrole.default" in vault_approle.list_cached(mount=approle_auth)
-    vault_approle.clear_cached(mount=approle_auth)
+    assert vault_approle.clear_cached(mount=approle_auth) is True
     assert f"secid.{approle_auth}.testrole.default" not in vault_approle.list_cached(
         mount=approle_auth
     )
