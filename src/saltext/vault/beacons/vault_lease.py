@@ -177,7 +177,7 @@ def beacon(config):
             continue
         lease_info = info[lease]
         effective_config = _merge_lease_config(lease_config, lease_info)
-        if effective_config.get("check_server"):
+        if lease_info["lease_id"] and effective_config.get("check_server"):
             try:
                 store.lookup(lease_info["lease_id"])
             except vault.VaultNotFoundError:
@@ -190,7 +190,11 @@ def beacon(config):
             events.append(_enrich_info(lease, effective_config, lease_info))
             continue
         if timestring_map(effective_config["min_ttl"]) >= lease_info["expires_in"]:
-            if not effective_config.get("renew", True):
+            if not (
+                lease_info["lease_id"]
+                and lease_info["renewable"]
+                and effective_config.get("renew", True)
+            ):
                 events.append(_enrich_info(lease, effective_config, lease_info))
                 continue
             # attempt renewal
