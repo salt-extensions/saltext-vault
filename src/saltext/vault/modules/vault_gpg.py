@@ -430,7 +430,10 @@ def export_public_key(
     mount
         Mount path the GPG backend is mounted to. Defaults to ``gpg``.
     """
-    key = read_key(name, mount=mount)["public_key"]
+    key_info = read_key(name, mount=mount)
+    if key_info is None:
+        raise CommandExecutionError(f"No key named '{name}' present on mount '{mount}'")
+    key = key_info["public_key"]
 
     if path:
         _write_path(path, key)
