@@ -1,1 +1,1 @@
-Added `vault_gpg` execution, state and wrapper modules to interface with the custom plugin `[LeSuisse/vault-gpg-plugin](https://github.com/LeSuisse/vault-gpg-plugin/)`. It's now possible to generate, manage, import and export GPG keys and sign, decrypt and verify data.
+Added `vault_gpg` execution, state and wrapper modules to interface with the custom plugin [LeSuisse/vault-gpg-plugin](https://github.com/LeSuisse/vault-gpg-plugin/). It's now possible to generate, manage, import and export GPG keys and sign, decrypt and verify data.

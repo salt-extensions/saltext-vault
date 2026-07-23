@@ -53,7 +53,7 @@ def store(minion_opts, context, lease, ckey, _event):  # pylint: disable=unused-
     store = vault.get_lease_store(minion_opts, context)
     store.store(ckey, lease)
     assert "vault/connection/session/leases" in context
-    assert "test.foo.lease" in context["vault/connection/session/leases"]
+    assert ckey in context["vault/connection/session/leases"]
     assert ckey in store.list()
     return store
 

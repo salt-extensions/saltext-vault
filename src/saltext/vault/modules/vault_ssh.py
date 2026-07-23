@@ -1,8 +1,8 @@
 """
-.. versionadded:: 1.2.0
-
 Manage the Vault (or OpenBao) SSH secret engine, request SSH credentials
 and certificates.
+
+.. versionadded:: 1.2.0
 
 .. versionadded:: 1.6.0
     You can specify this module as the ``backend`` parameter to the ``ssh_pki.certificate_managed``
