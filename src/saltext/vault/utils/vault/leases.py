@@ -552,8 +552,12 @@ class LeaseStore(typing.Generic[LeaseType]):
             if revoke is None or revoke:
                 self.revoke(lease, delta=revoke)
 
-        # Since we can renew leases, do not check for future validity in cache
-        lease = self.cache.get(ckey, flush=bool(revoke))
+        # Since we can renew leases, do not check for future validity in cache.
+        # Flush expired leases from cache. Underlying assumption: Our cache has no
+        # explicit TTL, it just follows lease validity. If it flushes leases
+        # that are still valid, we miss revocations.
+        # For monitoring expected leases being present, use the beacon.
+        lease = self.cache.get(ckey)
         if lease is None:
             return lease
         self.lease_id_ckey_cache[str(lease)] = ckey
