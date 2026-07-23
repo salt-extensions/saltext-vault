@@ -3,9 +3,14 @@ import shutil
 from contextlib import ExitStack
 
 import pytest
+from saltfactories.utils import random_string
 
 from tests.integration.conftest import _pillar_files
 from tests.support.helpers import ExtendedLoaders
+from tests.support.vault import vault_disable_auth_method
+from tests.support.vault import vault_enable_auth_method
+from tests.support.vault import vault_read
+from tests.support.vault import vault_write
 
 log = logging.getLogger(__name__)
 
@@ -148,3 +153,25 @@ def pillar_base(pillar_defaults, minion, loaders):
         if refresh:
             loaders.refresh_pillar()
         yield
+
+
+@pytest.fixture(scope="module")
+def approle(container, request):  # pylint: disable=unused-argument
+    defaults = {
+        "token_ttl": "60m",
+        "token_num_uses": 0,
+        "secret_id_ttl": "60m",
+        "secret_id_num_uses": 0,
+        "token_policies": ["salt_minion"],
+    }
+    defaults.update(getattr(request, "param", {}))
+    mount = random_string("approle-testsuite", uppercase=False)
+    role = "test-role"
+    assert vault_enable_auth_method("approle", mount)
+    try:
+        vault_write(f"auth/{mount}/role/{role}", **defaults)
+        role_id = vault_read(f"auth/{mount}/role/{role}/role-id")["data"]["role_id"]
+        secret_id = vault_write(f"auth/{mount}/role/{role}/secret-id")["data"]["secret_id"]
+        yield {"mount": mount, "role_id": role_id, "secret_id": secret_id}
+    finally:
+        assert vault_disable_auth_method(mount)
