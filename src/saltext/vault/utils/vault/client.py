@@ -811,9 +811,13 @@ class AuthenticatedVaultClient(VaultClient):
             return self.request_raw(
                 method, endpoint, payload=payload, wrap=False, safe_to_retry=True
             )
-        return self.request(method, endpoint, payload=payload, wrap=False, safe_to_retry=True)[
+        ret = self.request(method, endpoint, payload=payload, wrap=False, safe_to_retry=True)[
             "data"
         ]
+        if not (token or accessor):
+            # Sync our token info while we're at it
+            self.auth.update_token(data=ret)
+        return ret
 
     @typing.overload
     def token_renew(self, increment: int | str | None = None) -> dict[str, typing.Any]: ...
@@ -862,7 +866,7 @@ class AuthenticatedVaultClient(VaultClient):
         res = self.post(endpoint, payload=payload)
 
         if token is None and accessor is None:
-            self.auth.update_token(res["auth"])
+            self.auth.update_token(auth=res["auth"])
         return res["auth"]
 
     @typing.overload
@@ -914,7 +918,7 @@ class AuthenticatedVaultClient(VaultClient):
         # This means it has never been set. It should be set during creation,
         # so this is a migration functionality that should be dropped in a future version.
         info = self.token_lookup()
-        self.auth.update_token({"entity_id": info["entity_id"] or False})
+        self.auth.update_token(data={"entity_id": info["entity_id"] or False})
         return typing.cast(str | typing.Literal[False], self.auth.get_token().entity_id)
 
     def token_entity(self) -> Mapping[str, typing.Any] | None:

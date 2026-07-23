@@ -200,10 +200,19 @@ class BaseLease(DurationMixin, DropInitKwargsMixin):
     def with_renewed(self, **kwargs) -> "Self":
         """
         Partially update the contained data after lease renewal.
+        Recalculates expire_time based on the current time and the lease duration.
         """
         attrs = copy.copy(self.__dict__)
         # ensure expire_time is reset properly
         attrs.pop("expire_time")
+        attrs.update(kwargs)
+        return type(self)(**attrs)
+
+    def with_info(self, **kwargs) -> "Self":
+        """
+        Partially update the contained data without resetting anything.
+        """
+        attrs = copy.copy(self.__dict__)
         attrs.update(kwargs)
         return type(self)(**attrs)
 

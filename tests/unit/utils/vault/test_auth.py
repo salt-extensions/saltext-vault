@@ -174,7 +174,7 @@ def test_token_auth_update_token(uncached, token, num_uses):
     auth = vauth.VaultTokenAuth(cache=uncached, token=token)
     old_token = token
     old_token_ttl = old_token.duration
-    auth.update_token({"num_uses": num_uses, "ttl": 8483})
+    auth.update_token(auth={"num_uses": num_uses, "ttl": 8483})
     updated_token = token.with_renewed(num_uses=num_uses, ttl=8483)
     assert auth.token == updated_token
     assert old_token.duration == old_token_ttl
