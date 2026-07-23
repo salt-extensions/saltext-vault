@@ -895,7 +895,7 @@ class AuthenticatedVaultClient(VaultClient):
             elif accessor:
                 self.token_renew(increment=delta, accessor=accessor)
             else:
-                raise TypeError("Either token or accessor is required")
+                self.token_renew(increment=delta)
         except (VaultPermissionDeniedError, VaultNotFoundError, VaultAuthExpired):
             # if we're trying to revoke ourselves and this happens,
             # the token was already invalid
