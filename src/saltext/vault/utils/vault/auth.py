@@ -65,11 +65,25 @@ class VaultTokenAuth:
         if self.token.num_uses != 0:
             self._write_cache()
 
-    def update_token(self, auth: dict[str, typing.Any]):
+    def update_token(
+        self, auth: dict[str, typing.Any] | None = None, data: dict[str, typing.Any] | None = None
+    ):
         """
-        Partially update the contained token (e.g. after renewal)
+        Partially update the contained token (e.g. after renewal).
+
+        auth
+            ``auth`` key of the dict returned by auth/token/renew-self.
+            Note: If set, resets creation_time and recalculates expire_time based on lease duration.
+
+        data
+            ``data`` key of the dict returned by auth/token/lookup-self.
         """
-        self.token = self.token.with_renewed(**auth)
+        if auth:
+            self.token = self.token.with_renewed(**auth)
+        elif data:
+            self.token = self.token.with_info(**data)
+        else:
+            raise TypeError("Either `auth` or `data` is required")
         self._write_cache()
 
     def replace_token(self, token: leases.VaultToken):
@@ -140,11 +154,14 @@ class VaultAppRoleAuth:
         """
         self.token.used()
 
-    def update_token(self, auth: dict[str, typing.Any]):
+    def update_token(
+        self, auth: dict[str, typing.Any] | None = None, data: dict[str, typing.Any] | None = None
+    ):
         """
-        Partially update the contained token (e.g. after renewal)
+        Partially update the contained token (e.g. after renewal).
+        Note: resets creation_time and recalculates expire_time based on lease duration.
         """
-        self.token.update_token(auth)
+        self.token.update_token(auth=auth, data=data)
 
     def _login(self) -> leases.VaultToken:
         log.debug("Vault token expired. Recreating one by authenticating with AppRole.")

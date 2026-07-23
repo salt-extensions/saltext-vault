@@ -361,39 +361,51 @@ def token_lookup_self_response():
 @pytest.fixture
 def token_renew_self_response():
     return {
+        "request_id": "0e8c388e-2cb6-bcb2-83b7-625127d568bb",
+        "lease_id": "",
+        "lease_duration": 0,
+        "renewable": False,
         "auth": {
             "client_token": "test-token",
             "policies": ["default", "renewed"],
             "metadata": {},
+            "lease_duration": 3600,
+            "renewable": True,
         },
-        "lease_duration": 3600,
-        "renewable": True,
     }
 
 
 @pytest.fixture
 def token_renew_other_response():
     return {
+        "request_id": "0e8c388e-2cb6-bcb2-83b7-625127d568bb",
+        "lease_id": "",
+        "lease_duration": 0,
+        "renewable": False,
         "auth": {
             "client_token": "other-test-token",
             "policies": ["default", "renewed"],
             "metadata": {},
+            "lease_duration": 3600,
+            "renewable": True,
         },
-        "lease_duration": 3600,
-        "renewable": True,
     }
 
 
 @pytest.fixture
 def token_renew_accessor_response():
     return {
+        "request_id": "0e8c388e-2cb6-bcb2-83b7-625127d568bb",
+        "lease_id": "",
+        "lease_duration": 0,
+        "renewable": False,
         "auth": {
             "client_token": "",
             "policies": ["default", "renewed"],
             "metadata": {},
+            "lease_duration": 3600,
+            "renewable": True,
         },
-        "lease_duration": 3600,
-        "renewable": True,
     }
 
 
@@ -410,6 +422,71 @@ def token_auth():
             "lease_duration": 9999999999,
             "num_uses": 0,
             "creation_time": 1661188581,
+        },
+    }
+
+
+@pytest.fixture
+def token_renew_response():
+    return {
+        "request_id": "0e8c388e-2cb6-bcb2-83b7-625127d568bb",
+        "lease_id": "",
+        "lease_duration": 0,
+        "renewable": False,
+        "auth": {
+            "accessor": "pakUh4PF8hg1MME9ykGPliSy",
+            "client_token": "test-token",
+            "entity_id": None,
+            "lease_duration": 9999999999,
+            "metadata": {
+                "saltstack-jid": "20260707152708962211",
+                "saltstack-minion": "test-minion",
+                "saltstack-user": "root",
+            },
+            "mfa_requirement": None,
+            "num_uses": 0,
+            "orphan": True,
+            "policies": ["default", "salt_minions"],
+            "renewable": True,
+            "token_policies": ["default", "salt_minions"],
+            "token_type": "service",
+        },
+        "data": None,
+    }
+
+
+@pytest.fixture
+def token_lookup_response():
+    return {
+        "request_id": "0e8c388e-2cb6-bcb2-83b7-625127d568bb",
+        "lease_id": "",
+        "lease_duration": 0,
+        "renewable": False,
+        "auth": None,
+        "data": {
+            "accessor": "authpakUh4PF8hg1MME9ykGPliSy",
+            "creation_time": 1661188581,
+            "creation_ttl": 9999999999,
+            "display_name": "salt_minions",
+            "entity_id": None,
+            "expire_time": "2343-06-13T03:09:08.439202603Z",
+            "explicit_max_ttl": 0,
+            "id": "test-token",
+            "issue_time": "2022-08-22T17:16:21.020204603Z",
+            "last_renewal": "2026-07-23T09:22:29.439202603Z",
+            "last_renewal_time": 1784798549,
+            "meta": {
+                "saltstack-jid": "20260707152708962211",
+                "saltstack-minion": "test-minion",
+                "saltstack-user": "root",
+            },
+            "num_uses": 0,
+            "orphan": True,
+            "path": "auth/salt_minions/login",
+            "policies": ["default", "salt_minions"],
+            "renewable": True,
+            "ttl": 9999999324,
+            "type": "service",
         },
     }
 

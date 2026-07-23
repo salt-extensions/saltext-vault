@@ -496,7 +496,7 @@ def test_vault_client_token_renew_self_possible(token_renew_self_response, clien
         assert headers.get("X-Vault-Token") == str(client.auth.get_token())
         assert url.endswith("renew-self")
         req.assert_called_once()
-        client.auth.update_token.assert_called_once_with(token_renew_self_response["auth"])
+        client.auth.update_token.assert_called_once_with(auth=token_renew_self_response["auth"])
         assert res == token_renew_self_response["auth"]
     else:
         assert res is False

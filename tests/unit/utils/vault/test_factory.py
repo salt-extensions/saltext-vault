@@ -514,7 +514,9 @@ class TestGetConnectionConfig:
         ) = vfactory._get_connection_config("vault", {}, {}, update=True)
         assert res == updated_remote_config
         assert embedded_token is None
-        remote.assert_called_once_with("get_config", {}, issue_params=None, config_only=True)
+        remote.assert_called_once_with(
+            "get_config", {}, issue_params=None, config_only=True, unwrap_expected_creation_path=ANY
+        )
         cached.flush.assert_called_once_with(cbank=False)
         cached.store.assert_called_once_with(updated_remote_config)
 
@@ -606,7 +608,9 @@ class TestGetConnectionConfig:
         self._assert_not_updated(remote, cached)
 
     def _assert_not_updated(self, remote, cached):
-        remote.assert_called_once_with("get_config", {}, issue_params=None, config_only=True)
+        remote.assert_called_once_with(
+            "get_config", {}, issue_params=None, config_only=True, unwrap_expected_creation_path=ANY
+        )
         cached.flush.assert_not_called()
         cached.store.assert_not_called()
 
