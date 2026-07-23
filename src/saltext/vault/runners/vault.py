@@ -893,23 +893,41 @@ def clear_cache(master=True, minions=True):
         for pillar compilation as well as AppRole metadata and
         rendered policies for credential issuance.
         Defaults to true. Set this to a list of minion IDs to only clear
-        cached data pertaining to thse minions.
+        cached data pertaining to these minions.
     """
+    # We need the config to know which backend needs to be cleared
+    # for pillar compilation.
     config, _, _ = factory._get_connection_config("vault", __opts__, __context__, force_local=True)
-    cache = vcache._get_cache_backend(config, __opts__)
+    # Regular cache used by all client contexts. Can be the one in __opts__["cache"] or "localfs" or None (just context)
+    client_cache = vcache._get_cache_backend(config, __opts__)
 
-    if cache is None:
-        log.info("Vault cache clearance was requested, but no persistent cache is configured")
+    if master and client_cache:
+        log.debug("Clearing master client Vault cache")
+        vault.clear_cache(__opts__, __context__, force_local=True)
+
+    if not minions:
         return True
 
-    if master:
-        log.debug("Clearing master Vault cache")
-        cache.flush("vault")
-    if minions:
-        for minion in cache.list("minions"):
+    if client_cache:
+        # First, clear cached config/auth/KV metadata per impersonated minion.
+        # Using vault.clear_cache ensures tokens are revoked and the context is cleared.
+        for minion in client_cache.list("minions"):
             if minions is True or (isinstance(minions, list) and minion in minions):
-                log.debug(f"Clearing master Vault cache for minion {minion}")
-                cache.flush(f"minions/{minion}/vault")
+                log.debug(f"Clearing master client Vault cache for minion {minion}")
+                minion_opts = __opts__.copy()
+                minion_opts["minion_id"] = minion
+                minion_opts["grains"] = {"id": minion}
+                # Clear the whole cache. This might already get rid of the runner cache.
+                vault.clear_cache(minion_opts, __context__, connection=False)
+
+    # Cache of AppRole metadata and rendered policies.
+    # Might already be cleared if it's the same backend as the client one.
+    runner_cache = salt.cache.factory(__opts__)
+    for minion in runner_cache.list("minions"):
+        if minions is True or (isinstance(minions, list) and minion in minions):
+            log.debug(f"Clearing master Vault cache for minion {minion}")
+            runner_cache.flush(f"minions/{minion}/vault")
+
     return True
 
 
