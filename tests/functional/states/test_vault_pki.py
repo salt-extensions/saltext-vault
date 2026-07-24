@@ -378,6 +378,18 @@ def test_certificate_managed_includes_chain(vault_pki, cert_args, encoding):
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result is True
     assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup")
+@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.parametrize("testmode", (False, True))
+def test_certificate_managed_missing_issuer(vault_pki, cert_args, testmode):
+    cert_args["issuer_ref"] = "missing-issuer"
+    cert_args["append_ca_chain"] = True
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is False
+    assert not ret.changes
+    assert "'missing-issuer' does not exist" in ret.comment
     assert not ret.changes
 
 
