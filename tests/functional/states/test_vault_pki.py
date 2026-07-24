@@ -254,15 +254,26 @@ def roles_setup(request):  # pylint: disable=unused-argument
                 assert role_name not in vault_list("pki/roles")
 
 
+def _wipe_issuers():
+    # Ensure the mount does not contain any leftover issuers or keys.
+    # When importing a CA bundle whose issuers/keys partially exist already,
+    # the imported_issuers/imported_keys response fields can be null,
+    # breaking the setup of subsequent tests.
+    for issuer in vault_list("pki/issuers"):
+        vault_delete(f"pki/issuer/{issuer}")
+    for key in vault_list("pki/keys"):
+        vault_delete(f"pki/key/{key}")
+
+
 @pytest.fixture
 def issuer_setup(ca_cert, ca_key):
-    ret_data = vault_write("/pki/config/ca", pem_bundle="\n".join([ca_cert, ca_key]))["data"]
-    issuer_id = ret_data["imported_issuers"][0]
-    vault_write(f"/pki/issuer/{issuer_id}", issuer_name="root")
     try:
+        ret_data = vault_write("/pki/config/ca", pem_bundle="\n".join([ca_cert, ca_key]))["data"]
+        issuer_id = ret_data["imported_issuers"][0]
+        vault_write(f"/pki/issuer/{issuer_id}", issuer_name="root")
         yield issuer_id
     finally:
-        vault_delete(f"/pki/issuer/{issuer_id}")
+        _wipe_issuers()
 
 
 @pytest.fixture
@@ -270,30 +281,27 @@ def issuer_setup_additional(ca2_cert, ca2_key):
     ret_data = vault_write("/pki/config/ca", pem_bundle="\n".join([ca2_cert, ca2_key]))["data"]
     issuer_id = ret_data["imported_issuers"][0]
     vault_write(f"/pki/issuer/{issuer_id}", issuer_name="additional")
-    try:
-        yield issuer_id
-    finally:
-        vault_delete(f"/pki/issuer/{issuer_id}")
+    # No teardown here: This fixture is only used together with issuer_setup,
+    # which wipes all issuers and keys on the mount.
+    yield issuer_id
 
 
 @pytest.fixture
 def issuer_setup_sub(ca_cert, ca_sub_cert, ca_sub_key):
-    ret_data = vault_write(
-        "/pki/config/ca", pem_bundle="\n".join([ca_sub_cert, ca_sub_key, ca_cert])
-    )["data"]
-    issuers = ret_data["mapping"]
-    imported_key = ret_data["imported_keys"][0]
     try:
-        root_id = next(x for x in issuers if issuers[x] != imported_key)
-        sub_id = next(x for x in issuers if issuers[x] if issuers[x] == imported_key)
-    except StopIteration as err:
-        raise AssertionError("Unable to find issuer IDs") from err
-    vault_write(f"/pki/issuer/{sub_id}", issuer_name="sub")
-    try:
+        ret_data = vault_write(
+            "/pki/config/ca", pem_bundle="\n".join([ca_sub_cert, ca_sub_key, ca_cert])
+        )["data"]
+        issuers = ret_data["mapping"]
+        imported_key = ret_data["imported_keys"][0]
+        try:
+            sub_id = next(x for x in issuers if issuers[x] if issuers[x] == imported_key)
+        except StopIteration as err:
+            raise AssertionError("Unable to find issuer IDs") from err
+        vault_write(f"/pki/issuer/{sub_id}", issuer_name="sub")
         yield sub_id
     finally:
-        vault_delete(f"/pki/issuer/{sub_id}")
-        vault_delete(f"/pki/issuer/{root_id}")
+        _wipe_issuers()
 
 
 @pytest.mark.usefixtures("issuer_setup")
@@ -332,33 +340,44 @@ def test_certificate_managed_is_reissued_forcibly(vault_pki, cert_args):
 
 @pytest.mark.usefixtures("issuer_setup")
 @pytest.mark.usefixtures("roles_setup")
-@pytest.mark.parametrize("encoding", ["der", "pem"])
+@pytest.mark.parametrize("encoding", ["der", "pem", "pkcs7_der", "pkcs7_pem"])
 def test_certificate_managed_encoding(vault_pki, cert_args, encoding):
     cert_args["encoding"] = encoding
     ret = vault_pki.certificate_managed(**cert_args)
-    assert ret.result
-
+    assert ret.result is True
+    assert "created" in ret.changes
     _, enc, _, _ = load_cert(cert_args["name"], get_encoding=True)
-
     assert enc == encoding
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
 
 
 @pytest.mark.usefixtures("issuer_setup_sub")
 @pytest.mark.usefixtures("roles_setup")
-def test_certificate_managed_includes_chain(vault_pki, cert_args):
+@pytest.mark.parametrize("encoding", ["der", "pem", "pkcs7_der", "pkcs7_pem"])
+def test_certificate_managed_includes_chain(vault_pki, cert_args, encoding):
+    cert_args["encoding"] = encoding
     cert_args["append_ca_chain"] = True
     cert_args["issuer_ref"] = "sub"
     ret = vault_pki.certificate_managed(**cert_args)
-    assert ret.result
-    assert ret.changes
 
-    _, chain = load_cert(cert_args["name"], load_chain=True)
+    is_der = encoding == "der"
+    assert ret.result is not is_der
+    if is_der:
+        assert "Cannot append the CA chain" in ret.comment
+        assert not ret.changes
+        return
 
+    assert "created" in ret.changes
+    _, enc, chain, _ = load_cert(cert_args["name"], get_encoding=True)
+    assert enc == encoding
     assert len(chain) == 1
 
     # Ensure it's idempotent still
     ret = vault_pki.certificate_managed(**cert_args)
-    assert ret.result
+    assert ret.result is True
+    assert not ret.changes
     assert not ret.changes
 
 
