@@ -552,6 +552,29 @@ def test_role_managed_payload(vault_pki, params):
 
 @pytest.mark.usefixtures("issuer_setup")
 @pytest.mark.usefixtures("roles_setup")
+def test_role_managed_normalized_params_no_changes(vault_pki):
+    """
+    Ensure scalar values for list-type parameters and duration strings
+    are compared correctly against the normalized values reported by
+    Vault instead of causing a rewrite on every run.
+    """
+    params = {
+        "allowed_domains": "www.example.com",
+        "ttl": "1h",
+        "max_ttl": "30d",
+        "not_before_duration": "2m",
+    }
+    ret = vault_pki.role_managed("testrole", **params)
+    assert ret.result is True
+    assert ret.changes
+
+    ret = vault_pki.role_managed("testrole", **params)
+    assert ret.result is True
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup")
+@pytest.mark.usefixtures("roles_setup")
 @pytest.mark.parametrize(
     "ttl,expected", [(60, 60), ("10m", 600), ("1h", 3600), ("1d", 86400), ("30d", 2592000)]
 )
