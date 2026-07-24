@@ -242,6 +242,8 @@ def certificate_managed(
                 raise CommandExecutionError(f"role {role_name} does not exist.")
 
         issuer_info = __salt__["vault_pki.read_issuer"](issuer_ref, mount=mount)
+        if issuer_info is None:
+            raise CommandExecutionError(f"Issuer '{issuer_ref}' does not exist on mount {mount}")
 
         if append_ca_chain:
             ca_chain = [x509util.load_cert(x) for x in issuer_info["ca_chain"]]
