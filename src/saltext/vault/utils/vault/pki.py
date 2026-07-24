@@ -73,6 +73,25 @@ def check_cert_for_changes(
             return changes
         raise
 
+    if current_chain and "pkcs7" in encoding:
+        # This is an issue in salt.utils.x509.load_cert that was missed so far.
+        # PKCS#7 does not guarantee certificate order, so the leaf
+        # certificate is not necessarily reported as the main one.
+        # Identify it as the only certificate that did not issue
+        # another one in the set.
+        all_certs = [current] + current_chain
+        issuer_subjects = {
+            crt.issuer.rfc4514_string() for crt in all_certs if crt.issuer != crt.subject
+        }
+        leaves = [crt for crt in all_certs if crt.subject.rfc4514_string() not in issuer_subjects]
+        if len(leaves) != 1:  # pragma: no cover
+            # Some weird bundle without or with more than one leaf cert.
+            # Replace it, it can't match the state spec.
+            changes["replaced"] = True
+            return changes
+        current = leaves[0]
+        current_chain = [crt for crt in all_certs if crt is not current]
+
     if encoding != current_encoding:
         changes["encoding"] = {
             "old": current_encoding,
@@ -112,7 +131,7 @@ def check_cert_for_changes(
         if cert.subject.rfc4514_string() != cert.issuer.rfc4514_string()
     ]
 
-    if not compare_ca_chain(current_chain, loaded_chain):
+    if not compare_ca_chain(current_chain or [], loaded_chain):
         changes["ca_chain"] = True
 
     ca = x509util.load_cert(issuer)
@@ -167,10 +186,11 @@ def compare_cert_signing(
 def compare_ca_chain(current: list[cx509.Certificate], new: list[cx509.Certificate]):
     if len(current) != len(new):
         return False
-    for i, new_cert in enumerate(new):
-        if new_cert.fingerprint(hashes.SHA256()) != current[i].fingerprint(hashes.SHA256()):
-            return False
-    return True
+    # Compare without regarding the order since some encodings
+    # do not guarantee it (PKCS#7)
+    current_fprints = {crt.fingerprint(hashes.SHA256()) for crt in current}
+    new_fprints = {crt.fingerprint(hashes.SHA256()) for crt in new}
+    return current_fprints == new_fprints
 
 
 def dec2hex(decval: int | str) -> str:

@@ -198,6 +198,12 @@ def certificate_managed(
                 f"Invalid value '{encoding}' for encoding. Valid: der, pem, pkcs7_der, pkcs7_pem"
             )
 
+        if encoding == "der" and append_ca_chain:
+            raise SaltInvocationError(
+                "Cannot append the CA chain to DER-encoded certificates. "
+                "Use pkcs7_der if you need a binary encoding including the chain."
+            )
+
         if timestring_map(ttl_remaining, cast=int) >= timestring_map(ttl, cast=int):
             raise SaltInvocationError("The ttl_remaning cannot be larger or equal to ttl.")
 
@@ -311,7 +317,7 @@ def certificate_managed(
                 )
                 cert = __salt__["x509.encode_certificate"](
                     issued_cert["certificate"],
-                    append_certs=ca_chain if encoding in ["pem", "pkcs7_pem"] else [],
+                    append_certs=ca_chain,
                     encoding=encoding,
                 )
 
