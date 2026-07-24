@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 
+from saltext.vault.utils.vault.helpers import deserialize_csl
 from saltext.vault.utils.vault.helpers import filter_state_internal_kwargs
 from saltext.vault.utils.vault.helpers import safe_atomic_write
 from saltext.vault.utils.vault.helpers import timestring_map
@@ -413,11 +414,27 @@ def role_managed(name, mount="pki", issuer_ref=None, ttl=None, max_ttl=None, **k
                     }
                 )
         for param, arg in kwargs.items():
-            if param in current and current[param] != arg:
+            if param not in current:
+                continue
+            curr_val = current[param]
+            # Compare normalized values: The API normalizes scalars for
+            # list-type parameters and duration strings into seconds.
+            if isinstance(curr_val, list) and isinstance(arg, str):
+                arg = deserialize_csl(arg)
+            elif (
+                isinstance(curr_val, (int, float))
+                and not isinstance(curr_val, bool)
+                and isinstance(arg, str)
+            ):
+                try:
+                    arg = timestring_map(arg, cast=type(curr_val))
+                except SaltInvocationError:
+                    pass
+            if curr_val != arg:
                 changed.update(
                     {
                         param: {
-                            "old": current.get(param),
+                            "old": curr_val,
                             "new": arg,
                         }
                     }
