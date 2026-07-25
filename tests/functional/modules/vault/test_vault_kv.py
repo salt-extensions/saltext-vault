@@ -158,6 +158,28 @@ def test_patch_secret(vault, secret_mount):
     assert vault_read_secret(f"{secret_mount}/patched_secret") == {"foo": "bar", "bar": "baz"}
 
 
+def test_patch_secret_raw(vault, secret_mount):
+    res = vault.write_raw(f"{secret_mount}/patched_raw_secret", {"foo": "bar"})
+    if "v1" in secret_mount:
+        assert res is True
+    else:
+        assert res
+        assert "created_time" in res
+        assert res["destroyed"] is False
+        assert res["deletion_time"] == ""
+        assert res["version"] == 1
+    res = vault.patch_raw(f"{secret_mount}/patched_raw_secret", {"bar": "baz"})
+    if "v1" in secret_mount:
+        assert res is True
+    else:
+        assert res
+        assert "created_time" in res
+        assert res["destroyed"] is False
+        assert res["deletion_time"] == ""
+        assert res["version"] == 2
+    assert vault_read_secret(f"{secret_mount}/patched_raw_secret") == {"foo": "bar", "bar": "baz"}
+
+
 @pytest.fixture
 def existing_secret(secret_mounts):  # pylint: disable=unused-argument
     secret_key = "secret/versions/" + random_string("test", uppercase=False)
