@@ -290,6 +290,27 @@ def test_role_present_key_type_change(vault_ssh, iprole, testmode):
 
 
 @pytest.mark.usefixtures("roles_setup")
+def test_role_present_ca_allowed_user_key_lengths_csl(vault_ssh, userrole, testmode):
+    """
+    Ensure allowed_user_key_lengths values specified as comma-separated
+    strings are compared correctly against the integer lists reported by Vault.
+    """
+    params = userrole.copy()
+    params.pop("key_type")
+    params["allowed_user_key_lengths"] = {"rsa": "2048,4096"}
+    ret = vault_ssh.role_present_ca("userrole", **params, test=testmode)
+    assert ret.result is (None if testmode else True)
+    assert ("would have" in ret.comment) is testmode
+    assert "allowed_user_key_lengths" in ret.changes
+    new = vault_read("ssh/roles/userrole")["data"]
+    assert (new["allowed_user_key_lengths"] == {"rsa": [2048, 4096]}) is not testmode
+    if not testmode:
+        ret = vault_ssh.role_present_ca("userrole", **params)
+        assert ret.result is True
+        assert not ret.changes
+
+
+@pytest.mark.usefixtures("roles_setup")
 def test_role_absent(vault_ssh, testmode):
     ret = vault_ssh.role_absent("userrole", test=testmode)
     assert ret.result is (None if testmode else True)
