@@ -390,8 +390,14 @@ def restore_secret(path, *versions, all_versions=False):
 
 def destroy_secret(path, *args, all_versions=False):
     """
-    Destroy specified secret versions at <path>. Only supported on Vault KV v2.
+    Destroy specified secret versions at <path>.
     This makes a secret version unrecoverable.
+    On KV v1, there is no functional difference to ``delete``
+    because the backend does not support versioning.
+    Specifying versions fails there.
+
+    .. versionchanged:: 1.8.0
+        KV v1 secrets are now deleted instead of failing.
 
     CLI Example:
 
@@ -444,7 +450,11 @@ def wipe_secret(path):
     .. versionadded:: 1.2.0
 
     Remove all version history and data for the secret at <path>.
-    Requires KV v2.
+    On KV v1, there is no functional difference to ``delete``
+    because the backend does not support versioning.
+
+    .. versionchanged:: 1.8.0
+        KV v1 secrets are now deleted instead of failing.
 
     CLI Example:
 

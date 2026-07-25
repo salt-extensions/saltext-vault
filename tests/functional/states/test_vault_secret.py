@@ -178,3 +178,21 @@ def test_absent_wipe(vault_secret, secret_present, testmode, modules):
     assert (res is None) is not testmode
     meta = modules.vault.read_secret_meta(secret_present)
     assert (meta is False) is not testmode
+
+
+@pytest.mark.parametrize("secret_mounts", ((("kv", "secret-v1"),),), indirect=True)
+@pytest.mark.parametrize("operation", ("delete", "destroy", "wipe"))
+def test_absent_kv_v1(vault_secret, operation, testmode):
+    """
+    On KV v1, all operations should remove the secret since the backend
+    does not support versioning (as documented). ``destroy`` and ``wipe``
+    fall back to delete, which is functionally equivalent.
+    """
+    path = "secret-v1/my/secret"
+    vault_write_secret(path, foo="bar")
+    ret = vault_secret.absent(path, operation=operation, test=testmode)
+    assert ret.result is (None if testmode else True)
+    assert ("Would have" in ret.comment) is testmode
+    assert ret.changes
+    res = vault_read_secret(path)
+    assert (res is None) is not testmode
