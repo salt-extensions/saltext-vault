@@ -172,7 +172,7 @@ def write_raw(path, raw):
 
     .. code-block:: bash
 
-            salt '*' vault.write_raw "secret/my/secret" '{"user":"foo","password": "bar"}'
+            salt '*' vault.write_raw "secret/my/secret" '{user: foo, password: bar}'
 
     Required policy: see :func:`write_secret`
 
@@ -246,6 +246,38 @@ def patch_secret(path, **kwargs):
     data = {x: y for x, y in kwargs.items() if not x.startswith("__")}
     try:
         res = vault.patch_kv(path, data, __opts__, __context__)
+        if isinstance(res, dict):
+            return res["data"]
+        return res
+    except Exception as err:  # pylint: disable=broad-except
+        log.error("Failed to patch secret! %s: %s", type(err).__name__, err)
+        return False
+
+
+def patch_raw(path, raw):
+    """
+    .. versionadded:: 1.8.0
+
+    Patch raw data at <path>.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+            salt '*' vault.patch_raw "secret/my/secret" '{user: foo, password: bar}'
+
+    Required policy: see :func:`patch_secret`
+
+    path
+        Path to the secret, including mount.
+
+    raw
+        Secret data to patch into <path>. Has to be a mapping.
+        Keys set to ``null`` (JSON/YAML)/``None`` (Python) are deleted.
+    """
+    log.debug("Patching vault secrets for %s at %s", __grains__.get("id"), path)
+    try:
+        res = vault.patch_kv(path, raw, __opts__, __context__)
         if isinstance(res, dict):
             return res["data"]
         return res
