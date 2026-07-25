@@ -7,6 +7,7 @@ from tests.support.mysql import mysql_combo  # pylint: disable=unused-import
 from tests.support.mysql import mysql_container  # pylint: disable=unused-import
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
+from tests.support.vault import vault_plugin_read
 from tests.support.vault import vault_read
 from tests.support.vault import vault_revoke
 from tests.support.vault import vault_write
@@ -223,6 +224,49 @@ def test_connection_present_test_mode(vault_db, connargs):
     assert "created" in ret.changes
     assert ret.changes["created"] == "testdb"
     assert "testdb" not in vault_list("database/config")
+
+
+def test_connection_present_missing_required_kwargs(vault_db):
+    ret = vault_db.connection_present("testdb", plugin="mysql")
+    assert ret.result is False
+    assert not ret.changes
+    assert "requires the following additional kwargs" in ret.comment
+    assert "Traceback" not in ret.comment
+
+
+@pytest.fixture
+def atlas_connargs():
+    if not vault_plugin_read("database", "mongodbatlas-database-plugin", _nofail=True):
+        pytest.skip("The mongodbatlas database plugin is not available")
+    try:
+        yield {
+            "plugin": "mongodb_atlas",
+            "public_key": "abcdefgh",
+            "private_key": "01234567-89ab-cdef-0123-456789abcdef",
+            "project_id": "5cf5a45a9ccf6400e60981b6",
+            "allowed_roles": ["*"],
+            "verify": False,
+            "rotate": False,
+        }
+    finally:
+        if "testatlas" in vault_list("database/config"):
+            vault_delete("database/config/testatlas")
+            assert "testatlas" not in vault_list("database/config")
+
+
+def test_connection_present_secret_kwargs_idempotent(vault_db, atlas_connargs):
+    """
+    Secret plugin kwargs other than ``password`` (here: ``private_key``)
+    are not reported back by Vault. Ensure they do not cause the state to
+    fail the post-write parameter verification or to report changes and
+    rewrite the connection on every run.
+    """
+    ret = vault_db.connection_present("testatlas", **atlas_connargs)
+    assert ret.result is True
+    assert ret.changes.get("created") == "testatlas"
+    ret = vault_db.connection_present("testatlas", **atlas_connargs)
+    assert ret.result is True
+    assert not ret.changes
 
 
 @pytest.mark.usefixtures("connection_setup")

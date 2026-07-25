@@ -17,6 +17,7 @@ PLUGINS: immutabletypes.ImmutableDict = immutabletypes.freeze(
                 "username",
                 "password",
             ],
+            "secret": ["password"],
         },
         "couchbase": {
             "name": "couchbase",
@@ -25,6 +26,7 @@ PLUGINS: immutabletypes.ImmutableDict = immutabletypes.freeze(
                 "username",
                 "password",
             ],
+            "secret": ["password"],
         },
         "elasticsearch": {
             "name": "elasticsearch",
@@ -33,6 +35,7 @@ PLUGINS: immutabletypes.ImmutableDict = immutabletypes.freeze(
                 "username",
                 "password",
             ],
+            "secret": ["password"],
         },
         "influxdb": {
             "name": "influxdb",
@@ -41,18 +44,21 @@ PLUGINS: immutabletypes.ImmutableDict = immutabletypes.freeze(
                 "username",
                 "password",
             ],
+            "secret": ["password"],
         },
         "hanadb": {
             "name": "hana",
             "required": [
                 "connection_url",
             ],
+            "secret": ["password"],
         },
         "mongodb": {
             "name": "mongodb",
             "required": [
                 "connection_url",
             ],
+            "secret": ["password"],
         },
         "mongodb_atlas": {
             "name": "mongodbatlas",
@@ -61,30 +67,35 @@ PLUGINS: immutabletypes.ImmutableDict = immutabletypes.freeze(
                 "private_key",
                 "project_id",
             ],
+            "secret": ["private_key"],
         },
         "mssql": {
             "name": "mssql",
             "required": [
                 "connection_url",
             ],
+            "secret": ["password"],
         },
         "mysql": {
             "name": "mysql",
             "required": [
                 "connection_url",
             ],
+            "secret": ["password"],
         },
         "oracle": {
             "name": "oracle",
             "required": [
                 "connection_url",
             ],
+            "secret": ["password"],
         },
         "postgresql": {
             "name": "postgresql",
             "required": [
                 "connection_url",
             ],
+            "secret": ["password", "private_key"],
         },
         "redis": {
             "name": "redis",
@@ -94,6 +105,7 @@ PLUGINS: immutabletypes.ImmutableDict = immutabletypes.freeze(
                 "username",
                 "password",
             ],
+            "secret": ["password"],
         },
         "redis_elasticache": {
             "name": "redis-elasticache",
@@ -102,22 +114,26 @@ PLUGINS: immutabletypes.ImmutableDict = immutabletypes.freeze(
                 "username",
                 "password",
             ],
+            "secret": ["password"],
         },
         "redshift": {
             "name": "redshift",
             "required": [
                 "connection_url",
             ],
+            "secret": ["password"],
         },
         "snowflake": {
             "name": "snowflake",
             "required": [
                 "connection_url",
             ],
+            "secret": ["password", "private_key"],
         },
         "default": {
             "name": "",
             "required": [],
+            "secret": ["password"],
         },
     }
 )

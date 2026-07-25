@@ -105,6 +105,7 @@ def connection_present(
         "changes": {},
     }
     kwargs = {k: v for k, v in kwargs.items() if not k.startswith("_")}
+    secret_params = vaultdb.get_plugin_meta(plugin)["secret"]
 
     def _diff_params(current):
         nonlocal version, allowed_roles, root_rotation_statements, password_policy, kwargs
@@ -127,8 +128,7 @@ def connection_present(
             if param not in current or current[param] != arg:
                 changed.update({param: {"old": current.get(param), "new": arg}})
         for param, val in kwargs.items():
-            if param == "password":
-                # password is not reported
+            if param in secret_params:
                 continue
             if (
                 param not in current["connection_details"]
@@ -169,8 +169,9 @@ def connection_present(
                 ret["changes"]["created"] = name
             return ret
 
-        if current and "password" in kwargs:
-            kwargs.pop("password")
+        if current:
+            for param in secret_params:
+                kwargs.pop(param, None)
 
         __salt__["vault_db.write_connection"](
             name,
@@ -188,7 +189,7 @@ def connection_present(
 
         if new is None:
             raise CommandExecutionError(
-                "There were no errors during role management, but it is still reported as absent."
+                "There were no errors during connection management, but it is still reported as absent."
             )
         if not current:
             ret["changes"]["created"] = name
@@ -204,7 +205,7 @@ def connection_present(
         ret["changes"].update(changes)
         ret["comment"] = f"Connection `{name}` has been {'updated' if current else 'created'}"
 
-    except CommandExecutionError as err:
+    except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
         ret["comment"] = str(err)
         # do not reset changes
