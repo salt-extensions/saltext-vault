@@ -122,6 +122,8 @@ def key_present(
         if __opts__["test"]:
             ret["result"] = None
             ret["comment"] = f"Would have {'regenerated' if curr else 'created'} the key"
+            if curr:
+                changes["deleted"] = name
             ret["changes"] = changes
             return ret
         if curr:
