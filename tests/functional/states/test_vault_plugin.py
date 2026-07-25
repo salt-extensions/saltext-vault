@@ -239,6 +239,83 @@ def test_registered_version_update_changes(vault_plugin, secret_plugin, testmode
     ),
     indirect=True,
 )
+def test_registered_oci_image_runtime_change_detection(vault_plugin, secret_plugin):
+    """
+    Ensure specifying oci_image/runtime for a plugin whose current
+    configuration does not report these parameters results in a clean
+    change prediction instead of an uncaught KeyError.
+    """
+    ret = vault_plugin.registered(
+        secret_plugin["name"],
+        plugin_type="secret",
+        sha256=secret_plugin["sha256"],
+        oci_image="example/image",
+        runtime="runsc",
+        test=True,
+    )
+    assert ret.result is None
+    assert "Traceback" not in ret.comment
+    assert ret.changes.get("oci_image", {}).get("new") == "example/image"
+    assert ret.changes.get("runtime", {}).get("new") == "runsc"
+
+
+@pytest.mark.usefixtures("plugins_registered")
+@pytest.mark.parametrize(
+    "plugins_registered",
+    (
+        {
+            "secret_plugin": [],
+        },
+    ),
+    indirect=True,
+)
+def test_registered_no_sha256_no_changes(vault_plugin, secret_plugin, testmode):
+    """
+    When sha256 is not specified (e.g. for plugins registered as an
+    extracted .zip artifact, where it must be unset), an existing
+    registration should not be reported as changed and reregistered
+    on every run.
+    """
+    ret = vault_plugin.registered(secret_plugin["name"], plugin_type="secret", test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    assert "as specified" in ret.comment
+
+
+def test_registered_update_keeps_unmanaged_params(vault_plugin, secret_plugin):
+    """
+    The plugin catalog write replaces the whole configuration, so an
+    update triggered by a single changed parameter should try to keep
+    unspecified ones (e.g. command and args). ``env`` cannot be preserved
+    because it is not reported by the API.
+    """
+    vault_plugin_register(
+        secret_plugin["plugin_type"],
+        secret_plugin["name"],
+        sha256=secret_plugin["sha256"],
+        command="explicit-cmd",
+        args=["foo=bar"],
+    )
+    new_sha = "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    ret = vault_plugin.registered(secret_plugin["name"], plugin_type="secret", sha256=new_sha)
+    assert ret.result is True
+    assert ret.changes == {"sha256": {"old": secret_plugin["sha256"], "new": new_sha}}
+    plugin = vault_plugin_read("secret", secret_plugin["name"])
+    assert plugin["sha256"] == new_sha
+    assert plugin["command"] == "explicit-cmd"
+    assert plugin["args"] == ["foo=bar"]
+
+
+@pytest.mark.usefixtures("plugins_registered")
+@pytest.mark.parametrize(
+    "plugins_registered",
+    (
+        {
+            "secret_plugin": [],
+        },
+    ),
+    indirect=True,
+)
 def test_registered_ok(vault_plugin, secret_plugin, testmode):
     ret = vault_plugin.registered(
         secret_plugin["name"], plugin_type="secret", sha256=secret_plugin["sha256"], test=testmode

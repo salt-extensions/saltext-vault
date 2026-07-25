@@ -65,18 +65,17 @@ def _manage_plugin(
             current = None
             changes["registered"] = name
         else:
-            if current["sha256"] != sha256:
-                changes["sha256"] = {"old": current["sha256"], "new": sha256}
+            if sha256 is not None and current.get("sha256") != sha256:
+                changes["sha256"] = {"old": current.get("sha256"), "new": sha256}
             if command is not None and current["command"] != command:
                 changes["command"] = {"old": current["command"], "new": command}
             if args is not None and current["args"] != args:
                 changes["args"] = {"old": current["args"], "new": args}
             # env is not reported
-            # unsure about the following, could not test
             if oci_image is not None and current.get("oci_image") != oci_image:
-                changes["oci_image"] = {"old": current["oci_image"], "new": oci_image}
+                changes["oci_image"] = {"old": current.get("oci_image"), "new": oci_image}
             if runtime is not None and current.get("runtime") != runtime:
-                changes["runtime"] = {"old": current["runtime"], "new": runtime}
+                changes["runtime"] = {"old": current.get("runtime"), "new": runtime}
 
         if not changes:
             return ret
@@ -88,6 +87,21 @@ def _manage_plugin(
                 f"Plugin config would have been {'updated' if current else 'registered'}"
             )
             return ret
+
+        if current:
+            # Registering a plugin replaces the whole configuration, so
+            # unspecified parameters need to be carried over to avoid
+            # resetting them (env cannot be preserved since it is not reported).
+            if sha256 is None:
+                sha256 = current.get("sha256") or None
+            if command is None:
+                command = current.get("command") or None
+            if args is None:
+                args = current.get("args") or None
+            if oci_image is None:
+                oci_image = current.get("oci_image") or None
+            if runtime is None:
+                runtime = current.get("runtime") or None
 
         __salt__["vault_plugin.register"](
             plugin_type=plugin_type,
@@ -435,7 +449,7 @@ def version_pinned(name, plugin_type, version, now=False, now_globally=False):
 
 def version_unpinned(name, plugin_type, now=False, now_globally=False):
     """
-    Ensure a plugin is pinned to a specific version.
+    Ensure a plugin is not pinned to a specific version.
 
     .. note::
         Only available on Vault.
