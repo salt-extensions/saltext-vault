@@ -28,6 +28,8 @@ Privkey: typing.TypeAlias = (
     | rsa.RSAPrivateKey
 )
 
+SUPPORTED_SAN_TYPES = ("DNS", "EMAIL", "IP", "URI")
+
 
 def check_cert_for_changes(
     current: str,
@@ -191,6 +193,65 @@ def compare_ca_chain(current: list[cx509.Certificate], new: list[cx509.Certifica
     current_fprints = {crt.fingerprint(hashes.SHA256()) for crt in current}
     new_fprints = {crt.fingerprint(hashes.SHA256()) for crt in new}
     return current_fprints == new_fprints
+
+
+def norm_sans(
+    sans: dict[str, str | list[str]] | list[str],
+) -> dict[str, list[str]]:
+    """
+    Normalize all allowed inputs for SubjectAlternativeNames into a dict of lists
+    with uppercase keys.
+    """
+    parsed: dict[str, list[str]] = {}
+
+    def _norm(typ):
+        typ = typ.upper()
+        if typ not in SUPPORTED_SAN_TYPES:
+            try:
+                cx509.ObjectIdentifier(typ)
+            except ValueError as err:
+                raise SaltInvocationError(
+                    f"Invalid SAN type '{typ}', valid: DNS, EMAIL, IP, URI, <OID>"
+                ) from err
+        return typ
+
+    if isinstance(sans, list):
+        try:
+            for typ, val in (item.split(":", 1) for item in sans):
+                parsed.setdefault(_norm(typ), []).append(val)
+        except ValueError as err:
+            raise CommandExecutionError(
+                f"SAN is not in correct format. Must be in format <type>:<value>: {err}"
+            ) from err
+        return parsed
+    if isinstance(sans, dict):
+        for k, v in sans.items():
+            parsed.setdefault(_norm(k), []).extend(v if isinstance(v, list) else [v])
+        return parsed
+    raise SaltInvocationError("Wrong format for alt_names")  # pragma: no cover
+
+
+def split_sans(sans: dict[str, list[str]]) -> tuple[list[str], list[str], list[str], list[str]]:
+    """
+    Render a normalized dict of lists of SubjectAlternativeNames into a format
+    Vault understands and return each type separately.
+    """
+    dns_sans = []
+    ip_sans = []
+    uri_sans = []
+    other_sans = []
+
+    for typ, vals in sans.items():
+        if typ in ("DNS", "EMAIL"):
+            dns_sans.extend(vals)
+        elif typ == "IP":
+            ip_sans.extend(vals)
+        elif typ == "URI":
+            uri_sans.extend(vals)
+        else:
+            other_sans.extend(f"{typ};UTF8:{vv}" for vv in vals)
+
+    return dns_sans, ip_sans, uri_sans, other_sans
 
 
 def dec2hex(decval: int | str) -> str:
