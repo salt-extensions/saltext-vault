@@ -575,6 +575,52 @@ def test_creds_cached_reissue_only(testmode, vault_db, loaders):
     assert (new == old) is testmode
 
 
+@pytest.mark.parametrize("_cached_creds", ({"valid_for": "50m"},), indirect=True)
+@pytest.mark.parametrize("valid_for", ("240m", 14400))
+def test_creds_cached_renew_min_ttl_timestring(
+    testmode, valid_for, vault_db, modules, _cached_creds
+):
+    """
+    Ensure a lease whose min_ttl was cached as a time string is compared
+    correctly when the state requests a longer validity.
+    """
+    ret = vault_db.creds_cached("testrole", valid_for=valid_for, test=testmode)
+    assert (ret.result is None) is testmode
+    assert ret.changes
+    assert "expiry" in ret.changes
+    assert ret.changes["min_ttl"] == {"old": "50m", "new": valid_for}
+    assert "renewed" in ret.comment
+    assert ("would have" in ret.comment) is testmode
+    if not testmode:
+        assert modules.vault_db.get_creds("testrole") == _cached_creds
+
+
+@pytest.mark.parametrize(
+    "_cached_creds",
+    ({"valid_for": 300, "renew_increment": 120, "revoke_delay": 240, "meta": {"foo": "bar"}},),
+    indirect=True,
+)
+def test_creds_cached_edit_keeps_unspecified_attrs(testmode, vault_db, modules, _cached_creds):
+    """
+    Ensure that when the state needs to call the execution module to apply
+    changes, lease attributes that were not specified in the state call are
+    kept on the cached lease instead of being reset to defaults.
+    """
+    ret = vault_db.creds_cached("testrole", valid_for=600, test=testmode)
+    assert (ret.result is None) is testmode
+    assert ret.changes == {"min_ttl": {"old": 300, "new": 600}}
+    assert "edited" in ret.comment
+    assert ("would have" in ret.comment) is testmode
+    if not testmode:
+        assert modules.vault_db.get_creds("testrole") == _cached_creds
+    curr = modules.vault_db.list_cached()
+    curr = curr[next(iter(curr))]
+    assert curr["min_ttl"] == (300 if testmode else 600)
+    assert curr["renew_increment"] == 120
+    assert curr["revoke_delay"] == 240
+    assert curr["meta"] == {"foo": "bar"}
+
+
 @pytest.mark.usefixtures("_cached_creds")
 def test_creds_uncached(testmode, vault_db, modules):
     ret = vault_db.creds_uncached("testrole", test=testmode)
