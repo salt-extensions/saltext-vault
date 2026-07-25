@@ -233,11 +233,17 @@ class VaultKV:
         all_versions: bool = False,
     ):
         """
-        Permanently remove version data. Requires KV v2.
+        Permanently remove version data.
+
+        On KV v1, there is no functional difference to ``delete`` since the backend
+        does not support versioning. Specifying ``versions`` fails there.
+
+        .. versionchanged:: 1.8.0
+            KV v1 secrets are now deleted instead of failing.
 
         versions
             Specifies versions to destroy. Needs to be castable
-            to a list of integers.
+            to a list of integers. Requires KV v2.
 
             .. versionchanged:: 1.2.0
                 If unspecified, destroys the most recent version.
@@ -249,7 +255,11 @@ class VaultKV:
         """
         v2_info = self.is_v2(path)
         if not v2_info["v2"]:
-            raise VaultInvocationError("Destroy operation requires KV v2.")
+            if versions is not None:
+                raise VaultInvocationError("Versioning support requires KV v2.")
+            # KV v1 does not support versioning, the only
+            # possible operation is permanent deletion.
+            return self.client.delete(path)
         if all_versions or not versions:
             versions = []
             try:
@@ -288,12 +298,16 @@ class VaultKV:
     def nuke(self, path: str):
         """
         Delete path metadata and version data, including all version history.
-        Requires KV v2.
+
+        On KV v1, there is no functional difference to ``delete`` since the backend
+        does not support versioning.
+
+        .. versionchanged:: 1.8.0
+            KV v1 secrets are now deleted instead of failing.
         """
         v2_info = self.is_v2(path)
-        if not v2_info["v2"]:
-            raise VaultInvocationError("Wipe operation requires KV v2.")
-        path = v2_info["metadata"]
+        if v2_info["v2"]:
+            path = v2_info["metadata"]
         return self.client.delete(path)
 
     def list(self, path: str) -> list[str]:
