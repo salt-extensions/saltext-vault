@@ -16,7 +16,7 @@ from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 
 from saltext.vault.utils import vault
-from saltext.vault.utils.vault.pki import dec2hex
+from saltext.vault.utils.vault import pki
 
 try:
     import salt.utils.x509 as x509util
@@ -962,7 +962,7 @@ def issue_certificate(
     **kwargs,
 ):
     """
-    Generate and issue a new certificate with private key.
+    Generate and issue a new certificate and private key.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#generate-certificate-and-key>`__.
 
@@ -982,11 +982,17 @@ def issue_certificate(
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     issuer_ref
-        Override role's issuer. Can be issuer_name or issuer_id.
+        Specify an explicit issuer instead of taking it from the role definition.
+        Can be issuer_name or issuer_id.
 
     alt_names
-        Any alternative names to be added to the certificate. Can be specified either as dict (``{ "<type>": "<value"}``)
-        or list of SANs (``["<type>:<value>"]``).
+        Any alternative names to be added to the certificate.
+        Can be specified either as dict (``{ "<type>": "<value>" }``),
+        a dict of lists(``{ "<type>": ["<value1>", "<value2>", ...] })
+        or list of SAN strings (``["<type>:<value>"]``).
+
+        ``<type>`` can be ``dns``, ``email``, ``uri``, ``ip`` or any OID for otherName SANs.
+        ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8;``.
 
     ttl
         Specifies the requested Time To Live (after which the certificate expires).
@@ -999,7 +1005,7 @@ def issue_certificate(
         If set to true, the Common Name is not part of the SANs.
 
     kwargs
-        Any additional parameter accepted by Vault API.
+        Any additional parameter accepted by the Vault API.
     """
     endpoint = f"{mount}/issue/{role_name}"
     if issuer_ref is not None:
@@ -1015,7 +1021,7 @@ def issue_certificate(
     payload["exclude_cn_from_sans"] = exclude_cn_from_sans
 
     if alt_names is not None:
-        dns_sans, ip_sans, uri_sans, other_sans = _split_sans(alt_names)
+        dns_sans, ip_sans, uri_sans, other_sans = pki.split_sans(pki.norm_sans(alt_names))
         payload["alt_names"] = ",".join(dns_sans)
         payload["ip_sans"] = ",".join(ip_sans)
         payload["uri_sans"] = ",".join(uri_sans)
@@ -1044,7 +1050,7 @@ def sign_certificate(
     **kwargs,
 ):
     """
-    Issue a new certificate from existing private key or CSR.
+    Issue a new certificate from an existing private key or CSR.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#sign-certificate>`__.
 
@@ -1066,7 +1072,8 @@ def sign_certificate(
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     csr
-        Pass the CSR which should be used for issuing the certificate. Either ``csr`` or ``private_key`` parameter can be set, not both.
+        Pass the CSR which should be used for issuing the certificate.
+        Either ``csr`` or ``private_key`` parameter can be set, not both.
 
     private_key
         Private key for which certificate should be issued. Can be text or path.
@@ -1082,11 +1089,23 @@ def sign_certificate(
         Digest to be used for generating the CSR. Not used in case of ``private_key``. Defaults to ``sha256``
 
     issuer_ref
-        Override role's issuer. Can be issuer_name or issuer_id.
+        Specify an explicit issuer instead of taking it from the role definition.
+        Can be issuer_name or issuer_id.
 
     alt_names
-        Any alternative names to be added to the certificate. Can be specified either as dict (``{ "<type>": "<value"}``)
-        or list of SANs (``["<type>:<value>"]``).
+        Any alternative names to be added to the certificate.
+        Can be specified either as dict (``{ "<type>": "<value>" }``),
+        a dict of lists(``{ "<type>": ["<value1>", "<value2>", ...] })
+        or list of SAN strings (``["<type>:<value>"]``).
+
+        ``<type>`` can be ``dns``, ``email``, ``uri``, ``ip`` or any OID for otherName SANs.
+        ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8;``.
+
+        .. note::
+            As of writing this, otherName SANs are not supported by the
+            :py:func:`x509_v2 module <salt.modules.x509_v2.create_csr>`, which is used to generate
+            a CSR when ``csr`` is not specified. If you need to make this work, in the affected role,
+            set ``use_csr_sans`` to ``false``, which circumvents this issue.
 
     ttl
         Specifies the requested Time To Live (after which the certificate be expire).
@@ -1107,62 +1126,83 @@ def sign_certificate(
         If set to true, the Common Name is not part of the SANs.
 
     kwargs
-        Any additional parameter accepted by Vault API or
-        `x509_v2 module <https://docs.saltproject.io/en/latest/ref/modules/all/salt.modules.x509_v2.html#salt.modules.x509_v2.create_csr>`__
+        Any additional parameter accepted by the Vault API or the
+        :py:func:`x509_v2 module <salt.modules.x509_v2.create_csr>`
     """
 
     if csr is None and private_key is None:
-        raise SaltInvocationError("either csr or private_key must be passed.")
+        raise SaltInvocationError("Either csr or private_key must be passed.")
 
     if csr is not None and private_key is not None:
-        raise SaltInvocationError("only one of csr or private_key must be passed, not both")
-
-    csr_args, extra_args = _split_csr_kwargs(kwargs)
+        raise SaltInvocationError("Only one of csr or private_key must be passed, not both")
 
     sign = "sign-verbatim" if sign_verbatim else "sign"
-
     endpoint = f"{mount}/{sign}/{role_name}"
     if issuer_ref is not None:
         endpoint = f"{mount}/issuer/{issuer_ref}/{sign}/{role_name}"
+    csr_args, extra_args = _split_csr_kwargs(kwargs)
 
     payload = {k: v for k, v in extra_args.items() if not k.startswith("_")}
-
     payload["common_name"] = common_name
-
     if ttl is not None:
         payload["ttl"] = ttl
-
     payload["format"] = encoding
     payload["exclude_cn_from_sans"] = exclude_cn_from_sans
 
+    norm_sans = None
     if alt_names is not None:
-        dns_sans, ip_sans, uri_sans, other_sans = _split_sans(alt_names)
+        norm_sans = pki.norm_sans(alt_names)
+        dns_sans, ip_sans, uri_sans, other_sans = pki.split_sans(norm_sans)
         payload["alt_names"] = ",".join(dns_sans)
         payload["ip_sans"] = ",".join(ip_sans)
         payload["uri_sans"] = ",".join(uri_sans)
         payload["other_sans"] = ",".join(other_sans)
 
-    # In case private_key is passed we're going to build
-    # CSR in place.
+    # In case private_key is passed, we're going to build a CSR in place.
     if private_key is not None:
-        if isinstance(alt_names, dict):
-            alt_names = [
-                f"{k}:{vv}"
-                for k, v in alt_names.items()
-                for vv in ([v] if isinstance(v, str) else v)
+        if norm_sans:
+            csr_args["subjectAltName"] = [
+                f"{k}:{vv}" if k.upper() in pki.SUPPORTED_SAN_TYPES else f"otherName:{k};UTF8:{vv}"
+                for k, v in norm_sans.items()
+                for vv in v
             ]
-
-        if alt_names:
-            csr_args["subjectAltName"] = alt_names
-
         csr_args["CN"] = common_name
-
-        csr = __salt__["x509.create_csr"](
-            private_key=private_key,
-            private_key_passphrase=private_key_passphrase,
-            digest=digest,
-            **csr_args,
-        )
+        try:
+            csr = __salt__["x509.create_csr"](
+                private_key=private_key,
+                private_key_passphrase=private_key_passphrase,
+                digest=digest,
+                **csr_args,
+            )
+        except SaltInvocationError as err:
+            if not norm_sans or "otherName is currently not implemented" not in str(err):
+                raise
+            try:
+                role = read_role(role_name, mount=mount)
+            except CommandExecutionError as err2:
+                raise CommandExecutionError(
+                    "Cannot include otherName SANs when `private_key` is passed and the role "
+                    "has `use_csr_sans` set to true. Tried checking role for `use_csr_sans` "
+                    "but access was denied. Either permit access and ensure `use_csr_sans` "
+                    "is disabled, remove the otherName SANs or pass `csr` instead of `private_key`."
+                ) from err2
+            if role is None:
+                raise CommandExecutionError(
+                    f"Role '{role}' on mount '{mount}' does not exist"
+                ) from err
+            if role.get("use_csr_sans", True):
+                raise CommandExecutionError(
+                    "Cannot include otherName SANs when `private_key` is passed and the role "
+                    "has `use_csr_sans` set to true. Either set it to false, remove the otherName "
+                    "SANs or pass `csr` instead of `private_key`."
+                ) from err
+            csr_args.pop("subjectAltName")
+            csr = __salt__["x509.create_csr"](
+                private_key=private_key,
+                private_key_passphrase=private_key_passphrase,
+                digest=digest,
+                **csr_args,
+            )
 
     payload["csr"] = csr
 
@@ -1212,7 +1252,7 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
             )
         elif serial is not None:
             if isinstance(serial, int):
-                serial = dec2hex(serial)
+                serial = pki.dec2hex(serial)
             payload["serial_number"] = serial
 
         vault.query("POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True)
@@ -1245,38 +1285,6 @@ def read_urls(mount="pki"):
         return vault.query("GET", endpoint, __opts__, __context__)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
-
-
-def _split_sans(sans) -> tuple[list[str], list[str], list[str], list[str]]:
-    dns_sans = []
-    ip_sans = []
-    uri_sans = []
-    other_sans = []
-
-    try:
-        if isinstance(sans, list):
-            dic = {}
-            for typ, val in map(lambda x: x.split(":", 1), sans):
-                dic.setdefault(typ, []).append(val)
-            sans = dic
-
-        for k, v in sans.items():
-            if isinstance(v, str):
-                v = [v]
-            if k.upper() == "DNS" or k.upper() == "EMAIL":
-                dns_sans.extend(v)
-            elif k.upper() == "IP":
-                ip_sans.extend(v)
-            elif k.upper() == "URI":
-                uri_sans.extend(v)
-            else:
-                other_sans.extend(f"{k};UTF8:{vv}" for vv in v)
-    except ValueError as err:
-        raise CommandExecutionError(
-            f"SAN is not in correct format. Must be in format <type>:<value>: {err}"
-        ) from err
-
-    return dns_sans, ip_sans, uri_sans, other_sans
 
 
 def _split_csr_kwargs(kwargs):

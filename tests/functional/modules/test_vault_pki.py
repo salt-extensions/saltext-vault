@@ -1,3 +1,4 @@
+import contextlib
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -5,6 +6,7 @@ from datetime import timezone
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
+from salt.exceptions import CommandExecutionError
 from salt.utils.x509 import generate_rsa_privkey
 from salt.utils.x509 import load_cert
 
@@ -35,8 +37,8 @@ def minion_config_overrides(salt_version):
 
 
 @pytest.fixture
-def testrole():
-    return {
+def testrole(request):
+    defaults = {
         "ttl": 3600,
         "max_ttl": 86400,
         "allow_any_name": True,
@@ -44,6 +46,8 @@ def testrole():
         "allowed_uri_sans": ["*"],
         "issuer_ref": "testissuer",
     }
+    defaults.update(getattr(request, "param", {}))
+    return defaults
 
 
 @pytest.fixture
@@ -304,50 +308,73 @@ def test_sign_certificate_with_private_key(vault_pki, private_key):
 
 @pytest.mark.usefixtures("issuers_setup")
 @pytest.mark.usefixtures("roles_setup")
-@pytest.mark.parametrize("sans_as_list", (False, True))
-def test_sign_certificate_with_dict_alt_names(vault_pki, private_key, sans_as_list):
+@pytest.mark.parametrize(
+    "testrole,fail,sans_as_list",
+    (
+        ({}, False, False),
+        ({"usr_csr_sans": False}, False, True),
+        ({}, True, False),
+    ),
+    indirect=["testrole"],
+)
+def test_sign_certificate_with_dict_alt_names(vault_pki, private_key, sans_as_list, testrole, fail):
     alt_names = {
         "DNS": "test2.example.com",
         "IP": "1.2.3.4",
         "URI": "https://foo.bar",
-        # "1.2.3.4": "some identifier",  # otherName is currently not supported by x509_v2
+        "1.2.3.4": "some identifier",  # otherName is currently not supported by x509_v2
     }
     if sans_as_list:
         alt_names["DNS"] = [alt_names["DNS"], "test3.example.com"]
         alt_names["IP"] = [alt_names["IP"], "2.3.4.5"]
         alt_names["URI"] = [alt_names["URI"], "https://bar.baz"]
-        # alt_names["1.2.3.4"] = [alt_names["1.2.3.4"], "some other identifier"]
-    ret = vault_pki.sign_certificate(
-        "testrole",
-        common_name="test.example.com",
-        private_key=private_key,
-        ttl="2h",
-        alt_names=alt_names,
-    )
+        alt_names["1.2.3.4"] = [alt_names["1.2.3.4"], "some other identifier"]
+    ctx = contextlib.nullcontext()
+    use_csr_sans = testrole.get("use_csr_sans", True)
+    if use_csr_sans:
+        if not fail:
+            alt_names.pop("1.2.3.4")
+        else:
+            ctx = pytest.raises(
+                CommandExecutionError, match=".*use_csr_sans.*set it to false.*otherName"
+            )
+
+    with ctx:
+        ret = vault_pki.sign_certificate(
+            "testrole",
+            common_name="test.example.com",
+            private_key=private_key,
+            ttl="2h",
+            alt_names=alt_names,
+        )
+    if fail:
+        return
     assert "certificate" in ret
     certificate = load_cert(ret["certificate"])
     san = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName)
     dns_sans = san.value.get_values_for_type(x509.DNSName)
     ip_sans = san.value.get_values_for_type(x509.IPAddress)
     uri_sans = san.value.get_values_for_type(x509.UniformResourceIdentifier)
-    # other_sans = san.value.get_values_for_type(x509.OtherName)
+    other_sans = san.value.get_values_for_type(x509.OtherName)
     assert "test2.example.com" in dns_sans
     assert "test.example.com" in dns_sans
     assert any(str(ip) == "1.2.3.4" for ip in ip_sans)
     assert "https://foo.bar" in uri_sans
-    # assert any(
-    #     other.type_id.dotted_string == "1.2.3.4" and other.value == b"\x0c\x0fsome identifier"
-    #     for other in other_sans
-    # )
+    if not use_csr_sans:
+        assert any(
+            other.type_id.dotted_string == "1.2.3.4" and other.value == b"\x0c\x0fsome identifier"
+            for other in other_sans
+        )
     if sans_as_list:
         assert "test3.example.com" in dns_sans
         assert any(str(ip) == "2.3.4.5" for ip in ip_sans)
         assert "https://bar.baz" in uri_sans
-        # assert any(
-        #     other.type_id.dotted_string == "1.2.3.4"
-        #     and other.value == b"\x0c\x15some other identifier"
-        #     for other in other_sans
-        # )
+        if not use_csr_sans:
+            assert any(
+                other.type_id.dotted_string == "1.2.3.4"
+                and other.value == b"\x0c\x15some other identifier"
+                for other in other_sans
+            )
 
 
 @pytest.mark.usefixtures("issuers_setup")
