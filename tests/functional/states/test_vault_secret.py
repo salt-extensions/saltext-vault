@@ -84,6 +84,39 @@ def test_present_change_patch(vault_secret, secret_present, testmode):
     assert (res != {"bar": "baz"}) is testmode
 
 
+def test_present_path_key(vault_secret, temp_secret, testmode):
+    """
+    A secret key named ``path`` clashed with the first positional
+    argument of the execution module functions the secret data is
+    passed to as keyword arguments, resulting in an uncaught TypeError.
+    """
+    values = {"path": "foo"}
+    ret = vault_secret.present(temp_secret, values=values, test=testmode)
+    assert ret.result is (None if testmode else True)
+    assert ("Would have" in ret.comment) is testmode
+    assert "Traceback" not in ret.comment
+    assert ret.changes
+    res = vault_read_secret(temp_secret)
+    assert (res == values) is not testmode
+
+
+def test_present_dunder_key(vault_secret, temp_secret, testmode):
+    """
+    Keys beginning with a double underscore were silently dropped by the
+    execution module when passed as keyword arguments, so the state
+    reported success without ever writing them and never converged.
+    """
+    values = {"__foo": "bar"}
+    ret = vault_secret.present(temp_secret, values=values, test=testmode)
+    assert ret.result is (None if testmode else True)
+    if testmode:
+        return
+    assert vault_read_secret(temp_secret) == values
+    ret = vault_secret.present(temp_secret, values=values)
+    assert ret.result is True
+    assert not ret.changes
+
+
 def test_absent_already_absent(vault_secret, testmode):
     ret = vault_secret.absent("secret/foo/bar/nonexistent", test=testmode)
     assert ret.result is True
