@@ -141,6 +141,19 @@ def test_present_list_param_change(vault_approle, roleargs, approle_auth, testmo
 
 
 @pytest.mark.usefixtures("roles_setup", "testrole")
+@pytest.mark.parametrize("testrole", ({"token_policies": ["foo"]},), indirect=True)
+def test_present_list_param_as_string_no_changes(vault_approle, roleargs, testmode):
+    """
+    Ensure list-type parameters specified as a string are not compared
+    character-wise against the current list.
+    """
+    roleargs["token_policies"] = "foo"
+    ret = vault_approle.present("testrole", **roleargs, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("roles_setup", "testrole")
 def test_present_time_param_change(vault_approle, roleargs, approle_auth, testmode):
     roleargs["secret_id_ttl"] = "1h"
     ret = vault_approle.present("testrole", **roleargs, test=testmode)

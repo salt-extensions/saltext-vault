@@ -14,6 +14,7 @@ from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 from salt.utils.dictdiffer import diff
 
+from saltext.vault.utils.vault.helpers import deserialize_csl
 from saltext.vault.utils.vault.helpers import timestring_map
 
 if TYPE_CHECKING:
@@ -176,7 +177,7 @@ def present(
                 ("token_bound_cidrs", token_bound_cidrs),
             ):
                 if wanted is not None and (old_set := set(curr[param] or [])) != (
-                    new_set := set(wanted)
+                    new_set := set(deserialize_csl(wanted))
                 ):
                     changes[param] = {
                         "added": list(sorted(new_set.difference(old_set))),
@@ -234,7 +235,7 @@ def present(
             "token_strictly_bind_ip": token_strictly_bind_ip,
         }
         if curr and "token_type" in changes and token_type == "batch":
-            # Switching the token type needs to would need to token_period
+            # Switching the token type would need to unset token_period
             # and token_num_uses, which needs a policy allowing those paths.
             # Just recreate the AppRole
             verb = "recreate"
