@@ -84,6 +84,23 @@ def test_present_change_patch(vault_secret, secret_present, testmode):
     assert (res != {"bar": "baz"}) is testmode
 
 
+def test_present_patch_scalar_to_mapping(vault_secret, secret_present, testmode):
+    """
+    Replacing an existing scalar value with a mapping in the default
+    (patch) mode crashed with an uncaught ValueError raised by the
+    local JSON merge patch implementation instead of applying the change.
+    """
+    values = {"foo": {"bar": "baz"}}
+    ret = vault_secret.present(secret_present, values=values, test=testmode)
+    assert ret.result is (None if testmode else True)
+    assert ("Would have" in ret.comment) is testmode
+    assert "Traceback" not in ret.comment
+    assert ret.changes
+    assert "patched" in ret.changes
+    res = vault_read_secret(secret_present)
+    assert (res == values) is not testmode
+
+
 def test_present_path_key(vault_secret, temp_secret, testmode):
     """
     A secret key named ``path`` clashed with the first positional

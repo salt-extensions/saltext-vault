@@ -20,6 +20,22 @@ if typing.TYPE_CHECKING:
 log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 
+def apply_json_merge_patch(data, patch):
+    # https://datatracker.ietf.org/doc/html/rfc7396
+    if not isinstance(patch, dict):
+        return patch
+    if not isinstance(data, dict):
+        data = {}
+    for key, value in patch.items():
+        if value is None:
+            data.pop(key, None)
+        elif isinstance(value, dict):
+            data[key] = apply_json_merge_patch(data.get(key), value)
+        else:
+            data[key] = value
+    return data
+
+
 class VaultKV:
     """
     Interface to Vault secret paths
@@ -90,21 +106,6 @@ class VaultKV:
         Since this uses the `JSON Merge Patch format <https://datatracker.ietf.org/doc/html/draft-ietf-appsawg-json-merge-patch-07>`_,
         values set to ``null`` (``None``) are dropped.
         """
-
-        def apply_json_merge_patch(data, patch):
-            if not patch:
-                return data
-            if not isinstance(data, dict) or not isinstance(patch, dict):
-                raise ValueError("Data and patch must be dictionaries.")
-
-            for key, value in patch.items():
-                if value is None:
-                    data.pop(key, None)
-                elif isinstance(value, dict):
-                    data[key] = apply_json_merge_patch(data.get(key, {}), value)
-                else:
-                    data[key] = value
-            return data
 
         v2_info = self.is_v2(path)
 
