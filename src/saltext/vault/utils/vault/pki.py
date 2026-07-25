@@ -4,6 +4,7 @@ Vault PKI helpers
 .. versionadded:: 1.1.0
 """
 
+import ipaddress
 import typing
 from datetime import datetime
 from datetime import timedelta
@@ -11,6 +12,7 @@ from datetime import timezone
 
 import salt.utils.x509 as x509util
 from cryptography import x509 as cx509
+from cryptography.hazmat import asn1
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric import ed448
@@ -28,6 +30,17 @@ Privkey: typing.TypeAlias = (
     | rsa.RSAPrivateKey
 )
 
+Encoding: typing.TypeAlias = (
+    typing.Literal["pem"]
+    | typing.Literal["pkcs7_pem"]
+    | typing.Literal["der"]
+    | typing.Literal["pkcs7_der"]
+)
+
+ExtensionChange: typing.TypeAlias = (
+    typing.Literal["added"] | typing.Literal["changed"] | typing.Literal["removed"]
+)
+
 SUPPORTED_SAN_TYPES = ("DNS", "EMAIL", "IP", "URI")
 
 
@@ -36,34 +49,60 @@ def check_cert_for_changes(
     issuer: str,
     private_key: str,
     common_name: str,
-    encoding: (
-        typing.Literal["pem"]
-        | typing.Literal["pkcs7_pem"]
-        | typing.Literal["der"]
-        | typing.Literal["pkcs7_der"]
-    ) = "pem",
+    encoding: Encoding = "pem",
     common_name_only: bool = False,
     append_chain: list[str] | str | None = None,
     private_key_passphrase: str | None = None,
     expire_tolerance: int | str | None = None,
+    alt_names: dict[str, str | list[str]] | list[str] | None = None,
     **kwargs,
 ) -> dict[str, typing.Any]:
+    """
+    current
+        Path of the certificate on disk
 
-    changes = {}
+    issuer
+        Issuer certificate
 
+    private_key
+        Path of the private key on disk
+
+    common_name
+        CN
+
+    encoding
+        Requested certificate encoding
+
+    common_name_only
+        Skip change detection on subject fields other than CN.
+
+    append_chain
+        List of certificates to append. Fails with der
+
+    private_key_passphrase
+        Passphrase for ``private_key``
+
+    expire_tolerance
+        Otherwise called ``ttl_remaining``, minimum TTL to allow
+        before requesting a fresh certificate.
+
+    alt_names
+        Requested SANs
+
+    kwargs
+        All other kwargs passed to the cert signing endpoint
+    """
+    changes: dict[str, typing.Any] = {}
     expire_tolerance = expire_tolerance or 0
-
     append_chain = append_chain or []
     if not isinstance(append_chain, list):
         append_chain = [append_chain]
 
     try:
-        (
-            current,
-            current_encoding,
-            current_chain,
-            _,
-        ) = x509util.load_cert(current, passphrase=None, get_encoding=True)
+        cert, current_encoding, current_chain, _ = typing.cast(
+            tuple[cx509.Certificate, Encoding, list[cx509.Certificate], typing.Any],
+            x509util.load_cert(current, passphrase=None, get_encoding=True),
+        )
     except SaltInvocationError as err:
         if any(
             (
@@ -81,7 +120,7 @@ def check_cert_for_changes(
         # certificate is not necessarily reported as the main one.
         # Identify it as the only certificate that did not issue
         # another one in the set.
-        all_certs = [current] + current_chain
+        all_certs = [cert] + current_chain
         issuer_subjects = {
             crt.issuer.rfc4514_string() for crt in all_certs if crt.issuer != crt.subject
         }
@@ -91,8 +130,8 @@ def check_cert_for_changes(
             # Replace it, it can't match the state spec.
             changes["replaced"] = True
             return changes
-        current = leaves[0]
-        current_chain = [crt for crt in all_certs if crt is not current]
+        cert = leaves[0]
+        current_chain = [crt for crt in all_certs if crt is not cert]
 
     if encoding != current_encoding:
         changes["encoding"] = {
@@ -102,7 +141,8 @@ def check_cert_for_changes(
 
     # Check common_name. This is always checked as a major
     # and required attribute for each certificate.
-    current_cn = current.subject.get_attributes_for_oid(x509util.NAME_ATTRS_OID["CN"])[0].value
+    # FIXME: Unless the role has `require_cn` set to false.
+    current_cn = cert.subject.get_attributes_for_oid(x509util.NAME_ATTRS_OID["CN"])[0].value
     if current_cn != common_name:
         changes.update({"subject": {"CN": {"old": current_cn, "new": common_name}}})
 
@@ -113,7 +153,7 @@ def check_cert_for_changes(
             if k == "CN":
                 continue
             if k in kwargs:
-                current_attr = current.subject.get_attributes_for_oid(v)
+                current_attr = cert.subject.get_attributes_for_oid(v)
                 if current_attr:
                     attr = current_attr[0]
                     if kwargs[k] != attr.value:
@@ -125,6 +165,14 @@ def check_cert_for_changes(
                         dict[str, dict[str, dict[str, str]]], changes.setdefault("subject", {})
                     ).update({k: {"old": "", "new": kwargs[k]}})
 
+    san_changes, change_type = compare_sans(
+        cert, alt_names or [], common_name, kwargs.get("exclude_cn_from_sans", False)
+    )
+    if san_changes:
+        changes.setdefault("extensions", {}).setdefault(change_type, {})[
+            "subjectAltName"
+        ] = san_changes
+
     loaded_chain: list[cx509.Certificate] = [x509util.load_cert(x) for x in append_chain]
     # Filter self-signed CA, which shouldn't be in the chain.
     loaded_chain = [
@@ -132,16 +180,14 @@ def check_cert_for_changes(
         for cert in loaded_chain
         if cert.subject.rfc4514_string() != cert.issuer.rfc4514_string()
     ]
-
     if not compare_ca_chain(current_chain or [], loaded_chain):
         changes["ca_chain"] = True
 
     ca = x509util.load_cert(issuer)
     privkey: Privkey = x509util.load_privkey(private_key, private_key_passphrase)
-
     changes.update(
         compare_cert_signing(
-            current=current,
+            current=cert,
             signing_ca=ca,
             private_key=privkey,
         )
@@ -149,9 +195,9 @@ def check_cert_for_changes(
 
     # Check if certificate should be renewed due to close to expiration
     try:
-        curr_not_valid_after = current.not_valid_after_utc
+        curr_not_valid_after = cert.not_valid_after_utc
     except AttributeError:
-        curr_not_valid_after = current.not_valid_after.replace(tzinfo=timezone.utc)
+        curr_not_valid_after = cert.not_valid_after.replace(tzinfo=timezone.utc)
 
     if curr_not_valid_after < datetime.now(timezone.utc) + timedelta(
         seconds=timestring_map(expire_tolerance, cast=int)
@@ -193,6 +239,34 @@ def compare_ca_chain(current: list[cx509.Certificate], new: list[cx509.Certifica
     current_fprints = {crt.fingerprint(hashes.SHA256()) for crt in current}
     new_fprints = {crt.fingerprint(hashes.SHA256()) for crt in new}
     return current_fprints == new_fprints
+
+
+def compare_sans(
+    cert: cx509.Certificate,
+    alt_names: dict[str, str | list[str]] | list[str],
+    common_name: str,
+    exclude_cn_from_sans: bool = False,
+) -> tuple[dict[str, list[str]], ExtensionChange] | tuple[None, None]:
+    """
+    Compare requested DNS, EMAIL, IP, URI and other SANs against the ones present in a certificate.
+    """
+    normalized_sans = norm_sans(alt_names)
+    requested_sans = _collect_requested_sans(normalized_sans)
+    current_sans = _collect_current_sans(cert)
+
+    if not exclude_cn_from_sans:
+        current_sans.discard(("dns", common_name))
+    if requested_sans == current_sans:
+        return None, None
+    change_type = "added" if not current_sans else "removed" if not requested_sans else "changed"
+
+    def render(typ, val):
+        return f"{typ}:{val}" if ":" not in typ else f"{typ};{val}"
+
+    return {
+        "added": sorted(render(*san) for san in requested_sans - current_sans),
+        "removed": sorted(render(*san) for san in current_sans - requested_sans),
+    }, change_type
 
 
 def norm_sans(
@@ -252,6 +326,70 @@ def split_sans(sans: dict[str, list[str]]) -> tuple[list[str], list[str], list[s
             other_sans.extend(f"{typ};UTF8:{vv}" for vv in vals)
 
     return dns_sans, ip_sans, uri_sans, other_sans
+
+
+def _collect_requested_sans(
+    alt_names: dict[str, list[str]],
+) -> set[tuple[str, str]]:
+    """
+    Collect a set of requested SubjectAlternativeNames from a normalized dict of lists
+    with uppercase keys.
+
+    Note: Ignores types other than DNS/EMAIL/IP/URI.
+    """
+    requested = set()
+    for typ, vals in alt_names.items():
+        if typ == "DNS":
+            requested.update(("dns", val) for val in vals)
+        elif typ == "EMAIL":
+            requested.update(("email", val) for val in vals)
+        elif typ == "IP":
+            for val in vals:
+                try:
+                    val = str(ipaddress.ip_address(val))
+                except ValueError:
+                    pass
+                requested.add(("ip", val))
+        elif typ == "URI":
+            requested.update(("uri", val) for val in vals)
+        else:
+            requested.update((f"otherName:{typ}", f"UTF8:{val}") for val in vals)
+    return requested
+
+
+def _collect_current_sans(cert: cx509.Certificate) -> set[tuple[str, str]]:
+    """
+    Collect a set of requested SubjectAlternativeNames from a normalized dict of lists
+    with uppercase keys.
+
+    Note: Ignores types other than DNS/EMAIL/IP/URI.
+    """
+    try:
+        ext = cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName).value
+    except cx509.ExtensionNotFound:
+        return set()
+    current_sans = set()
+    for name in ext:
+        if isinstance(name, cx509.DNSName):
+            current_sans.add(("dns", name.value))
+        elif isinstance(name, cx509.RFC822Name):
+            current_sans.add(("email", name.value))
+        elif isinstance(name, cx509.IPAddress):
+            current_sans.add(("ip", str(name.value)))
+        elif isinstance(name, cx509.UniformResourceIdentifier):
+            current_sans.add(("uri", name.value))
+        elif isinstance(name, cx509.OtherName):
+            try:
+                value = "UTF8:" + asn1.decode_der(str, name.value)
+            except ValueError:
+                # Going to be removed since Vault does not support other ASN.1 types
+                value = "<undetermined, not UTF8 ASN.1 type>"
+            current_sans.add((f"otherName:{name.type_id.dotted_string}", value))
+        elif isinstance(name, cx509.DirectoryName):
+            current_sans.add(("dirName", name.value.rfc4514_string()))
+        elif isinstance(name, cx509.RegisteredID):
+            current_sans.add(("rid", name.value.dotted_string))
+    return current_sans
 
 
 def dec2hex(decval: int | str) -> str:

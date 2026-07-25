@@ -1,4 +1,6 @@
 import pytest
+from cryptography import x509 as cx509
+from cryptography.hazmat import asn1
 from cryptography.hazmat.primitives import serialization
 from salt.utils.x509 import NAME_ATTRS_OID
 from salt.utils.x509 import generate_rsa_privkey
@@ -32,8 +34,17 @@ def vault_pki(states):
 
 
 @pytest.fixture
-def testrole():
-    return {"ttl": 3600, "max_ttl": 86400, "allow_any_name": True, "enforce_hostnames": False}
+def testrole(request):
+    defaults = {
+        "ttl": 3600,
+        "max_ttl": 86400,
+        "allow_any_name": True,
+        "enforce_hostnames": False,
+        "allowed_other_sans": ["*"],
+        "allowed_uri_sans": ["*"],
+    }
+    defaults.update(getattr(request, "param", {}))
+    return defaults
 
 
 @pytest.fixture
@@ -390,7 +401,171 @@ def test_certificate_managed_missing_issuer(vault_pki, cert_args, testmode):
     assert ret.result is False
     assert not ret.changes
     assert "'missing-issuer' does not exist" in ret.comment
+
+
+@pytest.mark.usefixtures("issuer_setup")
+@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.parametrize("testrole", ({}, {"use_csr_sans": False}), indirect=True)
+def test_certificate_managed_san(vault_pki, cert_args, testrole):
+    """
+    Ensure changes to the requested SANs are detected and applied.
+    This test is quite complex, when it should not be.
+    TODO: Refactor into separate tests.
+    """
+
+    def _assert_san(ass):
+        cert = load_cert(cert_args["name"])
+        sans = cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName).value
+        for typ, (in_vals, out_vals) in ass.items():
+            typ_sans = sans.get_values_for_type(typ)
+            if typ is cx509.IPAddress:
+                typ_sans = [str(x) for x in typ_sans]
+            elif typ is cx509.OtherName:
+                typ_sans = [
+                    f"{on.type_id.dotted_string}:{asn1.decode_der(str, on.value)}"
+                    for on in sans.get_values_for_type(cx509.OtherName)
+                ]
+            for is_in in in_vals:
+                assert is_in in typ_sans
+            for is_out in out_vals:
+                assert is_out not in typ_sans
+
+    def render_other(in_vals):
+        isl = True
+        ret = []
+        if isinstance(in_vals, str):
+            in_vals = [in_vals]
+            isl = False
+        for in_val in in_vals:
+            if in_val.startswith(("dns", "email", "uri", "ip")):
+                ret.append(in_val)
+            else:
+                typ, val = in_val.split(":", maxsplit=1)
+                ret.append(f"otherName:{typ};UTF8:{val}")
+        if not isl:
+            return ret[0]
+        return ret
+
+    dns, email, uri, ip, other = (
+        cx509.DNSName,
+        cx509.RFC822Name,
+        cx509.UniformResourceIdentifier,
+        cx509.IPAddress,
+        cx509.OtherName,
+    )
+
+    # Add cert with diverse SANs
+    csr_sans = testrole.get("use_csr_sans", True)
+    cert_args.pop("alt_names", None)
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+    init_vals = [
+        "dns:foo.example.com",
+        "dns:foo2.example.com",
+        "email:foo@b.ar",
+        "uri:https://f.o.o/bar/baz",
+        "uri:https://f.o.o/bar/quux",
+        "ip:1.1.1.1",
+        "ip:13::17",
+    ]
+    # expections of <type>: present[], absent[]
+    exp = {
+        dns: (["foo.example.com"], []),
+        email: (["foo@b.ar"], []),
+        uri: (["https://f.o.o/bar/baz"], []),
+        ip: (["1.1.1.1", "13::17"], []),
+    }
+    if not csr_sans:
+        extra_init_vals = (
+            "1.2.3.4:Hi there!",
+            "1.2.3.4:You too :)",
+            "2.3.4.5:Are you guys seriously talking to yourselves?",
+        )
+        init_vals.extend(extra_init_vals)
+        exp[other] = (list(extra_init_vals), [])
+    cert_args["alt_names"] = init_vals.copy()
+    added_vals = init_vals.copy()
+
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert ret.changes["extensions"]["added"]["subjectAltName"] == {
+        "added": list(sorted(render_other(added_vals))),
+        "removed": [],
+    }
+
+    _assert_san(exp)
+
+    # Ensure we're idempotent
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
     assert not ret.changes
+
+    # Now add more SANs
+    change_vals = [
+        "dns:foo3.example.com",
+        "email:bar@b.az",
+        "uri:https://f.o.o/bar/wut",
+        "ip:2.2.2.2",
+    ]
+    if not csr_sans:
+        extra_change_vals = (
+            "1.2.3.4:No! :|",
+            "1.3.6.1.5.5.7.8.9::::::!@#$%^&*",
+        )
+        change_vals.extend(extra_change_vals)
+        exp[other][0].extend(extra_change_vals)
+    cert_args["alt_names"].extend(change_vals)
+    exp[dns][0].append("foo3.example.com")
+    exp[email][0].append("bar@b.az")
+    exp[uri][0].append("https://f.o.o/bar/wut")
+    exp[ip][0].append("2.2.2.2")
+
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert ret.changes["extensions"]["changed"]["subjectAltName"] == {
+        "added": list(sorted(render_other(change_vals))),
+        "removed": [],
+    }
+
+    _assert_san(exp)
+
+    # Now remove the initial SANs
+    cert_args["alt_names"] = list(change_vals)
+    exp[dns] = (["foo3.example.com"], ["foo.example.com"])
+    exp[email] = (["bar@b.az"], ["foo@b.ar"])
+    exp[uri] = (["https://f.o.o/bar/wut"], ["https://f.o.o/bar/baz"])
+    exp[ip] = (["2.2.2.2"], ["1.1.1.1", "13::17"])
+    if not csr_sans:
+        exp[other] = (["1.2.3.4:No! :|"], ["1.2.3.4:Hi there!"])
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert ret.changes["extensions"]["changed"]["subjectAltName"] == {
+        "added": [],
+        "removed": list(sorted(render_other(init_vals))),
+    }
+
+    _assert_san(exp)
+
+    # Now swap both sets in one swoop
+    cert_args["alt_names"] = list(init_vals)
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert ret.changes["extensions"]["changed"]["subjectAltName"] == {
+        "added": list(sorted(render_other(init_vals))),
+        "removed": list(sorted(render_other(change_vals))),
+    }
+    exp = {k: (v[1], v[0]) for k, v in exp.items()}
+
+    _assert_san(exp)
+
+    remove_vals = cert_args.pop("alt_names")
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert ret.changes["extensions"]["removed"]["subjectAltName"] == {
+        "added": [],
+        "removed": list(sorted(render_other(remove_vals))),
+    }
 
 
 @pytest.mark.usefixtures("issuer_setup")

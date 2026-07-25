@@ -260,7 +260,6 @@ def certificate_managed(
                 # No need to make any checks, just replace the cert
                 changes["replaced"] = True
             else:
-
                 changes = check_cert_for_changes(
                     current=name,
                     append_chain=ca_chain,
