@@ -121,7 +121,9 @@ def connection_present(
             if arg is None:
                 continue
             # Strip statements to avoid tripping over final newlines
-            if param.endswith("statements"):
+            if param == "root_credentials_rotate_statements":
+                if not isinstance(arg, list):
+                    arg = [arg]
                 arg = [x.rstrip() for x in arg]
                 if param in current:
                     current[param] = [x.rstrip() for x in current[param]]
