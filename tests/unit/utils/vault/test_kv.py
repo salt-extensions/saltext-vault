@@ -464,19 +464,26 @@ class TestKVV1:
         with pytest.raises(vault.VaultInvocationError, match="Versioning support requires KV v2.*"):
             kvv1.delete(path, versions=[1, 2, 3, 4])
 
+    def test_vault_kv_destroy_versions(self, kvv1, path):
+        """
+        Ensure that VaultKV.destroy with versions raises an exception for KV v1.
+        """
+        with pytest.raises(vault.VaultInvocationError, match="Versioning support requires KV v2.*"):
+            kvv1.destroy(path, [1, 2, 3, 4])
+
     def test_vault_kv_destroy(self, kvv1, path):
         """
-        Ensure that VaultKV.destroy raises an exception for KV v1.
+        Ensure that VaultKV.destroy deletes the secret for KV v1.
         """
-        with pytest.raises(vault.VaultInvocationError):
-            kvv1.destroy(path, [1, 2, 3, 4])
+        kvv1.destroy(path)
+        kvv1.client.delete.assert_called_once_with(path)
 
     def test_vault_kv_nuke(self, kvv1, path):
         """
-        Ensure that VaultKV.nuke raises an exception for KV v1.
+        Ensure that VaultKV.nuke deletes the secret for KV v1.
         """
-        with pytest.raises(vault.VaultInvocationError):
-            kvv1.nuke(path)
+        kvv1.nuke(path)
+        kvv1.client.delete.assert_called_once_with(path)
 
     def test_vault_kv_list(self, kvv1, path):
         """

@@ -15,6 +15,8 @@ from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltException
 from salt.exceptions import SaltInvocationError
 
+from saltext.vault.utils.vault import kv
+
 if TYPE_CHECKING:
 
     from saltext.vault.utils._types import SaltContext
@@ -71,22 +73,7 @@ def present(name, values, sync=False):
                     return ret
             else:
 
-                def apply_json_merge_patch(data, patch):
-                    if not patch:
-                        return data
-                    if not isinstance(data, dict) or not isinstance(patch, dict):
-                        raise ValueError("Data and patch must be dictionaries.")
-
-                    for key, value in patch.items():
-                        if value is None:
-                            data.pop(key, None)
-                        elif isinstance(value, dict):
-                            data[key] = apply_json_merge_patch(data.get(key, {}), value)
-                        else:
-                            data[key] = value
-                    return data
-
-                new = apply_json_merge_patch(copy.deepcopy(current), values)
+                new = kv.apply_json_merge_patch(copy.deepcopy(current), values)
                 if new == current:
                     return ret
         verb = "patch" if current is not None and not sync else "write"
