@@ -274,7 +274,7 @@ def _diff_role_params(curr, wanted):
                     if isinstance(allowed, int):
                         val[algo] = [allowed]
                     else:
-                        val[algo] = deserialize_csl(allowed)
+                        val[algo] = [int(klen) for klen in deserialize_csl(allowed)]
             map_diff = salt.utils.dictdiffer.recursive_diff(
                 curr.get(param, {}), val, ignore_missing_keys=False
             )
