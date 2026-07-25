@@ -96,7 +96,7 @@ def present(name, values, sync=False):
             ret["result"] = None
             ret["comment"] = f"Would have {pp} the secret"
             return ret
-        if not __salt__[f"vault.{verb}_secret"](name, **values):
+        if not __salt__[f"vault.{verb}_raw"](name, values):
             # Only read_secret raises exceptions sadly FIXME?
             raise CommandExecutionError(f"Failed to {verb} secret, see logs for details")
         ret["comment"] = f"The secret was {pp}"
