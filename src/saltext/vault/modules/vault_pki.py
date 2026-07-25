@@ -79,6 +79,14 @@ def list_roles(mount="pki"):
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#list-roles>`__.
 
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/roles" {
+            capabilities = ["list"]
+        }
+
     CLI Example:
 
     .. code-block:: bash
@@ -102,6 +110,14 @@ def read_role(name, mount="pki"):
     Get configuration of specific PKI role.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-role>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/roles/<name>" {
+            capabilities = ["read"]
+        }
 
     CLI Example:
 
@@ -145,6 +161,14 @@ def write_role(
     Create or update PKI role.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#create-update-role>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/roles/<name>" {
+            capabilities = ["create", "update", "patch"]
+        }
 
     CLI Example:
 
@@ -257,6 +281,14 @@ def delete_role(name, mount="pki"):
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#delete-role>`__.
 
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/roles/<name>" {
+            capabilities = ["delete"]
+        }
+
     CLI Example:
 
     .. code-block:: bash
@@ -283,11 +315,19 @@ def delete_role(name, mount="pki"):
 
 def list_issuers(mount="pki"):
     """
-    List issuers information
+    List issuers information.
+
     Returns ``{ "<issuer_id>" : { "is_default": False, "issuer_name": "...", "key_id": "...", "serial_number": "...."}}``
 
-
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#list-issuers>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/issuers" {
+            capabilities = ["list"]
+        }
 
     CLI Example:
 
@@ -315,6 +355,14 @@ def read_issuer(ref="default", mount="pki"):
     Read an issuer's information.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-issuer-certificate>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/issuers/<name>" {
+            capabilities = ["read"]
+        }
 
     CLI Example:
 
@@ -353,6 +401,14 @@ def update_issuer(
     Update issuer's information.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#update-issuer>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/issuers/<name>" {
+            capabilities = ["patch"]
+        }
 
     CLI Example:
 
@@ -430,6 +486,8 @@ def read_issuer_certificate(name="default", mount="pki", include_chain=False):
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-issuer-certificate>`__.
 
+    Required policy: See :func:`read_issuer`
+
     CLI Example:
 
     .. code-block:: bash
@@ -461,6 +519,8 @@ def get_default_issuer(mount="pki"):
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#list-issuers>`__.
 
+    Required policy: See :func:`list_issuers`
+
     CLI Example:
 
     .. code-block:: bash
@@ -484,6 +544,14 @@ def set_default_issuer(name, mount="pki"):
     Set the default issuer.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#set-issuers-configuration>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/config/issuers" {
+            capabilities = ["create", "update"]
+        }
 
     CLI Example:
 
@@ -517,11 +585,19 @@ def generate_root(
 ):
     """
     Generate a new root issuer.
-    Returns ``{ "certificate" : "-----BEGIN CERTIFICATE...", "issuer_id": "...", "key_id": "...", }``
+
+    Returns ``{ "certificate" : "-----BEGIN CERTIFICATE...", "issuer_id": "...", "key_id": "...", }``.
     If type is ``exported``, also returns the private key.
 
-
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#generate-root>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/root/generate/<type>" {
+            capabilities = ["create", "update"]
+        }
 
     CLI Example:
 
@@ -612,6 +688,14 @@ def delete_key(ref, mount="pki"):
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#delete-key>`__.
 
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/key/<ref>" {
+            capabilities = ["delete"]
+        }
+
     CLI Example:
 
     .. code-block:: bash
@@ -640,6 +724,14 @@ def delete_issuer(ref, mount="pki", include_key=False):
     Delete issuer from Vault.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#delete-issuer>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/issuer/<ref>" {
+            capabilities = ["delete"]
+        }
 
     CLI Example:
 
@@ -685,6 +777,22 @@ def read_issuer_crl(ref="default", mount="pki", delta=False):
         If CA cannot sign CRLs, returns None.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-issuer-crl>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/issuer/<ref>" {
+            capabilities = ["read"]
+        }
+
+        path "<mount>/issuer/<ref>/crl" {
+            capabilities = ["read"]
+        }
+
+        path "<mount>/issuer/<ref>/crl/delta" {
+            capabilities = ["read"]
+        }
 
     CLI Example:
 
@@ -733,6 +841,14 @@ def list_revoked_certificates(mount="pki"):
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#list-revoked-certificates>`__.
 
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/certs/revoked" {
+            capabilities = ["list"]
+        }
+
     CLI Example:
 
     .. code-block:: bash
@@ -757,6 +873,14 @@ def list_certificates(mount="pki"):
     List issued certificates serial numbers
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#list-certificates>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/certs" {
+            capabilities = ["list"]
+        }
 
     CLI Example:
 
@@ -783,6 +907,14 @@ def read_certificate(serial, mount="pki"):
     Returns certificate in PEM format
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-certificate>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/cert/<serial>" {
+            capabilities = ["read"]
+        }
 
     CLI Example:
 
@@ -819,6 +951,18 @@ def read_certificate_full(serial, mount="pki"):
     and its CA chain certificates (`ca_chain`, a list of strings) in PEM format.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-certificate>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/cert/<serial>" {
+            capabilities = ["read"]
+        }
+
+        path "<mount>/issuers/<name>" {
+            capabilities = ["read"]
+        }
 
     CLI Example:
 
@@ -966,6 +1110,20 @@ def issue_certificate(
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#generate-certificate-and-key>`__.
 
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        # When not specifying issuer_ref
+        path "<mount>/issue/<role_name>" {
+            capabilities = ["create", "update"]
+        }
+
+        # When specifying issuer_ref
+        path "<mount>/issuer/<issuer_ref>/issue/<role_name>" {
+            capabilities = ["create", "update"]
+        }
+
     CLI Example:
 
     .. code-block:: bash
@@ -1055,6 +1213,35 @@ def sign_certificate(
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#sign-certificate>`__.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#sign-verbatim>`__
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        # When sign_verbatim is false and not specifying issuer_ref
+        path "<mount>/sign/<role_name>" {
+            capabilities = ["create", "update"]
+        }
+
+        # When sign_verbatim is false and specifying issuer_ref
+        path "<mount>/issuers/<issuer_ref>/sign/<role_name>" {
+            capabilities = ["create", "update"]
+        }
+
+        # When sign_verbatim is true and not specifying issuer_ref
+        path "<mount>/sign-verbatim/<role_name>" {
+            capabilities = ["create", "update"]
+        }
+
+        # When sign_verbatim is true and specifying issuer_ref
+        path "<mount>/issuers/<issuer_ref>/sign-verbatim/<role_name>" {
+            capabilities = ["create", "update"]
+        }
+
+        # When passing `private_key` and including otherName SANs
+        path "<mount>/roles/<role_name>" {
+            capabilities = ["read"]
+        }
 
     CLI Example:
 
@@ -1218,6 +1405,14 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#revoke-certificate>`__.
 
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/revoke" {
+            capabilities = ["create", "update"]
+        }
+
     CLI Example:
 
     .. code-block:: bash
@@ -1236,7 +1431,7 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
-    endpoint = f"{mount}/revoke/"
+    endpoint = f"{mount}/revoke"
     payload = {}
 
     if serial is None and certificate is None:
@@ -1269,6 +1464,14 @@ def read_urls(mount="pki"):
     No URL configuration is returned until the configuration is set.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#read-urls>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/config/urls" {
+            capabilities = ["read"]
+        }
 
     CLI Example:
 
