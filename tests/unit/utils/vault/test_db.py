@@ -6,8 +6,8 @@ from saltext.vault.utils.vault import db
 @pytest.mark.parametrize(
     "name,expected",
     (
-        ("mysql", {"name": "mysql", "required": ["connection_url"]}),
-        ("custom", {"name": "", "required": []}),
+        ("mysql", {"name": "mysql", "required": ["connection_url"], "secret": ["password"]}),
+        ("custom", {"name": "", "required": [], "secret": ["password"]}),
     ),
 )
 def test_get_plugin_meta(name, expected):
