@@ -747,9 +747,18 @@ def read_ca(mount="ssh"):
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
     if res.status_code == 200:
         return res.text
-    res.raise_for_status()
+    if res.status_code in (400, 404):
+        try:
+            errors = ", ".join(res.json()["errors"])
+        except (KeyError, ValueError):
+            errors = ""
+        if not errors:
+            # This endpoint returns an empty error list when the
+            # keys have not been configured yet.
+            errors = "keys haven't been configured yet"
+        raise CommandExecutionError(f"VaultNotFoundError: {errors}")
     raise CommandExecutionError(
-        f"Internal error, this should not have been hit. Response ({res.status_code}): {res.text}"
+        f"Unexpected response status {res.status_code} to unauthenticated public_key query: {res.text}"
     )
 
 
