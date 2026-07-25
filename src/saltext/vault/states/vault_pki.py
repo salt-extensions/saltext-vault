@@ -240,7 +240,7 @@ def certificate_managed(
                 "issuer_ref"
             )
             if issuer_ref is None:
-                raise CommandExecutionError(f"role {role_name} does not exist.")
+                raise CommandExecutionError(f"Role {role_name} does not exist.")
 
         issuer_info = __salt__["vault_pki.read_issuer"](issuer_ref, mount=mount)
         if issuer_info is None:

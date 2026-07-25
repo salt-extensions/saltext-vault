@@ -384,6 +384,10 @@ def read_issuer(ref="default", mount="pki"):
         return vault.query("GET", endpoint, __opts__, __context__, is_unauthd=True)["data"]
     except vault.VaultNotFoundError:
         return None
+    except vault.VaultServerError as err:
+        if "unable to find PKI issuer for reference" not in str(err):
+            raise
+        return None
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
