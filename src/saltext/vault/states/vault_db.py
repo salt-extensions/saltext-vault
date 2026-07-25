@@ -687,20 +687,28 @@ def creds_cached(
             ("revoke_delay", revoke_delay),
             ("meta", meta),
         ):
-            if val is not None and info.get(attr) != val:
+            if val is None:
+                continue
+            curr_val = info.get(attr)
+            if attr == "meta":
+                changed = curr_val != val
+            else:
+                # Time values can be specified as time strings or integers
+                changed = timestring_map(curr_val) != timestring_map(val)
+            if changed:
                 # Meta-only changes should be reported as well because the
                 # execution module needs to be called later to update them.
                 # This is especially valid for a lowering of min_ttl, which
                 # might result in a reissuance if the current lease has already
                 # reached its min_ttl (the current logic would not recognize that
                 # situation otherwise).
-                ret["changes"][attr] = {"old": info.get(attr), "new": val}
+                ret["changes"][attr] = {"old": curr_val, "new": val}
                 pp = "edited"
 
-        current_effective_valid_for: int | str = valid_for or 0
-        if info["min_ttl"] is not None:
-            current_effective_valid_for = max(info["min_ttl"], valid_for or 0)
-        if info["expires_in"] <= timestring_map(current_effective_valid_for):
+        current_effective_valid_for = max(
+            timestring_map(valid_for) or 0, timestring_map(info["min_ttl"]) or 0
+        )
+        if info["expires_in"] <= current_effective_valid_for:
             ret["changes"]["expiry"] = True
             pp = "renewed"
         if not ret["changes"]:
@@ -718,9 +726,11 @@ def creds_cached(
         static=static,
         cache=cache or True,
         valid_for=valid_for,
-        renew_increment=renew_increment,
-        revoke_delay=revoke_delay,
-        meta=meta,
+        # Unspecified attributes must not be reset on the cached lease,
+        # the sentinel for that is NOT_SET, not None.
+        renew_increment=renew_increment if renew_increment is not None else NOT_SET,
+        revoke_delay=revoke_delay if revoke_delay is not None else NOT_SET,
+        meta=meta if meta is not None else NOT_SET,
         mount=mount,
         _warn_about_attr_change=False,
     )
@@ -733,7 +743,6 @@ def creds_cached(
     if cached and info and new_cached[next(iter(cached))]["lease_id"] != info["lease_id"]:
         pp = "reissued"
         ret["changes"][pp] = True
-
     ret["comment"] = f"The credentials have been {pp}"
     return ret
 
