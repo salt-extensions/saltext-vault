@@ -668,82 +668,87 @@ def creds_cached(
         "changes": {},
     }
 
-    cached = __salt__["vault_db.list_cached"](
-        name, static=static, cache=cache or True if not static else True, mount=mount
-    )
-    pp = "issued"
-    info = None
-    if cached:
-        info = cached[next(iter(cached))]
-        if valid_for is NOT_SET:
-            if info["min_ttl"] is not None:
-                valid_for = info["min_ttl"]
-            else:
-                valid_for = None
-        valid_for = typing.cast(int | str | None, valid_for)
-        for attr, val in (
-            ("min_ttl", valid_for),
-            ("renew_increment", renew_increment),
-            ("revoke_delay", revoke_delay),
-            ("meta", meta),
-        ):
-            if val is None:
-                continue
-            curr_val = info.get(attr)
-            if attr == "meta":
-                changed = curr_val != val
-            else:
-                # Time values can be specified as time strings or integers
-                changed = timestring_map(curr_val) != timestring_map(val)
-            if changed:
-                # Meta-only changes should be reported as well because the
-                # execution module needs to be called later to update them.
-                # This is especially valid for a lowering of min_ttl, which
-                # might result in a reissuance if the current lease has already
-                # reached its min_ttl (the current logic would not recognize that
-                # situation otherwise).
-                ret["changes"][attr] = {"old": curr_val, "new": val}
-                pp = "edited"
+    try:
+        cached = __salt__["vault_db.list_cached"](
+            name, static=static, cache=cache or True if not static else True, mount=mount
+        )
+        pp = "issued"
+        info = None
+        if cached:
+            info = cached[next(iter(cached))]
+            if valid_for is NOT_SET:
+                if info["min_ttl"] is not None:
+                    valid_for = info["min_ttl"]
+                else:
+                    valid_for = None
+            valid_for = typing.cast(int | str | None, valid_for)
+            for attr, val in (
+                ("min_ttl", valid_for),
+                ("renew_increment", renew_increment),
+                ("revoke_delay", revoke_delay),
+                ("meta", meta),
+            ):
+                if val is None:
+                    continue
+                curr_val = info.get(attr)
+                if attr == "meta":
+                    changed = curr_val != val
+                else:
+                    # Time values can be specified as time strings or integers
+                    changed = timestring_map(curr_val) != timestring_map(val)
+                if changed:
+                    # Meta-only changes should be reported as well because the
+                    # execution module needs to be called later to update them.
+                    # This is especially valid for a lowering of min_ttl, which
+                    # might result in a reissuance if the current lease has already
+                    # reached its min_ttl (the current logic would not recognize that
+                    # situation otherwise).
+                    ret["changes"][attr] = {"old": curr_val, "new": val}
+                    pp = "edited"
 
-        current_effective_valid_for = max(
-            timestring_map(valid_for) or 0, timestring_map(info["min_ttl"]) or 0
-        )
-        if info["expires_in"] <= current_effective_valid_for:
-            ret["changes"]["expiry"] = True
-            pp = "renewed"
-        if not ret["changes"]:
+            current_effective_valid_for = max(
+                timestring_map(valid_for) or 0, timestring_map(info["min_ttl"]) or 0
+            )
+            if info["expires_in"] <= current_effective_valid_for:
+                ret["changes"]["expiry"] = True
+                pp = "renewed"
+            if not ret["changes"]:
+                return ret
+        else:
+            ret["changes"]["new"] = True
+        if __opts__["test"]:
+            ret["result"] = None
+            if pp == "renewed":
+                pp = "renewed/reissued"
+            ret["comment"] = f"The credentials would have been {pp}"
             return ret
-    else:
-        ret["changes"]["new"] = True
-    if __opts__["test"]:
-        ret["result"] = None
-        if pp == "renewed":
-            pp = "renewed/reissued"
-        ret["comment"] = f"The credentials would have been {pp}"
-        return ret
-    __salt__["vault_db.get_creds"](
-        name,
-        static=static,
-        cache=cache or True,
-        valid_for=valid_for,
-        # Unspecified attributes must not be reset on the cached lease,
-        # the sentinel for that is NOT_SET, not None.
-        renew_increment=renew_increment if renew_increment is not None else NOT_SET,
-        revoke_delay=revoke_delay if revoke_delay is not None else NOT_SET,
-        meta=meta if meta is not None else NOT_SET,
-        mount=mount,
-        _warn_about_attr_change=False,
-    )
-    new_cached = __salt__["vault_db.list_cached"](name, static=static, cache=cache, mount=mount)
-    if not new_cached:
-        raise CommandExecutionError(
-            "Could not find cached credentials after issuing, this is likely a bug"
+        __salt__["vault_db.get_creds"](
+            name,
+            static=static,
+            cache=cache or True,
+            valid_for=valid_for,
+            # Unspecified attributes must not be reset on the cached lease,
+            # the sentinel for that is NOT_SET, not None.
+            renew_increment=renew_increment if renew_increment is not None else NOT_SET,
+            revoke_delay=revoke_delay if revoke_delay is not None else NOT_SET,
+            meta=meta if meta is not None else NOT_SET,
+            mount=mount,
+            _warn_about_attr_change=False,
         )
-    # Ensure the reporting is correct.
-    if cached and info and new_cached[next(iter(cached))]["lease_id"] != info["lease_id"]:
-        pp = "reissued"
-        ret["changes"][pp] = True
-    ret["comment"] = f"The credentials have been {pp}"
+        new_cached = __salt__["vault_db.list_cached"](name, static=static, cache=cache, mount=mount)
+        if not new_cached:
+            raise CommandExecutionError(
+                "Could not find cached credentials after issuing, this is likely a bug"
+            )
+        # Ensure the reporting is correct.
+        if cached and info and new_cached[next(iter(cached))]["lease_id"] != info["lease_id"]:
+            pp = "reissued"
+            ret["changes"][pp] = True
+        ret["comment"] = f"The credentials have been {pp}"
+    except (CommandExecutionError, SaltInvocationError) as err:
+        ret["result"] = False
+        ret["comment"] = str(err)
+        ret["changes"] = {}
     return ret
 
 
@@ -782,16 +787,21 @@ def creds_uncached(
         "changes": {},
     }
 
-    cached = __salt__["vault_db.list_cached"](name, static=static, cache=cache, mount=mount)
-    if not cached:
-        return ret
-    ret["changes"]["revoked"] = list(cached)
-    if __opts__["test"]:
-        ret["result"] = None
-        ret["comment"] = "The credentials would have been revoked"
-        return ret
-    __salt__["vault_db.clear_cached"](name, static=static, cache=cache, mount=mount)
-    ret["comment"] = "The credentials have been revoked"
+    try:
+        cached = __salt__["vault_db.list_cached"](name, static=static, cache=cache, mount=mount)
+        if not cached:
+            return ret
+        ret["changes"]["revoked"] = list(cached)
+        if __opts__["test"]:
+            ret["result"] = None
+            ret["comment"] = "The credentials would have been revoked"
+            return ret
+        __salt__["vault_db.clear_cached"](name, static=static, cache=cache, mount=mount)
+        ret["comment"] = "The credentials have been revoked"
+    except (CommandExecutionError, SaltInvocationError) as err:
+        ret["result"] = False
+        ret["comment"] = str(err)
+        ret["changes"] = {}
     return ret
 
 
