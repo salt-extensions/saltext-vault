@@ -202,9 +202,11 @@ def beacon(config):
                 lease,
                 valid_for=effective_config["min_ttl"],
                 revoke=False,
-                check_server=effective_config.get("check_server", False),
+                check_server=False,  # already did that
             )
             if not res:
+                # Update our info after attempted renewal before sending it in event
+                lease_info = store.list_info(lease).get(lease) or lease_info
                 events.append(_enrich_info(lease, effective_config, lease_info))
                 continue
     return events

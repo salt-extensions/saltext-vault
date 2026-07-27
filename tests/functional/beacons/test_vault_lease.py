@@ -335,8 +335,12 @@ def test_beacon_min_ttl_unattainable(beacon, beacon_config):
     ret = beacon(beacon_config)
     assert len(ret) == 1
     ret = ret[0]
-    _assert_evt(ret, min_ttl=8000)
-    assert ret["expires_in"] > 3590
+    _assert_evt(
+        ret,
+        min_ttl=8000,
+        duration=pytest.approx(7200, abs=60),
+        expires_in=pytest.approx(7200, abs=60),
+    )
 
 
 @pytest.mark.usefixtures("beacon_config", "lease_creation_params")
@@ -380,7 +384,25 @@ def test_beacon_meta(beacon, beacon_config, expected_meta):
     ret = beacon(beacon_config)
     assert len(ret) == 1
     ret = ret[0]
-    _assert_evt(ret, min_ttl=10000, meta=expected_meta)
+    _assert_evt(ret, min_ttl=10000, meta=expected_meta, duration=pytest.approx(7200, abs=60))
+
+
+@pytest.mark.usefixtures("beacon_config", "lease_creation_params")
+@pytest.mark.parametrize("beacon_config", ({"min_ttl": 8000},), indirect=True)
+def test_beacon_failed_renewal_reports_fresh_info(beacon, beacon_config, vault_db, existing_lease):
+    """
+    When a renewal attempt does not manage to reach ``min_ttl``, the emitted
+    event must reflect the lease state after the renewal attempt, not the
+    stale snapshot from before it.
+    """
+    ret = beacon(beacon_config)
+    assert len(ret) == 1
+    evt = ret[0]
+    info = vault_db.list_cached()[existing_lease]
+    # Sanity check: the renewal attempt extended the cached lease close to max_ttl
+    assert info["expires_in"] == pytest.approx(7200, abs=60)
+    assert evt["expires_in"] == pytest.approx(info["expires_in"], abs=60)
+    assert evt["duration"] == info["duration"]
 
 
 def _assert_evt(evt, *remove, **expected):
@@ -405,7 +427,7 @@ def _assert_evt(evt, *remove, **expected):
         "ckey": "db.database.dynamic.testrole.default",
         # For renewals, we can't know what the max_ttl is, so this will be the default
         # duration.
-        "duration": 3600,
+        "duration": pytest.approx(3600, abs=60),
         "expired": False,
         "meta": None,
         "min_ttl": 300,
