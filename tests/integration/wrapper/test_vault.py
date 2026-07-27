@@ -15,6 +15,7 @@ from tests.functional.modules.vault.test_vault_kv import test_destroy_secret_all
 from tests.functional.modules.vault.test_vault_kv import test_destroy_secret_latest
 from tests.functional.modules.vault.test_vault_kv import test_destroy_secret_versions
 from tests.functional.modules.vault.test_vault_kv import test_list_secrets as _test_list_secrets
+from tests.functional.modules.vault.test_vault_kv import test_patch_raw
 from tests.functional.modules.vault.test_vault_kv import test_patch_secret
 from tests.functional.modules.vault.test_vault_kv import test_read_secret
 from tests.functional.modules.vault.test_vault_kv import test_read_secret_meta

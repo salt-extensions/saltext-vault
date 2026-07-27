@@ -158,7 +158,7 @@ def test_patch_secret(vault, secret_mount):
     assert vault_read_secret(f"{secret_mount}/patched_secret") == {"foo": "bar", "bar": "baz"}
 
 
-def test_patch_secret_raw(vault, secret_mount):
+def test_patch_raw(vault, secret_mount):
     res = vault.write_raw(f"{secret_mount}/patched_raw_secret", {"foo": "bar"})
     if "v1" in secret_mount:
         assert res is True
