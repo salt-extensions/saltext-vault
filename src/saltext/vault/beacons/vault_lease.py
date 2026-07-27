@@ -147,18 +147,19 @@ def validate(config):
         return False, "Requires monitored lease(s) cache key(s) in `leases`"
     if not isinstance(config["leases"], (dict, list, str)):
         return False, "`leases` must be a dict, list or str"
-
     if isinstance(config["leases"], str):
         if "*" in config["leases"]:
             return False, "`leases` does not support globs"
+    elif isinstance(config["leases"], dict) and any(
+        not isinstance(cfg, dict) for cfg in config["leases"].values()
+    ):
+        return False, "`leases` mapping values must be dicts"
     else:
-        if any("*" in lease for lease in config["leases"]):
-            return False, "`leases` does not support globs"
-        if isinstance(config["leases"], dict) and any(
-            not isinstance(cfg, dict) for cfg in config["leases"].values()
-        ):
-            return False, "`leases` mapping values must be dicts"
-
+        try:
+            if any("*" in lease for lease in config["leases"]):
+                return False, "`leases` does not support globs"
+        except TypeError:
+            return False, "`leases` mapping keys must be strings"
     return True, "Valid beacon configuration."
 
 
@@ -248,7 +249,7 @@ def _merge_lease_config(cfg, lease):
         )
     elif lease.get("min_ttl") is not None:
         cfg["min_ttl"] = lease["min_ttl"]
-    elif "min_ttl" not in cfg:
+    elif cfg.get("min_ttl") is None:
         cfg["min_ttl"] = 300
     cfg["meta"] = _merge_meta(cfg.get("meta"), lease.get("meta"))
     return cfg
