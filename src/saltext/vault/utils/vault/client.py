@@ -523,7 +523,10 @@ class VaultClient:
         )
         if res.status_code == 204:
             return True
-        data = res.json()
+        try:
+            data = res.json()
+        except requests.exceptions.JSONDecodeError:
+            data = {}
         if not res.ok:
             if raise_error:
                 self._raise_status(res)
@@ -727,7 +730,10 @@ class VaultClient:
         return headers
 
     def _raise_status(self, res: requests.Response):
-        errors = ", ".join(res.json().get("errors", []))
+        try:
+            errors = ", ".join(res.json().get("errors", []))
+        except requests.JSONDecodeError:
+            errors = "<Failed to decode response>"
         if res.status_code == 400:
             raise VaultInvocationError(errors)
         if res.status_code == 403:

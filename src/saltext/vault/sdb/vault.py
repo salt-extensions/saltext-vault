@@ -101,12 +101,24 @@ def set_(key, value, profile=None):
             # Save the current data if patching is enabled
             # to write it back later, if any errors happen in patch_kv.
             # This also checks that the path exists, otherwise patching fails as well.
-            curr_data = vault.read_kv(path, __opts__, __context__)
             vault.patch_kv(path, data, __opts__, __context__)
-            return True
-        except (vault.VaultNotFoundError, vault.VaultPermissionDeniedError, vault.VaultAuthExpired):
-            # We're catching VaultAuthExpired in case num_uses of the token is 1 and we cannot PATCH in a single request.
+        except vault.VaultNotFoundError:
             pass
+        except Exception:  # pylint: disable=broad-except
+            # Intentionally broad, maybe it works with simlated patching.
+            # Major targets are VaultPermissionDeniedError and VaultAuthExpired.
+            # We're catching VaultAuthExpired in case num_uses of the token is 1 and we cannot PATCH in a single request.
+            try:
+                curr_data = vault.read_kv(path, __opts__, __context__)
+            except vault.VaultNotFoundError:
+                pass
+            except Exception as err:  # pylint: disable=broad-except
+                log.error(
+                    "Failed to read secret for simulating patching! %s: %s", type(err).__name__, err
+                )
+                raise salt.exceptions.CommandExecutionError(err) from err
+        else:
+            return True
 
     curr_data.update(data)
     try:
