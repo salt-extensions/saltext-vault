@@ -59,7 +59,7 @@ Consider setting ``secret_id_num_uses`` (for SecretIDs)/``num_uses`` (for tokens
 By default, minions automatically request and refresh authentication credentials via the master.
 
 (issuance-tradeoff-target)=
-### Token vs Approle
+### Token vs AppRole
 
 The decision whether to issue tokens or AppRoles should be made based on the following questions:
 
@@ -67,7 +67,7 @@ The decision whether to issue tokens or AppRoles should be made based on the fol
 
    Issuing tokens allows to restrict which policies the master is able to assign to minions via a [Token Role](token-role-target)'s
    ``allowed_policies``/``allowed_policies_glob``. There is no simple equivalent when issuing AppRoles,
-   meaning a compromised master can usually assign arbitary policies.
+   meaning a compromised master can usually assign arbitrary policies.
 
    If you answered both questions with ``no``, consider issuing tokens.
 

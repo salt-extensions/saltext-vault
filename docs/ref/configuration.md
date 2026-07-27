@@ -20,7 +20,7 @@ The name of the AppRole authentication mount point. Defaults to `approle`.
 The name of the AppRole. Defaults to `salt-master`.
 
 :::{note}
-Only relevant when a locally configured {vconf}`role_id`/{vconf}`secret_id` is set to the return
+Only relevant when a locally configured {vconf}`auth:role_id`/{vconf}`auth:secret_id` is set to the return
 payload of a wrapping request, so only in very specialized use cases.
 :::
 
@@ -514,7 +514,7 @@ is requested (they can be refreshed on demand by running the
 [vault.sync_approles](saltext.vault.runners.vault.sync_approles) runner).
 
 They are also refreshed in case other {vconf}`issuance parameters <issue:approle:params>` are changed, either on the master or the minion
-(if {vconf}`allow_minion_override_params` is True).
+(if {vconf}`issue:allow_minion_override_params` is True).
 :::
 
 :::{vconf} policies:refresh_pillar
@@ -601,7 +601,10 @@ vault:
       renew_increment: null
   cache:
     backend: session
+    clear_attempt_revocation: 60
+    clear_on_unauthorized: true
     config: 3600
+    expire_events: false
     kv_metadata: connection
     secret: ttl
   client:

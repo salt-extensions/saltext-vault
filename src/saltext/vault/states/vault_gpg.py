@@ -77,6 +77,9 @@ def key_present(
             When set to true, deletes existing keys to follow the state
             of all parameters above. Ensure you have a good reason to enable this.
 
+        .. important::
+
+            This functionality requires the GPG modules from Salt >=3008.
     mount
         Mount path the GPG backend is mounted to. Defaults to ``gpg``.
     """

@@ -58,7 +58,7 @@ def create_key(
 
     .. code-block:: bash
 
-            salt '*' vault_gpg.create_key mykey real_name='Foo Bar' email='foo@b.ar'
+        salt '*' vault_gpg.create_key mykey real_name='Foo Bar' email='foo@b.ar'
 
     Required policy:
 
@@ -125,10 +125,10 @@ def import_key(
 
     .. code-block:: bash
 
-            salt '*' vault_gpg.import_key mykey text="lQHYBGOH8R0BBACb1xGmsPqP8..."
-            salt '*' vault_gpg.import_key mykey text="-----BEGIN PGP PRIVATE KEY BLOCK..."
-            salt-call vault_gpg.import_key mykey path=/root/test.key
-            salt-call vault_gpg.import_key mykey fingerprint=3abcf1...
+        salt '*' vault_gpg.import_key mykey text="lQHYBGOH8R0BBACb1xGmsPqP8..."
+        salt '*' vault_gpg.import_key mykey text="-----BEGIN PGP PRIVATE KEY BLOCK..."
+        salt-call vault_gpg.import_key mykey path=/root/test.key
+        salt-call vault_gpg.import_key mykey fingerprint=3abcf1...
 
     Required policy:
 
@@ -219,7 +219,7 @@ def list_keys(mount="gpg"):
 
     .. code-block:: bash
 
-            salt '*' vault_gpg.list_keys
+        salt '*' vault_gpg.list_keys
 
     Required policy:
 
@@ -251,7 +251,7 @@ def read_key(name, mount="gpg"):
 
     .. code-block:: bash
 
-            salt '*' vault_gpg.read_key mykey
+        salt '*' vault_gpg.read_key mykey
 
     Required policy:
 
@@ -284,7 +284,7 @@ def delete_key(name, mount="gpg"):
 
     .. code-block:: bash
 
-            salt '*' vault_gpg.delete_key mykey
+        salt '*' vault_gpg.delete_key mykey
 
     Required policy:
 
@@ -318,9 +318,9 @@ def export_private_key(
 
     .. code-block:: bash
 
-            salt '*' vault_gpg.export_private_key mykey
-            salt '*' vault_gpg.export_private_key mykey path=/root/test.key
-            salt '*' vault_gpg.export_private_key mykey gnupg=true
+        salt '*' vault_gpg.export_private_key mykey
+        salt '*' vault_gpg.export_private_key mykey path=/root/test.key
+        salt '*' vault_gpg.export_private_key mykey gnupg=true
 
     Required policy:
 
@@ -388,9 +388,9 @@ def export_public_key(
 
     .. code-block:: bash
 
-            salt '*' vault_gpg.export_public_key mykey
-            salt '*' vault_gpg.export_public_key mykey path=/root/test.pub
-            salt '*' vault_gpg.export_public_key mykey gnupg=True
+        salt '*' vault_gpg.export_public_key mykey
+        salt '*' vault_gpg.export_public_key mykey path=/root/test.pub
+        salt '*' vault_gpg.export_public_key mykey gnupg=True
 
     Required policy:
 
@@ -456,8 +456,8 @@ def sign(
 
     .. code-block:: bash
 
-            salt '*' vault_gpg.sign mykey message="Hello there"
-            salt '*' vault_gpg.sign mykey path=/my/important/file
+        salt '*' vault_gpg.sign mykey message="Hello there"
+        salt '*' vault_gpg.sign mykey path=/my/important/file
 
     Required policy:
 
@@ -538,9 +538,9 @@ def verify(
 
     .. code-block:: bash
 
-            salt '*' vault_gpg.verify mykey message="Hello there" sig="wsBcBAABCgAQBQJZme..."
-            salt '*' vault_gpg.verify mykey message="Hello there" sig="-----BEGIN PGP SIGNATURE..."
-            salt '*' vault_gpg.verify mykey path=/my/important/file sig_path=/my/important/file.asc
+        salt '*' vault_gpg.verify mykey message="Hello there" sig="wsBcBAABCgAQBQJZme..."
+        salt '*' vault_gpg.verify mykey message="Hello there" sig="-----BEGIN PGP SIGNATURE..."
+        salt '*' vault_gpg.verify mykey path=/my/important/file sig_path=/my/important/file.asc
 
     Required policy:
 
@@ -555,7 +555,7 @@ def verify(
 
     message
         Signed data as a string (or a Python bytes type).
-        Either this or ``path`` is required.
+        Either this, ``message_encoded`` or ``path`` is required.
 
     sig
         Detached signature to verify as a string (or a Python bytes type).
@@ -622,9 +622,9 @@ def decrypt(
 
     .. code-block:: bash
 
-            salt '*' vault_gpg.decrypt mykey message="wsBcBAABCgAQBQJZme..."
-            salt '*' vault_gpg.decrypt mykey message="-----BEGIN PGP MESSAGE..."
-            salt '*' vault_gpg.decrypt mykey path=/my/important/file
+        salt '*' vault_gpg.decrypt mykey message="wsBcBAABCgAQBQJZme..."
+        salt '*' vault_gpg.decrypt mykey message="-----BEGIN PGP MESSAGE..."
+        salt '*' vault_gpg.decrypt mykey path=/my/important/file
 
     Required policy:
 
@@ -729,9 +729,9 @@ def show_session_key(
 
     .. code-block:: bash
 
-            salt '*' vault_gpg.show_session_key mykey message="wsBcBAABCgAQBQJZme..."
-            salt '*' vault_gpg.show_session_key mykey message="-----BEGIN PGP MESSAGE..."
-            salt '*' vault_gpg.show_session_key mykey path=/my/important/file
+        salt '*' vault_gpg.show_session_key mykey message="wsBcBAABCgAQBQJZme..."
+        salt '*' vault_gpg.show_session_key mykey message="-----BEGIN PGP MESSAGE..."
+        salt '*' vault_gpg.show_session_key mykey path=/my/important/file
 
     Required policy:
 

@@ -635,8 +635,8 @@ def creds_cached(
         otherwise request new ones.
         This can be an integer, which is interpreted as seconds, or a time string
         using the same format as Vault does:
-        Suffix ``s`` for seconds, ``m`` for minuts, ``h`` for hours, ``d`` for days.
-        Defaults to ``0``.
+        Suffix ``s`` for seconds, ``m`` for minutes, ``h`` for hours, ``d`` for days.
+        Defaults to the cached lease's ``min_ttl`` or ``0``.
 
     renew_increment
         When using cache and ``valid_for`` results in a renewal attempt, request this
@@ -655,7 +655,7 @@ def creds_cached(
         be emitted by the ``vault_lease`` beacon module whenever a lease is
         running out (usually because it cannot be extended further). It is intended
         to support the reactor in deciding what needs to be done in order
-        to to reconfigure dependent, Vault-unaware software with newly issued
+        to reconfigure dependent, Vault-unaware software with newly issued
         credentials. Entirely optional.
 
     mount

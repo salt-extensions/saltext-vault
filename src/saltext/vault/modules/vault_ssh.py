@@ -5,7 +5,7 @@ and certificates.
 .. versionadded:: 1.2.0
 
 .. versionadded:: 1.6.0
-    You can specify this module as the ``backend`` parameter to the ``ssh_pki.certificate_managed``
+    You can specify this module as the ``backend`` parameter to the :py:func:`ssh_pki.certificate_managed <salt.states.ssh_pki.certificate_managed>`
     state introduced in Salt 3008 for stateful management of Vault-issued certificates.
 
     See :py:func:`create_certificate <saltext.vault.modules.vault_ssh.create_certificate>` for details.
@@ -505,7 +505,7 @@ def write_zeroaddr_roles(roles, mount="ssh"):
 
     .. code-block:: bash
 
-        salt '*' vault_ssh.write_roles_zeroaddr '[super, admin]'
+        salt '*' vault_ssh.write_zeroaddr_roles '[super, admin]'
 
     Required policy:
 
@@ -541,7 +541,7 @@ def delete_zeroaddr_roles(mount="ssh"):
 
     .. code-block:: bash
 
-        salt '*' vault_ssh.delete_roles_zeroaddr
+        salt '*' vault_ssh.delete_zeroaddr_roles
 
     Required policy:
 
@@ -637,12 +637,12 @@ def create_ca(
     public_key
         Public key part of the SSH CA key pair. Can be a file
         local to the minion or a PEM-encoded string.
-        If this or ``public_key`` is unspecified, generates a pair
+        If this or ``private_key`` is unspecified, generates a pair
         on the Vault server.
 
     key_type
         Desired key type for the generated SSH CA key when generating
-        on the Vault server. Valid: ``ssh-rsa`` (default), ``sha2-nistp256``,
+        on the Vault server. Valid: ``ssh-rsa`` (default), ``ecdsa-sha2-nistp256``,
         ``ecdsa-sha2-nistp384``, ``ecdsa-sha2-nistp521``, or ``ssh-ed25519``.
         Can also specify an algorithm: ``rsa``, ``ec``, or ``ed25519``.
 
@@ -880,7 +880,7 @@ def generate_key_cert(
 
     .. code-block:: vaultpolicy
 
-        path "<mount>/sign/<role_name>" {
+        path "<mount>/issue/<role_name>" {
             capabilities = ["create", "update"]
         }
 
@@ -888,13 +888,13 @@ def generate_key_cert(
         Name of the SSH role.
 
     key_type
-        Desired key type for the generated SSH CA key.
-        Valid: ``ssh-rsa`` (default), ``sha2-nistp256``,
+        Desired key type for the generated SSH key.
+        Valid: ``ssh-rsa`` (default), ``ecdsa-sha2-nistp256``,
         ``ecdsa-sha2-nistp384``, ``ecdsa-sha2-nistp521``, or ``ssh-ed25519``.
         Can also specify an algorithm: ``rsa``, ``ec``, or ``ed25519``.
 
     key_bits
-        Desired key bits for the generated SSH CA key.
+        Desired key bits for the generated SSH key.
         Only used for variable length keys (e.g. ``ssh-rsa``)
         or when ``ec`` was specified as ``key_type``, in which case this
         selects the NIST P-curve: ``256``, ``384``, ``521``.
@@ -964,8 +964,8 @@ def create_certificate(
     .. versionadded:: 1.6.0
 
     Create an OpenSSH certificate and return an encoded version of it.
-    This functions allows this module to be specified as the ``backend`` parameter to the
-    ``ssh_pki.certificate_managed`` state introduced in Salt 3008.
+    This function allows this module to be specified as the ``backend`` parameter to the
+    :py:func:`ssh_pki.certificate_managed <salt.states.ssh_pki.certificate_managed>` state introduced in Salt 3008.
 
     .. note::
         The following parameters from ``ssh_pki.create_certificate`` are ignored
@@ -1075,7 +1075,7 @@ def create_certificate(
         this parameter is specified. To unset a default extension, specify its value as ``false``.
 
         .. important::
-            Enabling ``default_extensions_template`` in a role can break the idempotency of the ``ssh_pki.certificate_managed``
+            Enabling ``default_extensions_template`` in a role can break the idempotency of the :py:func:`ssh_pki.certificate_managed <salt.states.ssh_pki.certificate_managed>`
             state, unless you allow access for a minion to read its entity as instructed above.
             Similarly, the merging of ``default_extensions`` with the passed ``extensions`` can break as well.
 
@@ -1097,7 +1097,7 @@ def create_certificate(
     all_principals
         Allow any principals. Defaults to false.
 
-        To truly allow any principals, requires ``*`` in a role's ``valid_principals``.
+        To truly allow any principals, requires ``*`` in a role's ``allowed_users``/``allowed_domains``.
         Otherwise, defaults to all valid ones.
 
         .. note::
@@ -1230,7 +1230,7 @@ def get_signing_policy(signing_policy, ca_server=None):
     Compatibility layer between ``ssh_pki`` and this module.
     This currently does not support all functionality Vault offers,
     e.g. dynamic principals (templates/allow_subdomains),
-    so ``ssh_pki.certificate_managed`` might always
+    so :py:func:`ssh_pki.certificate_managed <salt.states.ssh_pki.certificate_managed>` might always
     reissue a certificate in case these options are used.
 
     CLI Example:

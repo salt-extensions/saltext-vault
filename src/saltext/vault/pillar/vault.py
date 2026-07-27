@@ -64,7 +64,7 @@ You can write this data into their pillar path in Vault:
 
 .. code-block:: bash
 
-     vault kv put -mount=salt roles/testrole - <<EOF
+    vault kv put -mount=salt roles/testrole - <<EOF
     {"foobar": {"users": {"barbaz": {"password": "correct horse battery staple"}}}}
     EOF
 
@@ -145,7 +145,7 @@ def ext_pillar(
     conf=None,
 ):
     """
-    Get pillar data from Vault for the configuration ``conf``.
+    Get pillar data from Vault at path ``path``.
     """
     extra_minion_data = extra_minion_data or {}
     if extra_minion_data.get("_vault_runner_is_compiling_pillar_templates"):

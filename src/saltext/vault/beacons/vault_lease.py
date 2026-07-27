@@ -13,7 +13,7 @@ When a lease undercuts its minimum TTL, an event is sent.
 The event tag's format is: ``salt/beacon/<minion ID>/vault_lease_<lease cache key>/expire``
 
 .. note::
-    If {vconf}`expire_events <cache:expire_events>` are enabled, they are not emitted
+    If :vconf:`expire_events <cache:expire_events>` are enabled, they are not emitted
     when leases are requested by this beacon. This prevents duplicate events from being fired.
 
 The event data contains (non-exhaustive):

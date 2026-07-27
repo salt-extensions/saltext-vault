@@ -67,7 +67,7 @@ regarding token/SecretID validity.
    vault write auth/token/roles/salt-master \
      orphan=true \
      allowed_policies=salt_minion \
-     allowed_policies_glob='salt_minion_*,salt_role_*'
+     allowed_policies_glob='salt_minion_*,salt_role_*'  # Note: the (legacy) default policies need saltstack/*
    ```
 3. A policy allowing the Salt master access to token issuance endpoints:
    ```vaultpolicy
@@ -298,8 +298,9 @@ It is generally recommended to raise the defaults:
 vault:
   issue:
     token:
-      explicit_max_ttl: 30  # Tokens are valid for 30s
-      num_uses: 10          # Tokens are limited to 10 uses
+      params:
+        explicit_max_ttl: 30  # Tokens are valid for 30s
+        num_uses: 10          # Tokens are limited to 10 uses
 ```
 :::
 
@@ -359,7 +360,7 @@ This allows you to create a single policy like:
 
 ```vaultpolicy
   path "salt/data/minions/{{identity.entity.metadata.minion-id}}" {
-      capabilities = ["create", "read", "write", "delete", "patch"]
+      capabilities = ["create", "read", "update", "delete", "patch"]
   }
 
   path "salt/data/roles/{{identity.entity.metadata.role}}" {

@@ -134,7 +134,7 @@ def write_secret(path, **kwargs):
 
     .. code-block:: bash
 
-            salt '*' vault.write_secret "secret/my/secret" user="foo" password="bar"
+        salt '*' vault.write_secret "secret/my/secret" user="foo" password="bar"
 
     Required policy:
 
@@ -172,7 +172,7 @@ def write_raw(path, raw):
 
     .. code-block:: bash
 
-            salt '*' vault.write_raw "secret/my/secret" '{user: foo, password: bar}'
+        salt '*' vault.write_raw "secret/my/secret" '{user: foo, password: bar}'
 
     Required policy: see :func:`write_secret`
 
@@ -216,7 +216,7 @@ def patch_secret(path, **kwargs):
 
     .. code-block:: bash
 
-            salt '*' vault.patch_secret "secret/my/secret" password="baz"
+        salt '*' vault.patch_secret "secret/my/secret" password="baz"
 
     Required policy:
 
@@ -264,7 +264,7 @@ def patch_raw(path, raw):
 
     .. code-block:: bash
 
-            salt '*' vault.patch_raw "secret/my/secret" '{user: foo, password: bar}'
+        salt '*' vault.patch_raw "secret/my/secret" '{user: foo, password: bar}'
 
     Required policy: see :func:`patch_secret`
 

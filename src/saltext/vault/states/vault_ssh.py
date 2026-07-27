@@ -1,7 +1,7 @@
 """
-.. versionadded:: 1.2.0
-
 Manage the Vault (or OpenBao) SSH secret engine.
+
+.. versionadded:: 1.2.0
 
 .. versionadded:: 1.6.0
     If you want to manage Vault-issued SSH certificates statefully, you need the
@@ -76,12 +76,12 @@ def ca_present(
     public_key
         Public key part of the SSH CA key pair. Can be a file
         local to the minion or a PEM-encoded string.
-        If this or ``public_key`` is unspecified, generates a pair
+        If this or ``private_key`` is unspecified, generates a pair
         on the Vault server.
 
     key_type
         Desired key type for the generated SSH CA key when generating
-        on the Vault server. Valid: ``ssh-rsa`` (default), ``sha2-nistp256``,
+        on the Vault server. Valid: ``ssh-rsa`` (default), ``ecdsa-sha2-nistp256``,
         ``ecdsa-sha2-nistp384``, ``ecdsa-sha2-nistp521``, or ``ssh-ed25519``.
         Can also specify an algorithm: ``rsa``, ``ec``, or ``ed25519``.
 
