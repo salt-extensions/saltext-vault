@@ -158,6 +158,24 @@ def test_get_whole_dataset(read_kv_not_found_once, data):
     assert read_kv_not_found_once.call_count == 2
 
 
+def test_get_invalid_key_without_separator():
+    """
+    A key without a path/key separator cannot be mapped to a secret.
+    This should be reported as a usage error, not an unhandled ValueError.
+    """
+    with pytest.raises(salt.exceptions.SaltInvocationError):
+        vault.get("no-separator")
+
+
+def test_set_invalid_key_without_separator():
+    """
+    A key without a path/key separator cannot be mapped to a secret.
+    This should be reported as a usage error, not an unhandled ValueError.
+    """
+    with pytest.raises(salt.exceptions.SaltInvocationError):
+        vault.set_("no-separator", "value")
+
+
 @pytest.mark.usefixtures("read_kv_err")
 def test_get_err():
     """

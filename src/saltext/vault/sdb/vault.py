@@ -71,10 +71,7 @@ def set_(key, value, profile=None):
     """
     Set a key/value pair in the vault service
     """
-    if "?" in key:
-        path, key = key.rsplit("?", 1)
-    else:
-        path, key = key.rsplit("/", 1)
+    _, path, key = _split_key(key)
     data = {key: value}
     curr_data = {}
     profile = profile or {}
@@ -133,11 +130,7 @@ def get(key, profile=None):  # pylint: disable=unused-argument
     """
     Get a value from the vault service
     """
-    full_path = key
-    if "?" in key:
-        path, key = key.rsplit("?", 1)
-    else:
-        path, key = key.rsplit("/", 1)
+    full_path, path, key = _split_key(key)
 
     try:
         try:
@@ -152,3 +145,16 @@ def get(key, profile=None):  # pylint: disable=unused-argument
     except Exception as err:  # pylint: disable=broad-except
         log.error("Failed to read secret! %s: %s", type(err).__name__, err)
         raise salt.exceptions.CommandExecutionError(err) from err
+
+
+def _split_key(key: str) -> tuple[str, str, str]:
+    if "?" in key:
+        path, new_key = key.rsplit("?", 1)
+    else:
+        try:
+            path, new_key = key.rsplit("/", 1)
+        except ValueError as err:
+            raise salt.exceptions.SaltInvocationError(
+                f"Invalid key '{key}', must contain at least one path separator"
+            ) from err
+    return key, path, new_key
