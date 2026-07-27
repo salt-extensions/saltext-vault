@@ -12,6 +12,10 @@ When a lease undercuts its minimum TTL, an event is sent.
 
 The event tag's format is: ``salt/beacon/<minion ID>/vault_lease_<lease cache key>/expire``
 
+.. note::
+    If {vconf}`expire_events <cache:expire_events>` are enabled, they are not emitted
+    when leases are requested by this beacon. This prevents duplicate events from being fired.
+
 The event data contains (non-exhaustive):
 
 * ``expires_in`` - number of seconds left until the lease is revoked by Vault (can be ``-1`` if already revoked)
@@ -170,6 +174,8 @@ def beacon(config):
     config = _render_config(config)
     # background processes should not pass __context__
     store = vault.get_lease_store(__opts__, {})
+    # Our store should not fire events, we do that here already in a more controlled fashion
+    store.expire_events = store.cache.expire_events = None
     events = []
     for lease, lease_config in config["leases"].items():
         info = store.list_info(match=lease)
