@@ -37,6 +37,23 @@ def test_validate(config, exp):
 
 
 @pytest.mark.parametrize(
+    "config",
+    (
+        [{"leases": [123]}],
+        [{"leases": [None]}],
+        [{"leases": {123: {}}}],
+    ),
+)
+def test_validate_invalid_lease_key_types(config):
+    """
+    Validation must return a failure result instead of raising
+    when lease cache keys are not strings.
+    """
+    res, _ = lease.validate(config)
+    assert res is False
+
+
+@pytest.mark.parametrize(
     "config,exp",
     (
         ([{"leases": "foo"}], {"leases": {"foo": {}}}),
@@ -202,6 +219,23 @@ def test_render_config(config, exp):
 def test_merge_lease_config(cfg, info, exp):
     res = lease._merge_lease_config(cfg, info)
     assert res == exp
+
+
+@pytest.mark.parametrize(
+    "cfg,info,exp_min_ttl",
+    (
+        ({"min_ttl": None}, {"min_ttl": None, "meta": None}, 300),
+        ({"min_ttl": None}, {"min_ttl": 60, "meta": None}, 60),
+    ),
+)
+def test_merge_lease_config_min_ttl_explicit_none(cfg, info, exp_min_ttl):
+    """
+    An explicit ``min_ttl: null`` in the beacon configuration must behave
+    as if it was unset instead of crashing the beacon later
+    (``timestring_map(None)`` returns ``None``, which cannot be compared).
+    """
+    res = lease._merge_lease_config(cfg, info)
+    assert res["min_ttl"] == exp_min_ttl
 
 
 @pytest.mark.parametrize(
