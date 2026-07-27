@@ -40,17 +40,22 @@ Generally available template variables are:
       Pillar values originating from previously rendered pillars can be used to template
       [Vault Pillar](saltext.vault.pillar.vault) paths. Using pillar values to template
       Vault pillar paths requires them to be defined before the Vault ext_pillar is called.
-      Especially consider the significancy of the
+      Especially consider the significance of the
       {conf_master}`ext_pillar_first <ext_pillar_first>` master config setting.
       :::
 
+### Policies
+Policy configuration additionally provides:
+
 `{grains[<var>]}`
-    : The minion's grain value with the key `<var>`.
+    : The minion's grain value with the key `<var>` (for backwards-compatibility only,
+      please avoid!).
 
       :::{important}
       See {external+salt:ref}`Is Targeting using Grain Data Secure?
       <faq-grain-security>` for important security information. In short,
       everything except `grains[id]` is minion-controlled and should thus be avoided.
+      `grains[id]` is also available as `minion`.
       :::
 
 ### Metadata
@@ -63,7 +68,11 @@ Metadata configuration values additionally provide:
     : The user the Salt daemon issuing the secret was running as.
 
 ## Rendering
-In general, the templating works like regular Python f-strings.
+In general, the templating works like regular Python ``str.format()``.
+
+:::{note}
+Policies are lowercased automatically.
+:::
 
 ### Complex data
 Lists and dictionary keys are special-cased in the same way: They are expanded

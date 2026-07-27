@@ -140,9 +140,12 @@ def write(
     name
         Name of the AppRole.
 
+    bind_secret_id
+        Require SecretID to be presented when logging in using this AppRole.
+
     secret_id_bound_cidrs
         List of CIDR blocks that specifies blocks of IP addresses which can
-        perform the login operation
+        perform the login operation.
 
     secret_id_num_uses
         Number of times any particular SecretID can be used to fetch a token from
@@ -282,7 +285,7 @@ def get_role_id(name, wrap=False, mount="approle"):
 
     .. code-block:: bash
 
-        salt '*' vault.get_role_id salt_master
+        salt '*' vault_approle.get_role_id salt_master
 
     Required policy:
 
@@ -332,7 +335,7 @@ def get_secret_id(
 
     .. code-block:: bash
 
-        salt '*' vault.get_secret_id salt_master_bak
+        salt '*' vault_approle.get_secret_id salt_master_bak
 
     Required policy:
 
@@ -446,7 +449,7 @@ def lookup_secret_id(name, secret_id=None, accessor=None, mount="approle"):
 
     .. code-block:: bash
 
-        salt '*' vault.lookup_secret_id salt_master accessor=abcde1-f234...
+        salt '*' vault_approle.lookup_secret_id salt_master accessor=abcde1-f234...
 
     Required policy:
 
@@ -495,7 +498,7 @@ def destroy_secret_id(name, secret_id=None, accessor=None, mount="approle"):
 
     .. code-block:: bash
 
-        salt '*' vault.destroy_secret_id salt_master accessor=abcde1-f234...
+        salt '*' vault_approle.destroy_secret_id salt_master accessor=abcde1-f234...
 
     Required policy:
 
@@ -544,7 +547,7 @@ def clear_cached(name=None, cache=None, mount=None, flush_on_failure=True):
 
     .. code-block:: bash
 
-        salt '*' vault.clear_cached
+        salt '*' vault_approle.clear_cached
 
     Recommended policy:
 
@@ -581,9 +584,9 @@ def list_cached(name=None, cache=None, mount=None):
 
     .. code-block:: bash
 
-            salt '*' vault_approle.list_cached name=myrole mount=database
-            salt '*' vault_approle.list_cached mount=database
-            salt '*' vault_approle.list_cached
+        salt '*' vault_approle.list_cached name=myrole mount=database
+        salt '*' vault_approle.list_cached mount=database
+        salt '*' vault_approle.list_cached
 
     name
         Only list credentials using this AppRole name.

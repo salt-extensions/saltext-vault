@@ -30,6 +30,11 @@ The above URI is analogous to running the following vault command:
 
     $ vault read -field=mypassword secret/passwords
 
+.. note::
+
+    If ``secret/passwords`` does not contain a key ``mypassword``, this module also
+    checks if ``secret/passwords/mypassword`` represents an existing Vault KV secret path.
+    If so, it returns the whole secret.
 
 Further configuration
 ---------------------

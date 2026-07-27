@@ -118,9 +118,14 @@ def certificate_managed(
                 capabilities = ["read"]
             }
 
+            path "{mount}/issuer/{issuer_ref}" {
+                capabilities = ["read"]
+            }
+
             path "{mount}/issuer/{issuer_ref}/sign/{role_name}" {
                 capabilities = ["update"]
             }
+
             # in case of sign_verbatim
             path "{mount}/issuer/{issuer_ref}/sign-verbatim/{role_name}" {
                 capabilities = ["update"]
@@ -177,8 +182,14 @@ def certificate_managed(
         Always reissue the certificate. Defaults to ``false``.
 
     kwargs
-        Any other parameter accepted by ``file_managed`` execution module or Vault PKI
-        :obj:`sign_certificate <saltext.vault.modules.vault_pki.sign_certificate>` execution module.
+        Most parameters for the :py:func:`file.managed <salt.states.file.managed>` state or any of the ones for
+        the Vault PKI :py:func:`sign_certificate <saltext.vault.modules.vault_pki.sign_certificate>` execution module function
+        are passed through.
+
+        .. note::
+
+            ``encoding`` is a valid parameter for both this function and ``file.managed``. If you need to pass
+            it to the latter, specify it as ``file_encoding`` instead.
     """
 
     ret = {
@@ -379,8 +390,8 @@ def role_managed(name, mount="pki", issuer_ref=None, ttl=None, max_ttl=None, **k
         Hour is the largest suffix. If not set, defaults to the system maximum lease TTL.
 
     kwargs
-        Any other parameter accepted by Vault
-        :obj:`write_role <saltext.vault.modules.vault_pki.write_role>` execution module or Vault update role API method.
+        Any other parameter accepted by the Vault :py:func:`write_role <saltext.vault.modules.vault_pki.write_role>`
+        execution module function or Vault update role API method.
     """
 
     ret = {

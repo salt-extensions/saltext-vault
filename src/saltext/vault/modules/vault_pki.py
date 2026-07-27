@@ -91,7 +91,7 @@ def list_roles(mount="pki"):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.list_roles
+        salt '*' vault_pki.list_roles
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -123,7 +123,7 @@ def read_role(name, mount="pki"):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.read_role
+        salt '*' vault_pki.read_role my_role
 
     name
         Name of the role.
@@ -174,7 +174,7 @@ def write_role(
 
     .. code-block:: bash
 
-            salt '*' vault_pki.write_role myrole
+        salt '*' vault_pki.write_role myrole
 
     name
         Name of the role.
@@ -293,7 +293,7 @@ def delete_role(name, mount="pki"):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.delete_role myrole
+        salt '*' vault_pki.delete_role myrole
 
     name
         Name of the role.
@@ -333,7 +333,7 @@ def list_issuers(mount="pki"):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.list_issuers
+        salt '*' vault_pki.list_issuers
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -360,7 +360,7 @@ def read_issuer(ref="default", mount="pki"):
 
     .. code-block:: vaultpolicy
 
-        path "<mount>/issuers/<name>" {
+        path "<mount>/issuer/<name>" {
             capabilities = ["read"]
         }
 
@@ -368,7 +368,7 @@ def read_issuer(ref="default", mount="pki"):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.read_issuer
+        salt '*' vault_pki.read_issuer
 
     ref
         Reference of the issuer. Can be issuer ID, issuer name or literal ``default``
@@ -410,7 +410,7 @@ def update_issuer(
 
     .. code-block:: vaultpolicy
 
-        path "<mount>/issuers/<name>" {
+        path "<mount>/issuer/<name>" {
             capabilities = ["patch"]
         }
 
@@ -418,7 +418,7 @@ def update_issuer(
 
     .. code-block:: bash
 
-            salt '*' vault_pki.update_issuer ref usage=["crl-signing"]
+        salt '*' vault_pki.update_issuer ref usage=["crl-signing"]
 
     ref
         Reference of the issuer. Can be issuer ID, issuer name or literal ``default``
@@ -496,7 +496,7 @@ def read_issuer_certificate(name="default", mount="pki", include_chain=False):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.read_issuer_certificate
+        salt '*' vault_pki.read_issuer_certificate
 
     name
         Name of the issuer. Can be issuer ID, issuer name or literal ``default``
@@ -529,7 +529,7 @@ def get_default_issuer(mount="pki"):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.get_default_issuer
+        salt '*' vault_pki.get_default_issuer
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -561,7 +561,10 @@ def set_default_issuer(name, mount="pki"):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.set_default_issuer myca
+        salt '*' vault_pki.set_default_issuer myca
+
+    name
+        Name of the default issuer to set.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -607,7 +610,7 @@ def generate_root(
 
     .. code-block:: bash
 
-            salt '*' vault_pki.generate_root my-root
+        salt '*' vault_pki.generate_root my-root
 
     common_name
         Common Name to be used for the CA.
@@ -704,7 +707,7 @@ def delete_key(ref, mount="pki"):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.delete_key ref
+        salt '*' vault_pki.delete_key ref
 
     ref
         Ref of the key. Could be name or key_id.
@@ -741,7 +744,7 @@ def delete_issuer(ref, mount="pki", include_key=False):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.delete_issuer ref
+        salt '*' vault_pki.delete_issuer ref
 
     ref
         Ref of the issuer. Could be name or issuer_id.
@@ -802,7 +805,7 @@ def read_issuer_crl(ref="default", mount="pki", delta=False):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.read_issuer_crl ref
+        salt '*' vault_pki.read_issuer_crl ref
 
     ref
         Ref of the issuer, i.e. name or issuer_id. Defaults to default issuer.
@@ -857,7 +860,7 @@ def list_revoked_certificates(mount="pki"):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.list_revoked_certificates
+        salt '*' vault_pki.list_revoked_certificates
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -890,7 +893,7 @@ def list_certificates(mount="pki"):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.list_certificates
+        salt '*' vault_pki.list_certificates
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -924,7 +927,7 @@ def read_certificate(serial, mount="pki"):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.read_certificate 7e:85:c5:d1:85:94:9a:46:08:b5:1b:9c:22:cb:35:e5:ea:f3:56:3f
+        salt '*' vault_pki.read_certificate 7e:85:c5:d1:85:94:9a:46:08:b5:1b:9c:22:cb:35:e5:ea:f3:56:3f
 
     serial
         Specifies the serial of the key to read. Valid values are:
@@ -964,7 +967,7 @@ def read_certificate_full(serial, mount="pki"):
             capabilities = ["read"]
         }
 
-        path "<mount>/issuers/<name>" {
+        path "<mount>/issuer/<name>" {
             capabilities = ["read"]
         }
 
@@ -972,7 +975,7 @@ def read_certificate_full(serial, mount="pki"):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.read_certificate_full 7e:85:c5:d1:85:94:9a:46:08:b5:1b:9c:22:cb:35:e5:ea:f3:56:3f
+        salt '*' vault_pki.read_certificate_full 7e:85:c5:d1:85:94:9a:46:08:b5:1b:9c:22:cb:35:e5:ea:f3:56:3f
 
     serial
         Specifies the serial of the certificate to read. Valid values are:
@@ -1132,7 +1135,7 @@ def issue_certificate(
 
     .. code-block:: bash
 
-            salt '*' vault_pki.issue_certificate myrole common_name="www.example.com"
+        salt '*' vault_pki.issue_certificate myrole common_name="www.example.com"
 
     role_name
         Name of the role to be used for issuing the certificate.
@@ -1150,11 +1153,11 @@ def issue_certificate(
     alt_names
         Any alternative names to be added to the certificate.
         Can be specified either as dict (``{ "<type>": "<value>" }``),
-        a dict of lists(``{ "<type>": ["<value1>", "<value2>", ...] })
+        a dict of lists(``{ "<type>": ["<value1>", "<value2>", ...] }``)
         or list of SAN strings (``["<type>:<value>"]``).
 
         ``<type>`` can be ``dns``, ``email``, ``uri``, ``ip`` or any OID for otherName SANs.
-        ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8;``.
+        ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8:``.
 
     ttl
         Specifies the requested Time To Live (after which the certificate expires).
@@ -1228,7 +1231,7 @@ def sign_certificate(
         }
 
         # When sign_verbatim is false and specifying issuer_ref
-        path "<mount>/issuers/<issuer_ref>/sign/<role_name>" {
+        path "<mount>/issuer/<issuer_ref>/sign/<role_name>" {
             capabilities = ["create", "update"]
         }
 
@@ -1238,7 +1241,7 @@ def sign_certificate(
         }
 
         # When sign_verbatim is true and specifying issuer_ref
-        path "<mount>/issuers/<issuer_ref>/sign-verbatim/<role_name>" {
+        path "<mount>/issuer/<issuer_ref>/sign-verbatim/<role_name>" {
             capabilities = ["create", "update"]
         }
 
@@ -1251,7 +1254,8 @@ def sign_certificate(
 
     .. code-block:: bash
 
-            salt '*' vault_pki.issue_certificate myrole common_name="www.example.com"
+        salt '*' vault_pki.sign_certificate myrole common_name="www.example.com" private_key=/private/key/path.key
+        salt '*' vault_pki.sign_certificate myrole common_name="www.example.com" csr=/csr/path.csr
 
     role_name
         Name of the role to be used for issuing the certificate.
@@ -1286,11 +1290,11 @@ def sign_certificate(
     alt_names
         Any alternative names to be added to the certificate.
         Can be specified either as dict (``{ "<type>": "<value>" }``),
-        a dict of lists(``{ "<type>": ["<value1>", "<value2>", ...] })
+        a dict of lists(``{ "<type>": ["<value1>", "<value2>", ...] }``)
         or list of SAN strings (``["<type>:<value>"]``).
 
         ``<type>`` can be ``dns``, ``email``, ``uri``, ``ip`` or any OID for otherName SANs.
-        ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8;``.
+        ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8:``.
 
         .. note::
             As of writing this, otherName SANs are not supported by the
@@ -1421,7 +1425,7 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.revoke_certificate 7e:85:c5:d1:85:94:9a:46:08:b5:1b:9c:22:cb:35:e5:ea:f3:56:3f
+        salt '*' vault_pki.revoke_certificate 7e:85:c5:d1:85:94:9a:46:08:b5:1b:9c:22:cb:35:e5:ea:f3:56:3f
 
     serial
         Specifies the serial of the certificate to revoke. Either ``serial`` or ``certificate`` must be specified.
@@ -1481,7 +1485,7 @@ def read_urls(mount="pki"):
 
     .. code-block:: bash
 
-            salt '*' vault_pki.get_urls
+        salt '*' vault_pki.read_urls
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.

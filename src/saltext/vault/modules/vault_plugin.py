@@ -290,6 +290,9 @@ def pin(plugin_type, name, version, now=False, now_globally=False):
     name
         Name of the plugin to pin.
 
+    version
+        Version to pin.
+
     now
         After pinning, reload all mounts of the plugin. Defaults to false.
 
@@ -343,7 +346,7 @@ def unpin(plugin_type, name, now=False, now_globally=False):
         Type of the plugin to pin. Either ``auth``, ``database`` or ``secret``.
 
     name
-        Name of the plugin to pin.
+        Name of the plugin to unpin.
 
     now
         After unpinning, reload all mounts of the plugin. Defaults to false.
@@ -667,7 +670,7 @@ def reload_named(name, globally=False):
 
     .. code-block:: bash
 
-        salt '*' vault_plugin.reload_name mysql-database-plugin
+        salt '*' vault_plugin.reload_named mysql-database-plugin
 
     Required policy:
 

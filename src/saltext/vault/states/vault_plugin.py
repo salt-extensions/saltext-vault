@@ -150,16 +150,10 @@ def registered(
         If the actual SHA of the plugin binary and the SHA provided here do not match,
         Vault refuses to run the plugin.
 
-        .. note::
-            Required to register a plugin binary. Must be unset to register an extracted ``.zip`` file.
-
     command
         Specifies the command used to execute the plugin. This is relative to the plugin directory,
         e.g. "myplugin", or if ``oci_image`` is also specified, it is relative to the image's
         working directory. If unspecified and ``oci_image`` is not defined, defaults to the ``name``.
-
-        .. note::
-            Ignored when registering with an extracted ``.zip`` file as the associated run command is known then.
 
     args
         List of arguments used to execute the plugin. Optional.

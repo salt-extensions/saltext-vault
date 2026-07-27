@@ -2,6 +2,8 @@
 SSH wrapper for the :py:mod:`vault_plugin <saltext.vault.modules.vault_plugin>` execution module.
 
 See there for documentation.
+
+.. versionadded:: 1.8.0
 """
 
 from saltext.vault.modules.vault_plugin import _check_type

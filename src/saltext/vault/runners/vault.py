@@ -149,7 +149,7 @@ def generate_token(
         True. This happens when the master generates minion pillars.
 
     ttl
-        Ticket time to live in seconds, 1m minutes, or 2h hrs
+        Token time to live in seconds, 1m minutes, or 2h hrs
 
     uses
         Number of times a token can be used
@@ -585,7 +585,7 @@ def show_policies(minion_id, refresh_pillar=NOT_SET, expire=None):
 
     refresh_pillar
         Whether to refresh the pillar data when rendering templated policies.
-        None only refreshs when the cached data is unavailable, boolean values
+        None only refreshes when the cached data is unavailable, boolean values
         force one behavior always.
         Defaults to :vconf:`policies:refresh_pillar` or None.
 
@@ -872,6 +872,7 @@ def clear_cache(master=True, minions=True):
     .. versionadded:: 1.0.0
 
     Clears master cache of Vault-specific data. This can include:
+
     - AppRole metadata
     - rendered policies
     - cached authentication credentials for impersonated minions

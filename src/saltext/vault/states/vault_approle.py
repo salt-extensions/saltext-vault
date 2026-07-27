@@ -65,6 +65,9 @@ def present(
     name
         Name of the AppRole.
 
+    bind_secret_id
+        Require SecretID to be presented when logging in using this AppRole.
+
     secret_id_bound_cidrs
         List of CIDR blocks that specifies blocks of IP addresses which can
         perform the login operation

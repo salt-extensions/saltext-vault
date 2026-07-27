@@ -2,7 +2,7 @@
 ======================================================
 
 This Salt Extension provides modules for interacting with Vault by HashiCorp,
-a secrets and encryption management system. You only need to setup your Salt master,
+a secrets and encryption management system. You only need to set up your Salt master,
 which then orchestrates minion authentications for you.
 
 OpenBao, a community fork of HashiCorp Vault, is supported as well.
