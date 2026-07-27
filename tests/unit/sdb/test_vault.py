@@ -95,11 +95,20 @@ def test_set_patch(read_kv, patch_kv):
     "exception", (vaultutil.VaultPermissionDeniedError, vaultutil.VaultNotFoundError)
 )
 def test_set_patch_exception_fallback(patch_kv, write_kv, read_kv, exception):
-    read_kv.return_value = {"bar": "baz"}
     patch_kv.side_effect = exception("missing authorization or secret for patch")
+    if exception is vaultutil.VaultNotFoundError:
+        read_kv.side_effect = exception
+    else:
+        read_kv.return_value = {"bar": "baz"}
     vault.set_("path/to/foo", "bar", {"patch": True})
     patch_kv.assert_called_once_with("path/to", {"foo": "bar"}, opts=ANY, context=ANY)
-    write_kv.assert_called_once_with("path/to", {"foo": "bar", "bar": "baz"}, opts=ANY, context=ANY)
+    if exception is vaultutil.VaultNotFoundError:
+        # If patch fails with not found, the secret does not exist
+        write_kv.assert_called_once_with("path/to", {"foo": "bar"}, opts=ANY, context=ANY)
+    else:
+        write_kv.assert_called_once_with(
+            "path/to", {"foo": "bar", "bar": "baz"}, opts=ANY, context=ANY
+        )
 
 
 @pytest.mark.parametrize(
