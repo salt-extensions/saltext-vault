@@ -286,7 +286,7 @@ def patch_raw(path, raw):
         return False
 
 
-def delete_secret(path, *args, all_versions=False):
+def delete_secret(path, *args, all_versions=False, **_):
     """
     Delete secret at <path>. If <path> is on KV v2, the secret is soft-deleted.
 
@@ -344,7 +344,7 @@ def delete_secret(path, *args, all_versions=False):
         return False
 
 
-def restore_secret(path, *versions, all_versions=False):
+def restore_secret(path, *versions, all_versions=False, **_):
     """
     .. versionadded:: 1.2.0
 
@@ -388,7 +388,7 @@ def restore_secret(path, *versions, all_versions=False):
         raise CommandExecutionError(f"{err.__class__.__name__}: {err}") from err
 
 
-def destroy_secret(path, *args, all_versions=False):
+def destroy_secret(path, *args, all_versions=False, **_):
     """
     Destroy specified secret versions at <path>.
     This makes a secret version unrecoverable.
