@@ -619,7 +619,8 @@ def test_revoke_certificate(vault_pki, private_key, revoke_by):
     elif revoke_by == "serial_int":
         ret = vault_pki.revoke_certificate(serial=certificate.serial_number)
     else:
-        ret = vault_pki.revoke_certificate(certificate=ret["certificate"])
+        with pytest.helpers.temp_file("cert", contents=ret["certificate"]) as cert:  # type: ignore
+            ret = vault_pki.revoke_certificate(certificate=str(cert))
     assert ret
 
     revoked_certs = [serial.upper() for serial in vault_pki.list_revoked_certificates()]

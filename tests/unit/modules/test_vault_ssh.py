@@ -84,7 +84,7 @@ def test_create_certificate_requires_determinable_cert_type(query, allow):
 
 
 def test_create_certificate_ignores_incompatible_params(query, caplog):
-    query.return_value = {"data": {"signed_key": "yay"}}
+    query.side_effect = ({"data": {"key_type": "ca"}}, {"data": {"signed_key": "yay"}})
     ignored = {
         "signing_private_key": "key",
         "signing_private_key_passphrase": "hunter2",
@@ -101,6 +101,7 @@ def test_create_certificate_ignores_incompatible_params(query, caplog):
             signing_policy="foo",
             cert_type="user",
             public_key="ssh-ed25519 yay",
+            valid_principals=["foo"],
             **ignored,
         )
     assert res == "yay"

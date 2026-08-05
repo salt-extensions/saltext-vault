@@ -1091,17 +1091,22 @@ def create_certificate(
             It's impossible to unset all ``default_extensions`` without adding others because of Vault's behavior.
 
     valid_principals
-        List of valid principals.
+        List of valid principals. If specified, overrides ``all_principals``.
 
-        All specified principals must be in ``allowed_users``/``allowed_domains``.
-        For user certificates, defaults to a role's ``default_user``.
-        For host certificates, this is required.
+        All specified principals must be allowed by the role (``allowed_users``/``allowed_domains``).
+
+        If this is not specified and ``all_principals`` is not passed:
+
+        * For user certificates: Defaults to a role's ``default_user``, if set. Otherwise fails.
+        * For host certificates: Fails, this is required because there is no host equivalent to ``default_user``.
 
     all_principals
-        Allow any principals. Defaults to false.
+        Allow any principals, i.e. issue a certificate without any. Defaults to false.
 
-        To truly allow any principals, requires ``*`` in a role's ``allowed_users``/``allowed_domains``.
-        Otherwise, defaults to all valid ones.
+        To truly allow any principals, requires an empty ``allowed_users``/``allowed_domains`` (or one containing ``*``)
+        and ``allow_empty_principals`` set in the role.
+
+        Otherwise, defaults to all valid ones, if they can be derived statically.
 
         .. note::
             If a role specifies ``allowed_users_template``/``allowed_domains_template``/``allowed_subdomains``,
@@ -1136,25 +1141,37 @@ def create_certificate(
         )
 
     ca_server = ca_server or "ssh"
+    role = read_role(signing_policy, mount=ca_server)
+    policy = _get_signing_policy(role)
 
-    # Auto-determine cert type, if necessary and possible
-    if not kwargs.get("cert_type"):
-        role = read_role(signing_policy, mount=ca_server)
-        if role["key_type"] != "ca":
-            raise SaltInvocationError("The specified Vault role is not a CA role")
-        host_type = bool(role.get("allow_host_certificates"))
-        user_type = bool(role.get("allow_user_certificates"))
-        if user_type is host_type:
-            raise SaltInvocationError(
-                "Could not determine missing `cert_type` parameter from role definition"
-            )
-        kwargs["cert_type"] = "user" if user_type else "host"
+    kwargs["cert_type"] = kwargs.get("cert_type") or policy.get("cert_type")
+    if not kwargs["cert_type"]:
+        raise SaltInvocationError(
+            "Could not determine missing `cert_type` parameter from role definition"
+        )
 
     if kwargs.get("valid_principals"):
         # The ssh_pki module enforces a list here, don't need to account for strings
         kwargs["valid_principals"] = ",".join(kwargs["valid_principals"])
     elif kwargs.get("all_principals"):
-        kwargs["valid_principals"] = "*"
+        if policy.get("allowed_valid_principals"):
+            kwargs["valid_principals"] = policy["allowed_valid_principals"]
+        else:
+            # A certificate truly valid for all principals carries none.
+            # This requires the role to set allow_empty_principals and, for user
+            # certificates, to leave default_user unset.
+            if not role.get("allow_empty_principals"):
+                raise SaltInvocationError(
+                    "Role does not allow empty valid principals. If you really intend to create "
+                    "a certificate valid for any principal, update the role by setting "
+                    "`allow_empty_principals` to true, otherwise specify valid_principals."
+                )
+            kwargs["valid_principals"] = []
+    elif policy.get("default_valid_principals"):
+        kwargs["valid_principals"] = policy["default_valid_principals"]
+    else:  # pragma: no cover
+        # This should be ensured by the ssh_pki.certificate_managed state itself
+        raise SaltInvocationError("Need `valid_principals` or `all_principals` set to true")
     # Otherwise uses default principals if available, or fails
 
     if kwargs.get("private_key"):
@@ -1171,10 +1188,8 @@ def create_certificate(
     # Need to ensure default_critical_options/default_extensions are merged
     # with the overrides, which is expected by the state module, but not
     # the way Vault would work. Don't account for allowed options since Vault checks the policy.
-    role = None
     critical_options = extensions = None
     if kwargs.get("critical_options"):
-        role = read_role(signing_policy, mount=ca_server)
         final_opts = role.get("default_critical_options") or {}
         for opt, optval in kwargs["critical_options"].items():
             if optval:
@@ -1184,27 +1199,11 @@ def create_certificate(
         critical_options = final_opts
 
     if kwargs.get("extensions"):
-        role = role or read_role(signing_policy, mount=ca_server)
-        # Cannot render the templates currently, so disable merging
         if role.get("default_extensions_template"):
-            rends = {}
-            try:
-                for k, v in role.get("default_extensions", {}).items():
-                    rend = vault.render_identity_template(v, __opts__, __context__)
-                    # None means we failed to render, might be us or the template is invalid.
-                    # Missing values will throw an exception from Vault when generating a cert:
-                    # "no value could be found for one of the template directives"
-                    if rend is not None:
-                        rends[k] = rend
-            except VaultException as err:
-                final_exts = {}
-                log.error(
-                    "Failed rendering default extensions template: %s",
-                    err,
-                    exc_info_on_loglevel=logging.DEBUG,
-                )
-            else:
-                final_exts = rends
+            final_exts = {
+                ext: "" if val is True else val
+                for ext, val in (policy.get("default_extensions") or {}).items()
+            }
         else:
             final_exts = role.get("default_extensions") or {}
         for ext, extval in kwargs["extensions"].items():
@@ -1259,6 +1258,12 @@ def get_signing_policy(signing_policy, ca_server=None):
     """
     ca_server = ca_server or "ssh"
     role = read_role(signing_policy, mount=ca_server)
+    policy = _get_signing_policy(role)
+    policy["signing_public_key"] = read_ca(mount=ca_server)
+    return policy
+
+
+def _get_signing_policy(role):
     if role["key_type"] != "ca":
         raise SaltInvocationError("The specified Vault role is not a CA role")
     policy = {"allowed_valid_principals": []}
@@ -1272,6 +1277,7 @@ def get_signing_policy(signing_policy, ca_server=None):
             allowed_domains = ["*"]
             # TODO: Render basic templates.
         else:
+            # This actually requires ``allow_bare_domains``, but one of these must be set to use the role.
             allowed_domains = deserialize_csl(role.get("allowed_domains", ""))
         policy["allowed_valid_principals"].extend(allowed_domains)
         host_type = True
@@ -1287,7 +1293,7 @@ def get_signing_policy(signing_policy, ca_server=None):
         policy["allowed_valid_principals"].extend(allowed_users)
         user_type = True
 
-    if "*" in policy["allowed_valid_principals"]:
+    if "*" in policy["allowed_valid_principals"] or role.get("allow_empty_principals"):
         policy.pop("allowed_valid_principals")
         policy["all_principals"] = True
 
@@ -1326,9 +1332,9 @@ def get_signing_policy(signing_policy, ca_server=None):
         policy["default_extensions"] = {
             k: v or True for k, v in role.get("default_extensions", {}).items()
         }
-    policy["default_valid_principals"] = (
-        [role["default_user"]] if user_type and role.get("default_user") else []
-    )
+
+    if user_type and role.get("default_user"):
+        policy["default_valid_principals"] = [role["default_user"]]
 
     if role.get("ttl"):
         policy["ttl"] = role["ttl"]
@@ -1338,7 +1344,6 @@ def get_signing_policy(signing_policy, ca_server=None):
     if not role.get("allow_user_key_ids"):
         policy["key_id"] = None
 
-    policy["signing_public_key"] = read_ca(mount=ca_server)
     return policy
 
 
