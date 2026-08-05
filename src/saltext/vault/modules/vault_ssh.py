@@ -419,7 +419,7 @@ def list_roles(mount="ssh"):
 
     keys = res["key_info"]
     for key in res["keys"]:
-        if key not in keys:
+        if key not in keys:  # pragma: no cover
             keys[key] = {}
     return keys
 
@@ -452,12 +452,15 @@ def list_roles_ip(address, mount="ssh"):
     endpoint = f"{mount}/lookup"
     payload = {"ip": address}
     try:
-        return vault.query(
+        res = vault.query(
             "POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True
-        )["data"]["roles"]
+        )
+        # Recent versions return null instead of an error when no roles matched
+        return res["data"].get("roles") or []
     except vault.VaultInvocationError as err:
+        # Older versions returned an error when no roles matched
         if "Missing roles" not in str(err):
-            raise
+            raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
         return []
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err

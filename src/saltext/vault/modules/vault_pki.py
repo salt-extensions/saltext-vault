@@ -22,7 +22,7 @@ try:
     import salt.utils.x509 as x509util
 
     HAS_X509UTIL = True
-except ImportError:
+except ImportError:  # pragma: no cover
     HAS_X509UTIL = False
 
 
@@ -267,7 +267,7 @@ def write_role(
     try:
         vault.query(method, endpoint, __opts__, __context__, payload=payload, safe_to_retry=True)
         return True
-    except vault.VaultUnsupportedOperationError as err:
+    except vault.VaultUnsupportedOperationError as err:  # pragma: no cover
         raise CommandExecutionError(
             f"Vault version too old. Please upgrade to v1.11.0+: {err}"
         ) from err
@@ -386,7 +386,7 @@ def read_issuer(ref="default", mount="pki"):
         return None
     except vault.VaultServerError as err:
         if "unable to find PKI issuer for reference" not in str(err):
-            raise
+            raise CommandExecutionError(f"{err.__class__}: {err}") from err
         return None
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
@@ -720,8 +720,7 @@ def delete_key(ref, mount="pki"):
     try:
         vault.query("DELETE", endpoint, __opts__, __context__)
         return True
-    except vault.VaultNotFoundError:
-        return False
+    # Don't need to catch VaultNotFoundError, it's not thrown for missing key
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
@@ -770,8 +769,7 @@ def delete_issuer(ref, mount="pki", include_key=False):
         if key_id:
             delete_key(key_id, mount=mount)
         return True
-    except vault.VaultNotFoundError:
-        return False
+    # Don't need to catch VaultNotFoundError, it's not thrown for missing issuer
     except vault.VaultException as err:
         raise CommandExecutionError(f"{err.__class__}: {err}") from err
 
@@ -1036,7 +1034,7 @@ def _find_signing_issuer(leaf_pem, authority_key_id=None, mount="pki"):
     Find the configured issuer whose certificate SubjectKeyIdentifier matches the
     certificate's AuthorityKeyIdentifier. Returns the matching ``issuer_id`` or ``None``.
     """
-    if not HAS_X509UTIL:
+    if not HAS_X509UTIL:  # pragma: no cover
         return None
     try:
         leaf = x509util.load_cert(leaf_pem)
@@ -1383,7 +1381,7 @@ def sign_certificate(
                 ) from err2
             if role is None:
                 raise CommandExecutionError(
-                    f"Role '{role}' on mount '{mount}' does not exist"
+                    f"Role '{role_name}' on mount '{mount}' does not exist"
                 ) from err
             if role.get("use_csr_sans", True):
                 raise CommandExecutionError(
@@ -1457,6 +1455,8 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
             if isinstance(serial, int):
                 serial = pki.dec2hex(serial)
             payload["serial_number"] = serial
+        else:  # pragma: no cover
+            raise RuntimeError("This path should not have been hit")
 
         vault.query("POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True)
         return True

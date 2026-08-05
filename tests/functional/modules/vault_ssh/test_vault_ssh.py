@@ -96,10 +96,18 @@ def test_list_roles(vault_ssh):
         assert role in res
 
 
+def test_list_roles_empty(vault_ssh):
+    res = vault_ssh.list_roles()
+    assert res == {}
+
+
 @pytest.mark.usefixtures("roles_setup")
 def test_list_roles_ip(vault_ssh):
     res = vault_ssh.list_roles_ip("10.1.0.1")
     assert res == ["iprole"]
+    # An address without any associated roles should not cause an exception
+    res = vault_ssh.list_roles_ip("192.168.0.1")
+    assert res == []
 
 
 @pytest.mark.usefixtures("roles_setup")
@@ -205,12 +213,27 @@ def test_sign_key_host(vault_ssh, ec_pub, container):
 
 
 @pytest.mark.usefixtures("ca_setup", "roles_setup")
-def test_generate_key_cert_user(vault_ssh, container):
+@pytest.mark.parametrize(
+    "roles_setup",
+    ({"userrole": {"allow_empty_principals": True, "allow_user_key_ids": True}},),
+    indirect=True,
+)
+@pytest.mark.parametrize(
+    "valid_principals,ttl,key_id",
+    (
+        (["foobar"], "30m", "testkeyid"),
+        ("foobar", None, "testkeyid"),
+        (None, "30m", None),
+    ),
+)
+def test_generate_key_cert_user(vault_ssh, container, valid_principals, ttl, key_id):
     res = vault_ssh.generate_key_cert(
         "userrole",
+        ttl=ttl,
+        key_id=key_id,
         critical_options={"force-command": "rm -rf /"},
         extensions={"permit-pty": ""},
-        valid_principals=["foobar"],
+        valid_principals=valid_principals,
     )
     expected = {"private_key", "private_key_type", "serial_number", "signed_key"}
     if "openbao" in container:
@@ -223,7 +246,18 @@ def test_generate_key_cert_user(vault_ssh, container):
         assert cert.type == SSHCertificateType.USER
         assert cert.critical_options == {b"force-command": b"rm -rf /"}
         assert cert.extensions == {b"permit-pty": b""}
-        assert cert.valid_principals == [b"foobar"]
+        if valid_principals is None:
+            assert not cert.valid_principals
+        else:
+            assert cert.valid_principals == [b"foobar"]
+        if key_id is None:
+            # defaults to the display name of the creating token
+            assert cert.key_id != b"testkeyid"
+        else:
+            assert cert.key_id == b"testkeyid"
+        # requested ttl of 30m or the role default of 1h, accounting for backdating
+        expected_ttl = 1800 if ttl is not None else 3600
+        assert expected_ttl <= cert.valid_before - cert.valid_after <= expected_ttl + 100
 
 
 @pytest.mark.usefixtures("ca_setup", "roles_setup")

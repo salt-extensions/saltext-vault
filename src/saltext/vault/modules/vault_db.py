@@ -800,12 +800,11 @@ def list_cached(name=None, mount=None, cache=None, static=None):
     )
     for lease in info.values():
         for val in ("creation_time", "expire_time"):
-            if val in lease:
-                lease[val] = (
-                    datetime.fromtimestamp(lease[val], tz=timezone.utc)
-                    .astimezone()
-                    .strftime("%Y-%m-%d %H:%M:%S %Z")
-                )
+            lease[val] = (
+                datetime.fromtimestamp(lease[val], tz=timezone.utc)
+                .astimezone()
+                .strftime("%Y-%m-%d %H:%M:%S %Z")
+            )
     return info
 
 

@@ -374,9 +374,12 @@ def test_export_public_key_missing(vault_gpg, gpg_mount):
         vault_gpg.export_public_key("missing_key", mount=gpg_mount)
 
 
+@pytest.mark.parametrize("parent_exists", (False, True))
 @pytest.mark.parametrize("existing_key", (True,), indirect=True)
-def test_export_public_key_to_file(vault_gpg, gpg_mount, existing_key, tmp_path):
-    dst = tmp_path / "subdir" / "exported.pub"
+def test_export_public_key_to_file(vault_gpg, gpg_mount, existing_key, tmp_path, parent_exists):
+    if not parent_exists:
+        tmp_path = tmp_path / "subdir"
+    dst = tmp_path / "exported.pub"
     res = vault_gpg.export_public_key(existing_key, path=str(dst), mount=gpg_mount)
     assert "written to" in res
     assert dst.exists()

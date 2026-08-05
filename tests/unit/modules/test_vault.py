@@ -410,3 +410,50 @@ def test_query_raises_errors(query):
         salt.exceptions.CommandExecutionError, match=".*VaultPermissionDeniedError.*"
     ):
         vault.query("GET", "test/endpoint")
+
+
+@pytest.mark.parametrize(
+    "func,kwargs,target",
+    [
+        ("read_secret", {"path": "some/path"}, "read_kv"),
+        ("list_secrets", {"path": "some/path"}, "list_kv"),
+        ("restore_secret", {"path": "some/path"}, "restore_kv"),
+        ("policy_fetch", {"policy": "test-policy"}, "query"),
+        ("policy_write", {"policy": "test-policy", "rules": "rule"}, "query"),
+        ("policy_delete", {"policy": "test-policy"}, "query"),
+        ("policies_list", {}, "query"),
+        ("query", {"method": "GET", "endpoint": "test/endpoint"}, "query"),
+        ("get_server_config", {}, "get_authd_client"),
+        ("clear_cache", {}, "clear_cache"),
+        ("clear_token_cache", {}, "clear_cache"),
+        ("update_config", {}, "update_config"),
+    ],
+)
+def test_func_converts_errors(func, kwargs, target):
+    """
+    Ensure remote errors are converted into CommandExecutionErrors
+    """
+    with patch(f"saltext.vault.utils.vault.{target}", autospec=True) as tgt:
+        tgt.side_effect = vaultutil.VaultException("booh")
+        with pytest.raises(salt.exceptions.CommandExecutionError, match="booh"):
+            getattr(vault, func)(**kwargs)
+
+
+@pytest.mark.parametrize(
+    "func,kwargs,target",
+    [
+        ("read_secret_meta", {"path": "some/path"}, "read_kv_meta"),
+        ("patch_raw", {"path": "some/path", "raw": {"foo": "bar"}}, "patch_kv"),
+        ("wipe_secret", {"path": "some/path"}, "wipe_kv"),
+    ],
+)
+def test_func_swallows_errors(func, kwargs, target, caplog):
+    """
+    Ensure remote errors result in a False return value for legacy reasons
+    """
+    with patch(f"saltext.vault.utils.vault.{target}", autospec=True) as tgt:
+        tgt.side_effect = vaultutil.VaultException("booh")
+        with caplog.at_level(logging.ERROR):
+            res = getattr(vault, func)(**kwargs)
+    assert res is False
+    assert any("VaultException: booh" in msg for msg in caplog.messages)

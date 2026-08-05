@@ -1,4 +1,5 @@
 import datetime
+from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
@@ -86,6 +87,134 @@ def read_role(data_role, role_name):
 def query():
     with patch("saltext.vault.utils.vault.query", autospec=True) as _query:
         yield _query
+
+
+@pytest.fixture
+def _role_absent():
+    with patch(
+        "saltext.vault.modules.vault_pki.read_role", return_value=None, autospec=True
+    ) as _read_role:
+        yield _read_role
+
+
+@pytest.mark.parametrize(
+    "func,kwargs",
+    (
+        ("list_roles", {}),
+        ("read_role", {"name": "foo"}),
+        ("write_role", {"name": "foo"}),
+        ("delete_role", {"name": "foo"}),
+        ("list_issuers", {}),
+        ("read_issuer", {}),
+        ("update_issuer", {}),
+        ("read_issuer_certificate", {}),
+        ("get_default_issuer", {}),
+        ("set_default_issuer", {"name": "foo"}),
+        ("generate_root", {"common_name": "foo"}),
+        ("delete_key", {"ref": "foo"}),
+        ("delete_issuer", {"ref": "foo"}),
+        ("read_issuer_crl", {}),
+        ("list_revoked_certificates", {}),
+        ("list_certificates", {}),
+        ("read_certificate", {"serial": "00:11:22"}),
+        ("read_certificate_full", {"serial": "00:11:22"}),
+        ("issue_certificate", {"role_name": "foo", "common_name": "foo.example.com"}),
+        (
+            "sign_certificate",
+            {"role_name": "foo", "common_name": "foo.example.com", "csr": "-----BEGIN..."},
+        ),
+        ("revoke_certificate", {"serial": "00:11:22"}),
+        ("read_urls", {}),
+    ),
+)
+def test_func_converts_errors(func, kwargs, query, request):
+    query.side_effect = vaultutil.VaultException("booh")
+    if func == "write_role":
+        # otherwise we would test read_role again
+        request.getfixturevalue("_role_absent")
+    with pytest.raises(CommandExecutionError, match="booh"):
+        getattr(vault_pki, func)(**kwargs)
+
+
+def test_read_issuer_missing(query):
+    query.side_effect = vaultutil.VaultServerError("unable to find PKI issuer for reference")
+    assert vault_pki.read_issuer("foo") is None
+
+
+def test_read_issuer_converts_server_errors(query):
+    query.side_effect = vaultutil.VaultServerError("booh")
+    with pytest.raises(CommandExecutionError, match="booh"):
+        vault_pki.read_issuer("foo")
+
+
+@pytest.mark.parametrize(
+    "side_effect",
+    (
+        ({"data": {"usage": "crl-signing"}}, vaultutil.VaultException("booh")),
+        vaultutil.VaultServerError("booh"),
+    ),
+)
+def test_read_issuer_crl_converts_all_errors(query, side_effect):
+    query.side_effect = side_effect
+    with pytest.raises(CommandExecutionError, match="booh"):
+        vault_pki.read_issuer_crl()
+
+
+@pytest.mark.parametrize(
+    "kwargs,match",
+    (
+        ({}, "Either csr or private_key must be passed"),
+        (
+            {"csr": "-----BEGIN...", "private_key": "-----BEGIN..."},
+            "Only one of csr or private_key must be passed",
+        ),
+    ),
+)
+def test_sign_certificate_requires_exactly_one_of_csr_private_key(query, kwargs, match):
+    with pytest.raises(SaltInvocationError, match=match):
+        vault_pki.sign_certificate("role", "example.com", **kwargs)
+    query.assert_not_called()
+
+
+@pytest.fixture
+def create_csr_othername_failure():
+    create_csr = Mock(
+        side_effect=SaltInvocationError(
+            "otherName is currently not implemented for x509.create_csr"
+        )
+    )
+    with patch.dict(vault_pki.__salt__, {"x509.create_csr": create_csr}):
+        yield create_csr
+
+
+@pytest.mark.usefixtures("query", "create_csr_othername_failure")
+@pytest.mark.parametrize(
+    "read_role_effect,match",
+    (
+        (
+            [CommandExecutionError("permission denied")],
+            "Tried checking role for `use_csr_sans` but access was denied",
+        ),
+        ([None], "Role 'role' on mount 'pki' does not exist"),
+        ([{"use_csr_sans": True}], "has `use_csr_sans` set to true"),
+    ),
+)
+def test_sign_certificate_othername_sans_fallback_errors(read_role_effect, match):
+    """
+    When the salt-native CSR creation does not support otherName SANs,
+    the module checks whether the role would ignore CSR SANs anyways.
+    Ensure errors during this fallback are informative.
+    """
+    with patch(
+        "saltext.vault.modules.vault_pki.read_role", autospec=True, side_effect=read_role_effect
+    ):
+        with pytest.raises(CommandExecutionError, match=match):
+            vault_pki.sign_certificate(
+                "role",
+                "example.com",
+                private_key="-----BEGIN...",
+                alt_names={"1.3.6.1.4.1.311.20.2.3": "user@example.com"},
+            )
 
 
 @pytest.mark.usefixtures("list_roles")

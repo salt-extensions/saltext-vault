@@ -535,13 +535,19 @@ def test_get_config_with_version(vault_plugin, auth_plugin, db_plugin, secret_pl
 def _assert_plug(plugin_def):
     plugin = vault_plugin_read(**plugin_def)
     for key, val in plugin_def.items():
-        if key == "plugin_type":
+        if key in ("env", "plugin_type"):
             continue
         assert plugin[key] == val
 
 
 @pytest.mark.parametrize(
-    "upd", ({}, {"command": "explicit-cmd"}, {"version": "v1.2.3"}, {"args": ["foo", "bar"]})
+    "upd",
+    (
+        {},
+        {"command": "explicit-cmd"},
+        {"version": "v1.2.3"},
+        {"args": ["foo", "bar"], "env": ["FOO=bar"]},
+    ),
 )
 def test_plugin_register(vault_plugin, secret_plugin, upd):
     secret_plugin.update(upd)
