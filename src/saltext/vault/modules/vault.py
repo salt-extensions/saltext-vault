@@ -581,7 +581,10 @@ def clear_cache(connection=True, session=False):
         Setting this to true keeps the connection cache, regardless
         of ``connection``.
     """
-    return vault.clear_cache(__opts__, __context__, connection=connection, session=session)
+    try:
+        return vault.clear_cache(__opts__, __context__, connection=connection, session=session)
+    except SaltException as err:
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def clear_token_cache():
@@ -796,7 +799,10 @@ def update_config(keep_session=False):
         significantly.
         Defaults to False.
     """
-    return vault.update_config(__opts__, __context__, keep_session=keep_session)
+    try:
+        return vault.update_config(__opts__, __context__, keep_session=keep_session)
+    except SaltException as err:
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def get_server_config():

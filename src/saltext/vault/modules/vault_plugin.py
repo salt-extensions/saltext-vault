@@ -246,6 +246,7 @@ def pinned_version(plugin_type, name):
     name
         Name of the plugin to show pinned version for.
     """
+    plugin_type = _check_type(plugin_type)
     try:
         return vault.query("get", f"sys/plugins/pins/{plugin_type}/{name}", __opts__, __context__)[
             "data"

@@ -610,21 +610,25 @@ def _default_exts_templated(cert_managed, args, cert_typ, roles_setup, entity):
     ] += f"{{{{identity.groups.ids.{entity['group2_id']}.metadata.quux}}}}"
     vault_write(f"ssh/roles/{cert_typ}role", **role)
     ret, cert = _manage(cert_managed, args)
-    assert getattr(cert, "extensions") == {b"foobar": b"foo-bar-baz-quux"}
+    assert getattr(cert, "extensions") == {b"foobar": b"foo-bar-baz-quux", b"empty": b""}
     # Show idempotency
     ret, cert = _manage(cert_managed, args)
     assert not ret.changes
     # When we don't have permission or fail otherwise, we report the wrong changes and are not idempotent,
     # but the resulting extensions are still fine.
-    # assert ret.changes == {"extensions": {"added": [], "changed": [], "removed": ["foobar"]}}
-    assert getattr(cert, "extensions") == {b"foobar": b"foo-bar-baz-quux"}
+    # assert ret.changes == {"extensions": {"added": [], "changed": [], "removed": ["foobar", "empty"]}}
+    assert getattr(cert, "extensions") == {b"foobar": b"foo-bar-baz-quux", b"empty": b""}
     # Show that overrides merge with defaults.
     args["extensions"] = {"new": "value"}
     ret, cert = _manage(cert_managed, args)
     assert ret.changes == {"extensions": {"added": ["new"], "changed": [], "removed": []}}
-    assert getattr(cert, "extensions") == {b"new": b"value", b"foobar": b"foo-bar-baz-quux"}
+    assert getattr(cert, "extensions") == {
+        b"new": b"value",
+        b"foobar": b"foo-bar-baz-quux",
+        b"empty": b"",
+    }
     # When we don't have permission or fail otherwise, we don't merge the defaults.
-    # assert ret.changes == {"extensions": {"added": ["new"], "changed": [], "removed": ["foobar"]}}
+    # assert ret.changes == {"extensions": {"added": ["new"], "changed": [], "removed": ["foobar", "empty"]}}
     # assert getattr(cert, "extensions") == {b"new": b"value"}
     ret, _ = _manage(cert_managed, args)
     assert not ret.changes
@@ -638,7 +642,8 @@ def _default_exts_templated(cert_managed, args, cert_typ, roles_setup, entity):
             "userrole": {
                 "default_extensions_template": True,
                 "default_extensions": {
-                    "foobar": "foo-{{identity.entity.metadata.bar}}-{{identity.groups.names.group1.metadata.baz}}-"
+                    "foobar": "foo-{{identity.entity.metadata.bar}}-{{identity.groups.names.group1.metadata.baz}}-",
+                    "empty": "",
                 },
             }
         },
@@ -656,7 +661,8 @@ def test_user_default_exts_templated(cert_managed, user_args, roles_setup, entit
             "hostrole": {
                 "default_extensions_template": True,
                 "default_extensions": {
-                    "foobar": "foo-{{identity.entity.metadata.bar}}-{{identity.groups.names.group1.metadata.baz}}-"
+                    "foobar": "foo-{{identity.entity.metadata.bar}}-{{identity.groups.names.group1.metadata.baz}}-",
+                    "empty": "",
                 },
             }
         },

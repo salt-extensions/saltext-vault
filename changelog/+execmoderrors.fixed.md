@@ -1,0 +1,1 @@
+Fixed several execution module functions (`vault.clear_cache`/`clear_token_cache`/`update_config`, `vault_pki.read_issuer`, `vault_ssh.list_roles_ip`) leaking Vault exceptions instead of raising `CommandExecutionError`

@@ -485,7 +485,7 @@ def lookup_secret_id(name, secret_id=None, accessor=None, mount="approle"):
             return vault.get_approle_api(__opts__, __context__).read_secret_id(
                 name, accessor=accessor, mount=mount
             )
-        raise TypeError("Either secret_id or accessor is required")
+        raise SaltInvocationError("Either secret_id or accessor is required")
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -534,7 +534,7 @@ def destroy_secret_id(name, secret_id=None, accessor=None, mount="approle"):
             return vault.get_approle_api(__opts__, __context__).destroy_secret_id(
                 name, accessor=accessor, mount=mount
             )
-        raise TypeError("Either secret_id or accessor is required")
+        raise SaltInvocationError("Either secret_id or accessor is required")
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -570,10 +570,13 @@ def clear_cached(name=None, cache=None, mount=None, flush_on_failure=True):
         If a revocation fails, remove the lease from cache anyways.
         Defaults to true.
     """
-    return approle.get_store(__opts__, __context__).destroy_cached(
-        match=approle.create_cache_pattern(name=name, cache=cache, mount=mount),
-        flush_on_failure=flush_on_failure,
-    )
+    try:
+        return approle.get_store(__opts__, __context__).destroy_cached(
+            match=approle.create_cache_pattern(name=name, cache=cache, mount=mount),
+            flush_on_failure=flush_on_failure,
+        )
+    except vault.VaultException as err:
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def list_cached(name=None, cache=None, mount=None):
@@ -598,16 +601,18 @@ def list_cached(name=None, cache=None, mount=None):
         Only list credentials using this cache name (refer to :py:func:`get_secret_id <saltext.vault.modules.vault_approle.get_secret_id>`
         for details).
     """
-    creds_cache = approle.get_store(__opts__, __context__)
-    info = creds_cache.list_cached_info(
-        match=approle.create_cache_pattern(name=name, mount=mount, cache=cache)
-    )
+    try:
+        creds_cache = approle.get_store(__opts__, __context__)
+        info = creds_cache.list_cached_info(
+            match=approle.create_cache_pattern(name=name, mount=mount, cache=cache)
+        )
+    except vault.VaultException as err:
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
     for secid in info.values():
         for val in ("creation_time", "expire_time"):
-            if val in secid:
-                secid[val] = (
-                    datetime.fromtimestamp(secid[val], tz=timezone.utc)
-                    .astimezone()
-                    .strftime("%Y-%m-%d %H:%M:%S %Z")
-                )
+            secid[val] = (
+                datetime.fromtimestamp(secid[val], tz=timezone.utc)
+                .astimezone()
+                .strftime("%Y-%m-%d %H:%M:%S %Z")
+            )
     return info

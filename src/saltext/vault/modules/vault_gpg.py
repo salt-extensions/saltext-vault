@@ -692,26 +692,23 @@ def decrypt(
         Mount path the GPG backend is mounted to. Defaults to ``gpg``.
     """
     endpoint = f"{mount}/decrypt/{name}"
-    try:
-        res = _decrypt_cmd(
-            endpoint=endpoint,
-            message=message,
-            path=path,
-            signer_key=signer_key,
-            signer_key_path=signer_key_path,
-            signer_key_fingerprint=signer_key_fingerprint,
-            user=user,
-            gnupghome=gnupghome,
-            keyring=keyring,
-        )["plaintext"]
-        if not decode:
-            return res
-        res = base64.b64decode(res)
-        if not decode_utf8:
-            return res
-        return res.decode("utf-8")
-    except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+    res = _decrypt_cmd(
+        endpoint=endpoint,
+        message=message,
+        path=path,
+        signer_key=signer_key,
+        signer_key_path=signer_key_path,
+        signer_key_fingerprint=signer_key_fingerprint,
+        user=user,
+        gnupghome=gnupghome,
+        keyring=keyring,
+    )["plaintext"]
+    if not decode:
+        return res
+    res = base64.b64decode(res)
+    if not decode_utf8:
+        return res
+    return res.decode("utf-8")
 
 
 def show_session_key(
@@ -779,16 +776,13 @@ def show_session_key(
         Mount path the GPG backend is mounted to. Defaults to ``gpg``.
     """
     endpoint = f"{mount}/show-session-key/{name}"
-    try:
-        return _decrypt_cmd(
-            endpoint=endpoint,
-            message=message,
-            path=path,
-            signer_key=signer_key,
-            signer_key_path=signer_key_path,
-        )["session_key"]
-    except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+    return _decrypt_cmd(
+        endpoint=endpoint,
+        message=message,
+        path=path,
+        signer_key=signer_key,
+        signer_key_path=signer_key_path,
+    )["session_key"]
 
 
 def _norm_format(
@@ -922,26 +916,9 @@ def _fix_key(key: bytes, blocktype: str) -> str:
             f"Expected key to be ASCII-armored or raw base64 string, got neither: {key[:5]}..."
         )
 
-    fixed = []
-    temp = key.decode()  # we can safely decode base64
-
-    while len(temp) > 0:
-        if temp.startswith("-----"):
-            # Grab ----(.*)---- blocks
-            fixed.append(temp[: temp.index("-----", 5) + 5])
-            temp = temp[temp.index("-----", 5) + 5 :]
-        else:
-            # grab base64 chunks
-            if temp[:64].count("-") == 0:
-                fixed.append(temp[:64])
-                temp = temp[64:]
-            else:
-                fixed.append(temp[: temp.index("-")])
-                temp = temp[temp.index("-") :]
-    if fixed[0][0] != "-":
-        fixed.insert(0, "")
-        fixed.insert(0, "")
-        fixed.insert(0, f"-----BEGIN {blocktype}-----")
-    if fixed[-1][0] != "-":
-        fixed.append(f"-----END {blocktype}-----")
-    return "\n".join(fixed)
+    # Reflow the raw base64 data to 64 columns and add the armor.
+    raw = key.decode()  # we can safely decode base64
+    reflowed = (raw[i : i + 64] for i in range(0, len(raw), 64))
+    return "\n".join(
+        (f"-----BEGIN {blocktype}-----", "", "", *reflowed, f"-----END {blocktype}-----")
+    )
