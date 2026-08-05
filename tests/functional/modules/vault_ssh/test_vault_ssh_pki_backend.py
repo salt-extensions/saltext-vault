@@ -186,23 +186,12 @@ def _manage(cert_managed, args, exp=True, cert_type=None):
     return ret, cert
 
 
-def _requires_ca(cert_managed, args, exp):
-    args["signing_policy"] = "iprole"
-    ret = cert_managed(**args)
-    assert ret.result is False
-    assert exp in ret.comment
-    assert not ret.changes
-
-
 def test_requires_ca_new(cert_managed, host_args):
-    # Hits sign_key directly
-    _requires_ca(cert_managed, host_args, "not allowed by role")
-
-
-@pytest.mark.usefixtures("existing_cert")
-def test_requires_ca_existing(cert_managed, host_args):
-    # Hits get_signing_policy first
-    _requires_ca(cert_managed, host_args, "not a CA role")
+    host_args["signing_policy"] = "iprole"
+    ret = cert_managed(**host_args)
+    assert ret.result is False
+    assert "not a CA role" in ret.comment
+    assert not ret.changes
 
 
 def _basic(cert_managed, args):
@@ -237,6 +226,95 @@ def test_user_principal_change(cert_managed, user_args):
 def test_host_principal_change(cert_managed, host_args):
     host_args.pop("cert_type")  # also test autodetermination of cert type
     _principal_change(cert_managed, host_args, "foo.bar.baz", "foo.bar.quux", "host")
+
+
+def _all_principals_defaults_to_all_valid(cert_managed, args, valid):
+    args.pop("valid_principals")
+    args["all_principals"] = True
+    ret, cert = _manage(cert_managed, args)
+    assert ret.changes
+    assert set(cert.valid_principals) == {principal.encode() for principal in valid}
+    ret, cert = _manage(cert_managed, args)
+    assert not ret.changes
+    assert set(cert.valid_principals) == {principal.encode() for principal in valid}
+
+
+@pytest.mark.parametrize(
+    "roles_setup", ({"userrole": {"allowed_users": "foo,bar,baz"}},), indirect=True
+)
+def test_user_all_principals_defaults_to_all_valid(cert_managed, user_args):
+    _all_principals_defaults_to_all_valid(cert_managed, user_args, ("foo", "bar", "baz"))
+
+
+@pytest.mark.parametrize(
+    "roles_setup",
+    ({"hostrole": {"allowed_domains": "foo.bar.baz,foo.bar.quux", "allow_bare_domains": True}},),
+    indirect=True,
+)
+def test_host_all_principals_defaults_to_all_valid(cert_managed, host_args):
+    _all_principals_defaults_to_all_valid(cert_managed, host_args, ("foo.bar.baz", "foo.bar.quux"))
+
+
+def _all_principals_requires_allow_empty_principals(cert_managed, args):
+    args.pop("valid_principals")
+    args["all_principals"] = True
+    ret = _manage(cert_managed, args, False)
+    assert "Role does not allow empty valid principals" in ret.comment
+
+
+@pytest.mark.parametrize(
+    "roles_setup",
+    (
+        {"userrole": {"allowed_users": "*", "default_user": "foo"}},
+        {"userrole": {"allowed_users": "*", "default_user": ""}},
+        {"userrole": {"allowed_users": "", "default_user": ""}},
+    ),
+    indirect=True,
+)
+def test_user_all_principals_requires_allow_empty_principals(cert_managed, user_args):
+    _all_principals_requires_allow_empty_principals(cert_managed, user_args)
+
+
+@pytest.mark.parametrize(
+    "roles_setup",
+    (
+        {"hostrole": {"allowed_domains": "*"}},
+        {"hostrole": {"allowed_domains": ""}},
+    ),
+    indirect=True,
+)
+def test_host_all_principals_requires_allow_empty_principals(cert_managed, host_args):
+    _all_principals_requires_allow_empty_principals(cert_managed, host_args)
+
+
+@pytest.mark.parametrize(
+    "roles_setup",
+    (
+        {
+            "userrole": {
+                "allow_empty_principals": True,
+                "allowed_users": "",
+                "default_user": "",
+            }
+        },
+    ),
+    indirect=True,
+)
+def test_user_public_key_all_principals(cert_managed, user_args, ec_pub_file):
+    """
+    Ensure certificates can be requested by specifying ``public_key``
+    instead of ``private_key`` and that ``all_principals`` works.
+    """
+    user_args.pop("private_key")
+    user_args.pop("valid_principals")
+    user_args["public_key"] = ec_pub_file
+    user_args["all_principals"] = True
+    _, cert = _manage(cert_managed, user_args)
+    if CERT_CHECK:
+        # a certificate valid for all principals carries none
+        assert cert.valid_principals == []
+    ret, _ = _manage(cert_managed, user_args)
+    assert not ret.changes
 
 
 @pytest.mark.usefixtures("existing_cert")
@@ -360,32 +438,140 @@ def test_host_principal_invalid(cert_managed, host_args):
     _principal_invalid(cert_managed, host_args)
 
 
-def _principal_existing_all_invalid(cert_managed, args):
+def _principal_existing_all_invalid(cert_managed, args, expected_msg=None):
     """
     When checking for changes on an existing certificate, requesting ONLY invalid principals
-    results in an error.
+    results in an error, unless the existing certificate happens to match the (singular) default value
+    or the set of all allowed values (if no default is specified).
     """
-    ret = _manage(cert_managed, args, False)
-    assert "principals to allow" in ret.comment
+    if expected_msg is not False:
+        ret = _manage(cert_managed, args, False)
+        assert (expected_msg or "principals to allow") in ret.comment
+        return
+    # Here, the default value applied after filtering all matches the certificate
+    ret, _ = _manage(cert_managed, args, True)
     assert not ret.changes
-
-
-@pytest.mark.usefixtures("existing_cert")
-@pytest.mark.parametrize("roles_setup", ({"userrole": {"allowed_users": "foo"}},), indirect=True)
-def test_user_principal_existing_all_invalid(cert_managed, user_args):
-    user_args["valid_principals"] = ["bar"]
-    _principal_existing_all_invalid(cert_managed, user_args)
+    # Force changes to uncover invalid principal
+    args["extensions"] = {"foo": True}
+    ret = _manage(cert_managed, args, False)
+    assert "not a valid value" in ret.comment
 
 
 @pytest.mark.usefixtures("existing_cert")
 @pytest.mark.parametrize(
-    "roles_setup",
-    ({"hostrole": {"allowed_domains": "foo.bar.baz", "allow_bare_domains": True}},),
+    "roles_setup,user_args",
+    (
+        ({"userrole": {"allowed_users": "foo"}}, {}),
+        ({"userrole": {"allowed_users": "foo", "default_user": "foo"}}, {}),
+        ({"userrole": {"allowed_users": "foo,bar"}}, {}),
+        ({"userrole": {"allowed_users": "foo,bar"}}, {"valid_principals": ["foo", "bar"]}),
+        ({"userrole": {"allowed_users": "foo,bar", "default_user": "foo"}}, {}),
+        ({"userrole": {"allowed_users": "foo,bar", "default_user": "bar"}}, {}),
+        (
+            {
+                "userrole": {
+                    "allowed_users": "foo,bar",
+                    "default_user": "foo",
+                    "allowed_users_template": True,
+                }
+            },
+            {},
+        ),
+    ),
     indirect=True,
 )
-def test_host_principal_existing_all_invalid(cert_managed, host_args):
-    host_args["valid_principals"] = ["foo.bar.quux"]
-    _principal_existing_all_invalid(cert_managed, host_args)
+def test_user_principal_existing_all_invalid(cert_managed, user_args, roles_setup):
+    """
+    When all passed valid_principals are invalid, the behavior sadly depends on several factors.
+    This is a result of ssh_pki applying a policy's ``default_valid_principals``
+    (which defaults to ``allowed_valid_principals``) to two different cases,
+    both of which require ``allowed_valid_principals`` to be specified.
+
+    a) valid_principals specified, but after filtering invalid ones, it becomes empty
+    b) valid_principals and all_principals both unspecified
+
+    We could just merge our "signing policy" to align expectations, but that would completely
+    silence reporting about invalid principals, similar to what ssh_pki always does and what happens
+    when only some principals are invalid with this backend.
+    """
+    exp = "baz is not a valid value"
+    if roles_setup["userrole"].get("allowed_users_template"):
+        pass
+    elif "default_user" in roles_setup["userrole"]:
+        if [roles_setup["userrole"]["default_user"]] == user_args["valid_principals"]:
+            # All values filtered, ssh_pki sets default_valid_principals, which matches the single principal in the cert
+            exp = False
+            # Otherwise: All values filtered, ssh_pki sets default_valid_principals, which differs from the principal(s) in the cert
+    elif set(roles_setup["userrole"]["allowed_users"].split(",")) == set(
+        user_args["valid_principals"]
+    ):
+        # All values filtered, ssh_pki sets default_valid_principals, which defaults to allowed_valid_principals, which matches the principals in the cert
+        exp = False
+    user_args["valid_principals"] = ["baz"]
+    _principal_existing_all_invalid(cert_managed, user_args, exp)
+
+
+@pytest.mark.usefixtures("existing_cert")
+@pytest.mark.parametrize(
+    "roles_setup,host_args",
+    (
+        ({"hostrole": {"allowed_domains": "foo.bar.baz", "allow_bare_domains": True}}, {}),
+        (
+            {
+                "hostrole": {
+                    "allowed_domains": "foo.bar.baz,foo.bar.quux",
+                    "allow_bare_domains": True,
+                }
+            },
+            {},
+        ),
+        (
+            {
+                "hostrole": {
+                    "allowed_domains": "foo.bar.baz,foo.bar.quux",
+                    "allow_bare_domains": True,
+                }
+            },
+            {"valid_principals": ["foo.bar.baz", "foo.bar.quux"]},
+        ),
+        (
+            {
+                "hostrole": {
+                    "allowed_domains": "foo.bar.baz,foo.bar.quux",
+                    "allow_subdomains": True,
+                }
+            },
+            {"valid_principals": ["sub.foo.bar.baz", "sub.foo.bar.quux"]},
+        ),
+        (
+            {
+                "hostrole": {
+                    "allowed_domains": "foo.{{identity.entity.metadata.bar}}.baz,foo.{{identity.entity.metadata.bar}}.quux",
+                    "allow_bare_domains": True,
+                    "allowed_domains_template": True,
+                }
+            },
+            {"valid_principals": ["foo.bar.baz", "foo.bar.quux"]},
+        ),
+    ),
+    indirect=True,
+)
+def test_host_principal_existing_all_invalid(cert_managed, host_args, roles_setup):
+    """
+    Similar behavior as for user certificates, with the twist that there is no default value for host certificates.
+    """
+    exp = "foo.bar.fail is not a valid value"
+    if roles_setup["hostrole"].get("allow_subdomains") or roles_setup["hostrole"].get(
+        "allowed_domains_template"
+    ):
+        pass
+    elif set(roles_setup["hostrole"]["allowed_domains"].split(",")) == set(
+        host_args["valid_principals"]
+    ):
+        # All values filtered, ssh_pki sets default_valid_principals, which defaults to allowed_valid_principals, which matches the principals in the cert
+        exp = False
+    host_args["valid_principals"] = ["foo.bar.fail"]
+    _principal_existing_all_invalid(cert_managed, host_args, exp)
 
 
 def _principal_existing_some_valid(cert_managed, args, existing, invalid, new_valid):
@@ -427,7 +613,15 @@ def test_host_principal_override_existing_some_valid(cert_managed, host_args):
 
 @pytest.mark.parametrize(
     "roles_setup",
-    ({"userrole": {"allowed_users": "default_principal", "default_user": "default_principal"}},),
+    (
+        {"userrole": {"allowed_users": "default_principal", "default_user": "default_principal"}},
+        {
+            "userrole": {
+                "allowed_users": "default_principal,other_principal,yet_another_principal",
+                "default_user": "default_principal",
+            }
+        },
+    ),
     indirect=True,
 )
 def test_user_default_principal(cert_managed, user_args):
@@ -466,19 +660,54 @@ def test_user_default_principal_change(cert_managed, user_args):
 
 @pytest.mark.parametrize(
     "roles_setup",
-    ({"hostrole": {"allowed_domains": "foo.bar.baz", "allow_bare_domains": True}},),
+    (
+        {"userrole": {"allowed_users": "default_principal"}},
+        {
+            "userrole": {
+                "allowed_users": "default_principal,other_principal,yet_another_principal",
+            }
+        },
+        {
+            "userrole": {
+                "allowed_users": "default_principal,other_principal,yet_another_principal",
+                "allowed_users_template": True,
+            }
+        },
+    ),
     indirect=True,
 )
-def test_host_default_principal(cert_managed, host_args, container):
+def test_user_no_default_principal(cert_managed, user_args):
     """
-    Host certificates do not have an equivalent to default_user and require valid_principals to be specified.
+    If default_user is not set, valid_principals is required, unless all_principals is set.
+    """
+    user_args.pop("valid_principals")
+    ret = _manage(cert_managed, user_args, False)
+    assert "Need `valid_principals` or `all_principals`" in ret.comment
+
+
+@pytest.mark.parametrize(
+    "roles_setup",
+    (
+        {"hostrole": {"allowed_domains": "foo.bar.baz", "allow_bare_domains": True}},
+        {"hostrole": {"allowed_domains": "foo.bar.baz,foo.bar.quux", "allow_bare_domains": True}},
+        {"hostrole": {"allowed_domains": "foo.bar.baz,foo.bar.quux", "allow_subdomains": True}},
+        {
+            "hostrole": {
+                "allowed_domains": "foo.bar.baz,foo.bar.quux",
+                "allowed_domains_template": True,
+            }
+        },
+    ),
+    indirect=True,
+)
+def test_host_default_principal(cert_managed, host_args):
+    """
+    Host certificates do not have an equivalent to default_user and require valid_principals to be specified,
+    unless all_principals is set.
     """
     host_args.pop("valid_principals")
     ret = _manage(cert_managed, host_args, False)
-    if "openbao" in container:
-        assert "globally-valid certificate with no principals specified" in ret.comment
-    else:
-        assert "empty valid principals not allowed by role" in ret.comment
+    assert "Need `valid_principals` or `all_principals`" in ret.comment
 
 
 def _default_opts_exts_override(cert_managed, args, typ):
@@ -492,7 +721,7 @@ def _default_opts_exts_override(cert_managed, args, typ):
     assert ret.changes
     assert getattr(cert, typ) == {b"foobar": b"baz", b"quux": b"", b"keepme": b""}
     # ensure idempotency
-    ret, cert = _manage(cert_managed, args)
+    ret, _ = _manage(cert_managed, args)
     assert not ret.changes
 
 
@@ -610,6 +839,7 @@ def _default_exts_templated(cert_managed, args, cert_typ, roles_setup, entity):
     ] += f"{{{{identity.groups.ids.{entity['group2_id']}.metadata.quux}}}}"
     vault_write(f"ssh/roles/{cert_typ}role", **role)
     ret, cert = _manage(cert_managed, args)
+    assert ret.changes
     assert getattr(cert, "extensions") == {b"foobar": b"foo-bar-baz-quux", b"empty": b""}
     # Show idempotency
     ret, cert = _manage(cert_managed, args)
@@ -679,7 +909,7 @@ def _key_id(cert_managed, args, roles_setup, cert_typ):
     """
     # check that overrides are skipped when allow_user_key_ids is not set
     args["key_id"] = "foobar"
-    ret, cert = _manage(cert_managed, args)
+    ret, _ = _manage(cert_managed, args)
     assert not ret.changes
     # now allow it
     role = roles_setup[f"{cert_typ}role"]
