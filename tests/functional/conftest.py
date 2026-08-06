@@ -171,7 +171,9 @@ def approle(container, request):  # pylint: disable=unused-argument
     try:
         vault_write(f"auth/{mount}/role/{role}", **defaults)
         role_id = vault_read(f"auth/{mount}/role/{role}/role-id")["data"]["role_id"]
-        secret_id = vault_write(f"auth/{mount}/role/{role}/secret-id")["data"]["secret_id"]
+        secret_id = None
+        if defaults.get("bind_secret_id", True):
+            secret_id = vault_write(f"auth/{mount}/role/{role}/secret-id")["data"]["secret_id"]
         yield {"mount": mount, "role_id": role_id, "secret_id": secret_id}
     finally:
         assert vault_disable_auth_method(mount)
