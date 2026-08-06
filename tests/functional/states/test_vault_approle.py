@@ -202,11 +202,12 @@ def test_present_token_strictly_bind_ip_change(vault_approle, roleargs, approle_
     )
 
 
-@pytest.mark.usefixtures("roles_setup", "testrole")
+@pytest.mark.usefixtures("roles_setup")
 @pytest.mark.parametrize(
-    "testrole", ({"token_num_uses": 42, "token_period": "1h"},), indirect=True
+    "testrole", ({"token_num_uses": 42, "token_period": "1h"}, {}), indirect=True
 )  # These must not be set when setting batch token type
-def test_present_token_type_batch_change(vault_approle, roleargs, approle_auth, testmode):
+def test_present_token_type_batch_change(vault_approle, roleargs, approle_auth, testmode, testrole):
+    was_set = "token_num_uses" in testrole
     roleargs["token_type"] = "batch"
     roleargs["token_policies"] = ["foo", "bar"]
     roleargs.pop("secret_id_ttl")
@@ -215,8 +216,8 @@ def test_present_token_type_batch_change(vault_approle, roleargs, approle_auth, 
     assert (ret.result is None) is testmode
     assert ret.changes
     assert "token_type" in ret.changes
-    assert "token_num_uses" in ret.changes
-    assert "token_period" in ret.changes
+    assert ("token_num_uses" in ret.changes) is was_set
+    assert ("token_period" in ret.changes) is was_set
     assert "token_policies" in ret.changes
     data = vault_read(f"auth/{approle_auth}/role/testrole")["data"]
     assert (data["token_type"] != "batch") is testmode

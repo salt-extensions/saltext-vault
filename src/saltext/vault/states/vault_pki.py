@@ -25,7 +25,7 @@ try:
     import salt.utils.x509 as x509util
 
     HAS_CRYPTOGRAPHY = True
-except ImportError:
+except ImportError:  # pragma: no cover
     HAS_CRYPTOGRAPHY = False
 
 
@@ -53,10 +53,11 @@ def __virtual__():
     if "x509.encode_certificate" not in __salt__:
         return (
             False,
+            "This state requires the x509_v2 execution module. "
             "x509_v2 needs to be explicitly enabled by setting `x509_v2: true` "
             "in the minion configuration value `features` until Salt 3008 (Argon).",
         )
-    if not HAS_CRYPTOGRAPHY:
+    if not HAS_CRYPTOGRAPHY:  # pragma: no cover
         return (False, "Could not load cryptography")
     return __virtualname__
 
@@ -520,7 +521,7 @@ def role_absent(name, mount="pki"):
 
         ret["comment"] = f"PKI role `{name}` has been deleted."
 
-    except CommandExecutionError as err:
+    except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
         ret["comment"] = str(err)
         ret["changes"] = {}
@@ -555,7 +556,7 @@ def _add_sub_state_run(ret, sub):
 
 
 def _file_managed(name, test=None, **kwargs):
-    if test not in [None, True]:
+    if test not in [None, True]:  # pragma: no cover
         raise SaltInvocationError("test param can only be None or True")
     # work around https://github.com/saltstack/salt/issues/62590
     test = test or __opts__["test"]

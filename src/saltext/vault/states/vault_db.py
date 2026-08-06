@@ -736,7 +736,7 @@ def creds_cached(
             _warn_about_attr_change=False,
         )
         new_cached = __salt__["vault_db.list_cached"](name, static=static, cache=cache, mount=mount)
-        if not new_cached:
+        if not new_cached:  # pragma: no cover
             raise CommandExecutionError(
                 "Could not find cached credentials after issuing, this is likely a bug"
             )
