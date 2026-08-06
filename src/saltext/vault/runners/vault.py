@@ -1014,7 +1014,7 @@ def _get_policies_cached(minion_id, refresh_pillar=None, expire=60):
         minion_id=minion_id,
         refresh_pillar=refresh_pillar,
     )
-    if not isinstance(policies, list):
+    if not isinstance(policies, list):  # pragma: no cover
         log.warning("Cached vault policies were not formed as a list. Refreshing.")
         cache.flush(cbank, ckey)
         policies = cache.cache(
@@ -1309,7 +1309,7 @@ def _get_master_client():
 
 
 def _revoke_token(token=None, accessor=None):
-    if not token and not accessor:
+    if not token and not accessor:  # pragma: no cover
         raise SaltInvocationError("Need either token or accessor to revoke token.")
     endpoint = "auth/token/revoke"
     if token:

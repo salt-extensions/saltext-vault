@@ -107,13 +107,13 @@ def set_(key, value, profile=None):
         except vault.VaultNotFoundError:
             pass
         except Exception:  # pylint: disable=broad-except
-            # Intentionally broad, maybe it works with simlated patching.
+            # Intentionally broad, maybe it works with simulated patching.
             # Major targets are VaultPermissionDeniedError and VaultAuthExpired.
             # We're catching VaultAuthExpired in case num_uses of the token is 1 and we cannot PATCH in a single request.
             try:
                 curr_data = vault.read_kv(path, __opts__, __context__)
-            except vault.VaultNotFoundError:
-                pass
+            except vault.VaultNotFoundError:  # pragma: no cover
+                pass  # This fallback should not trigger (only races) since read_kv has an internal fallback.
             except Exception as err:  # pylint: disable=broad-except
                 log.error(
                     "Failed to read secret for simulating patching! %s: %s", type(err).__name__, err

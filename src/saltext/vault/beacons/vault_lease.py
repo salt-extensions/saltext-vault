@@ -193,7 +193,8 @@ def beacon(config):
                 lease_info["expired"] = True
                 events.append(_enrich_info(lease, effective_config, lease_info))
                 continue
-        if lease_info["expired"]:
+        if lease_info["expired"]:  # pragma: no cover
+            # This should not be hit usually since expired leases are not returned by the cache backend
             events.append(_enrich_info(lease, effective_config, lease_info))
             continue
         if timestring_map(effective_config["min_ttl"]) >= lease_info["expires_in"]:
