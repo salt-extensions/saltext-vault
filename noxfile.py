@@ -167,14 +167,16 @@ def tests(session):
     }
 
     # Support running functional/integration tests under Podman rootless
-    if not CI_RUN and sys.platform.startswith("linux"):
-        uid = os.getuid()
-        if uid != 0:
-            runtime_dir = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{uid}"))
-            podman_sock = runtime_dir / "podman" / "podman.sock"
-            if podman_sock.exists():
-                env["DOCKER_HOST"] = f"unix:{podman_sock}"
-                env["CONTAINER_HOST_REF"] = "host.containers.internal"
+    if not CI_RUN:
+        env["CONTAINER_HOST_REF"] = "host.docker.internal"
+        if sys.platform.startswith("linux"):
+            uid = os.getuid()
+            if uid != 0:
+                runtime_dir = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{uid}"))
+                podman_sock = runtime_dir / "podman" / "podman.sock"
+                if podman_sock.exists():
+                    env["DOCKER_HOST"] = f"unix:{podman_sock}"
+                    env["CONTAINER_HOST_REF"] = "host.containers.internal"
 
     session.run("coverage", "erase")
     args = [
