@@ -1,3 +1,6 @@
+from datetime import timedelta
+from pathlib import Path
+
 import pytest
 from cryptography import x509 as cx509
 from cryptography.hazmat import asn1
@@ -30,7 +33,15 @@ def minion_config_overrides(salt_version):
 
 @pytest.fixture
 def vault_pki(states):
-    yield states.vault_pki
+    try:
+        yield states.vault_pki
+    finally:
+        vault_delete("pki/roles/dummy")
+
+
+@pytest.fixture(params=(False, True))
+def testmode(request):
+    return request.param
 
 
 @pytest.fixture
@@ -317,73 +328,262 @@ def issuer_setup_sub(ca_cert, ca_sub_cert, ca_sub_key):
 
 @pytest.mark.usefixtures("issuer_setup")
 @pytest.mark.usefixtures("roles_setup")
-def test_certificate_managed_create(vault_pki, cert_args):
-    ret = vault_pki.certificate_managed(**cert_args)
-    assert ret.result
+def test_certificate_managed_create(vault_pki, cert_args, testmode):
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
     assert ret.changes
     assert "created" in ret.changes
+    assert Path(cert_args["name"]).exists() is not testmode
 
 
 @pytest.mark.usefixtures("issuer_setup")
 @pytest.mark.usefixtures("roles_setup")
-def test_certificate_managed_state_no_changes(vault_pki, cert_args):
+def test_certificate_managed_state_no_changes(vault_pki, cert_args, testmode):
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result
     assert ret.changes
     assert "created" in ret.changes
 
     # Try again
-    ret = vault_pki.certificate_managed(**cert_args)
-    assert ret.result
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is True
     assert not ret.changes
 
 
 @pytest.mark.usefixtures("issuer_setup")
 @pytest.mark.usefixtures("roles_setup")
-def test_certificate_managed_is_reissued_forcibly(vault_pki, cert_args):
+def test_certificate_managed_is_reissued_forcibly(vault_pki, cert_args, testmode):
     ret = vault_pki.certificate_managed(**cert_args)
     assert "created" in ret.changes
+    serial = load_cert(cert_args["name"]).serial_number
 
     cert_args["reissue"] = True
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert (ret.result is None) is testmode
     assert "replaced" in ret.changes
+    assert (load_cert(cert_args["name"]).serial_number == serial) is testmode
 
 
 @pytest.mark.usefixtures("issuer_setup")
 @pytest.mark.usefixtures("roles_setup")
 @pytest.mark.parametrize("encoding", ["der", "pem", "pkcs7_der", "pkcs7_pem"])
-def test_certificate_managed_encoding(vault_pki, cert_args, encoding):
+def test_certificate_managed_encoding(vault_pki, cert_args, encoding, testmode):
     cert_args["encoding"] = encoding
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result is True
     assert "created" in ret.changes
     _, enc, _, _ = load_cert(cert_args["name"], get_encoding=True)
     assert enc == encoding
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
     assert ret.result is True
     assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup")
+@pytest.mark.usefixtures("roles_setup")
+def test_certificate_managed_no_create(vault_pki, cert_args, testmode):
+    cert_args["create"] = False
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    assert not Path(cert_args["name"]).exists()
+
+
+@pytest.mark.usefixtures("issuer_setup")
+@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.parametrize("follow_symlinks", (False, True))
+def test_certificate_managed_symlink(vault_pki, cert_args, tmp_path, follow_symlinks, testmode):
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    link = tmp_path / "cert_link"
+    link.symlink_to(cert_args["name"])
+    cert_args["name"] = str(link)
+    cert_args["follow_symlinks"] = follow_symlinks
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is not False
+    if follow_symlinks:
+        # the managed file is the symlink target, which is in the correct state
+        assert ret.result is True
+        assert not ret.changes
+        assert link.is_symlink()
+    else:
+        assert (ret.result is None) is testmode
+        assert "replaced" in ret.changes
+        # the symlink should have been replaced by a regular file
+        assert link.is_symlink() is testmode
 
 
 @pytest.mark.usefixtures("issuer_setup_sub")
 @pytest.mark.usefixtures("roles_setup")
 @pytest.mark.parametrize("encoding", ["der", "pem", "pkcs7_der", "pkcs7_pem"])
-def test_certificate_managed_includes_chain(vault_pki, cert_args, encoding):
+def test_certificate_managed_includes_chain(vault_pki, cert_args, encoding, testmode):
     cert_args["encoding"] = encoding
     cert_args["append_ca_chain"] = True
     cert_args["issuer_ref"] = "sub"
-    ret = vault_pki.certificate_managed(**cert_args)
 
     is_der = encoding == "der"
-    assert ret.result is not is_der
     if is_der:
+        ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+        assert ret.result is False
         assert "Cannot append the CA chain" in ret.comment
         assert not ret.changes
         return
 
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
     assert "created" in ret.changes
     _, enc, chain, _ = load_cert(cert_args["name"], get_encoding=True)
     assert enc == encoding
     assert len(chain) == 1
+
+    # Ensure it's idempotent still
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup")
+def test_certificate_managed_missing_role(vault_pki, cert_args, testmode):
+    cert_args["role_name"] = "missing-role"
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is False
+    assert not ret.changes
+    assert "Role missing-role does not exist" in ret.comment
+
+
+@pytest.mark.usefixtures("issuer_setup_sub")
+@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.parametrize("change", ("ca_chain", "encoding"))
+def test_certificate_managed_local_changes_are_recreated(vault_pki, cert_args, change):
+    """
+    Changes to the encoding or the appended CA chain only should not
+    cause a reissuance, but be applied locally to the existing certificate.
+    """
+    cert_args["issuer_ref"] = "sub"
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+    serial = load_cert(cert_args["name"]).serial_number
+
+    if change == "ca_chain":
+        cert_args["append_ca_chain"] = True
+    else:
+        cert_args["encoding"] = "pkcs7_pem"
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert ret.changes
+    assert not set(ret.changes) - {"ca_chain", "encoding"}
+    assert "recreated" in ret.comment
+
+    cert, enc, chain, _ = load_cert(cert_args["name"], get_encoding=True)
+    # the certificate itself should not have been reissued
+    assert cert.serial_number == serial
+    if change == "ca_chain":
+        assert len(chain) == 1
+    else:
+        assert enc == "pkcs7_pem"
+
+
+@pytest.fixture
+def existing_cert(
+    vault_pki, cert_args, issuer_setup, roles_setup, request
+):  # pylint: disable=unused-argument
+    cert_args.update(getattr(request, "param", {}))
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+    return load_cert(cert_args["name"]).serial_number
+
+
+@pytest.mark.usefixtures("issuer_setup")
+@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.parametrize("existing_cert", ({"mode": "0644"},), indirect=True)
+def test_certificate_managed_file_param_changes_only(vault_pki, cert_args, existing_cert, testmode):
+    """
+    Changes affecting only the managed file (like its mode) should be
+    applied via file.managed without recreating the certificate.
+    """
+    cert_path = Path(cert_args["name"])
+    assert oct(cert_path.stat().st_mode)[-4:] == "0644"
+    existing_cert = load_cert(cert_args["name"]).serial_number
+
+    cert_args["mode"] = "0600"
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    # the certificate itself should be unchanged
+    assert load_cert(cert_args["name"]).serial_number == existing_cert
+    assert oct(cert_path.stat().st_mode)[-4:] == ("0644" if testmode else "0600")
+
+
+def test_certificate_managed_changed_private_key(vault_pki, cert_args, existing_cert):
+    """
+    A certificate whose public key does not match the specified private
+    key anymore should be reissued.
+    """
+    new_privkey = generate_rsa_privkey(2048)
+    cert_args["private_key"] = new_privkey.private_bytes(
+        serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode()
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert "private_key" in ret.changes
+    cert = load_cert(cert_args["name"])
+    assert cert.serial_number != existing_cert
+    assert cert.public_key().public_numbers() == new_privkey.public_key().public_numbers()
+
+
+@pytest.mark.parametrize("existing_cert", ({"ttl": "10m"},), indirect=True)
+def test_certificate_managed_expiry(vault_pki, cert_args, existing_cert):
+    """
+    A certificate that expires within ``ttl_remaining`` should be reissued.
+    """
+    cert_args["ttl"] = "30m"
+    cert_args["ttl_remaining"] = "15m"
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert "expiration" in ret.changes
+    cert = load_cert(cert_args["name"])
+    assert cert.serial_number != existing_cert
+    assert cert.not_valid_after_utc - cert.not_valid_before_utc > timedelta(minutes=15)
+
+
+@pytest.mark.usefixtures("issuer_setup")
+@pytest.mark.usefixtures("roles_setup")
+def test_certificate_managed_existing_file_not_a_cert(vault_pki, cert_args):
+    """
+    When the target file exists, but does not contain a certificate,
+    it should be replaced.
+    """
+    Path(cert_args["name"]).write_text("banana")
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert "replaced" in ret.changes
+    assert load_cert(cert_args["name"])
+
+
+@pytest.mark.parametrize("existing_cert", ({"alt_names": ["dns:foo.bar.baz"]},), indirect=True)
+def test_certificate_managed_exclude_cn_from_sans(vault_pki, cert_args, existing_cert):
+    """
+    By default, the common name is included in the SANs. Ensure setting
+    ``exclude_cn_from_sans`` is detected as a change, honored during
+    reissuance and idempotent.
+    """
+    cert = load_cert(cert_args["name"])
+    sans = cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName).value
+    assert cert_args["common_name"] in sans.get_values_for_type(cx509.DNSName)
+
+    cert_args["exclude_cn_from_sans"] = True
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert ret.changes
+    cert = load_cert(cert_args["name"])
+    assert cert.serial_number != existing_cert
+    sans = cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName).value
+    assert cert_args["common_name"] not in sans.get_values_for_type(cx509.DNSName)
 
     # Ensure it's idempotent still
     ret = vault_pki.certificate_managed(**cert_args)
@@ -391,9 +591,30 @@ def test_certificate_managed_includes_chain(vault_pki, cert_args, encoding):
     assert not ret.changes
 
 
+@pytest.mark.parametrize(
+    "existing_cert", ({"sign_verbatim": True, "O": "Salt Project", "C": "US"},), indirect=True
+)
+def test_certificate_managed_subject_attr_comparison(vault_pki, cert_args, existing_cert):
+    """
+    Ensure subject attributes other than CN are compared as well.
+    """
+    cert_args["C"] = "UK"
+    cert_args["L"] = "Boston"
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert ret.changes["subject"] == {
+        "C": {"old": "US", "new": "UK"},
+        "L": {"old": "", "new": "Boston"},
+    }
+    cert = load_cert(cert_args["name"])
+    assert cert.serial_number != existing_cert
+    assert cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["O"])[0].value == "Salt Project"
+    assert cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["C"])[0].value == "UK"
+    assert cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["L"])[0].value == "Boston"
+
+
 @pytest.mark.usefixtures("issuer_setup")
 @pytest.mark.usefixtures("roles_setup")
-@pytest.mark.parametrize("testmode", (False, True))
 def test_certificate_managed_missing_issuer(vault_pki, cert_args, testmode):
     cert_args["issuer_ref"] = "missing-issuer"
     cert_args["append_ca_chain"] = True
@@ -580,11 +801,16 @@ def test_certificate_managed_san(vault_pki, cert_args, testrole):
         ({"OU": "Salt Extensions"}),
     ],
 )
-def test_certificate_managed_sign_verbatim(vault_pki, cert_args, attr):
+def test_certificate_managed_sign_verbatim(vault_pki, cert_args, attr, testmode):
     cert_args = {**cert_args, **attr}
     cert_args["sign_verbatim"] = True
-    ret = vault_pki.certificate_managed(**cert_args)
-    assert ret.result
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert "created" in ret.changes
+    if testmode:
+        assert not Path(cert_args["name"]).exists()  # type: ignore
+        return
 
     cert = load_cert(cert_args["name"])
 
@@ -596,20 +822,22 @@ def test_certificate_managed_sign_verbatim(vault_pki, cert_args, attr):
 
 @pytest.mark.usefixtures("issuer_setup")
 @pytest.mark.usefixtures("roles_setup")
-def test_certificate_managed_changed_cn(vault_pki, cert_args):
+def test_certificate_managed_changed_cn(vault_pki, cert_args, testmode):
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result
     assert "created" in ret.changes
 
+    old_cn = cert_args["common_name"]
     cert_args["common_name"] = "brand new common name"
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert (ret.result is None) is testmode
     cert = load_cert(cert_args["name"])
 
     assert "subject" in ret.changes
     assert "CN" in ret.changes["subject"]
 
     c_attrs = cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["CN"])
-    assert c_attrs[0].value == "brand new common name"
+    assert c_attrs[0].value == (old_cn if testmode else "brand new common name")
 
 
 @pytest.mark.usefixtures("issuer_setup")
@@ -640,7 +868,7 @@ def test_certificate_managed_changed_cn(vault_pki, cert_args):
         ),
     ],
 )
-def test_certificate_managed_changed_subject(vault_pki, cert_args, attr, replace):
+def test_certificate_managed_changed_subject(vault_pki, cert_args, attr, replace, testmode):
     cert_args["sign_verbatim"] = True
     cert_args = {**cert_args, **attr}
     ret = vault_pki.certificate_managed(**cert_args)
@@ -648,7 +876,8 @@ def test_certificate_managed_changed_subject(vault_pki, cert_args, attr, replace
     assert "created" in ret.changes
 
     cert_args = {**cert_args, **replace}
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert (ret.result is None) is testmode
     cert = load_cert(cert_args["name"])
 
     assert "subject" in ret.changes
@@ -659,41 +888,49 @@ def test_certificate_managed_changed_subject(vault_pki, cert_args, attr, replace
         assert ret.changes["subject"][k]["new"] == v
         c_attrs = cert.subject.get_attributes_for_oid(NAME_ATTRS_OID[k])
         assert len(c_attrs) == 1
-        assert c_attrs[0].value == v
+        assert c_attrs[0].value == (attr[k] if testmode else v)
 
 
 @pytest.mark.usefixtures("issuer_setup")
 @pytest.mark.usefixtures("issuer_setup_additional")
 @pytest.mark.usefixtures("roles_setup")
-def test_certificate_managed_changed_issuer(vault_pki, cert_args):
+def test_certificate_managed_changed_issuer(vault_pki, cert_args, testmode):
     cert_args["issuer_ref"] = "root"
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result
     assert "created" in ret.changes
 
     cert_args["issuer_ref"] = "additional"
-    ret = vault_pki.certificate_managed(**cert_args)
-    assert ret.result
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
     assert "issuer_name" in ret.changes
 
 
 @pytest.mark.usefixtures("issuer_setup")
-def test_role_managed(vault_pki):
-    ret = vault_pki.role_managed("dummy")
-    assert ret.result
+def test_role_managed(vault_pki, testmode):
+    ret = vault_pki.role_managed("dummy", test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
     assert "created" in ret.changes
+    assert ("dummy" in vault_list("pki/roles")) is not testmode
 
-    ret = vault_pki.role_managed("dummy")
-    assert ret.result
-    assert not ret.changes
+    if not testmode:
+        ret = vault_pki.role_managed("dummy", test=testmode)
+        assert ret.result
+        assert not ret.changes
 
 
 @pytest.mark.usefixtures("issuer_setup")
 @pytest.mark.usefixtures("issuer_setup_additional")
 @pytest.mark.parametrize("issuer_ref", ["additional", "root"])
-def test_role_managed_correct_issuer(vault_pki, issuer_ref):
-    ret = vault_pki.role_managed("dummy", issuer_ref=issuer_ref)
-    assert ret.result
+def test_role_managed_correct_issuer(vault_pki, issuer_ref, testmode):
+    ret = vault_pki.role_managed("dummy", issuer_ref=issuer_ref, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    if testmode:
+        assert "dummy" not in vault_list("pki/roles")
+        return
 
     role_info = vault_read("pki/roles/dummy")["data"]
     assert role_info["issuer_ref"] == issuer_ref
@@ -715,19 +952,21 @@ def test_role_managed_correct_issuer(vault_pki, issuer_ref):
         {"organization": ["Salt"], "country": ["US"], "locality": ["Seattle"], "require_cn": False},
     ],
 )
-def test_role_managed_payload(vault_pki, params):
-    ret = vault_pki.role_managed("testrole", **params)
+def test_role_managed_payload(vault_pki, params, testmode):
+    ret = vault_pki.role_managed("testrole", **params, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
 
     role_info = vault_read("pki/roles/testrole")["data"]
 
     for k, v in params.items():
         assert ret.changes[k]["new"] == v
-        assert role_info[k] == v
+        assert (role_info[k] == v) is not testmode
 
 
 @pytest.mark.usefixtures("issuer_setup")
 @pytest.mark.usefixtures("roles_setup")
-def test_role_managed_normalized_params_no_changes(vault_pki):
+def test_role_managed_normalized_params_no_changes(vault_pki, testmode):
     """
     Ensure scalar values for list-type parameters and duration strings
     are compared correctly against the normalized values reported by
@@ -743,7 +982,7 @@ def test_role_managed_normalized_params_no_changes(vault_pki):
     assert ret.result is True
     assert ret.changes
 
-    ret = vault_pki.role_managed("testrole", **params)
+    ret = vault_pki.role_managed("testrole", **params, test=testmode)
     assert ret.result is True
     assert not ret.changes
 
@@ -753,11 +992,16 @@ def test_role_managed_normalized_params_no_changes(vault_pki):
 @pytest.mark.parametrize(
     "ttl,expected", [(60, 60), ("10m", 600), ("1h", 3600), ("1d", 86400), ("30d", 2592000)]
 )
-def test_role_managed_ttl(vault_pki, ttl, expected):
-    vault_pki.role_managed("testrole", ttl=ttl, max_ttl="365d")
+def test_role_managed_ttl(vault_pki, ttl, expected, testmode):
+    ret = vault_pki.role_managed("testrole", ttl=ttl, max_ttl="365d", test=testmode)
+    assert ret.result is not False
 
     role_info = vault_read("pki/roles/testrole")["data"]
-    assert role_info["ttl"] == expected
+    if testmode:
+        # the role's initial ttl as set up by the testrole fixture
+        assert role_info["ttl"] == 3600
+    else:
+        assert role_info["ttl"] == expected
 
 
 @pytest.mark.usefixtures("issuer_setup")
@@ -765,16 +1009,30 @@ def test_role_managed_ttl(vault_pki, ttl, expected):
 @pytest.mark.parametrize(
     "max_ttl,expected", [(60, 60), ("10m", 600), ("1h", 3600), ("1d", 86400), ("30d", 2592000)]
 )
-def test_role_managed_max_ttl(vault_pki, max_ttl, expected):
-    vault_pki.role_managed("testrole", ttl=1, max_ttl=max_ttl)
+def test_role_managed_max_ttl(vault_pki, max_ttl, expected, testmode):
+    ret = vault_pki.role_managed("testrole", ttl=1, max_ttl=max_ttl, test=testmode)
+    assert ret.result is not False
 
     role_info = vault_read("pki/roles/testrole")["data"]
-    assert role_info["max_ttl"] == expected
+    if testmode:
+        # the role's initial max_ttl as set up by the testrole fixture
+        assert role_info["max_ttl"] == 86400
+    else:
+        assert role_info["max_ttl"] == expected
 
 
 @pytest.mark.usefixtures("roles_setup")
-def test_role_absent(vault_pki):
+def test_role_absent(vault_pki, testmode):
     assert "testrole" in vault_list("pki/roles")
-    ret = vault_pki.role_absent("testrole")
+    ret = vault_pki.role_absent("testrole", test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
     assert "deleted" in ret.changes
-    assert "testrole" not in vault_list("pki/roles")
+    assert ("testrole" in vault_list("pki/roles")) is testmode
+
+
+def test_role_absent_already_absent(vault_pki, testmode):
+    ret = vault_pki.role_absent("missing", test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    assert "already absent" in ret.comment

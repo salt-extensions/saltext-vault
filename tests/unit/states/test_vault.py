@@ -2,6 +2,7 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
+from salt.exceptions import CommandExecutionError
 
 from saltext.vault.modules import vault as vaultexe
 from saltext.vault.states import vault
@@ -9,7 +10,7 @@ from saltext.vault.states import vault
 
 @pytest.fixture
 def configure_loader_modules():
-    return {vault: {}}
+    return {vault: {"__opts__": {"test": False}}}
 
 
 @pytest.fixture
@@ -90,6 +91,51 @@ def test_policy_absent_no_changes(policy_fetch, test):
         res = vault.policy_absent("test-policy")
     assert res["result"]
     assert not res["changes"]
+
+
+@pytest.mark.parametrize(
+    "func,kwargs",
+    [
+        ("policy_present", {"rules": "test-rules"}),
+        ("policy_absent", {}),
+    ],
+)
+def test_policy_fetch_errors_are_reported(policy_fetch, func, kwargs):
+    """
+    Test that policy read errors are caught and reported as a failure.
+    """
+    policy_fetch.side_effect = CommandExecutionError("booh")
+    res = getattr(vault, func)("test-policy", **kwargs)
+    assert res["result"] is False
+    assert not res["changes"]
+    assert "Failed to read policy: booh" in res["comment"]
+
+
+def test_policy_present_write_errors_are_reported(policy_fetch, policy_write):
+    """
+    Test that policy write errors are caught and reported as a failure.
+    """
+    policy_fetch.return_value = None
+    policy_write.side_effect = CommandExecutionError("booh")
+    res = vault.policy_present("test-policy", "test-rules")
+    assert res["result"] is False
+    assert not res["changes"]
+    assert "Failed to write policy: booh" in res["comment"]
+
+
+@pytest.mark.usefixtures("policy_fetch")
+def test_policy_absent_delete_errors_are_reported():
+    """
+    Test that a policy that vanishes between the initial fetch and the
+    deletion attempt is caught and reported as a failure.
+    """
+    delete = Mock(return_value=False, spec=vaultexe.policy_delete)
+    with patch.dict(vault.__salt__, {"vault.policy_delete": delete}):
+        res = vault.policy_absent("test-policy")
+    assert res["result"] is False
+    assert not res["changes"]
+    assert "Failed to delete policy" in res["comment"]
+    assert "initially reported as existent" in res["comment"]
 
 
 @pytest.mark.usefixtures("policy_fetch")

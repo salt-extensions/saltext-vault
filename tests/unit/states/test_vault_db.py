@@ -1,6 +1,9 @@
 from unittest.mock import Mock
+from unittest.mock import patch
 
 import pytest
+from salt.exceptions import CommandExecutionError
+from salt.exceptions import SaltInvocationError
 
 from saltext.vault.modules import vault_db as vault_db_exe
 from saltext.vault.states import vault_db
@@ -230,6 +233,13 @@ def test_conn_detail_changes(testmode, write_connection_mock, _conns):
 def test_conn_statements_strip(write_connection_mock):
     write_connection_mock("conn", "custom", root_rotation_statements=["foo"])
     ret = vault_db.connection_present("conn", "custom", root_rotation_statements=["foo\n"])
+    assert ret["result"] is True
+    assert not ret["changes"]
+
+
+def test_conn_statements_as_string(write_connection_mock):
+    write_connection_mock("conn", "custom", root_rotation_statements=["foo"])
+    ret = vault_db.connection_present("conn", "custom", root_rotation_statements="foo\n")
     assert ret["result"] is True
     assert not ret["changes"]
 
@@ -507,3 +517,29 @@ def test_static_role_verification(present, write_static_role_mock):
         assert "reported parameters do not match" in ret["comment"]
     else:
         assert "but it is still reported as absent" in ret["comment"]
+
+
+@pytest.mark.parametrize("func", ("creds_cached", "creds_uncached"))
+@pytest.mark.parametrize("err", (CommandExecutionError, SaltInvocationError))
+def test_creds_errors_are_reported(func, err):
+    list_cached_mock = Mock(spec=vault_db_exe.list_cached, side_effect=err("booh"))
+    with patch.dict(vault_db.__salt__, {"vault_db.list_cached": list_cached_mock}):
+        ret = getattr(vault_db, func)("role")
+    assert ret["result"] is False
+    assert ret["comment"] == "booh"
+    assert not ret["changes"]
+
+
+def test_mod_beacon_unsupported_sfun():
+    ret = vault_db.mod_beacon("role", sfun="role_present")
+    assert ret["result"] is False
+    assert "'vault_db.role_present' does not work with mod_beacon" in ret["comment"]
+    assert not ret["changes"]
+
+
+@pytest.mark.parametrize("sfun", ("creds_cached", "creds_uncached"))
+def test_mod_beacon_unmanaged(sfun):
+    ret = vault_db.mod_beacon("role", sfun=sfun)
+    assert ret["result"] is True
+    assert ret["comment"] == "Not managing beacon"
+    assert not ret["changes"]

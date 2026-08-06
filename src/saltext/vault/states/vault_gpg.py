@@ -242,7 +242,7 @@ def keychain_present(name, mount="gpg", **kwargs):
         kwargs["keys"] = None
         kwargs["source"] = None
         return __states__["gpg.present"](fp, **kwargs)
-    except CommandExecutionError as err:
+    except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
         ret["comment"] = str(err)
         ret["changes"] = {}

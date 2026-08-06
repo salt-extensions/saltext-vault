@@ -577,7 +577,7 @@ def role_absent(name, mount="ssh"):
             "There were no errors during role deletion, but it is still reported as present."
         )
 
-    except CommandExecutionError as err:
+    except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
         ret["comment"] = str(err)
         ret["changes"] = {}
