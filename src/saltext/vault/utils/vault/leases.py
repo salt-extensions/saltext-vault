@@ -202,7 +202,7 @@ class BaseLease(DurationMixin, DropInitKwargsMixin):
         Partially update the contained data after lease renewal.
         Recalculates expire_time based on the current time and the lease duration.
         """
-        attrs = copy.copy(self.__dict__)
+        attrs = self.to_dict()
         # ensure expire_time is reset properly
         attrs.pop("expire_time")
         attrs.update(kwargs)
@@ -212,7 +212,7 @@ class BaseLease(DurationMixin, DropInitKwargsMixin):
         """
         Partially update the contained data without resetting anything.
         """
-        attrs = copy.copy(self.__dict__)
+        attrs = self.to_dict()
         attrs.update(kwargs)
         return type(self)(**attrs)
 
@@ -398,6 +398,34 @@ class VaultSecretId(UseCountMixin, AccessorMixin, BaseLease):
         if "expiration_time" in kwargs:
             kwargs["expire_time"] = kwargs.pop("expiration_time")
         super().__init__(**kwargs)
+
+    def with_renewed(self, **kwargs) -> "Self":
+        """
+        Partially update the contained data after renewal.
+        Recalculates expire_time based on the current time and the lease duration.
+        """
+        return super().with_renewed(**self._remap_meta(kwargs))
+
+    def with_info(self, **kwargs) -> "Self":
+        """
+        Partially update the contained data without resetting anything.
+        """
+        return super().with_info(**self._remap_meta(kwargs))
+
+    @staticmethod
+    def _remap_meta(kwargs: dict[str, typing.Any]) -> dict[str, typing.Any]:
+        """
+        Remap SecretID API (lookup) response fields to the generic lease data model.
+        """
+        remapped = dict(kwargs)
+        for src, tgt in (
+            ("secret_id_ttl", "duration"),
+            ("secret_id_num_uses", "num_uses"),
+            ("secret_id_accessor", "accessor"),
+        ):
+            if src in remapped:
+                remapped[tgt] = remapped.pop(src)
+        return remapped
 
     def is_valid(self, valid_for: int | str = 0, uses: int = 1) -> bool:
         """
