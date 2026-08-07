@@ -3,6 +3,7 @@ from datetime import datetime
 from unittest.mock import patch
 
 import pytest
+from salt.exceptions import SaltInvocationError
 
 from saltext.vault.utils.vault import helpers as hlp
 
@@ -25,6 +26,55 @@ def test_get_salt_run_type(opts_runtype, expected):
     Ensure run types are detected as expected
     """
     assert hlp.get_salt_run_type(opts_runtype) == expected
+
+
+@pytest.mark.parametrize(
+    "opts",
+    [
+        {"id": "test-minion", "vault": {"config_location": "local"}},
+        {
+            "id": "test-minion",
+            "vault": {"config_location": "master"},
+            "__master_opts__": {"vault": {"server": {"url": "http://vault:8200"}}},
+        },
+    ],
+)
+def test_check_salt_ssh_opts_unchanged(opts):
+    """
+    Ensure opts are returned unchanged when they do not originate
+    from an SSH wrapper (no ``__master_opts__``) or when a ``vault``
+    configuration is present already
+    """
+    res = hlp.check_salt_ssh_opts(opts)
+    assert res is opts
+
+
+@pytest.mark.parametrize("caller_cachedir", [False, True])
+def test_check_salt_ssh_opts_merges_master_opts(caller_cachedir):
+    """
+    Ensure that for SSH wrapper opts without a vault configuration,
+    the master opts are merged in the same way as during pillar compilation,
+    with the minion's ID set and the master's cachedir restored from
+    ``_caller_cachedir`` if present (Salt 3008 OptsDict workaround)
+    """
+    opts = {
+        "id": "test-minion",
+        "cachedir": "/var/tmp/sshcache",
+        "__master_opts__": {
+            "vault": {"server": {"url": "http://vault:8200"}},
+            "cachedir": "/var/cache/salt/master",
+        },
+    }
+    if caller_cachedir:
+        opts["_caller_cachedir"] = "/var/cache/salt/master/caller"
+    res = hlp.check_salt_ssh_opts(opts)
+    assert res is not opts
+    assert res["vault"] == {"server": {"url": "http://vault:8200"}}
+    assert res["id"] == res["minion_id"] == "test-minion"
+    if caller_cachedir:
+        assert res["cachedir"] == "/var/cache/salt/master/caller"
+    else:
+        assert res["cachedir"] == "/var/cache/salt/master"
 
 
 @pytest.mark.parametrize(
@@ -107,6 +157,7 @@ def test_timestring_map(inpt, expected):
 @pytest.mark.parametrize(
     "inpt,expected",
     [
+        (None, None),
         (60.0, 60),
         (60, 60),
         ("60", 60),
@@ -122,6 +173,124 @@ def test_timestring_map(inpt, expected):
 )
 def test_timestring_map_with_int(inpt, expected):
     assert hlp.timestring_map(inpt, cast=int) == expected
+
+
+def test_timestring_map_invalid_type():
+    with pytest.raises(SaltInvocationError, match="Expected integer or time string"):
+        hlp.timestring_map(b"1m")  # type: ignore
+
+
+@pytest.mark.parametrize("inpt", ["1w", "foo", "m", "-1m", "1m "])
+def test_timestring_map_invalid_time_string(inpt):
+    with pytest.raises(SaltInvocationError, match="Invalid time string format"):
+        hlp.timestring_map(inpt)
+
+
+@pytest.mark.parametrize(
+    "inpt,expected",
+    [
+        (None, None),
+        ("", []),
+        ("foo", ["foo"]),
+        ("foo,bar,baz", ["foo", "bar", "baz"]),
+        (["foo", "bar"], ["foo", "bar"]),
+        (("foo", "bar"), ["foo", "bar"]),
+    ],
+)
+def test_deserialize_csl(inpt, expected):
+    assert hlp.deserialize_csl(inpt) == expected
+
+
+def test_deserialize_csl_invalid_type():
+    with pytest.raises(SaltInvocationError, match="Expected a comma-separated string list"):
+        hlp.deserialize_csl(42)  # type: ignore
+
+
+@pytest.mark.parametrize(
+    "inpt,expected",
+    [
+        # valid base64 string is decoded
+        ("aGVsbG8=", (b"hello", True)),
+        # valid base64 bytes are decoded
+        (b"aGVsbG8=", (b"hello", True)),
+        # embedded newlines are ignored during validation
+        (b"aGVs\nbG8=", (b"hello", True)),
+        # decodable, but not canonical base64 (re-encoding differs)
+        ("ab==", (b"ab==", False)),
+        # incorrect padding raises during decoding
+        ("abc", (b"abc", False)),
+        # non-ASCII strings cannot be base64
+        ("hëllo", ("hëllo".encode(), False)),
+    ],
+)
+def test_try_base64(inpt, expected):
+    assert hlp.try_base64(inpt) == expected
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"foo": "set", "bar": None},
+        {"foo": None, "bar": "set"},
+        {"_min": 1, "_max": 2, "foo": "set", "bar": "set", "baz": None},
+        {"_predicate": lambda x: x == "set", "foo": "set", "bar": "unset"},
+    ],
+)
+def test_x_of_valid(kwargs):
+    assert hlp.x_of(**kwargs) is None
+
+
+@pytest.mark.parametrize(
+    "kwargs,expected",
+    [
+        (
+            {"foo": None},
+            "Either `foo` is required",
+        ),
+        (
+            {"foo": None, "bar": None},
+            "Either `foo` or `bar` is required",
+        ),
+        (
+            {"foo": "set", "bar": "set"},
+            "Either `foo` or `bar` is required (exclusive)",
+        ),
+        (
+            {"foo": "set", "bar": "set", "baz": None},
+            "Only specify either `foo`, `bar` or `baz` (exclusive)",
+        ),
+        (
+            {"_min": 2, "_max": 3, "foo": "set", "bar": None, "baz": None},
+            "At least two of `foo`, `bar` or `baz` must be passed",
+        ),
+        (
+            {"_min": 1, "_max": 2, "foo": "set", "bar": "set", "baz": "set"},
+            "At most two of `foo`, `bar` or `baz` can be specified",
+        ),
+    ],
+)
+def test_x_of_invalid(kwargs, expected):
+    with pytest.raises(SaltInvocationError) as excinfo:
+        hlp.x_of(**kwargs)
+    assert str(excinfo.value) == expected
+
+
+@pytest.mark.parametrize(
+    "kwargs,expected",
+    [
+        ({"foo": "set", "bar": None}, None),
+        ({"foo": "set", "bar": "set"}, SaltInvocationError),
+    ],
+)
+def test_one_of(kwargs, expected):
+    """
+    Ensure one_of is a shorthand for the default x_of parameters
+    """
+    if expected is None:
+        assert hlp.one_of(**kwargs) is None
+    else:
+        with pytest.raises(expected):
+            hlp.one_of(**kwargs)
 
 
 @pytest.mark.parametrize(

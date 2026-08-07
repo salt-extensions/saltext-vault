@@ -31,7 +31,7 @@ try:
     from urllib3.util import create_urllib3_context
 
     URLLIB3V1 = False
-except ImportError:
+except ImportError:  # pragma: no cover
     # urllib <2
     from urllib3.util.ssl_ import create_urllib3_context
 
@@ -565,7 +565,7 @@ class VaultClient:
 
         try:
             headers.update(add_headers or {})
-        except TypeError:
+        except (TypeError, ValueError):
             pass
 
         # Not thread-safe!
@@ -614,9 +614,6 @@ class VaultClient:
             wrap_info = self.wrap_info(wrapped)
             if isinstance(expected_creation_path, str):
                 expected_creation_path = [expected_creation_path]
-            elif not isinstance(expected_creation_path, list):
-                expected_creation_path = [str(path) for path in expected_creation_path]
-            expected_creation_path = typing.cast(list[str], expected_creation_path)
             if not any(re.fullmatch(p, wrap_info["creation_path"]) for p in expected_creation_path):
                 raise VaultUnwrapException(
                     actual=wrap_info["creation_path"],
@@ -1170,7 +1167,7 @@ class VaultRetry(requests.adapters.Retry):
         Also, allow limiting the value returned by ``Retry-After`` by
         specifying ``retry_after_max``.
         """
-        if URLLIB3V1:
+        if URLLIB3V1:  # pragma: no cover
             self.backoff_max = backoff_max
             self.backoff_jitter = backoff_jitter
         else:
@@ -1255,7 +1252,7 @@ class VaultRetry(requests.adapters.Retry):
         ensure all requests use the defined parameters, not the default ones.
         """
         ret = super().new(**kw)
-        if URLLIB3V1:
+        if URLLIB3V1:  # pragma: no cover
             ret.backoff_jitter = self.backoff_jitter
             ret.backoff_max = self.backoff_max
         ret.retry_after_max = self.retry_after_max

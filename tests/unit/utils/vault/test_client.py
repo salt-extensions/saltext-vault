@@ -103,6 +103,19 @@ def test_vault_client_request_raw_headers_additional(header, client, req):
         assert actual_header == "changed"
 
 
+@pytest.mark.parametrize("add_headers", ["X-Custom-Header", ["X-Custom-Header"], 42])
+def test_vault_client_request_raw_headers_additional_invalid(add_headers, client, req):
+    """
+    Test that invalid additional headers are ignored instead of crashing the request
+    """
+    with patch.object(
+        client, "_get_headers", Mock(return_value={"X-Existing-Header": "unchanged"})
+    ):
+        client.request_raw("GET", "secret/some/path", add_headers=add_headers)
+        headers = req.call_args.kwargs.get("headers", {})
+        assert headers == {"X-Existing-Header": "unchanged"}
+
+
 @pytest.mark.usefixtures("req_failed")
 @pytest.mark.parametrize(
     "req_failed",
@@ -210,6 +223,188 @@ def test_vault_client_token_valid(client, remote, req_any):
         not remote or req_any("POST", "abc").status_code == 200
     )
     assert valid is should_be_valid
+
+
+@pytest.mark.parametrize("client", ["valid_token"], indirect=True)
+def test_vault_client_token_valid_error(client, req):
+    """
+    Errors during the remote token check should be embedded in a
+    CommandExecutionError
+    """
+    req.side_effect = requests.exceptions.ConnectionError("booh")
+    with pytest.raises(
+        salt.exceptions.CommandExecutionError, match="Error while looking up self token"
+    ):
+        client.token_valid()
+
+
+@pytest.mark.parametrize("client", ["valid_token"], indirect=True)
+@pytest.mark.parametrize("by", ("token", "accessor"))
+def test_vault_client_token_revoke_other(client, by):
+    """
+    Revoking another token should request a renewal with the requested delta
+    """
+    with patch.object(client, "token_renew", autospec=True) as renew:
+        assert client.token_revoke(2, **{by: "test"}) is True
+    renew.assert_called_once_with(increment=2, **{by: "test"})
+
+
+@pytest.mark.parametrize("client", ["valid_token"], indirect=True)
+@pytest.mark.parametrize(
+    "err", (vault.VaultPermissionDeniedError, vault.VaultNotFoundError, vault.VaultAuthExpired)
+)
+@pytest.mark.parametrize("by", (None, "token", "accessor"))
+def test_vault_client_token_revoke_invalid_token(client, by, err):
+    """
+    When the token to revoke is already invalid, this should be reported
+    by returning False for the client's own token, otherwise by raising
+    the exception.
+    """
+    kwargs = {by: "test"} if by else {}
+    with patch.object(client, "token_renew", autospec=True) as renew:
+        renew.side_effect = err
+        if by:
+            with pytest.raises(err):
+                client.token_revoke(**kwargs)
+        else:
+            assert client.token_revoke(**kwargs) is False
+
+
+@pytest.fixture
+def token_entity():
+    return {
+        "id": "test-entity-id",
+        "name": "salt_minion_test-minion",
+        "metadata": {},
+        "aliases": [],
+        "group_ids": ["test-group-id"],
+    }
+
+
+@pytest.mark.parametrize("client", ["valid_token"], indirect=True)
+def test_vault_client_token_entity_group_without_entity(client, req):
+    """
+    When the current token is not associated with an entity,
+    it cannot be part of a group
+    """
+    with patch.object(client, "token_entity", return_value=None):
+        assert client.token_entity_group(gid="test-group-id") is None
+    req.assert_not_called()
+
+
+@pytest.mark.parametrize("client", ["valid_token"], indirect=True)
+def test_vault_client_token_entity_group_not_a_member_gid(client, token_entity, req):
+    """
+    Groups the token's entity is not a member of should not be looked up by ID
+    """
+    with patch.object(client, "token_entity", return_value=token_entity):
+        assert client.token_entity_group(gid="other-group-id") is None
+    req.assert_not_called()
+
+
+@pytest.mark.parametrize("client", ["valid_token"], indirect=True)
+def test_vault_client_token_entity_group_not_a_member_name(client, token_entity, req):
+    """
+    Groups looked up by name that the token's entity is not a member of
+    should not be returned
+    """
+    req.return_value = _mock_json_response(
+        {"data": {"id": "other-group-id", "name": "other-group", "metadata": {}}}
+    )
+    with patch.object(client, "token_entity", return_value=token_entity):
+        assert client.token_entity_group(name="other-group") is None
+    req.assert_called_once()
+
+
+@pytest.mark.parametrize("client", ["valid_token"], indirect=True)
+def test_vault_client_token_entity_group_requires_name_or_gid(client, token_entity):
+    with patch.object(client, "token_entity", return_value=token_entity):
+        with pytest.raises(TypeError, match="`name` or `gid` is required"):
+            client.token_entity_group()
+
+
+@pytest.mark.parametrize("client", ["valid_token"], indirect=True)
+@pytest.mark.parametrize("by", ("gid", "name"))
+def test_vault_client_token_entity_group_member(client, token_entity, req, by):
+    """
+    Groups the token's entity is a member of should be looked up once
+    and be served from cache afterwards, regardless of the lookup key
+    """
+    group = {"id": "test-group-id", "name": "test-group", "metadata": {}}
+    kwargs = {"gid": group["id"]} if by == "gid" else {"name": group["name"]}
+    req.return_value = _mock_json_response({"data": group})
+    with patch.object(client, "token_entity", return_value=token_entity):
+        assert client.token_entity_group(**kwargs) == group
+        req.assert_called_once()
+        # Both by-ID and by-name lookups should now be served from cache
+        assert client.token_entity_group(gid=group["id"]) == group
+        assert client.token_entity_group(name=group["name"]) == group
+    req.assert_called_once()
+
+
+@pytest.mark.parametrize("client", ["valid_token"], indirect=True)
+def test_vault_client_token_entity_id_set(client, req):
+    """
+    An entity ID (or False) saved with the token should be returned as-is
+    """
+    client.auth.get_token.return_value.entity_id = "test-entity-id"
+    assert client.token_entity_id() == "test-entity-id"
+    req.assert_not_called()
+
+
+@pytest.mark.parametrize("client", ["valid_token"], indirect=True)
+@pytest.mark.parametrize("remote_id,expected", (("test-entity-id", "test-entity-id"), ("", False)))
+def test_vault_client_token_entity_id_migration(
+    client, req, token_lookup_self_response, remote_id, expected
+):
+    """
+    Tokens cached by previous versions of this extension might not carry
+    entity information, ensure it is looked up and saved with the token
+    """
+    token_lookup_self_response["data"]["entity_id"] = remote_id
+    req.return_value = _mock_json_response(token_lookup_self_response)
+    tok = client.auth.get_token.return_value
+    tok.entity_id = None
+
+    def update_token(auth=None, data=None):  # pylint: disable=unused-argument
+        data = data or {}
+        if "entity_id" in data:
+            tok.entity_id = data["entity_id"]
+
+    client.auth.update_token.side_effect = update_token
+    res = client.token_entity_id()
+    assert res == expected
+    client.auth.update_token.assert_called_with(data={"entity_id": expected})
+    req.assert_called_once()
+
+
+@pytest.mark.parametrize("client", ["valid_token"], indirect=True)
+def test_vault_client_token_entity_without_entity(client, req):
+    """
+    Tokens without an associated entity should be reported as such
+    """
+    with patch.object(client, "token_entity_id", return_value=False):
+        assert client.token_entity() is None
+    req.assert_not_called()
+
+
+@pytest.mark.parametrize("client", ["valid_token"], indirect=True)
+def test_vault_client_token_entity_caches(client, req):
+    """
+    The token's entity data should only be fetched once per client
+    """
+    entity = {
+        "id": "test-entity-id",
+        "name": "salt_minion_test-minion",
+        "metadata": {},
+        "aliases": [],
+        "group_ids": [],
+    }
+    req.return_value = _mock_json_response({"data": entity})
+    with patch.object(client, "token_entity_id", return_value="test-entity-id"):
+        assert client.token_entity() == entity
+        assert client.token_entity() == entity
+    req.assert_called_once()
 
 
 @pytest.mark.parametrize("func", ["get", "delete", "post", "list"])

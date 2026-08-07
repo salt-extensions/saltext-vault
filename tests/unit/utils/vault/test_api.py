@@ -224,6 +224,22 @@ def test_destroy_secret_id_by_accessor(approle_api, client):
 
 
 @pytest.mark.parametrize(
+    "func,verb", (("read_secret_id", "read"), ("destroy_secret_id", "destroy"))
+)
+def test_secret_id_funcs_require_secret_id_or_accessor(approle_api, client, func, verb):
+    """
+    Ensure an exception is raised when neither secret_id nor accessor is passed,
+    without the API being involved.
+    """
+    with pytest.raises(
+        vault.VaultInvocationError, match=f"Need either secret_id or accessor to {verb} secret ID"
+    ):
+        getattr(approle_api, func)("test-minion", mount="salt-minions")
+    client.put.assert_not_called()
+    client.post.assert_not_called()
+
+
+@pytest.mark.parametrize(
     "aliases",
     [
         [],
@@ -390,3 +406,53 @@ def test_write_approle(approle_api, client):
     }
     approle_api.write_approle("test-minion", mount="salt-minions", **payload)
     client.put.assert_called_once_with("auth/salt-minions/role/test-minion", payload=payload)
+
+
+@pytest.mark.parametrize("as_string", (False, True))
+def test_write_approle_normalizes_string_lists(approle_api, client, as_string):
+    """
+    Single strings passed for list parameters should be wrapped in a list.
+    """
+    kwargs = {
+        "secret_id_bound_cidrs": "10.1.0.0/16",
+        "token_policies": "default",
+        "token_bound_cidrs": "10.2.0.0/16",
+    }
+    if not as_string:
+        kwargs = {param: [val] for param, val in kwargs.items()}
+    approle_api.write_approle("test-minion", mount="salt-minions", **kwargs)
+    client.put.assert_called_once_with(
+        "auth/salt-minions/role/test-minion",
+        payload={
+            "secret_id_bound_cidrs": ["10.1.0.0/16"],
+            "token_policies": ["default"],
+            "token_bound_cidrs": ["10.2.0.0/16"],
+        },
+    )
+
+
+@pytest.mark.usefixtures("time_stopped")
+@pytest.mark.parametrize("as_string", (False, True))
+def test_generate_secret_id_normalizes_string_lists(
+    approle_api, client, secret_id_response, as_string
+):
+    """
+    Single strings passed for list parameters should be wrapped in a list.
+    """
+    client.post.return_value = secret_id_response
+    kwargs = {
+        "cidr_list": "10.1.0.0/16",
+        "token_bound_cidrs": "10.2.0.0/16",
+    }
+    if not as_string:
+        kwargs = {param: [val] for param, val in kwargs.items()}
+    res = approle_api.generate_secret_id("test-minion", mount="salt-minions", **kwargs)
+    assert res == vault.VaultSecretId(**secret_id_response["data"])
+    client.post.assert_called_once_with(
+        "auth/salt-minions/role/test-minion/secret-id",
+        payload={
+            "cidr_list": ["10.1.0.0/16"],
+            "token_bound_cidrs": ["10.2.0.0/16"],
+        },
+        wrap=False,
+    )

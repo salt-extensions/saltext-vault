@@ -179,9 +179,9 @@ class SecretIdStore:
             if flush:
                 self.cache.flush(ckey)
             return None
-        secid_updated = secid.with_renewed(**meta)
+        secid_updated = secid.with_info(**meta)
         if secid_updated != secid:
-            self.cache.store(ckey, secid)
+            self.cache.store(ckey, secid_updated)
         return secid_updated
 
     def destroy(self, name: str, secid: vleases.VaultSecretId, mount: str = "approle"):

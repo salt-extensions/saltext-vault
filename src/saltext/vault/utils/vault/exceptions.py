@@ -3,6 +3,7 @@ Exceptions that are raised by ``saltext.vault`` utilities
 """
 
 import typing
+from collections.abc import Sequence
 
 import salt.exceptions
 
@@ -49,7 +50,7 @@ class VaultUnwrapException(VaultException):
 
     def __init__(
         self,
-        expected: list[str],
+        expected: Sequence[str],
         actual: str,
         url: str,
         namespace: str | None,

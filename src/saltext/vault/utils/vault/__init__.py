@@ -515,7 +515,7 @@ class LazyIdentityContext(Mapping[str, typing.Any]):
         yield from _it(self._groups, ["identity", "groups"])
 
     def __len__(self):
-        return len(dict(self))
+        return sum(1 for _ in self)
 
 
 def render_identity_template(tpl, opts, context):

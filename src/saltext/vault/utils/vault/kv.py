@@ -62,9 +62,10 @@ class VaultKV:
             if version != 0:
                 raise VaultInvocationError("Cannot request secret versions on KV v1")
             version = None
+        payload = None
         if version is not None:
-            path += f"?version={version}"
-        res = self.client.get(path)
+            payload = {"version": version}
+        res = self.client.get(path, payload=payload)
         ret = res["data"]
         if v2_info["v2"] and not include_metadata:
             return ret["data"]
