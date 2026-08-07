@@ -5,6 +5,7 @@ Vault PKI helpers
 """
 
 import ipaddress
+import logging
 import typing
 from datetime import datetime
 from datetime import timedelta
@@ -23,6 +24,7 @@ from salt.exceptions import SaltInvocationError
 
 from saltext.vault.utils.vault.helpers import timestring_map
 
+log = logging.getLogger(__name__)
 Privkey: typing.TypeAlias = (
     ec.EllipticCurvePrivateKey
     | ed448.Ed448PrivateKey
@@ -95,8 +97,6 @@ def check_cert_for_changes(
     changes: dict[str, typing.Any] = {}
     expire_tolerance = expire_tolerance or 0
     append_chain = append_chain or []
-    if not isinstance(append_chain, list):
-        append_chain = [append_chain]
 
     try:
         cert, current_encoding, current_chain, _ = typing.cast(
@@ -196,7 +196,7 @@ def check_cert_for_changes(
     # Check if certificate should be renewed due to close to expiration
     try:
         curr_not_valid_after = cert.not_valid_after_utc
-    except AttributeError:
+    except AttributeError:  # pragma: no cover
         curr_not_valid_after = cert.not_valid_after.replace(tzinfo=timezone.utc)
 
     if curr_not_valid_after < datetime.now(timezone.utc) + timedelta(
@@ -389,6 +389,8 @@ def _collect_current_sans(cert: cx509.Certificate) -> set[tuple[str, str]]:
             current_sans.add(("dirName", name.value.rfc4514_string()))
         elif isinstance(name, cx509.RegisteredID):
             current_sans.add(("rid", name.value.dotted_string))
+        else:  # pragma: no cover
+            log.warning(f"Unknown GeneralName type in subjectAltName extension: {type(name)}")
     return current_sans
 
 
@@ -410,7 +412,7 @@ def dec2hex(decval: int | str) -> str:
 def _getattr_safe(obj: object, attr: str) -> typing.Any:
     try:
         return getattr(obj, attr)
-    except AttributeError as err:
+    except AttributeError as err:  # pragma: no cover
         # Since we cannot get the certificate object without signing,
         # we need to compare attributes marked as internal. At least
         # convert possible exceptions into some description.

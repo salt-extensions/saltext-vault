@@ -15,7 +15,7 @@ from tests.functional.modules.test_vault_plugin import test_list
 from tests.functional.modules.test_vault_plugin import test_list_includes_custom_versioned
 from tests.functional.modules.test_vault_plugin import test_list_versions
 from tests.functional.modules.test_vault_plugin import test_pinned_version
-from tests.functional.modules.test_vault_plugin import test_plugin_register
+from tests.functional.modules.test_vault_plugin import test_plugin_register as _test_plugin_register
 
 # pylint: enable=unused-import
 from tests.support.helpers import WrapperFuncProxy
@@ -254,6 +254,10 @@ def test_get_config_with_version(vault_plugin, auth_plugin, db_plugin):
     _ = res.pop("declarative", None), res.pop("oci", None)
     expected = vault_plugin_read("database", db_plugin["name"], "9.0.0")
     assert res == expected
+
+
+def test_plugin_register(vault_plugin, secret_plugin):
+    _test_plugin_register(vault_plugin, secret_plugin, {})
 
 
 @pytest.mark.usefixtures("plugins_registered")

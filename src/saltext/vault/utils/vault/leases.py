@@ -281,7 +281,7 @@ class VaultLease(BaseLease):
         self.revoke_delay = revoke_delay
         # metadata that is included in expiry events
         self.meta = meta
-        self._cache_key: str | None = None
+        self._cache_key: str | None = None  # A lease must be stored for this to be set
         super().__init__(lease_id, **kwargs)
 
     def is_valid_for(self, valid_for: int | str | None = None, blur: int = 0) -> bool:

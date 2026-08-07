@@ -233,6 +233,18 @@ class TestLeaseStore:
     Vault Lease Tests
     """
 
+    def test_get_renew_increment_undercuts_valid_for(self, store_valid):
+        """
+        Ensure requesting a renew_increment lower than valid_for fails
+        early since the returned lease could never be valid
+        """
+        with pytest.raises(
+            vault.VaultInvocationError,
+            match="When renew_increment is set, it must be at least valid_for",
+        ):
+            store_valid.get("test", valid_for=120, renew_increment=60)
+        store_valid.cache.get.assert_not_called()
+
     def test_get_uncached_or_invalid(self, store):
         """
         Ensure uncached or invalid leases are reported as None.
@@ -574,6 +586,137 @@ class TestLeaseStore:
             tag="vault/lease/test/expire", data={"valid_for_less": 3000, "ttl": 0, "meta": None}
         )
 
+    def test_lookup_without_lease_id(self, store):
+        """
+        Ensure that looking up leases without an ID (e.g. static database
+        credentials) fails with VaultNotFoundError without a remote call
+        """
+        with pytest.raises(vault.VaultNotFoundError, match="Lease does not have an ID"):
+            store.lookup("")
+        store.client.put.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "err,expected",
+        [
+            ("invalid lease", vault.VaultNotFoundError),
+            ("permission denied", vault.VaultInvocationError),
+        ],
+    )
+    def test_lookup_invalid_lease(self, store, lease, err, expected):
+        """
+        Ensure the API's 400 response for expired leases is translated into
+        VaultNotFoundError while other invocation errors are reraised
+        """
+        store.client.put.side_effect = vault.VaultInvocationError(err)
+        with pytest.raises(expected, match=err):
+            store.lookup(lease["id"])
+
+    def test_renew_without_lease_id(self, store):
+        """
+        Ensure that renewing leases without an ID (e.g. static database
+        credentials) fails with VaultNotFoundError without a remote call
+        """
+        with pytest.raises(vault.VaultNotFoundError, match="Lease does not have an ID"):
+            store.renew("", increment=None)
+        store.client.post.assert_not_called()
+
+    def test_renew_not_renewable(self, store, lease):
+        """
+        Ensure that renewing leases marked as not renewable fails
+        with VaultNotFoundError without a remote call
+        """
+        lease = vault.VaultLease(**{**lease, "renewable": False})  # type: ignore
+        with pytest.raises(vault.VaultNotFoundError, match="Lease is not renewable"):
+            store.renew(lease, increment=None)
+        store.client.post.assert_not_called()
+
+    def test_renew_by_lease_id_cached(self, store_valid, lease, lease_renewed_response):
+        """
+        Ensure that when a lease is renewed by its ID and the associated
+        cached lease is still available, it is renewed and written back
+        """
+        store_valid.lease_id_ckey_cache[lease["id"]] = "test"
+        ret = store_valid.renew(lease["id"], increment=None)
+        store_valid.cache.get.assert_called_once_with("test", flush=False)
+        assert str(ret) == lease_renewed_response["lease_id"]
+        assert ret.duration == lease_renewed_response["lease_duration"]
+        store_valid.cache.store.assert_called_once_with("test", ret)
+
+    def test_renew_by_lease_id_expired(self, store, lease):
+        """
+        Ensure that when a lease is renewed by its ID and the associated
+        cached lease has been flushed already, it is reported as expired
+        """
+        store.lease_id_ckey_cache[lease["id"]] = "test"
+        with pytest.raises(vault.VaultNotFoundError, match="Lease is already expired"):
+            store.renew(lease["id"], increment=None)
+        store.cache.get.assert_called_once_with("test", flush=False)
+        store.client.post.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "err,expected",
+        [
+            ("lease not found", vault.VaultNotFoundError),
+            ("permission denied", vault.VaultInvocationError),
+        ],
+    )
+    def test_renew_invalid_lease(self, store, lease, err, expected):
+        """
+        Ensure the API's 400 response for expired leases is translated into
+        VaultNotFoundError while other invocation errors are reraised
+        """
+        store.client.post.side_effect = vault.VaultInvocationError(err)
+        with pytest.raises(expected, match=err):
+            store.renew(vault.VaultLease(**lease), increment=None)
+
+    @pytest.mark.parametrize(
+        "raise_all_errors,as_str", [(True, False), (False, True), (False, False)]
+    )
+    def test_renew_other_errors(self, store, lease, raise_all_errors, as_str):
+        """
+        Ensure unrelated exceptions during renewal are only swallowed when
+        raise_all_errors is false and the unmodified lease can be returned
+        """
+        store.client.post.side_effect = vault.VaultServerError("internal error")
+        lease = vault.VaultLease(**lease)
+        if as_str:
+            lease = str(lease)
+        if raise_all_errors or as_str:
+            with pytest.raises(vault.VaultServerError, match="internal error"):
+                store.renew(lease, increment=None, raise_all_errors=raise_all_errors)
+        else:
+            assert store.renew(lease, increment=None, raise_all_errors=False) is lease
+
+    def test_renew_unknown_cache_key_not_stored(self, store_valid, lease, lease_renewed_response):
+        """
+        Ensure a renewed lease is only written back to the cache
+        when its cache key is known
+        """
+        ret = store_valid.renew(vault.VaultLease(**lease), increment=None)
+        store_valid.client.post.assert_called_once_with(
+            "sys/leases/renew", payload={"lease_id": lease["id"]}
+        )
+        assert str(ret) == lease_renewed_response["lease_id"]
+        assert ret.duration == lease_renewed_response["lease_duration"]
+        store_valid.cache.store.assert_not_called()
+
+    @pytest.mark.parametrize("param", ["empty_str", "no_id", "unrenewable"])
+    def test_revoke_unrevokable_lease(self, store, lease, param):
+        """
+        Ensure that attempting to revoke leases without an ID (e.g. static
+        database credentials) or unrenewable ones fails early since
+        revocation internally relies on renewals with a low validity period
+        """
+        if param == "empty_str":
+            lease = ""
+        elif param == "no_id":
+            lease = vault.VaultLease(**{**lease, "lease_id": ""})  # type: ignore
+        else:
+            lease = vault.VaultLease(**{**lease, "renewable": False})  # type: ignore
+        with pytest.raises(vault.VaultInvocationError, match="not renewable and/or has no ID"):
+            store.revoke(lease)
+        store.client.post.assert_not_called()
+
     @pytest.mark.parametrize("as_str", (False, True))
     def test_revoke_already_revoked(self, store_valid, lease, as_str):
         """
@@ -688,6 +831,24 @@ class TestLeaseStore:
             "sys/leases/renew", payload={"lease_id": lease["id"]}
         )
         store_multi.cache.get.assert_called_with("test_12", flush=True)
+
+    def test_renew_cached_skips_unrenewable(self, store, lease, lease_renewed_response):
+        """
+        Cached leases that are not renewable or that do not have an ID
+        (e.g. static database credentials) should be skipped silently
+        """
+        leases = {
+            "test_1": vault.VaultLease(**lease),
+            "test_2": vault.VaultLease(**{**lease, "lease_id": ""}),  # type: ignore
+            "test_3": vault.VaultLease(**{**lease, "renewable": False}),  # type: ignore
+        }
+        store.cache.list.return_value = list(leases)
+        store.cache.get.side_effect = lambda x, **_: leases[x]
+        store.client.post.return_value = lease_renewed_response
+        assert store.renew_cached() is True
+        store.client.post.assert_called_once_with(
+            "sys/leases/renew", payload={"lease_id": lease["id"]}
+        )
 
     @pytest.mark.parametrize("exc", (vault.VaultNotFoundError, vault.VaultPermissionDeniedError))
     def test_renew_cached_exception(self, store_multi, exc, lease_renewed_response, lease):
