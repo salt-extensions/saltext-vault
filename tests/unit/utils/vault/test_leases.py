@@ -954,3 +954,44 @@ class TestLeaseStore:
             )
         else:
             store_multi.cache.flush.assert_has_calls((call("test_1"), call("test_3")))
+
+
+@pytest.fixture
+def secret_id():
+    return vleases.VaultSecretId(
+        secret_id="test-secret-id",
+        secret_id_ttl=1337,
+        secret_id_num_uses=3,
+        secret_id_accessor="test-accessor",
+        creation_time=0,
+        expiration_time=1337,
+    )
+
+
+def test_vault_secret_id_with_info_remaps_lookup_meta(secret_id):
+    """
+    Updating a SecretID with API (lookup) response data should remap
+    the field names to the generic lease data model and keep the accessor
+    if it is not part of the update.
+    """
+    res = secret_id.with_info(
+        secret_id_ttl=2000,
+        secret_id_num_uses=5,
+        expiration_time=3000,
+        cidr_list=[],
+    )
+    assert str(res) == "test-secret-id"
+    assert res.accessor == "test-accessor"
+    assert res.duration == 2000
+    assert res.num_uses == 5
+    assert res.expire_time == 3000
+    assert res.creation_time == 0
+
+
+def test_vault_secret_id_with_renewed_remaps_meta_and_resets_expire_time(secret_id):
+    res = secret_id.with_renewed(secret_id_ttl=2000, secret_id_accessor="new-accessor")
+    assert str(res) == "test-secret-id"
+    assert res.accessor == "new-accessor"
+    assert res.duration == 2000
+    # time is stopped at 0, so the new expire_time equals the duration
+    assert res.expire_time == 2000
