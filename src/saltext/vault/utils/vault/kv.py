@@ -370,10 +370,10 @@ class VaultKV:
 
         otype = possible_types[0] if possible_types[0] != ptype else possible_types[1]
         other = pfilter + "/" + otype
-        if path.startswith(other):
+        if path == other or path.startswith(other + "/"):
             path = path.replace(other, together, 1)
             msg = f'Path is a "{otype}" type but "{ptype}" type requested - Flipping: {path}'
-        elif not path.startswith(together):
+        elif path != together and not path.startswith(together + "/"):
             old_path = path
             path = path.replace(pfilter, together, 1)
             msg = f"Converting path to v2 {old_path} => {path}"

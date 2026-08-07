@@ -669,6 +669,29 @@ class TestKVV2:
             exc is vault.VaultPermissionDeniedError
         )
 
+    @pytest.mark.parametrize(
+        "path,ptype,expected",
+        [
+            # a path of the wrong type is flipped
+            ("secret/data/some/path", "metadata", "secret/metadata/some/path"),
+            ("secret/metadata/some/path", "data", "secret/data/some/path"),
+            # a path of the correct type is returned unchanged
+            ("secret/data/some/path", "data", "secret/data/some/path"),
+            # only complete path segments should match the type checks,
+            # otherwise secrets whose name begins with a type are mangled
+            ("secret/database", "data", "secret/data/database"),
+            ("secret/database", "metadata", "secret/metadata/database"),
+            ("secret/metadatabase", "data", "secret/data/metadatabase"),
+        ],
+    )
+    def test_v2_the_path(self, kvv2, path, ptype, expected):
+        """
+        Ensure paths that already contain a type prefix are flipped to
+        the requested type, while type-like secret name prefixes are
+        not mistaken for one
+        """
+        assert kvv2._v2_the_path(path, "secret", ptype) == expected
+
     def test_vault_kv_delete(self, kvv2, path, paths):
         """
         Ensure that VaultKV.delete works for KV v2.
