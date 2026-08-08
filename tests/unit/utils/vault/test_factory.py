@@ -1760,10 +1760,11 @@ class TestBuildRevocationClient:
             res = vfactory._build_revocation_client({}, {})
             query.assert_not_called()
             if token.return_value.get.return_value is not None:
+                assert res is not None
                 assert isinstance(res[0], vclient.AuthenticatedVaultClient)
                 assert res[1] == test_remote_config
             else:
-                assert res == (None, None)
+                assert res is None
 
 
 @pytest.mark.parametrize("ckey", ["token", None])
