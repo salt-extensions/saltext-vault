@@ -165,6 +165,7 @@ def write_role_ca(
     allowed_user_key_lengths=None,
     algorithm_signer=None,
     not_before_duration=None,
+    allow_commas_in_identity_templates=None,
     mount="ssh",
 ):
     """
@@ -292,6 +293,15 @@ def write_role_ca(
         Specifies the duration by which to backdate the ``ValidAfter`` property.
         Defaults to ``30s``.
 
+    allow_commas_in_identity_templates
+        .. versionadded:: 1.8.0
+
+        (OpenBao only, Vault always allows this behavior)
+        If set and templating is enabled, the values substituted in for
+        ``allowed_users`` and ``allowed_domains`` template expressions are allowed to contain a comma.
+        As these values are comma separated lists, this can enable injection attacks.
+        Only use this if the data used by the templates is trusted. Defaults to false.
+
     mount
         Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
@@ -324,6 +334,7 @@ def write_role_ca(
         "allowed_user_key_lengths": allowed_user_key_lengths,
         "algorithm_signer": algorithm_signer,
         "not_before_duration": not_before_duration,
+        "allow_commas_in_identity_templates": allow_commas_in_identity_templates,
     }
     for param in (
         "allowed_users",

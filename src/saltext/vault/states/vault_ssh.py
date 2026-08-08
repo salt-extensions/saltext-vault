@@ -49,6 +49,7 @@ LIST_ROLE_PARAMS = (
 )
 MAP_ROLE_PARAMS = ("default_critical_options", "default_extensions", "allowed_user_key_lengths")
 TIME_ROLE_PARAMS = ("ttl", "max_ttl", "not_before_duration")
+OPENBAO_ROLE_PARAMS = ("allow_commas_in_identity_templates",)
 
 
 def ca_present(
@@ -259,6 +260,8 @@ def role_present_otp(
 def _diff_role_params(curr, wanted):
     diff = {}
     for param, val in wanted.items():
+        if param in OPENBAO_ROLE_PARAMS and param not in curr:
+            continue  # not an issue to pass a value anyways, Vault ignores extra args
         if param in LIST_ROLE_PARAMS:
             curr_param = set(deserialize_csl(curr.get(param, [])))
             wanted_param = set(deserialize_csl(val or []))
@@ -375,6 +378,7 @@ def role_present_ca(
     allowed_user_key_lengths=None,
     algorithm_signer="default",
     not_before_duration=30,
+    allow_commas_in_identity_templates=False,
     mount="ssh",
 ):
     """
@@ -488,6 +492,15 @@ def role_present_ca(
         Specifies the duration by which to backdate the ``ValidAfter`` property.
         Defaults to ``30s``.
 
+    allow_commas_in_identity_templates
+        .. versionadded:: 1.8.0
+
+        (OpenBao only, Vault always allows this behavior)
+        If set and templating is enabled, the values substituted in for
+        ``allowed_users`` and ``allowed_domains`` template expressions are allowed to contain a comma.
+        As these values are comma separated lists, this can enable injection attacks.
+        Only use this if the data used by the templates is trusted. Defaults to false.
+
     mount
         Name of the mount point the SSH secret backend is mounted at.
         Defaults to ``ssh``.
@@ -527,6 +540,7 @@ def role_present_ca(
         "allowed_user_key_lengths": allowed_user_key_lengths,
         "algorithm_signer": algorithm_signer,
         "not_before_duration": not_before_duration,
+        "allow_commas_in_identity_templates": allow_commas_in_identity_templates,
     }
     return _role_present(name, "ca", ret, mount=mount, **payload)
 
