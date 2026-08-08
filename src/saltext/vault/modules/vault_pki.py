@@ -227,8 +227,7 @@ def write_role(
         If set to false, makes the common_name field optional while generating a certificate. Defaults to true.
 
     kwargs:
-        Any other params which can be understand by Vault API.
-
+        Any other params which can be understood by the Vault API.
     """
 
     endpoint = f"{mount}/roles/{name}"
