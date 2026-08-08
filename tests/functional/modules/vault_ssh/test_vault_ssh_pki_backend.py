@@ -612,25 +612,45 @@ def test_host_principal_override_existing_some_valid(cert_managed, host_args):
 
 
 @pytest.mark.parametrize(
-    "roles_setup",
+    "roles_setup,exp",
     (
-        {"userrole": {"allowed_users": "default_principal", "default_user": "default_principal"}},
-        {
-            "userrole": {
-                "allowed_users": "default_principal,other_principal,yet_another_principal",
-                "default_user": "default_principal",
-            }
-        },
+        (
+            {
+                "userrole": {
+                    "allowed_users": "default_principal",
+                    "default_user": "default_principal",
+                },
+            },
+            ("default_principal",),
+        ),
+        (
+            {
+                "userrole": {
+                    "allowed_users": "default_principal,other_principal,yet_another_principal",
+                    "default_user": "default_principal",
+                }
+            },
+            ("default_principal",),
+        ),
+        (
+            {
+                "userrole": {
+                    "allowed_users": "default_principal,other_default_principal,yet_another_principal",
+                    "default_user": "default_principal,other_default_principal",
+                }
+            },
+            ("default_principal", "other_default_principal"),
+        ),
     ),
-    indirect=True,
+    indirect=("roles_setup",),
 )
-def test_user_default_principal(cert_managed, user_args):
+def test_user_default_principal(cert_managed, user_args, exp):
     """
     Ensure we don't need to specify principals for user certificates.
     """
     user_args.pop("valid_principals")
     _, cert = _manage(cert_managed, user_args)
-    assert cert.valid_principals == [b"default_principal"]
+    assert cert.valid_principals == [p.encode() for p in sorted(exp)]
     ret, _ = _manage(cert_managed, user_args)
     assert not ret.changes
 

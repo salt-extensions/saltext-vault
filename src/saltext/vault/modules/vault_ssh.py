@@ -108,7 +108,7 @@ def write_role_otp(
         Name of the SSH role.
 
     default_user
-        Default username for which a credential should be generated.
+        Default username(s) for which a credential should be generated.
         Required.
 
     cidr_list
@@ -188,13 +188,13 @@ def write_role_ca(
         Name of the SSH role.
 
     default_user
-        Default username for which a credential should be generated.
+        Default username(s) for which a credential should be generated.
         When ``default_user_template`` is true, this can contain an identity
         template with any prefix or suffix, like ``ssh-{{identity.entity.id}}-user``.
         If you wish this to be a valid principal, it must also be in ``allowed_users``.
 
     default_user_template
-        Allow ``default_users`` to be specified using identity template values.
+        Allow ``default_user`` to be specified using identity template values.
         A non-templated user is also permitted. Defaults to false.
 
     allowed_users
@@ -1334,7 +1334,7 @@ def _get_signing_policy(role):
         }
 
     if user_type and role.get("default_user"):
-        policy["default_valid_principals"] = [role["default_user"]]
+        policy["default_valid_principals"] = deserialize_csl(role["default_user"])
 
     if role.get("ttl"):
         policy["ttl"] = role["ttl"]
