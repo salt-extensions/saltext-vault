@@ -10,7 +10,7 @@ from salt.exceptions import CommandExecutionError
 from salt.utils.x509 import generate_rsa_privkey
 from salt.utils.x509 import load_cert
 
-from saltext.vault.utils.vault.pki import dec2hex
+from saltext.vault.utils.vault.helpers import dec2hex
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_disable_secret_engine
 from tests.support.vault import vault_enable_secret_engine

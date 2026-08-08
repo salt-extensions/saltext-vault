@@ -19,10 +19,11 @@ from saltext.vault.utils.vault.helpers import deserialize_csl
 from saltext.vault.utils.vault.helpers import filter_state_internal_kwargs
 from saltext.vault.utils.vault.helpers import safe_atomic_write
 from saltext.vault.utils.vault.helpers import timestring_map
-from saltext.vault.utils.vault.pki import check_cert_for_changes
 
 try:
-    import salt.utils.x509 as x509util
+    from salt.utils import x509 as x509util
+
+    from saltext.vault.utils.vault.pki import check_cert_for_changes
 
     HAS_CRYPTOGRAPHY = True
 except ImportError:  # pragma: no cover
@@ -50,7 +51,9 @@ __virtualname__ = "vault_pki"
 
 
 def __virtual__():
-    if "x509.encode_certificate" not in __salt__:
+    try:
+        __salt__["x509.encode_certificate"]  # pylint: disable=pointless-statement
+    except KeyError:  # pragma: no cover
         return (
             False,
             "This state requires the x509_v2 execution module. "

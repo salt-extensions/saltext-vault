@@ -196,30 +196,6 @@ def new_pki():
     return cert_obj.certificate, cert_obj.private_key, [cert_obj.ca.certificate]
 
 
-@pytest.mark.parametrize(
-    "inpt,expected",
-    [
-        (60, "3C"),
-        (4508375982735402, "10:04:58:14:F7:00:2A"),
-        (123456789011, "1C:BE:99:1A:13"),
-    ],
-)
-def test_dec2hex(inpt, expected):
-    assert pki.dec2hex(inpt) == expected
-
-
-@pytest.mark.parametrize(
-    "inpt,match",
-    [
-        (-60, ".*non-negative"),
-        ("00:11:22:33:44:55:66:77:88:99", ".*input must be integer.*"),
-    ],
-)
-def test_dec2hex_raise_err(inpt, match):
-    with pytest.raises(SaltInvocationError, match=match):
-        pki.dec2hex(inpt)
-
-
 def test_compare_ca_chain_with_new(existing_pki, new_pki):
     _, _, chain = existing_pki
     _, _, new_chain = new_pki
