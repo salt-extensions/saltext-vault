@@ -1164,7 +1164,11 @@ def create_certificate(
                 raise SaltInvocationError(
                     "Role does not allow empty valid principals. If you really intend to create "
                     "a certificate valid for any principal, update the role by setting "
-                    "`allow_empty_principals` to true, otherwise specify valid_principals."
+                    "`allow_empty_principals` to true, otherwise specify valid_principals. "
+                    "If you expected this call to default to all valid principals and "
+                    "this role uses templating for allowed principals, ensure the minion "
+                    "can read its own entity/groups. If this is a host role and has "
+                    "allow_subdomains set, you need to request explicit principals."
                 )
             kwargs["valid_principals"] = []
     elif policy.get("default_valid_principals"):
@@ -1231,9 +1235,9 @@ def get_signing_policy(signing_policy, ca_server=None):
     Returns an SSH role formatted as a signing policy.
     Compatibility layer between ``ssh_pki`` and this module.
     This currently does not support all functionality Vault offers,
-    e.g. dynamic principals (templates/allow_subdomains),
+    specifically ``allow_subdomains`` for host certificates,
     so :py:func:`ssh_pki.certificate_managed <salt.states.ssh_pki.certificate_managed>` might always
-    reissue a certificate in case these options are used.
+    reissue a certificate in case this option is used.
 
     CLI Example:
 
@@ -1271,25 +1275,46 @@ def _get_signing_policy(role):
     user_type = host_type = False
 
     if role.get("allow_host_certificates"):
-        if role.get("allowed_domains_template") or role.get("allow_subdomains"):
+        if role.get("allow_subdomains"):
             # Patterns are unsupported by the current ssh_pki modules.
             # Ensure the certificate is not always recreated.
             allowed_domains = ["*"]
-            # TODO: Render basic templates.
         else:
+            allowed_domains_str = role.get("allowed_domains", "")
+            if role.get("allowed_domains_template"):
+                # Vault first renders templates and then splits the output
+                try:
+                    allowed_domains_str = vault.render_identity_template(
+                        allowed_domains_str, __opts__, __context__
+                    )
+                except VaultException as err:
+                    allowed_domains_str = "*"
+                    log.error(
+                        "Failed rendering allowed_domains template: %s",
+                        err,
+                        exc_info_on_loglevel=logging.DEBUG,
+                    )
             # This actually requires ``allow_bare_domains``, but one of these must be set to use the role.
-            allowed_domains = deserialize_csl(role.get("allowed_domains", ""))
+            allowed_domains = deserialize_csl(allowed_domains_str)
         policy["allowed_valid_principals"].extend(allowed_domains)
         host_type = True
 
     if role.get("allow_user_certificates"):
+        allowed_users_str = role.get("allowed_users", "")
         if role.get("allowed_users_template"):
-            # Patterns are unsupported by the current ssh_pki modules.
-            # Ensure the certificate is not always recreated.
-            allowed_users = ["*"]
-            # TODO: Render basic templates via looking up metadata
-        else:
-            allowed_users = deserialize_csl(role.get("allowed_users", ""))
+            # Vault first renders templates and then splits the output
+            try:
+                allowed_users_str = vault.render_identity_template(
+                    allowed_users_str, __opts__, __context__
+                )
+            except VaultException as err:
+                allowed_users_str = "*"
+                log.error(
+                    "Failed rendering allowed_users template: %s",
+                    err,
+                    exc_info_on_loglevel=logging.DEBUG,
+                )
+        allowed_users = deserialize_csl(allowed_users_str)
         policy["allowed_valid_principals"].extend(allowed_users)
         user_type = True
 
@@ -1334,7 +1359,23 @@ def _get_signing_policy(role):
         }
 
     if user_type and role.get("default_user"):
-        policy["default_valid_principals"] = deserialize_csl(role["default_user"])
+        default_user_str = role["default_user"]
+        if role.get("default_user_template"):
+            try:
+                default_user_str = vault.render_identity_template(
+                    default_user_str, __opts__, __context__
+                )
+            except VaultException as err:
+                default_user_str = ""
+                log.error(
+                    "Failed rendering default_user template: %s",
+                    err,
+                    exc_info_on_loglevel=logging.DEBUG,
+                )
+        # In spite of its name, multiple default principals are allowed
+        default_users = deserialize_csl(default_user_str)
+        if default_users:
+            policy["default_valid_principals"] = default_users
 
     if role.get("ttl"):
         policy["ttl"] = role["ttl"]
