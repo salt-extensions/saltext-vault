@@ -114,8 +114,8 @@ def check_cert_for_changes(
             return changes
         raise
 
-    if current_chain and "pkcs7" in encoding:
-        # This is an issue in salt.utils.x509.load_cert that was missed so far.
+    if current_chain and "pkcs7" in encoding and not hasattr(x509util, "order_certs_naively"):
+        # This is an issue in salt.utils.x509.load_cert that was missed until recently.
         # PKCS#7 does not guarantee certificate order, so the leaf
         # certificate is not necessarily reported as the main one.
         # Identify it as the only certificate that did not issue
@@ -180,7 +180,7 @@ def check_cert_for_changes(
         for cert in loaded_chain
         if cert.subject.rfc4514_string() != cert.issuer.rfc4514_string()
     ]
-    if not compare_ca_chain(current_chain or [], loaded_chain):
+    if not compare_ca_chain(current_chain or [], loaded_chain, unordered="pkcs7" in encoding):
         changes["ca_chain"] = True
 
     ca = x509util.load_cert(issuer)
@@ -212,7 +212,7 @@ def check_cert_for_changes(
 
 def compare_cert_signing(
     current: cx509.Certificate, signing_ca: cx509.Certificate, private_key: Privkey
-):
+) -> dict[str, typing.Any]:
     changes = {}
 
     if signing_ca and not x509util.verify_signature(current, signing_ca.public_key()):
@@ -231,14 +231,19 @@ def compare_cert_signing(
     return changes
 
 
-def compare_ca_chain(current: list[cx509.Certificate], new: list[cx509.Certificate]):
+def compare_ca_chain(
+    current: list[cx509.Certificate], new: list[cx509.Certificate], unordered: bool = False
+) -> bool:
     if len(current) != len(new):
         return False
-    # Compare without regarding the order since some encodings
-    # do not guarantee it (PKCS#7)
-    current_fprints = {crt.fingerprint(hashes.SHA256()) for crt in current}
-    new_fprints = {crt.fingerprint(hashes.SHA256()) for crt in new}
-    return current_fprints == new_fprints
+    if unordered:
+        return {cert.fingerprint(hashes.SHA256()) for cert in new} == {
+            cert.fingerprint(hashes.SHA256()) for cert in current
+        }
+    for i, new_cert in enumerate(new):
+        if new_cert.fingerprint(hashes.SHA256()) != current[i].fingerprint(hashes.SHA256()):
+            return False
+    return True
 
 
 def compare_sans(

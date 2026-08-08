@@ -1294,7 +1294,7 @@ def sign_certificate(
         ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8:``.
 
         .. note::
-            As of writing this, otherName SANs are not supported by the
+            As of writing this, otherName SANs require very recent releases of the
             :py:func:`x509_v2 module <salt.modules.x509_v2.create_csr>`, which is used to generate
             a CSR when ``csr`` is not specified. If you need to make this work, in the affected role,
             set ``use_csr_sans`` to ``false``, which circumvents this issue.
@@ -1369,6 +1369,7 @@ def sign_certificate(
         except SaltInvocationError as err:
             if not norm_sans or "otherName is currently not implemented" not in str(err):
                 raise
+            # otherName SAN support requires Salt 3006.28/3008.3 (likely, if merged forward in time)
             try:
                 role = read_role(role_name, mount=mount)
             except CommandExecutionError as err2:
@@ -1385,8 +1386,8 @@ def sign_certificate(
             if role.get("use_csr_sans", True):
                 raise CommandExecutionError(
                     "Cannot include otherName SANs when `private_key` is passed and the role "
-                    "has `use_csr_sans` set to true. Either set it to false, remove the otherName "
-                    "SANs or pass `csr` instead of `private_key`."
+                    "has `use_csr_sans` set to true. Either set it to false, upgrade Salt, "
+                    "remove the otherName SANs or pass `csr` instead of `private_key`."
                 ) from err
             csr_args.pop("subjectAltName")
             csr = __salt__["x509.create_csr"](
