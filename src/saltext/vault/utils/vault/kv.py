@@ -20,7 +20,7 @@ if typing.TYPE_CHECKING:
 log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 
-def apply_json_merge_patch(data, patch):
+def apply_json_merge_patch(data: typing.Any, patch: typing.Any) -> typing.Any:
     # https://datatracker.ietf.org/doc/html/rfc7396
     if not isinstance(patch, dict):
         return patch
@@ -46,7 +46,7 @@ class VaultKV:
         self.metadata_cache = metadata_cache
 
     def read(
-        self, path: str, include_metadata: bool = False, version: str | None = None
+        self, path: str, include_metadata: bool = False, version: int | str | None = None
     ) -> dict[str, typing.Any]:
         """
         Read secret data at path.
@@ -64,7 +64,7 @@ class VaultKV:
             version = None
         payload = None
         if version is not None:
-            payload = {"version": version}
+            payload = {"version": self._parse_versions(version)[0]}
         res = self.client.get(path, payload=payload)
         ret = res["data"]
         if v2_info["v2"] and not include_metadata:
@@ -84,7 +84,7 @@ class VaultKV:
             raise VaultInvocationError("The backend is not KV v2")
         return self.client.get(v2_info["metadata"])["data"]
 
-    def write(self, path, data, cas=None):
+    def write(self, path: str, data: dict[str, typing.Any], cas: int | str | None = None):
         """
         Write secret data to path.
         """
@@ -285,6 +285,10 @@ class VaultKV:
         payload = {"versions": parsed_versions}
         return self.client.post(path, payload=payload)
 
+    @typing.overload
+    def _parse_versions(self, versions: None) -> None: ...
+    @typing.overload
+    def _parse_versions(self, versions: int | str | list[int | str]) -> list[int]: ...
     def _parse_versions(self, versions: int | str | list[int | str] | None) -> list[int] | None:
         if versions is None:
             return versions

@@ -1295,8 +1295,11 @@ def _get_signing_policy(role):
             if role.get("allowed_domains_template"):
                 # Vault first renders templates and then splits the output
                 try:
-                    allowed_domains_str = vault.render_identity_template(
+                    allowed_domains_rend = vault.render_identity_template(
                         allowed_domains_str, __opts__, __context__
+                    )
+                    allowed_domains_str = (
+                        allowed_domains_rend if allowed_domains_rend is not None else "*"
                     )
                 except VaultException as err:
                     allowed_domains_str = "*"
@@ -1315,9 +1318,10 @@ def _get_signing_policy(role):
         if role.get("allowed_users_template"):
             # Vault first renders templates and then splits the output
             try:
-                allowed_users_str = vault.render_identity_template(
+                allowed_users_rend = vault.render_identity_template(
                     allowed_users_str, __opts__, __context__
                 )
+                allowed_users_str = allowed_users_rend if allowed_users_rend is not None else "*"
             except VaultException as err:
                 allowed_users_str = "*"
                 log.error(
