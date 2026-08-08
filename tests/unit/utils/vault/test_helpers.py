@@ -189,6 +189,30 @@ def test_timestring_map_invalid_time_string(inpt):
 @pytest.mark.parametrize(
     "inpt,expected",
     [
+        (60, "3C"),
+        (4508375982735402, "10:04:58:14:F7:00:2A"),
+        (123456789011, "1C:BE:99:1A:13"),
+    ],
+)
+def test_dec2hex(inpt, expected):
+    assert hlp.dec2hex(inpt) == expected
+
+
+@pytest.mark.parametrize(
+    "inpt,match",
+    [
+        (-60, ".*non-negative"),
+        ("00:11:22:33:44:55:66:77:88:99", ".*Input must be integer.*"),
+    ],
+)
+def test_dec2hex_raise_err(inpt, match):
+    with pytest.raises(SaltInvocationError, match=match):
+        hlp.dec2hex(inpt)
+
+
+@pytest.mark.parametrize(
+    "inpt,expected",
+    [
         (None, None),
         ("", []),
         ("foo", ["foo"]),

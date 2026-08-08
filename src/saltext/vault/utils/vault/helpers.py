@@ -214,6 +214,28 @@ def timestring_map(
     raise RuntimeError("This path should not have been hit")  # pragma: no cover
 
 
+def dec2hex(decval: int | str) -> str:
+    """
+    Converts decimal values to nicely formatted hex strings
+    """
+    try:
+        decval = int(decval)
+    except (TypeError, ValueError) as exc:
+        raise SaltInvocationError(f"Input must be integer, got {type(decval)} instead") from exc
+    if decval < 0:
+        raise SaltInvocationError("Input must be non-negative integer")
+    return _pretty_hex(f"{decval:X}")
+
+
+def _pretty_hex(hex_str: str) -> str:
+    """
+    Nicely formats hex strings
+    """
+    if len(hex_str) % 2 != 0:
+        hex_str = "0" + hex_str
+    return ":".join([hex_str[i : i + 2] for i in range(0, len(hex_str), 2)]).upper()
+
+
 def filter_state_internal_kwargs(kwargs: dict[str, typing.Any]) -> dict[str, typing.Any]:
     """
     Removes state-internal kwargs from a kwargs dict.

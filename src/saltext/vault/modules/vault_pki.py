@@ -16,14 +16,16 @@ from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 
 from saltext.vault.utils import vault
-from saltext.vault.utils.vault import pki
+from saltext.vault.utils.vault import helpers as hlp
 
 try:
-    import salt.utils.x509 as x509util
+    from salt.utils import x509 as x509util
 
-    HAS_X509UTIL = True
+    from saltext.vault.utils.vault import pki
+
+    HAS_CRYPTOGRAPHY = True
 except ImportError:  # pragma: no cover
-    HAS_X509UTIL = False
+    HAS_CRYPTOGRAPHY = False
 
 
 if typing.TYPE_CHECKING:
@@ -1033,7 +1035,7 @@ def _find_signing_issuer(leaf_pem, authority_key_id=None, mount="pki"):
     Find the configured issuer whose certificate SubjectKeyIdentifier matches the
     certificate's AuthorityKeyIdentifier. Returns the matching ``issuer_id`` or ``None``.
     """
-    if not HAS_X509UTIL:  # pragma: no cover
+    if not HAS_CRYPTOGRAPHY:  # pragma: no cover
         return None
     try:
         leaf = x509util.load_cert(leaf_pem)
@@ -1183,6 +1185,10 @@ def issue_certificate(
     payload["exclude_cn_from_sans"] = exclude_cn_from_sans
 
     if alt_names is not None:
+        if not HAS_CRYPTOGRAPHY:  # pragma: no cover
+            raise CommandExecutionError(
+                "Missing `cryptography` library, which is required for this operation"
+            )
         dns_sans, ip_sans, uri_sans, other_sans = pki.split_sans(pki.norm_sans(alt_names))
         payload["alt_names"] = ",".join(dns_sans)
         payload["ip_sans"] = ",".join(ip_sans)
@@ -1343,6 +1349,10 @@ def sign_certificate(
 
     norm_sans = None
     if alt_names is not None:
+        if not HAS_CRYPTOGRAPHY:  # pragma: no cover
+            raise CommandExecutionError(
+                "Missing `cryptography` library, which is required for this operation"
+            )
         norm_sans = pki.norm_sans(alt_names)
         dns_sans, ip_sans, uri_sans, other_sans = pki.split_sans(norm_sans)
         payload["alt_names"] = ",".join(dns_sans)
@@ -1360,7 +1370,13 @@ def sign_certificate(
             ]
         csr_args["CN"] = common_name
         try:
-            csr = __salt__["x509.create_csr"](
+            create_csr = __salt__["x509.create_csr"]
+        except KeyError as err:  # pragma: no cover
+            raise CommandExecutionError(
+                "Missing `x509.create_csr`, provided by the builtin `x509_v2` execution module"
+            ) from err
+        try:
+            csr = create_csr(
                 private_key=private_key,
                 private_key_passphrase=private_key_passphrase,
                 digest=digest,
@@ -1453,7 +1469,7 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
             )
         elif serial is not None:
             if isinstance(serial, int):
-                serial = pki.dec2hex(serial)
+                serial = hlp.dec2hex(serial)
             payload["serial_number"] = serial
         else:  # pragma: no cover
             raise RuntimeError("This path should not have been hit")

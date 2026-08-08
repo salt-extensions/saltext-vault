@@ -399,21 +399,6 @@ def _collect_current_sans(cert: cx509.Certificate) -> set[tuple[str, str]]:
     return current_sans
 
 
-def dec2hex(decval: int | str) -> str:
-    """
-    Converts decimal values to nicely formatted hex strings
-    """
-    try:
-        decval = int(decval)
-    except (TypeError, ValueError) as exc:
-        raise SaltInvocationError(f"input must be integer. got {type(decval)} instead") from exc
-
-    if decval < 0:
-        raise SaltInvocationError("input must be non-negative integer")
-
-    return _pretty_hex(f"{decval:X}")
-
-
 def _getattr_safe(obj: object, attr: str) -> typing.Any:
     try:
         return getattr(obj, attr)
@@ -425,12 +410,3 @@ def _getattr_safe(obj: object, attr: str) -> typing.Any:
             f"Could not get attribute {attr} from {obj.__class__.__name__}. "
             "Did the internal API of cryptography change?"
         ) from err
-
-
-def _pretty_hex(hex_str: str) -> str:
-    """
-    Nicely formats hex strings
-    """
-    if len(hex_str) % 2 != 0:
-        hex_str = "0" + hex_str
-    return ":".join([hex_str[i : i + 2] for i in range(0, len(hex_str), 2)]).upper()
