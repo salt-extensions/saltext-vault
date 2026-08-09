@@ -1,1 +1,0 @@
-Fixed crash during loading of `vault_pki` modules when `cryptography` was not available. This should not happen in most cases since it's a requirement of this extension and a Salt core requirement, but might happen when this extension is forwarded to the target host via Salt-SSH.
