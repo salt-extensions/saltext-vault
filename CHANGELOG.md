@@ -4,6 +4,72 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## 1.8.0 (2026-08-09)
+
+
+### Changed
+
+- Made `destroy` and `wipe` operations proxy to `delete` on KV v1 secrets instead of refusing with an exception
+
+
+### Fixed
+
+- Fixed `vault_pki.certificate_managed` not detecting changes to requested `alt_names` [#127](https://github.com/salt-extensions/saltext-vault/issues/127)
+- Fixed KV lookup failures in very specific situations when a KV v1 mount has the full name of a KV v2 mount as a prefix
+- Fixed KVv2 paths whose root key started with KVv2 prefixes such as `data` (example: `secret_mount/database`) from being mishandled and leading to permission denied/not found errors
+- Fixed LeaseStore.get not flushing already expired leases from cache when called without `revoke` argument
+- Fixed `sdb.get`/`sdb.set` raising an unhandled `ValueError` instead of a usage error when the SDB URI did not contain a path/key separator
+- Fixed `sdb.set` with SDB module and single-use tokens issued by the master when the `patch` option was enabled in the profile
+- Fixed `sdb.set` with the `patch` option enabled unexpectedly overwriting the complete secret when its data could not be read (e.g. write-only policies or exhausted token uses)
+- Fixed `vault.auth_info` runner crashing when AppRole is configured with `bind_secret_id: false`
+- Fixed `vault.clear_cache` runner not clearing cached AppRole metadata/rendered policies when `cache:backend` is `session` and not revoking impersonated minion tokens
+- Fixed `vault_db.connection_present` failing and rewriting the connection on every run for plugins with secret parameters other than `password`, e.g. `private_key` for `mongodb_atlas`
+- Fixed `vault_db.connection_present` mishandling `root_rotation_statements` passed as a string
+- Fixed `vault_db.connection_present` raising an uncaught exception instead of failing cleanly when required plugin parameters were missing
+- Fixed `vault_db.creds_cached` crashing or misdetecting the need for renewal when the cached lease's `min_ttl` and the requested `valid_for` were specified as a mix of time strings and integers
+- Fixed `vault_db.creds_cached` resetting cached lease attributes (`renew_increment`, `revoke_delay`, `meta`) that were not specified in the state call when applying other changes
+- Fixed `vault_db.creds_cached`/`creds_uncached` raising uncaught exceptions instead of reporting failures via the state result
+- Fixed `vault_lease` beacon configuration validation raising an exception instead of reporting a validation failure when lease cache keys were not strings
+- Fixed `vault_pki.certificate_managed` crashing instead of failing cleanly when the issuer reference did not exist
+- Fixed `vault_pki.certificate_managed` crashing on subsequent runs when `encoding` was set to `der`
+- Fixed `vault_pki.certificate_managed` with `append_ca_chain` never converging for binary encodings. The chain is now included for `pkcs7_der`, while the impossible combination with `der` fails early
+- Fixed `vault_pki.issue_certificate`/`sign_certificate` corrupting SANs when `alt_names` is passed as a mapping
+- Fixed `vault_pki.list_certificates`/`list_revoked_certificates` raising an exception instead of returning an empty list when no (revoked) certificates are present
+- Fixed `vault_pki.role_managed` rewriting the role on every run when list-type (e.g. `allowed_domains`) or duration (`not_before_duration`, not `ttl`/`max_ttl`) parameters were specified as strings
+- Fixed `vault_secret.present` crashing when replacing an existing scalar value with a mapping in the default patch mode
+- Fixed `vault_secret.present` failing or silently dropping secret keys named like function parameters (e.g. `path`) or prefixed with double underscores
+- Fixed `vault_ssh.ca_present/absent` failing to work as expected when the authenticated read CA config path was denied
+- Fixed `vault_ssh.get_signing_policy` reporting a phantom empty principal/extension when `allowed_users`, `allowed_domains` or `allowed_extensions` are unset on the role
+- Fixed `vault_ssh.list_roles_ip` returning None instead of an empty list when no role matches IP on recent Vault releases
+- Fixed `vault_ssh.role_present_ca` never converging when `allowed_user_key_lengths` values were specified as comma-separated strings
+- Fixed authenticated unwrap requests not deducting a token use
+- Fixed cache handling of static DB role credentials
+- Fixed cached accessor information being lost when token/SecretID information was refreshed
+- Fixed clearing session cache not invalidating active client in context, which could reintroduce stale data into permanent cache or cause unexpected permission issues during long-running contexts
+- Fixed crash during loading of `vault_pki` modules when `cryptography` was not available. This should not happen in most cases since it's a requirement of this extension and a Salt core requirement, but might happen when this extension is forwarded to the target host via Salt-SSH.
+- Fixed handling of `all_principals` in `vault_ssh` `ssh_pki` backend
+- Fixed handling of multiple values in `default_user` in `vault_ssh` `ssh_pki` backend
+- Fixed raw KeyError when `cert_type` was not passed and not inferrable from a role definition in the `vault_ssh` `ssh_pki` backend
+- Fixed remaining token ttl being corrupted by the templated policy rendering logic released in 1.7.0 (only used in `vault_ssh` backend for `ssh_pki.certificate_managed`)
+- Fixed several execution module functions (`vault.clear_cache`/`clear_token_cache`/`update_config`, `vault_pki.read_issuer`, `vault_ssh.list_roles_ip`) leaking Vault exceptions instead of raising `CommandExecutionError`
+- Fixed the `vault_lease` beacon crashing when `min_ttl` was explicitly set to `null` in the beacon configuration
+- Fixed the `vault_lease` beacon firing duplicate lease expiry events on the Salt event bus when `cache:expire_events` was enabled
+- Fixed the `vault_lease` beacon reporting stale lease information in expiry events when a renewal attempt did not manage to extend the lease to `min_ttl`
+- Fixed the client unexpectedly raising ValueErrors when an error return was not valid JSON
+- Improved error and implemented a workaround when trying to set otherNames while simultaneously passing a private key to `vault_pki.sign_certificate`
+
+
+### Added
+
+- Added the ability to override `server:url` in the minion config. The new value must be in a list of allowed values specified in the master configuration in `server:url_alts` to take effect. [#156](https://github.com/salt-extensions/saltext-vault/issues/156)
+- Added `vault.patch_raw` to patch secret data that cannot be passed as keyword arguments
+- Added `vault_approle` execution, state and wrapper modules to manage and utilize the AppRole auth backend
+- Added `vault_gpg` execution, state and wrapper modules to interface with the custom plugin [LeSuisse/vault-gpg-plugin](https://github.com/LeSuisse/vault-gpg-plugin/). It's now possible to generate, manage, import and export GPG keys and sign, decrypt and verify data.
+- Added `vault_plugin` execution, state and wrapper modules to manage plugins and pinned versions
+- Added expected creation path verification for wrapped secrets embedded in the `vault.get_config` response (token and role_id), derived from the fresh config itself
+- Added support for `allow_commas_in_identity_templates` for SSH secret backend roles in OpenBao
+- Added support for rendering of identity templates in `allowed_users`, `allowed_domains` and `default_user` in `vault_ssh` `ssh_pki` backend
+
 ## 1.7.0 (2026-07-08)
 
 
