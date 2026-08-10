@@ -104,7 +104,7 @@ def list_roles(mount="pki"):
     except vault.VaultNotFoundError:
         return []
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def read_role(name, mount="pki"):
@@ -141,7 +141,7 @@ def read_role(name, mount="pki"):
     except vault.VaultNotFoundError:
         return None
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def write_role(
@@ -273,7 +273,7 @@ def write_role(
             f"Vault version too old. Please upgrade to v1.11.0+: {err}"
         ) from err
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def delete_role(name, mount="pki"):
@@ -311,7 +311,7 @@ def delete_role(name, mount="pki"):
     except vault.VaultNotFoundError:
         return False
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def list_issuers(mount="pki"):
@@ -348,7 +348,7 @@ def list_issuers(mount="pki"):
     except vault.VaultNotFoundError:
         return {}
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def read_issuer(ref="default", mount="pki"):
@@ -387,10 +387,10 @@ def read_issuer(ref="default", mount="pki"):
         return None
     except vault.VaultServerError as err:
         if "unable to find PKI issuer for reference" not in str(err):
-            raise CommandExecutionError(f"{err.__class__}: {err}") from err
+            raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
         return None
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def update_issuer(
@@ -481,7 +481,7 @@ def update_issuer(
         )
         return True
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def read_issuer_certificate(name="default", mount="pki", include_chain=False):
@@ -576,7 +576,7 @@ def set_default_issuer(name, mount="pki"):
         vault.query("POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True)
         return True
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def generate_root(
@@ -723,7 +723,7 @@ def delete_key(ref, mount="pki"):
         return True
     # Don't need to catch VaultNotFoundError, it's not thrown for missing key
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def delete_issuer(ref, mount="pki", include_key=False):
@@ -772,7 +772,7 @@ def delete_issuer(ref, mount="pki", include_key=False):
         return True
     # Don't need to catch VaultNotFoundError, it's not thrown for missing issuer
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def read_issuer_crl(ref="default", mount="pki", delta=False):
@@ -824,9 +824,9 @@ def read_issuer_crl(ref="default", mount="pki", delta=False):
     except vault.VaultServerError as err:
         if "unable to find PKI issuer" in str(err):
             return None
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
     if "crl-signing" not in issuer["usage"].split(","):
         return None
@@ -838,7 +838,7 @@ def read_issuer_crl(ref="default", mount="pki", delta=False):
     try:
         return vault.query("GET", endpoint, __opts__, __context__, is_unauthd=True)["data"]["crl"]
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def list_revoked_certificates(mount="pki"):
@@ -871,7 +871,7 @@ def list_revoked_certificates(mount="pki"):
     except vault.VaultNotFoundError:
         return []
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def list_certificates(mount="pki"):
@@ -904,7 +904,7 @@ def list_certificates(mount="pki"):
     except vault.VaultNotFoundError:
         return []
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def read_certificate(serial, mount="pki"):
@@ -946,7 +946,7 @@ def read_certificate(serial, mount="pki"):
             "certificate"
         ]
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def read_certificate_full(serial, mount="pki"):
@@ -993,7 +993,7 @@ def read_certificate_full(serial, mount="pki"):
     try:
         data = vault.query("GET", endpoint, __opts__, __context__, is_unauthd=True)["data"]
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
     # Ensure trailing newline so callers can concatenate certificate
     # and ca_chain entries without corrupting PEM boundaries.
@@ -1198,7 +1198,7 @@ def issue_certificate(
     try:
         return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def sign_certificate(
@@ -1418,7 +1418,7 @@ def sign_certificate(
     try:
         return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def revoke_certificate(serial=None, certificate=None, mount="pki"):
@@ -1479,7 +1479,7 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
     except vault.VaultInvocationError:
         return False
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def read_urls(mount="pki"):
@@ -1511,7 +1511,7 @@ def read_urls(mount="pki"):
     try:
         return vault.query("GET", endpoint, __opts__, __context__)["data"]
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def _split_csr_kwargs(kwargs):

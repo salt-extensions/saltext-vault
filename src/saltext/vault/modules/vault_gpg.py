@@ -103,7 +103,7 @@ def create_key(
     try:
         return vault.query("POST", endpoint, __opts__, __context__, payload=payload)
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def import_key(
@@ -208,7 +208,7 @@ def import_key(
     try:
         return vault.query("POST", endpoint, __opts__, __context__, payload=payload)
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def list_keys(mount="gpg"):
@@ -238,7 +238,7 @@ def list_keys(mount="gpg"):
     except vault.VaultNotFoundError:
         return []
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def read_key(name, mount="gpg"):
@@ -273,7 +273,7 @@ def read_key(name, mount="gpg"):
     except vault.VaultNotFoundError:
         return None
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def delete_key(name, mount="gpg"):
@@ -304,7 +304,7 @@ def delete_key(name, mount="gpg"):
     try:
         return vault.query("DELETE", endpoint, __opts__, __context__)
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def export_private_key(
@@ -364,7 +364,7 @@ def export_private_key(
     try:
         key = vault.query("GET", endpoint, __opts__, __context__)["data"]["key"]
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
     if path:
         _write_path(path, key)
@@ -523,9 +523,9 @@ def sign(
                 "signature"
             ]
         except vault.VaultException as err:
-            raise CommandExecutionError(f"{err.__class__}: {err}") from err
+            raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def verify(
@@ -598,7 +598,7 @@ def verify(
             "valid"
         ]
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def decrypt(
@@ -846,7 +846,7 @@ def _decrypt_cmd(
     try:
         return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def _get_file_or_data(
