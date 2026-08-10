@@ -386,9 +386,11 @@ def read_issuer(ref="default", mount="pki"):
     except vault.VaultNotFoundError:
         return None
     except vault.VaultServerError as err:
-        if "unable to find PKI issuer for reference" not in str(err):
-            raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
-        return None
+        if "unable to find PKI issuer for reference" in str(err):
+            return None
+        if ref == "default" and "no default issuer currently configured" in str(err):
+            return None
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
