@@ -64,7 +64,7 @@ def test_func_converts_errors(func, kwargs, query):
     ),
 )
 def test_func_validates_plugin_type(func, kwargs, query):
-    with pytest.raises(SaltInvocationError, match="Invalid plugin type: invalid"):
+    with pytest.raises(SaltInvocationError, match="Invalid value 'invalid' for `plugin_type`.*"):
         getattr(vault_plugin, func)(plugin_type="invalid", **kwargs)
     query.assert_not_called()
 

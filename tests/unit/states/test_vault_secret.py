@@ -72,7 +72,7 @@ def test_errors_are_reported(read_secret, func, kwargs):
 
 
 def test_absent_invalid_operation():
-    with pytest.raises(SaltInvocationError, match="Invalid operation 'defenestrate'"):
+    with pytest.raises(SaltInvocationError, match="Invalid value 'defenestrate' for `operation`.*"):
         vault_secret.absent("secret/path", operation="defenestrate")
 
 

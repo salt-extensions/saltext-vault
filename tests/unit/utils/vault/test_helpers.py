@@ -1,4 +1,7 @@
+import re
+
 # this needs to be from! see test_iso_to_timestamp_polyfill
+from collections.abc import Sequence
 from datetime import datetime
 from unittest.mock import patch
 
@@ -276,6 +279,10 @@ def test_x_of_valid(kwargs):
             "Either `foo` or `bar` is required",
         ),
         (
+            {"foo": None, "bar": None, "_reason": "I said so"},
+            "Either `foo` or `bar` is required because I said so",
+        ),
+        (
             {"foo": "set", "bar": "set"},
             "Either `foo` or `bar` is required (exclusive)",
         ),
@@ -288,8 +295,8 @@ def test_x_of_valid(kwargs):
             "At least two of `foo`, `bar` or `baz` must be passed",
         ),
         (
-            {"_min": 1, "_max": 2, "foo": "set", "bar": "set", "baz": "set"},
-            "At most two of `foo`, `bar` or `baz` can be specified",
+            {"_min": 1, "_max": 2, "foo": "set", "bar": "set", "baz": "set", "_reason": "your mum"},
+            "At most two of `foo`, `bar` or `baz` can be specified because your mum",
         ),
     ],
 )
@@ -303,7 +310,11 @@ def test_x_of_invalid(kwargs, expected):
     "kwargs,expected",
     [
         ({"foo": "set", "bar": None}, None),
-        ({"foo": "set", "bar": "set"}, SaltInvocationError),
+        ({"foo": "set", "bar": "set"}, "Either `foo` or `bar` is required (exclusive)"),
+        (
+            {"foo": "set", "bar": "set", "_reason": "why not"},
+            "Either `foo` or `bar` is required (exclusive) because why not",
+        ),
     ],
 )
 def test_one_of(kwargs, expected):
@@ -313,8 +324,173 @@ def test_one_of(kwargs, expected):
     if expected is None:
         assert hlp.one_of(**kwargs) is None
     else:
-        with pytest.raises(expected):
+        with pytest.raises(SaltInvocationError, match=re.escape(expected)):
             hlp.one_of(**kwargs)
+
+
+@pytest.mark.parametrize(
+    "kwargs,expected",
+    [
+        ({"foo": "set"}, "`foo` cannot be specified because why not"),
+        ({"foo": None, "bar": None, "baz": None}, None),
+        ({"foo": "set", "bar": None}, "None of `foo` and `bar` can be specified because why not"),
+    ],
+)
+def test_none_of(kwargs, expected):
+    kwargs["_reason"] = "why not"
+    if expected is None:
+        assert hlp.none_of(**kwargs) is None
+    else:
+        with pytest.raises(SaltInvocationError, match=re.escape(expected)):
+            hlp.none_of(**kwargs)
+
+
+@pytest.mark.parametrize(
+    "valid,kwargs",
+    [
+        (("rsa", "ec", "ed25519"), {"algo": "rsa"}),
+        (["rsa", "ec", "ed25519"], {"algo": "rsa"}),
+        ((b"rsa", b"ec", b"ed25519"), {"algo": b"rsa"}),
+        (("rsa", "ec", "ed25519"), {"_multi": True, "algo": "rsa"}),
+        (["rsa", "ec", "ed25519"], {"_multi": True, "algo": "rsa"}),
+        ((b"rsa", b"ec", b"ed25519"), {"_multi": True, "algo": b"rsa"}),
+        (("rsa", "ec", "ed25519"), {"_multi": True, "algo": ["rsa", "ec"]}),
+        (["rsa", "ec", "ed25519"], {"_multi": True, "algo": ["rsa", "ec"]}),
+        ((b"rsa", b"ec", b"ed25519"), {"_multi": True, "algo": [b"rsa", b"ec"]}),
+        (("rsa", "ec", "ed25519"), {"_multi": True, "algo": ("rsa",)}),
+        ((b"rsa", b"ec", b"ed25519"), {"_multi": True, "algo": (b"rsa",)}),
+        ([b"rsa", b"ec", b"ed25519"], {"_multi": True, "algo": (b"rsa",)}),
+    ],
+)
+def test_in_vals_valid(valid, kwargs):
+    expected = kwargs[next(kwarg for kwarg in kwargs if kwarg != "_multi")]
+    if not kwargs.get("_multi"):
+        pass
+    elif isinstance(expected, (str, bytes)) or not isinstance(expected, Sequence):
+        expected = [expected]
+    elif isinstance(expected, Sequence):
+        expected = list(expected)
+    assert hlp.in_vals(valid, **kwargs) == expected
+
+
+@pytest.mark.parametrize(
+    "valid,kwargs,expected",
+    [
+        (
+            ("rsa", "ec", "ed25519"),
+            {"algo": "foo"},
+            "Invalid value 'foo' for `algo`. Valid: 'rsa', 'ec', 'ed25519'",
+        ),
+        (
+            ("rsa", "ec", "ed25519"),
+            {"algo": None},
+            "Invalid value None for `algo`. Valid: 'rsa', 'ec', 'ed25519'",
+        ),
+        (
+            ["rsa", "ec", "ed25519"],
+            {"algo": "foo"},
+            "Invalid value 'foo' for `algo`. Valid: 'rsa', 'ec', 'ed25519'",
+        ),
+        (
+            (b"rsa", b"ec", b"ed25519"),
+            {"algo": b"foo"},
+            "Invalid value b'foo' for `algo`. Valid: b'rsa', b'ec', b'ed25519'",
+        ),
+        (
+            ("rsa", "ec", "ed25519", None),
+            {"algo": "foo"},
+            "Invalid value 'foo' for `algo`. Valid: 'rsa', 'ec', 'ed25519', None",
+        ),
+        # single values are wrapped in a list with _multi
+        (
+            ("rsa", "ec", "ed25519"),
+            {"_multi": True, "algo": "foo"},
+            "Invalid value for `algo`: 'foo'. Valid: 'rsa', 'ec', 'ed25519'",
+        ),
+        (
+            ("rsa", "ec", "ed25519"),
+            {"_multi": True, "algo": b"rsa"},
+            "Invalid value for `algo`: b'rsa'. Valid: 'rsa', 'ec', 'ed25519'",
+        ),
+        (
+            ("rsa", "ec", "ed25519"),
+            {"_multi": True, "algo": None},
+            "Invalid value for `algo`: None. Valid: 'rsa', 'ec', 'ed25519'",
+        ),
+        # all passed values are reported, singular/plural depends on the invalid ones
+        (
+            ("rsa", "ec", "ed25519"),
+            {"_multi": True, "algo": ["rsa", "foo"]},
+            "Invalid value for `algo`: 'foo'. Valid: 'rsa', 'ec', 'ed25519'",
+        ),
+        (
+            ["rsa", "ec", "ed25519"],
+            {"_multi": True, "algo": ["rsa", "foo"]},
+            "Invalid value for `algo`: 'foo'. Valid: 'rsa', 'ec', 'ed25519'",
+        ),
+        (
+            ("rsa", "ec", "ed25519"),
+            {"_multi": True, "algo": ("rsa", "foo")},
+            "Invalid value for `algo`: 'foo'. Valid: 'rsa', 'ec', 'ed25519'",
+        ),
+        (
+            ("rsa", "ec", "ed25519"),
+            {
+                "_multi": True,
+                "algo": [
+                    "foo",
+                    "bar",
+                ],
+            },
+            "Invalid values for `algo`: 'foo', 'bar'. Valid: 'rsa', 'ec', 'ed25519'",
+        ),
+        (
+            ("rsa", "ec", "ed25519", None),
+            {
+                "_multi": True,
+                "algo": [
+                    "foo",
+                    "bar",
+                ],
+            },
+            "Invalid values for `algo`: 'foo', 'bar'. Valid: 'rsa', 'ec', 'ed25519', None",
+        ),
+        (
+            ("rsa", "ec", "ed25519"),
+            {
+                "_multi": True,
+                "algo": [
+                    "foo",
+                    "rsa",
+                    None,
+                ],
+            },
+            "Invalid values for `algo`: 'foo', None. Valid: 'rsa', 'ec', 'ed25519'",
+        ),
+        (
+            ("rsa", "ec", "ed25519"),
+            {
+                "_multi": True,
+                "algo": (
+                    "foo",
+                    "bar",
+                ),
+            },
+            "Invalid values for `algo`: 'foo', 'bar'. Valid: 'rsa', 'ec', 'ed25519'",
+        ),
+        (
+            ("rsa", "ec", "ed25519"),
+            {"algo": "rsa", "algo2": "boom"},
+            "in_vals() expects exactly one keyword argument",
+        ),
+        (("rsa", "ec", "ed25519"), {}, "in_vals() expects exactly one keyword argument"),
+    ],
+)
+def test_in_vals_invalid(valid, kwargs, expected):
+    exp = TypeError if expected.startswith("in_vals()") else SaltInvocationError
+    with pytest.raises(exp) as excinfo:
+        hlp.in_vals(valid, **kwargs)
+    assert str(excinfo.value) == expected
 
 
 @pytest.mark.parametrize(

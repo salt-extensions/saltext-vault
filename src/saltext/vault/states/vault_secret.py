@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING
 
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltException
-from salt.exceptions import SaltInvocationError
 
+from saltext.vault.utils.vault import helpers as hlp
 from saltext.vault.utils.vault import kv
 
 if TYPE_CHECKING:
@@ -109,9 +109,7 @@ def absent(name, operation="delete"):
         and ``wipe`` (forget about the secret completely). Defaults to ``delete``.
         KV v1 secrets are always wiped since the backend does not support versioning.
     """
-    valid_ops = ("delete", "destroy", "wipe")
-    if operation not in valid_ops:
-        raise SaltInvocationError(f"Invalid operation '{operation}'. Valid: {', '.join(valid_ops)}")
+    operation = hlp.in_vals(("delete", "destroy", "wipe"), operation=operation)
     ret = {
         "name": name,
         "result": True,

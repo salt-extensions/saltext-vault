@@ -14,9 +14,9 @@ import typing
 import salt.utils.versions
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltException
-from salt.exceptions import SaltInvocationError
 
 from saltext.vault.utils import vault
+from saltext.vault.utils.vault import helpers as hlp
 
 if typing.TYPE_CHECKING:
     from saltext.vault.utils._types import SaltContext
@@ -752,6 +752,4 @@ def reload_mounts(mounts, globally=False):
 def _check_type(
     plugin_type: str,
 ) -> typing.Literal["auth"] | typing.Literal["database"] | typing.Literal["secret"]:
-    if plugin_type not in ("auth", "database", "secret"):
-        raise SaltInvocationError(f"Invalid plugin type: {plugin_type}")
-    return plugin_type
+    return hlp.in_vals(("auth", "database", "secret"), plugin_type=plugin_type)

@@ -9,6 +9,7 @@ import re
 import string
 import typing
 from collections.abc import Mapping
+from collections.abc import Sequence
 from types import EllipsisType
 
 import salt.utils.atomicfile
@@ -39,6 +40,16 @@ def get_salt_run_type(
     | typing.Literal[3]
     | typing.Literal[4]
 ):
+    """
+    Determine the current operation's calling context from specific markers in ``__opts__``
+    and the ``vault`` config. Possible contexts:
+
+    * regular minion, credentials issued by master (e.g. via ``salt-call`` or ``salt minion_id``)
+    * regular minion, locally configured (e.g. via ``salt-call`` or ``salt minion_id``)
+    * regular master (e.g. via ``salt-run``)
+    * master impersonating a minion (during pillar compilation or via ``salt-ssh``)
+    * master called via peer running (e.g. when a minion requests new credentials)
+    """
     if "vault" in opts and opts.get("__role", "minion") == "master":
         if opts.get("minion_id"):
             log.debug("Salt runtype: impersonating master")
@@ -297,6 +308,18 @@ def filter_unset(
     data: Mapping[K, V],
     unset: object = None,
 ) -> dict[K, object]:
+    """
+    Remove all unset values in a dictionary and return the filtered result.
+
+    data
+        Dictionary to filter.
+
+    unset
+        Identity of what counts as unset; evaluated via ``is not``.
+        Defaults to ``None``. Other working examples: ``...`` (ellipsis),
+        a specific object such as ``salt.defaults.NOT_SET`` or
+        a string literal (not recommended though).
+    """
     return {k: v for k, v in data.items() if v is not unset}
 
 
@@ -325,35 +348,135 @@ def try_base64(data: str | bytes) -> tuple[bytes, bool]:
         return data, False
 
 
-def x_of(*, _min=1, _max=1, _predicate=bool, **kwargs):
+def _join(params, char=",", last="or"):
+    params = tuple(params)
+    ret = (char + " ").join(
+        f"`{param}`" for param in (params[:-1] if last and len(params) > 1 else params)
+    )
+    if last and len(params) > 1:
+        ret += f" {last} `{params[-1]}`"
+    return ret
+
+
+def x_of(*, _min=1, _max=1, _reason=None, _predicate=lambda x: x is not None, **kwargs):
+    """
+    Ensure a minimum and maximum number of parameters passed as keyword arguments to this function
+    satisfy a predicate. By default, exactly one parameter must be not None.
+
+    _min
+        Minimum number of params that must satisfy ``_predicate``. Defaults to 1.
+
+    _max
+        Maximum number of params that must satisfy ``_predicate``. Defaults to 1.
+
+    _predicate
+        Predicate function that receives the value of each passed kwarg and returns
+        a boolean. Defaults to ``bool``.
+
+    kwargs
+        Pass all parameters to check by name (which is included in the error message).
+    """
     num_set = sum(map(_predicate, kwargs.values()))
     if _min <= num_set <= _max:
         return
 
     num_words = ("zero", "one", "two", "three", "four", "five", "six")
 
-    def join(params, char=",", last="or"):
-        ret = (char + " ").join(f"`{param}`" for param in params)
-        if last and len(params) > 1:
-            ret = f" {last}".join(ret.rsplit(char, maxsplit=1))
-        return ret
-
     if _min == _max == 1:
         if num_set == 0:
-            msg = "Either " + join(kwargs) + " is required"
+            msg = "Either " + _join(kwargs) + " is required"
         elif len(kwargs) == 2:
-            msg = "Either " + join(kwargs) + " is required (exclusive)"
+            msg = "Either " + _join(kwargs) + " is required (exclusive)"
         else:
-            msg = "Only specify either " + join(kwargs) + " (exclusive)"
+            msg = "Only specify either " + _join(kwargs) + " (exclusive)"
     elif num_set < _min:
-        msg = f"At least {num_words[_min]} of " + join(kwargs) + " must be passed"
+        msg = f"At least {num_words[_min]} of " + _join(kwargs) + " must be passed"
     else:
-        msg = f"At most {num_words[_max]} of " + join(kwargs) + " can be specified"
+        msg = f"At most {num_words[_max]} of " + _join(kwargs) + " can be specified"
+    if _reason:
+        msg += f" because {_reason}"
     raise SaltInvocationError(msg)
 
 
-def one_of(*, _predicate=bool, **kwargs):
-    return x_of(_predicate=_predicate, **kwargs)
+def one_of(*, _reason=None, _predicate=lambda x: x is not None, **kwargs):
+    """
+    Ensure exactly one of the passed-in kwargs satsifies a predicate.
+
+    _predicate
+        Predicate function that receives the value of each passed kwarg and returns
+        a boolean. Defaults to ``lambda x: x is not None``.
+
+    kwargs
+        Pass all parameters to check by name (which is included in the error message).
+    """
+    return x_of(_predicate=_predicate, _reason=_reason, **kwargs)
+
+
+def none_of(*, _reason, _predicate=lambda x: x is not None, **kwargs):
+    """
+    Ensure none one of the passed-in kwargs satsifies a predicate.
+
+    _predicate
+        Predicate function that receives the value of each passed kwarg and returns
+        a boolean. Defaults to ``lambda x: x is not None``.
+
+    kwargs
+        Pass all parameters to check by name (which is included in the error message).
+    """
+    if sum(map(_predicate, kwargs.values())) == 0:
+        return
+    if len(kwargs) == 1:
+        raise SaltInvocationError(f"`{next(iter(kwargs))}` cannot be specified because " + _reason)
+    raise SaltInvocationError(
+        "None of " + _join(kwargs, last="and") + " can be specified because " + _reason
+    )
+
+
+T = typing.TypeVar("T")
+
+
+@typing.overload
+def in_vals(vals: Sequence[T], *, _multi: typing.Literal[True], **kwargs: object) -> list[T]: ...
+@typing.overload
+def in_vals(vals: Sequence[T], *, _multi: typing.Literal[False] = False, **kwargs: object) -> T: ...
+def in_vals(vals: Sequence[T], *, _multi: bool = False, **kwargs: T | Sequence[T]) -> T | list[T]:
+    """
+    Ensure an input is a subset of allowed values. Raises an exception if validation fails, otherwise
+    returns the normalized value. By default, the input must be exactly one of the allowed values.
+    A single variadic keyword argument defines the parameter name to include in the error message
+    and the value to check.
+
+    vals
+        A sequence of allowed values.
+
+    _multi
+        Allow a sequence of more than one allowed value. Defaults to false.
+        If true, the return is ensured to be a list. Otherwise, returns the validated
+        value as passed in.
+    """
+    if len(kwargs) != 1:
+        raise TypeError("in_vals() expects exactly one keyword argument")
+    param, val = next(iter(kwargs.items()))
+
+    if _multi:
+        if isinstance(val, (str, bytes)) or not isinstance(val, Sequence):
+            values = [typing.cast(T, val)]
+        else:
+            values = typing.cast(Sequence[T], val)
+        if invalid := set(values).difference(vals):
+            raise SaltInvocationError(
+                f"Invalid value{'s' if len(invalid) > 1 else ''} for `{param}`: "
+                + ", ".join(f"{v!r}" for v in sorted(invalid, key=values.index))
+                + ". Valid: "
+                + ", ".join(f"{v!r}" for v in vals)
+            )
+        return list(values)
+
+    if val not in vals:
+        raise SaltInvocationError(
+            f"Invalid value {val!r} for `{param}`. Valid: " + ", ".join(f"{v!r}" for v in vals)
+        )
+    return typing.cast(T, val)
 
 
 try:
