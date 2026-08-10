@@ -56,7 +56,7 @@ def list_connections(mount="database"):
     except vault.VaultNotFoundError:
         return []
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def fetch_connection(name, mount="database"):
@@ -83,7 +83,7 @@ def fetch_connection(name, mount="database"):
     except vault.VaultNotFoundError:
         return None
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def write_connection(
@@ -191,7 +191,7 @@ def write_connection(
     try:
         vault.query("POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True)
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
     if not rotate:
         return True
@@ -220,7 +220,7 @@ def delete_connection(name, mount="database"):
     try:
         return vault.query("DELETE", endpoint, __opts__, __context__)
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def reset_connection(name, mount="database"):
@@ -245,7 +245,7 @@ def reset_connection(name, mount="database"):
     try:
         return vault.query("POST", endpoint, __opts__, __context__)
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def rotate_root(name, mount="database"):
@@ -275,7 +275,7 @@ def rotate_root(name, mount="database"):
     try:
         return vault.query("POST", endpoint, __opts__, __context__)
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def list_roles(static=False, mount="database"):
@@ -303,7 +303,7 @@ def list_roles(static=False, mount="database"):
     except vault.VaultNotFoundError:
         return []
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def fetch_role(name, static=False, mount="database"):
@@ -334,7 +334,7 @@ def fetch_role(name, static=False, mount="database"):
     except vault.VaultNotFoundError:
         return None
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def write_static_role(
@@ -531,7 +531,7 @@ def _write_role(
             "POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True
         )
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def delete_role(name, static=False, mount="database"):
@@ -560,7 +560,7 @@ def delete_role(name, static=False, mount="database"):
     try:
         return vault.query("DELETE", endpoint, __opts__, __context__)
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def get_creds(
@@ -705,7 +705,7 @@ def get_creds(
     try:
         res = vault.query("GET", endpoint, __opts__, __context__)
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
     if static:
         # Static role credentials are not associated with a lease and are
@@ -869,4 +869,4 @@ def rotate_static_role(name, mount="database"):
     try:
         return vault.query("POST", endpoint, __opts__, __context__)
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err

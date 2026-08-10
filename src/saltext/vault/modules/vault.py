@@ -385,7 +385,7 @@ def restore_secret(path, *versions, all_versions=False, **_):
             path, __opts__, __context__, list(versions) or None, all_versions=all_versions
         )
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__.__name__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def destroy_secret(path, *args, all_versions=False, **_):
