@@ -136,11 +136,6 @@ def test_func_converts_errors(func, kwargs, query, request):
         getattr(vault_pki, func)(**kwargs)
 
 
-def test_read_issuer_missing(query):
-    query.side_effect = vaultutil.VaultServerError("unable to find PKI issuer for reference")
-    assert vault_pki.read_issuer("foo") is None
-
-
 def test_read_issuer_converts_server_errors(query):
     query.side_effect = vaultutil.VaultServerError("booh")
     with pytest.raises(CommandExecutionError, match="booh"):

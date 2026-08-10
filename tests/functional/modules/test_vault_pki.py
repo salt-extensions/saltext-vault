@@ -189,6 +189,19 @@ def test_read_issuer(vault_pki):
     assert "certificate" in ret
 
 
+def test_read_issuer_missing(vault_pki):
+    assert vault_pki.read_issuer("missing-no") is None
+
+
+def test_read_issuer_default_missing(vault_pki, empty_pki_mount):
+    """
+    Reading the default issuer while none is configured should return None
+    instead of raising. The server reports this case differently from an
+    unknown issuer reference (``no default issuer currently configured``).
+    """
+    assert vault_pki.read_issuer(mount=empty_pki_mount) is None
+
+
 @pytest.mark.usefixtures("issuers_setup")
 @pytest.mark.usefixtures("roles_setup")
 def test_issue_certificate(vault_pki):
