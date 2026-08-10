@@ -1327,12 +1327,7 @@ def sign_certificate(
         Any additional parameter accepted by the Vault API or the
         :py:func:`x509_v2 module <salt.modules.x509_v2.create_csr>`
     """
-
-    if csr is None and private_key is None:
-        raise SaltInvocationError("Either csr or private_key must be passed.")
-
-    if csr is not None and private_key is not None:
-        raise SaltInvocationError("Only one of csr or private_key must be passed, not both")
+    hlp.one_of(csr=csr, private_key=private_key)
 
     sign = "sign-verbatim" if sign_verbatim else "sign"
     endpoint = f"{mount}/{sign}/{role_name}"
@@ -1456,11 +1451,7 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
     endpoint = f"{mount}/revoke"
     payload = {}
 
-    if serial is None and certificate is None:
-        raise SaltInvocationError("either serial or certificate must be passed.")
-
-    if serial is not None and certificate is not None:
-        raise SaltInvocationError("only one of serial or certificate must be passed, not both")
+    hlp.one_of(serial=serial, certificate=certificate)
 
     try:
         if certificate is not None:

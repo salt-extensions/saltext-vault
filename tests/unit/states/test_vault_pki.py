@@ -40,7 +40,7 @@ def test_certificate_managed_invalid_encoding():
         "/etc/pki/cert.pem", "example.com", "role", "pk", encoding="foo"
     )
     assert res["result"] is False
-    assert "Invalid value 'foo' for encoding" in res["comment"]
+    assert "Invalid value 'foo' for `encoding`" in res["comment"]
     assert not res["changes"]
 
 

@@ -163,10 +163,10 @@ def test_read_issuer_crl_converts_all_errors(query, side_effect):
 @pytest.mark.parametrize(
     "kwargs,match",
     (
-        ({}, "Either csr or private_key must be passed"),
+        ({}, "Either `csr` or `private_key` is required"),
         (
             {"csr": "-----BEGIN...", "private_key": "-----BEGIN..."},
-            "Only one of csr or private_key must be passed",
+            r"Either `csr` or `private_key` is required \(exclusive\)",
         ),
     ),
 )

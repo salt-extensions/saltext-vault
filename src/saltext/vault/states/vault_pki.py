@@ -15,9 +15,7 @@ from typing import TYPE_CHECKING
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 
-from saltext.vault.utils.vault.helpers import deserialize_csl
-from saltext.vault.utils.vault.helpers import filter_state_internal_kwargs
-from saltext.vault.utils.vault.helpers import safe_atomic_write
+from saltext.vault.utils.vault import helpers as hlp
 from saltext.vault.utils.vault.helpers import timestring_map
 
 try:
@@ -206,13 +204,10 @@ def certificate_managed(
     changes = {}
     ca_chain = []
     verb = "create"
-    file_args, cert_args = _split_file_kwargs(filter_state_internal_kwargs(kwargs))
+    file_args, cert_args = _split_file_kwargs(hlp.filter_state_internal_kwargs(kwargs))
 
     try:
-        if encoding not in ["der", "pem", "pkcs7_der", "pkcs7_pem"]:
-            raise SaltInvocationError(
-                f"Invalid value '{encoding}' for encoding. Valid: der, pem, pkcs7_der, pkcs7_pem"
-            )
+        encoding = hlp.in_vals(("der", "pem", "pkcs7_der", "pkcs7_pem"), encoding=encoding)
 
         if encoding == "der" and append_ca_chain:
             raise SaltInvocationError(
@@ -347,7 +342,7 @@ def certificate_managed(
                 _add_sub_state_run(ret, file_managed_ret)
                 if not _check_file_ret(file_managed_ret, ret, file_exists):
                     return ret
-                safe_atomic_write(
+                hlp.safe_atomic_write(
                     name,
                     base64.b64decode(cert),
                     __salt__["config.backup_mode"](file_args.get("backup", "")),
@@ -434,7 +429,7 @@ def role_managed(name, mount="pki", issuer_ref=None, ttl=None, max_ttl=None, **k
             # Compare normalized values: The API normalizes scalars for
             # list-type parameters and duration strings into seconds.
             if isinstance(curr_val, list) and isinstance(arg, str):
-                arg = deserialize_csl(arg)
+                arg = hlp.deserialize_csl(arg)
             elif (
                 isinstance(curr_val, (int, float))
                 and not isinstance(curr_val, bool)
