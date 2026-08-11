@@ -403,6 +403,9 @@ def update_issuer(
     aia_urls=None,
     crl_endpoints=None,
     ocsp_servers=None,
+    name=None,
+    aia_url_templating=None,
+    delta_crl_endpoints=None,
 ):
     """
     Update issuer's information.
@@ -424,8 +427,8 @@ def update_issuer(
         salt '*' vault_pki.update_issuer ref usage=["crl-signing"]
 
     ref
-        Reference of the issuer. Can be issuer ID, issuer name or literal ``default``
-        which means default issuer. Defaults to ``default``.
+        Reference of the issuer. Can be issuer ID, issuer name or literal ``default``,
+        referring to the default issuer. Defaults to ``default``.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -453,9 +456,25 @@ def update_issuer(
     ocsp_servers
         Specifies the URL values for the OCSP Servers field as an array.
 
+    name
+        .. versionadded:: 1.9.0
+
+        Custom name for the issuer. Must be unique and not equal to ``default``.
+
+    aia_url_templating
+        .. versionadded:: 1.9.0
+
+        Render ``aia_urls``/``crl_endpoints``/``ocsp_servers``/``delta_crl_endpoints`` as templates.
+        Supported variables: `{{issuer_id}}`, ``{{cluster_path}}``, ``{{cluster_aia_path}}``
+
+    delta_crl_endpoints
+        .. versionadded:: 1.9.0
+
+        (Requires Vault 1.20+ or OpenBao)
+        Specifies the URL values for the Delta CRL Distribution Points field.
+        This can be an array or a comma- separated string list.
     """
     endpoint = f"{mount}/issuer/{ref}"
-
     payload = {}
 
     if manual_chain is not None:
@@ -472,6 +491,15 @@ def update_issuer(
 
     if ocsp_servers is not None:
         payload["ocsp_servers"] = ocsp_servers
+
+    if name is not None:
+        payload["issuer_name"] = name
+
+    if aia_url_templating is not None:
+        payload["enable_aia_url_templating"] = aia_url_templating
+
+    if delta_crl_endpoints is not None:
+        payload["delta_crl_distribution_points"] = delta_crl_endpoints
 
     try:
         vault.query(
@@ -567,7 +595,7 @@ def set_default_issuer(name, mount="pki"):
         salt '*' vault_pki.set_default_issuer myca
 
     name
-        Name of the default issuer to set.
+        Name or ID of the default issuer to set.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -694,7 +722,8 @@ def generate_root(
 
 def delete_key(ref, mount="pki"):
     """
-    Delete private key from Vault.
+    Delete a private key from Vault.
+    There must be no issuers depending on the key for this to succeed.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#delete-key>`__.
 
@@ -713,7 +742,7 @@ def delete_key(ref, mount="pki"):
         salt '*' vault_pki.delete_key ref
 
     ref
-        Ref of the key. Could be name or key_id.
+        Reference to the key, either ``key_name`` or ``key_id``.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -749,7 +778,7 @@ def delete_issuer(ref, mount="pki", include_key=False):
         salt '*' vault_pki.delete_issuer ref
 
     ref
-        Ref of the issuer. Could be name or issuer_id.
+        Reference to the issuer, either ``issuer_name`` or ``issuer_id``.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -809,7 +838,8 @@ def read_issuer_crl(ref="default", mount="pki", delta=False):
         salt '*' vault_pki.read_issuer_crl ref
 
     ref
-        Ref of the issuer, i.e. name or issuer_id. Defaults to default issuer.
+        Reference to the issuer, either ``issuer_name`` or ``issuer_id``.
+        Defaults to ``default``.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
