@@ -7,6 +7,7 @@ from salt.utils.x509 import generate_rsa_privkey
 from tests.conftest import CONTAINER_TARGETS
 
 # pylint: disable=unused-import
+from tests.functional.modules.test_vault_pki import empty_pki_mount
 from tests.functional.modules.test_vault_pki import generated_root
 from tests.functional.modules.test_vault_pki import issuers_setup
 from tests.functional.modules.test_vault_pki import roles_setup
