@@ -97,6 +97,14 @@ def _role_absent():
         yield _read_role
 
 
+@pytest.fixture
+def _x509v2_mock():
+    with patch(
+        "saltext.vault.modules.vault_pki._x509v2", autospec=True, return_value="pem"
+    ) as _x509v2:
+        yield _x509v2
+
+
 @pytest.mark.parametrize(
     "func,kwargs",
     (
@@ -110,9 +118,14 @@ def _role_absent():
         ("read_issuer_certificate", {}),
         ("get_default_issuer", {}),
         ("set_default_issuer", {"name": "foo"}),
+        ("list_keys", {}),
+        ("generate_key", {"key_type": "internal"}),
         ("generate_root", {"common_name": "foo"}),
+        ("generate_intermediate_csr", {}),
         ("delete_key", {"ref": "foo"}),
         ("delete_issuer", {"ref": "foo"}),
+        ("import_issuer_intermediate", {"cert": "cert", "chain": ["chain"]}),
+        ("import_issuer", {"cert": "cert", "chain": ["chain"]}),
         ("read_issuer_crl", {}),
         ("list_revoked_certificates", {}),
         ("list_certificates", {}),
@@ -125,6 +138,7 @@ def _role_absent():
         ),
         ("revoke_certificate", {"serial": "00:11:22"}),
         ("read_urls", {}),
+        ("write_urls", {"ocsp_servers": ["http://ocsp.example.com"]}),
     ),
 )
 def test_func_converts_errors(func, kwargs, query, request):
@@ -132,6 +146,9 @@ def test_func_converts_errors(func, kwargs, query, request):
     if func == "write_role":
         # otherwise we would test read_role again
         request.getfixturevalue("_role_absent")
+    if func.startswith("import_issuer"):
+        # certificate encoding requires the x509 execution module
+        request.getfixturevalue("_x509v2_mock")
     with pytest.raises(CommandExecutionError, match="booh"):
         getattr(vault_pki, func)(**kwargs)
 

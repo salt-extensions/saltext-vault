@@ -3,10 +3,13 @@ import logging
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
+from pathlib import Path
 
 import pytest
 from cryptography import x509
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
+from cryptography.x509.oid import NameOID
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 from salt.utils.x509 import generate_rsa_privkey
@@ -367,6 +370,8 @@ def test_sign_certificate_with_dict_alt_names(vault_pki, private_key, sans_as_li
     ctx = contextlib.nullcontext()
     use_csr_sans = testrole.get("use_csr_sans", True)
     if use_csr_sans:
+        # This test will break in the next 3006 release since otherName
+        # support has been added to x509_v2.
         if not fail:
             alt_names.pop("1.2.3.4")
         else:
@@ -924,3 +929,264 @@ def test_read_certificate_full_special(serial, vault_pki):
 
     assert "certificate" in ret
     assert "ca_chain" in ret
+
+
+@pytest.fixture
+def clean_pki():
+    """
+    Remove issuers and keys created during a test.
+    Issuers need to be deleted before the keys they reference.
+    """
+    issuers_before = set(vault_list("pki/issuers"))
+    keys_before = set(vault_list("pki/keys"))
+    try:
+        yield
+    finally:
+        for issuer in set(vault_list("pki/issuers")) - issuers_before:
+            vault_delete(f"pki/issuer/{issuer}")
+        for key in set(vault_list("pki/keys")) - keys_before:
+            vault_delete(f"pki/key/{key}")
+
+
+@pytest.fixture
+def testkey(clean_pki):  # pylint: disable=unused-argument
+    return vault_write("pki/keys/generate/internal", key_name="testkey")["data"]
+
+
+@pytest.fixture(scope="module")
+def local_ca(private_key):
+    """
+    A CA created outside of Vault, for signing intermediates and imports.
+    """
+    if "-----BEGIN" not in private_key:
+        # wrapper tests
+        private_key = Path(private_key).read_text()  # pylint: disable=unspecified-encoding
+    key = serialization.load_pem_private_key(private_key.encode(), None)
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Local Root CA")])
+    now = datetime.now(tz=timezone.utc)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(subject)
+        .public_key(key.public_key())  # type: ignore
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(hours=1))
+        .not_valid_after(now + timedelta(days=7))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=False,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=True,
+                crl_sign=True,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)  # type: ignore
+        .sign(key, hashes.SHA256())  # type: ignore
+    )
+    return {"cert": cert.public_bytes(serialization.Encoding.PEM).decode(), "key": private_key}
+
+
+@pytest.mark.parametrize("by", ("name", "id"))
+def test_get_key_id(vault_pki, testkey, by):
+    res = vault_pki.get_key_id("testkey" if by == "name" else testkey["key_id"])
+    assert res == testkey["key_id"]
+
+
+def test_get_key_id_missing(vault_pki):
+    with pytest.raises(CommandExecutionError, match="No key is associated"):
+        vault_pki.get_key_id("missing_key")
+
+
+def test_list_keys(vault_pki, testkey):
+    ret = vault_pki.list_keys()
+    assert testkey["key_id"] in ret
+    assert ret[testkey["key_id"]]["key_name"] == "testkey"
+
+
+def test_list_keys_empty(vault_pki, empty_pki_mount):
+    assert vault_pki.list_keys(mount=empty_pki_mount) == {}
+
+
+@pytest.mark.usefixtures("clean_pki")
+def test_generate_key(vault_pki):
+    ret = vault_pki.generate_key(
+        "internal", key_name="testkey-generated", key_algo="ec", key_bits=384
+    )
+    assert ret["key_id"]
+    assert ret["key_name"] == "testkey-generated"
+    assert "private_key" not in ret
+    assert vault_read(f"pki/key/{ret['key_id']}")["data"]["key_type"] == "ec"
+
+
+@pytest.mark.usefixtures("clean_pki")
+def test_generate_key_exported(vault_pki):
+    ret = vault_pki.generate_key("exported", key_name="testkey-exported")
+    assert ret["key_id"]
+    assert "private_key" in ret
+
+
+def test_generate_key_invalid_type(vault_pki):
+    with pytest.raises(SaltInvocationError, match="Invalid value 'existing' for `key_type`"):
+        vault_pki.generate_key("existing")
+
+
+def test_generate_key_reserved_key_name(vault_pki):
+    with pytest.raises(SaltInvocationError, match="reserved word"):
+        vault_pki.generate_key("internal", key_name="default")
+
+
+def test_generate_key_kms_requires_managed_arg(vault_pki):
+    with pytest.raises(
+        SaltInvocationError, match=r"Either `managed\w+` or `managed\w+`.* key_type is `kms`"
+    ):
+        vault_pki.generate_key("kms")
+
+
+@pytest.mark.usefixtures("clean_pki")
+def test_generate_intermediate_csr(vault_pki):
+    ret = vault_pki.generate_intermediate_csr(
+        "internal", key_name="testkey-csr", common_name="Test Intermediate CA"
+    )
+    assert "csr" in ret
+    csr = x509.load_pem_x509_csr(ret["csr"].encode())
+    assert csr.subject.rfc4514_string() == "CN=Test Intermediate CA"
+    assert "testkey-csr" in (info["key_name"] for info in vault_pki.list_keys().values())
+
+
+def test_generate_intermediate_csr_existing_key(vault_pki, testkey):
+    keys_before = vault_list("pki/keys")
+    ret = vault_pki.generate_intermediate_csr(
+        "existing", key_ref=testkey["key_id"], common_name="Test Intermediate CA"
+    )
+    assert "csr" in ret
+    x509.load_pem_x509_csr(ret["csr"].encode())
+    # No new key should have been generated
+    assert vault_list("pki/keys") == keys_before
+
+
+def test_generate_intermediate_csr_reserved_key_name(vault_pki):
+    with pytest.raises(SaltInvocationError, match="reserved word"):
+        vault_pki.generate_intermediate_csr("internal", key_name="default")
+
+
+def test_generate_intermediate(vault_pki, testkey, local_ca):
+    with (
+        pytest.helpers.temp_file(  # ty: ignore[unresolved-attribute]
+            "signing_key", contents=local_ca["key"]
+        ) as signing_key_file,
+        pytest.helpers.temp_file(  # ty: ignore[unresolved-attribute]
+            "signing_cert", contents=local_ca["cert"]
+        ) as signing_cert_file,
+    ):
+        # files for wrapper test
+        ret = vault_pki.generate_intermediate(
+            testkey["key_id"],
+            "Test Generated Intermediate CA",
+            signing_private_key=str(signing_key_file),
+            signing_cert=str(signing_cert_file),
+            days_valid=7,
+        )
+    assert ret["imported_issuers"]
+    issuer = vault_pki.read_issuer(ret["imported_issuers"][0])
+    assert issuer["key_id"] == testkey["key_id"]
+    certificate = load_cert(issuer["certificate"])
+    assert certificate.subject.rfc4514_string() == "CN=Test Generated Intermediate CA"
+    assert certificate.issuer.rfc4514_string() == "CN=Local Root CA"
+    basic_constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints)
+    assert basic_constraints.value.ca is True
+    assert basic_constraints.value.path_length == 0
+
+
+@pytest.mark.usefixtures("clean_pki")
+def test_import_issuer_intermediate(vault_pki, modules, local_ca):
+    csr_resp = vault_write(
+        "pki/intermediate/generate/internal", common_name="Test Imported Intermediate CA"
+    )["data"]
+    cert = modules.x509.create_certificate(
+        csr=csr_resp["csr"],
+        signing_private_key=local_ca["key"],
+        signing_cert=local_ca["cert"],
+        CN="Test Imported Intermediate CA",
+        basicConstraints="critical, CA:true",
+        keyUsage="critical, cRLSign, keyCertSign",
+        # Vault refuses to build CRLs for issuers without a SKI
+        subjectKeyIdentifier="hash",
+        authorityKeyIdentifier="keyid:always,issuer",
+        days_valid=7,
+    )
+    ret = vault_pki.import_issuer_intermediate(cert)
+    assert ret["imported_issuers"]
+    issuer = vault_pki.read_issuer(ret["imported_issuers"][0])
+    assert issuer["key_id"] == csr_resp["key_id"]
+    certificate = load_cert(issuer["certificate"])
+    assert certificate.subject.rfc4514_string() == "CN=Test Imported Intermediate CA"
+
+
+@pytest.mark.usefixtures("clean_pki")
+def test_import_issuer(vault_pki, local_ca):
+    with pytest.helpers.temp_file("cert", contents=local_ca["cert"]) as cert_file:  # type: ignore
+        # File needed for wrapper test
+        ret = vault_pki.import_issuer(str(cert_file))
+    assert len(ret["imported_issuers"]) == 1
+    assert not ret["imported_keys"]
+    issuer = vault_pki.read_issuer(ret["imported_issuers"][0])
+    assert not issuer["key_id"]
+    certificate = load_cert(issuer["certificate"])
+    assert certificate.subject.rfc4514_string() == "CN=Local Root CA"
+
+
+@pytest.mark.usefixtures("clean_pki")
+def test_import_issuer_with_private_key(vault_pki, local_ca):
+    with pytest.helpers.temp_file("cert", contents=local_ca["cert"]) as cert_file:  # type: ignore
+        with pytest.helpers.temp_file("pk", contents=local_ca["key"]) as pk_file:  # type: ignore
+            # Files needed for wrapper test
+            ret = vault_pki.import_issuer(str(cert_file), private_key=str(pk_file))
+    assert len(ret["imported_issuers"]) == 1
+    assert len(ret["imported_keys"]) == 1
+    assert ret["mapping"] == {ret["imported_issuers"][0]: ret["imported_keys"][0]}
+
+
+def test_write_urls(vault_pki):
+    urls = {
+        "issuing_certificates": ["http://aia.example.com/{{issuer_id}}.list"],
+        "crl_endpoints": ["http://crl.example.com/{{issuer_id}}.crl"],
+        "ocsp_servers": ["http://ocsp.example.com"],
+    }
+    try:
+        assert vault_pki.write_urls(**urls, aia_url_templating=True)
+        data = vault_read("pki/config/urls")["data"]
+        assert data["issuing_certificates"] == urls["issuing_certificates"]
+        assert data["crl_distribution_points"] == urls["crl_endpoints"]
+        assert data["ocsp_servers"] == urls["ocsp_servers"]
+        assert data["enable_templating"] is True
+    finally:
+        vault_write(
+            "pki/config/urls",
+            issuing_certificates=[],
+            crl_distribution_points=[],
+            ocsp_servers=[],
+            enable_templating=False,
+        )
+
+
+def test_write_urls_delta_crl_endpoints(vault_pki):
+    if "delta_crl_distribution_points" not in vault_read("pki/config/urls")["data"]:
+        pytest.skip("Server does not support delta CRL distribution points in the URL config")
+    try:
+        assert vault_pki.write_urls(delta_crl_endpoints=["http://crl.example.com/delta.crl"])
+        data = vault_read("pki/config/urls")["data"]
+        assert data["delta_crl_distribution_points"] == ["http://crl.example.com/delta.crl"]
+    finally:
+        vault_write("pki/config/urls", delta_crl_distribution_points=[])
+
+
+def test_write_urls_requires_parameter(vault_pki):
+    with pytest.raises(CommandExecutionError, match="at least one parameter"):
+        vault_pki.write_urls()

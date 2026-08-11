@@ -609,6 +609,173 @@ def set_default_issuer(name, mount="pki"):
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
+def get_key_id(ref, mount="pki"):
+    """
+    .. versionadded:: 1.9.0
+
+    Get the key ID of a reference, which can be a key ID or a key name. Ensures the returned key ID exists.
+
+    Required policy:  See :func:`list_keys`
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault_pki.get_key_id foobar
+
+    ref
+        Reference to a key. Either ``key_name`` or ``key_id``.
+
+    mount
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
+    """
+    keys = list_keys(mount=mount)
+    if ref in keys:
+        return ref
+    for key_id, info in keys.items():
+        if info.get("key_name") == ref:
+            return key_id
+    raise CommandExecutionError(f"No key is associated with reference '{ref}' on mount '{mount}'")
+
+
+def list_keys(mount="pki"):
+    """
+    .. versionadded:: 1.9.0
+
+    Get a mapping of keys provisioned in this mount to some of their properties (currently only ``key_name``).
+
+    `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#list-keys>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/keys" {
+            capabilities = ["list"]
+        }
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault_pki.list_keys
+
+    mount
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
+    """
+    try:
+        res = vault.query("LIST", f"{mount}/keys", __opts__, __context__)["data"]
+    except vault.VaultNotFoundError:
+        return {}
+    except vault.VaultException as err:
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
+
+    keys = res["key_info"]
+    for key in res["keys"]:
+        if key not in keys:  # pragma: no cover
+            keys[key] = {}
+    return keys
+
+
+def generate_key(
+    key_type="internal",
+    key_name=None,
+    key_algo=None,
+    key_bits=None,
+    managed_key_name=None,
+    managed_key_id=None,
+    mount="pki",
+):
+    """
+    .. versionadded:: 1.9.0
+
+    Generate a new private key for use in the PKI mount.
+    This key can be used with :func:`generate_root` and :func:`generate_intermediate`,
+    using the ``key_type=existing`` variant by passing the returned ``key_id`` as ``key_ref``.
+
+    `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#generate-key>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/keys/generate/<key_type>" {
+            capabilities = ["create", "update"]
+        }
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault_pki.generate_key key_name=my_rsa_key key_bits=4096
+        salt '*' vault_pki.generate_key exported key_algo=ed25519
+
+    key_type
+        Key type to generate. Valid values are:
+
+        * ``internal``: The private key is not returned and cannot be retrieved later.
+        * ``exported``: The private key is returned in the response.
+        * ``kms``: Request a key from a key management system. The private key is not returned and cannot be retrieved later.
+
+        Defaults to ``internal``.
+
+    key_name
+        Specify a name for the generated key. Optional.
+
+    key_algo
+        Key algorithm. Either ``rsa``, ``ed25519`` or ``ec``. Defaults to ``rsa``.
+
+    key_bits
+        Number of bits to use for the generated key. Valid values depend on the ``key_type``:
+
+        * ``rsa``: 2048 (default), 3072, 4096, 8192.
+        * ``ec``: 224, 256 (default), 384, 521
+        * ``ed25519``: ignored
+
+        Defaults to ``0`` (universal default).
+
+    managed_key_name
+        When ``key_type`` is ``kms``, the managed key's configured name. Either this or ``managed_key_id`` is required then.
+
+    managed_key_id
+        When ``key_type`` is ``kms``, the managed key's UUID. Either this or ``managed_key_name`` is required then.
+
+    mount
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
+    """
+    key_type = hlp.in_vals(("exported", "internal", "kms"), key_type=key_type)
+    if key_name == "default":
+        raise SaltInvocationError("key_name cannot be `default`. This is a reserved word.")
+
+    if key_type == "kms":
+        hlp.one_of(
+            _reason="key_type is `kms`",
+            managed_key_name=managed_key_name,
+            managed_key_id=managed_key_id,
+        )
+    else:
+        hlp.none_of(
+            _reason="key_type is not `kms`",
+            managed_key_name=managed_key_name,
+            managed_key_id=managed_key_id,
+        )
+
+    endpoint = f"{mount}/keys/generate/{key_type}"
+    payload = hlp.filter_unset(
+        {
+            "key_name": key_name,
+            "key_type": key_algo,
+            "key_bits": key_bits,
+            "managed_key_name": managed_key_name,
+            "managed_key_id": managed_key_id,
+        }
+    )
+    try:
+        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+    except vault.VaultException as err:
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
+
+
 def generate_root(
     common_name,
     mount="pki",
@@ -782,6 +949,172 @@ def generate_root(
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
+def generate_intermediate_csr(
+    key_type="internal",
+    key_name=None,
+    key_algo=None,
+    key_bits=None,
+    key_ref=None,
+    managed_key_name=None,
+    managed_key_id=None,
+    mount="pki",
+    **kwargs,
+):
+    """
+    .. versionadded:: 1.9.0
+
+    Generate a new CSR for signing, optionally generating a new private key.
+    To create an issuer, the CSR must be signed and the resulting certificate imported.
+
+    `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#generate-intermediate-csr>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/intermediate/generate/<key_type>" {
+            capabilities = ["create", "update"]
+        }
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault_pki.generate_root my-root
+
+    key_type
+        Key type of the (future) intermediate issuer to generate. Valid values are:
+
+        * ``existing``: Use an existing key, specified in ``key_ref``.
+        * ``internal``: The private key is not returned and cannot be retrieved later.
+        * ``exported``: The private key is returned in the response.
+        * ``kms``: Request a key from a key management system. The private key is not returned and cannot be retrieved later.
+
+    Defaults to ``internal``.
+
+    kwargs
+        Unknown keyword arguments are passed through. See the API method docs linked above for details.
+    """
+    key_type = hlp.in_vals(("existing", "exported", "internal", "kms"), key_type=key_type)
+    if key_type == "kms":
+        hlp.one_of(
+            _reason="key_type is `kms`",
+            managed_key_name=managed_key_name,
+            managed_key_id=managed_key_id,
+        )
+    else:
+        hlp.none_of(
+            _reason="key_type is not `kms`",
+            managed_key_name=managed_key_name,
+            managed_key_id=managed_key_id,
+        )
+        if key_type == "existing":
+            if key_ref is None:
+                raise SaltInvocationError("key_type `existing` requires `key_ref` to be set")
+        else:
+            hlp.none_of(_reason="key_type is not `existing`", key_ref=key_ref)
+    if key_type in ("existing", "kms"):
+        hlp.none_of(
+            _reason="key_type is `existing` or `kms`",
+            key_algo=key_algo,
+            key_bits=key_bits,
+        )
+    if key_name == "default":
+        raise SaltInvocationError("key_name cannot be `default`. This is a reserved word.")
+
+    endpoint = f"{mount}/intermediate/generate/{key_type}"
+    payload = hlp.filter_unset(
+        {
+            **kwargs,
+            "key_name": key_name,
+            "key_type": key_algo,
+            "key_bits": key_bits,
+            "key_ref": key_ref,
+            "managed_key_name": managed_key_name,
+            "managed_key_id": managed_key_id,
+        }
+    )
+    try:
+        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+    except vault.VaultException as err:
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
+
+
+def generate_intermediate(
+    key_ref,
+    common_name,
+    max_path_length=0,
+    mount="pki",
+    **kwargs,
+):
+    """
+    .. versionadded:: 1.9.0
+
+    Generate an intermediate CA from an existing key by signing it
+    via :py:func:`x509.create_certificate <salt.modules.x509_v2.create_certificate>`.
+
+    Required policy: see :func:`generate_intermediate_csr` and :func:`import_intermediate`
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault_pki.generate_intermediate my-existing-named-key "My Intermediate CA"
+
+    key_ref
+        Reference to an existing private key on this ``mount``, either ``key_name`` or ``key_id``.
+
+    common_name
+        Subject ``CN``. Required.
+
+    max_path_length
+        basicConstraints ``pathlen`` parameter, which indicates the maximum number of CAs that can appear below this one in a chain.
+        If set to ``0``, this CA can only issue leaf certificates, not other CAs.
+        A negative value means no limit, unless the issuer certificate has a maximum path length,
+        in which case it means one less than the issuer's pathlen.
+        Defaults to ``0``.
+
+    mount
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
+
+    kwargs
+        Unknown keyword arguments are passed to :py:func:`x509.create_certificate <salt.modules.x509_v2.create_certificate>`.
+        See there for details.
+
+        The following arguments are enforced by this function:
+
+        * ``CN``
+        * ``basicConstraints``
+        * ``csr``
+        * ``format``
+        * ``private_key`` (empty)
+        * ``public_key`` (empty)
+        * ``raw`` (empty)
+
+        These receive defaults if not specified:
+
+        * ``keyUsage``: ``[critical, cRLSign, keyCertSign]``
+        * ``subjectKeyIdentifier``: ``hash``
+        * ``authorityKeyIdentifier``: ``keyid:always,issuer``
+    """
+    csr = generate_intermediate_csr("existing", key_ref=key_ref, mount=mount)  # source for pubkey
+    basic_constraints = {"critical": True, "ca": True}
+    if max_path_length >= 0:
+        basic_constraints["pathlen"] = max_path_length
+    kwargs["basicConstraints"] = basic_constraints
+    kwargs["CN"] = common_name
+    kwargs["csr"] = csr["csr"]
+    kwargs["format"] = "pem"
+    kwargs.pop("path", None)
+    kwargs.pop("private_key", None)
+    kwargs.pop("public_key", None)
+    kwargs.setdefault("keyUsage", ["critical", "cRLSign", "keyCertSign"])
+    kwargs.setdefault("subjectKeyIdentifier", "hash")
+    kwargs.setdefault("authorityKeyIdentifier", "keyid:always,issuer")
+    cert = __salt__["x509.create_certificate"](**kwargs)
+    return import_issuer_intermediate(cert, mount=mount)
+
+
 def delete_key(ref, mount="pki"):
     """
     Delete a private key from Vault.
@@ -864,6 +1197,122 @@ def delete_issuer(ref, mount="pki", include_key=False):
             delete_key(key_id, mount=mount)
         return True
     # Don't need to catch VaultNotFoundError, it's not thrown for missing issuer
+    except vault.VaultException as err:
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
+
+
+def import_issuer_intermediate(cert, chain=None, mount="pki"):
+    """
+    .. versionadded:: 1.9.0
+
+    Import a CA certificate issued for an existing key on this mount.
+
+    `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#import-ca-certificates-and-keys>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/intermediate/set-signed" {
+            capabilities = ["create", "update"]
+        }
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault_pki.import_issuer_intermediate /etc/tls/my_intermediate_cert.pem
+
+    cert
+        Certificate to import. Any input accepted by the :py:mod:`x509_v2 modules <salt.modules.x509_v2>` is accepted.
+        Included CA chain is respected when ``chain`` is not specified.
+
+    chain
+        CA chain for the certificate. Defaults to the chain in ``cert``, if present.
+
+    mount
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
+    """
+    if not HAS_CRYPTOGRAPHY:  # pragma: no cover
+        raise CommandExecutionError(
+            "Missing `cryptography` library, which is required for this operation"
+        )
+    endpoint = f"{mount}/intermediate/set-signed"
+    if not chain:
+        cert, chain = x509util.load_cert(cert, load_chain=True)
+        # Ensure this works in the wrapper
+        cert = x509util.to_pem(cert).decode()
+        chain = [x509util.to_pem(chain_cert).decode() for chain_cert in chain]
+    elif not isinstance(chain, list):
+        chain = [chain]
+    payload = {"certificate": _x509v2("encode_certificate", cert, append_certs=chain)}
+    try:
+        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+    except vault.VaultException as err:
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
+
+
+def import_issuer(cert, chain=None, private_key=None, private_key_passphrase=None, mount="pki"):
+    """
+    .. versionadded:: 1.9.0
+
+    Import a CA certificate and (optionally) corresponding private key.
+
+    `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#import-ca-certificates-and-keys>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        # without private_key
+        path "<mount>/issuer/import/cert" {
+            capabilities = ["create", "update"]
+        }
+
+        # with private_key
+        path "<mount>/issuer/import/bundle" {
+            capabilities = ["create", "update"]
+        }
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault_pki.import_issuer /etc/tls/my_intermediate_cert.pem
+        salt '*' vault_pki.import_issuer /etc/tls/my_intermediate_cert.pem private_key=/etc/tls/my_intermediate.key
+
+    cert
+        Certificate to import. Any input accepted by the :py:mod:`x509_v2 modules <salt.modules.x509_v2>` is accepted.
+        Included CA chain is respected when ``chain`` is not specified.
+
+    chain
+        CA chain for the certificate. Defaults to the chain in ``cert``, if present.
+
+    private_key
+        Import corresponding private key for ``cert``. Optional.
+
+    private_key_passphrase
+        When ``private_key`` is specified and encrypted, the passphrase to decrypt it.
+
+    mount
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
+    """
+    endpoint = f"{mount}/issuers/import/"
+    if not chain:
+        cert, chain = x509util.load_cert(cert, load_chain=True)
+        # Ensure this works in the wrapper
+        cert = x509util.to_pem(cert).decode()
+        chain = [x509util.to_pem(chain_cert).decode() for chain_cert in chain]
+    payload = {"pem_bundle": _x509v2("encode_certificate", cert, append_certs=chain)}
+    if private_key:
+        endpoint += "bundle"
+        payload["pem_bundle"] += "\n" + _x509v2(
+            "encode_private_key", private_key, private_key_passphrase=private_key_passphrase
+        )
+    else:
+        endpoint += "cert"
+    try:
+        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -1616,6 +2065,80 @@ def read_urls(mount="pki"):
 
     try:
         return vault.query("GET", endpoint, __opts__, __context__)["data"]
+    except vault.VaultException as err:
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
+
+
+def write_urls(
+    issuing_certificates=None,
+    crl_endpoints=None,
+    delta_crl_endpoints=None,
+    ocsp_servers=None,
+    aia_url_templating=None,
+    mount="pki",
+):
+    """
+    .. versionadded:: 1.9.0
+
+    Set issuing certificate endpoints, CRL distribution points, and OCSP server
+    endpoints that will be encoded into issued certificates. This behaves
+    as PATCH. To unset a value, set it to an empty string.
+
+    `API method docs <https://www.vaultproject.io/api-docs/secret/pki#set-urls>`_.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/config/urls" {
+            capabilities = ["create", "update"]
+        }
+
+    CLI Example:
+
+    .. code-block:: bash
+
+            salt '*' vault_pki.set_urls ocsp_servers=ocsp.my.ca
+
+    issuing_certificates
+        Specifies the URL values for the Issuing Certificate field as a list.
+        (see RFC 5280 Section 4.2.2.1 for details)
+
+    crl_endpoints
+        Specifies the URL values for the CRL Distribution Points field as a list.
+        (see RFC 5280 Section 4.2.1.13 for details)
+
+    delta_crl_endpoints
+        (Requires Vault 1.20+ or OpenBao)
+        Specifies the URL values for the Delta CRL Distribution Points field.
+        (see RFC 5280 Section 4.2.1.15 for details)
+
+    ocsp_servers
+        Specifies the URL values for the OCSP Servers field as a list.
+        (see RFC 5280 Section 4.2.2.1 for details)
+
+    aia_url_templating
+        Render ``issuing_certificates``/``crl_endpoints``/``ocsp_servers``/``delta_crl_endpoints`` as templates.
+        Supported variables: `{{issuer_id}}`, ``{{cluster_path}}``, ``{{cluster_aia_path}}``
+
+    mount
+        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+    """
+    endpoint = f"{mount}/config/urls"
+    payload = hlp.filter_unset(
+        {
+            "issuing_certificates": issuing_certificates,
+            "crl_distribution_points": crl_endpoints,
+            "delta_crl_distribution_points": delta_crl_endpoints,
+            "ocsp_servers": ocsp_servers,
+            "enable_templating": aia_url_templating,
+        }
+    )
+    if not payload:
+        raise CommandExecutionError("You need to specify at least one parameter.")
+
+    try:
+        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 

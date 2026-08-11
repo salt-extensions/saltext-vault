@@ -3,23 +3,32 @@ import json
 import pytest
 from cryptography.hazmat.primitives import serialization
 from salt.utils.x509 import generate_rsa_privkey
+from salt.utils.x509 import load_cert
 
 from tests.conftest import CONTAINER_TARGETS
 
 # pylint: disable=unused-import
+from tests.functional.modules.test_vault_pki import clean_pki
 from tests.functional.modules.test_vault_pki import empty_pki_mount
 from tests.functional.modules.test_vault_pki import generated_root
 from tests.functional.modules.test_vault_pki import issuers_setup
+from tests.functional.modules.test_vault_pki import local_ca
 from tests.functional.modules.test_vault_pki import roles_setup
 from tests.functional.modules.test_vault_pki import root_issuer_setup
 from tests.functional.modules.test_vault_pki import test_delete_issuer
 from tests.functional.modules.test_vault_pki import test_delete_role
+from tests.functional.modules.test_vault_pki import test_generate_intermediate
+from tests.functional.modules.test_vault_pki import test_generate_intermediate_csr
+from tests.functional.modules.test_vault_pki import test_generate_key
 from tests.functional.modules.test_vault_pki import test_generate_root
 from tests.functional.modules.test_vault_pki import test_generate_root_exported
 from tests.functional.modules.test_vault_pki import test_get_default_issuer
+from tests.functional.modules.test_vault_pki import test_get_key_id
+from tests.functional.modules.test_vault_pki import test_import_issuer_with_private_key
 from tests.functional.modules.test_vault_pki import test_issue_certificate
 from tests.functional.modules.test_vault_pki import test_list_certificates
 from tests.functional.modules.test_vault_pki import test_list_issuers
+from tests.functional.modules.test_vault_pki import test_list_keys
 from tests.functional.modules.test_vault_pki import test_list_roles
 from tests.functional.modules.test_vault_pki import test_read_certificate
 from tests.functional.modules.test_vault_pki import test_read_certificate_full
@@ -36,14 +45,17 @@ from tests.functional.modules.test_vault_pki import test_sign_certificate_with_s
 from tests.functional.modules.test_vault_pki import test_update_issuer
 from tests.functional.modules.test_vault_pki import test_update_role
 from tests.functional.modules.test_vault_pki import test_write_role
+from tests.functional.modules.test_vault_pki import test_write_urls
 from tests.functional.modules.test_vault_pki import testissuer
 from tests.functional.modules.test_vault_pki import testissuer2
+from tests.functional.modules.test_vault_pki import testkey
 from tests.functional.modules.test_vault_pki import testrole
 
 # pylint: enable=unused-import
 from tests.support.helpers import WrapperFuncProxy
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
+from tests.support.vault import vault_write
 
 pytest.importorskip("docker")
 
@@ -122,3 +134,45 @@ def private_key(tmp_path_factory):
         "pk.pem", data, tmp_path_factory.mktemp("pki_wrapper")
     ) as pk:
         yield str(pk)
+
+
+@pytest.mark.usefixtures("clean_pki")
+def test_import_issuer_intermediate(vault_pki, salt_call_cli, local_ca):
+    csr_resp = vault_write(
+        "pki/intermediate/generate/internal", common_name="Test Imported Intermediate CA"
+    )["data"]
+    with (
+        pytest.helpers.temp_file(  # ty: ignore[unresolved-attribute]
+            "csr", contents=csr_resp["csr"]
+        ) as csr_file,
+        pytest.helpers.temp_file(  # ty: ignore[unresolved-attribute]
+            "signing_cert", contents=local_ca["cert"]
+        ) as signing_cert_file,
+        pytest.helpers.temp_file(  # ty: ignore[unresolved-attribute]
+            "signing_pk", contents=local_ca["key"]
+        ) as signing_key_file,
+    ):
+        res = salt_call_cli.run(
+            "x509.create_certificate",
+            csr=str(csr_file),
+            signing_private_key=str(signing_key_file),
+            signing_cert=str(signing_cert_file),
+            CN="Test Imported Intermediate CA",
+            basicConstraints="critical, CA:true",
+            keyUsage="critical, cRLSign, keyCertSign",
+            # Vault refuses to build CRLs for issuers without a SKI
+            subjectKeyIdentifier="hash",
+            authorityKeyIdentifier="keyid:always,issuer",
+            days_valid=7,
+        )
+    assert res.returncode == 0
+    assert "-----BEGIN" in res.data
+    cert = res.data
+    with pytest.helpers.temp_file("cert", contents=cert) as cert_file:  # type: ignore
+        # File needed for wrapper test
+        ret = vault_pki.import_issuer_intermediate(str(cert_file))
+    assert ret["imported_issuers"]
+    issuer = vault_pki.read_issuer(ret["imported_issuers"][0])
+    assert issuer["key_id"] == csr_resp["key_id"]
+    certificate = load_cert(issuer["certificate"])
+    assert certificate.subject.rfc4514_string() == "CN=Test Imported Intermediate CA"
