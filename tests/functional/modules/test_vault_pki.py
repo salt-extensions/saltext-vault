@@ -7,6 +7,7 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from salt.exceptions import CommandExecutionError
+from salt.exceptions import SaltInvocationError
 from salt.utils.x509 import generate_rsa_privkey
 from salt.utils.x509 import load_cert
 
@@ -690,6 +691,38 @@ def test_revoke_certificate(vault_pki, private_key, revoke_by):
 def test_revoke_certificate_missing(vault_pki):
     ret = vault_pki.revoke_certificate(serial=1337)
     assert ret is False
+
+
+@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.parametrize("revoke_by", ("serial", "certificate"))
+def test_revoke_certificate_with_private_key(vault_pki, revoke_by):
+    ret = vault_pki.issue_certificate(
+        "testrole",
+        common_name="test.example.com",
+        ttl="2h",
+    )
+    assert "private_key" in ret
+    certificate = load_cert(ret["certificate"])
+    serial = dec2hex(certificate.serial_number)
+
+    if revoke_by == "serial":
+        res = vault_pki.revoke_certificate(serial=serial, private_key=ret["private_key"])
+    else:
+        res = vault_pki.revoke_certificate(
+            certificate=ret["certificate"], private_key=ret["private_key"]
+        )
+    assert res is True
+
+    revoked_certs = [crt.upper() for crt in vault_pki.list_revoked_certificates()]
+    assert serial in revoked_certs
+
+
+def test_revoke_certificate_serial_certificate_exclusive(vault_pki):
+    with pytest.raises(SaltInvocationError, match="serial"):
+        vault_pki.revoke_certificate()
+    with pytest.raises(SaltInvocationError, match="serial"):
+        vault_pki.revoke_certificate(serial="aa:bb:cc", certificate="certdata")
 
 
 @pytest.mark.usefixtures("issuers_setup")

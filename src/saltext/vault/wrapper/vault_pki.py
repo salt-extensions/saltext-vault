@@ -29,6 +29,7 @@ This means:
 
 from saltext.vault.modules.vault_pki import _find_signing_issuer
 from saltext.vault.modules.vault_pki import _split_csr_kwargs
+from saltext.vault.modules.vault_pki import _x509v2
 from saltext.vault.modules.vault_pki import delete_issuer
 from saltext.vault.modules.vault_pki import delete_key
 from saltext.vault.modules.vault_pki import delete_role
@@ -57,6 +58,7 @@ globals_dict = globals()
 
 _find_signing_issuer = namespaced_function(_find_signing_issuer, globals_dict)
 _split_csr_kwargs = namespaced_function(_split_csr_kwargs, globals_dict)
+_x509v2 = namespaced_function(_x509v2, globals_dict)
 delete_issuer = namespaced_function(delete_issuer, globals_dict)
 delete_key = namespaced_function(delete_key, globals_dict)
 delete_role = namespaced_function(delete_role, globals_dict)

@@ -1397,13 +1397,8 @@ def sign_certificate(
             ]
         csr_args["CN"] = common_name
         try:
-            create_csr = __salt__["x509.create_csr"]
-        except KeyError as err:  # pragma: no cover
-            raise CommandExecutionError(
-                "Missing `x509.create_csr`, provided by the builtin `x509_v2` execution module"
-            ) from err
-        try:
-            csr = create_csr(
+            csr = _x509v2(
+                "create_csr",
                 private_key=private_key,
                 private_key_passphrase=private_key_passphrase,
                 digest=digest,
@@ -1448,9 +1443,11 @@ def sign_certificate(
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
-def revoke_certificate(serial=None, certificate=None, mount="pki"):
+def revoke_certificate(
+    serial=None, certificate=None, private_key=None, private_key_passphrase=None, mount="pki"
+):
     """
-    Revoke issued certificate.
+    Revoke an issued certificate.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#revoke-certificate>`__.
 
@@ -1458,7 +1455,13 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
 
     .. code-block:: vaultpolicy
 
+        # when `private_key` is unspecified
         path "<mount>/revoke" {
+            capabilities = ["create", "update"]
+        }
+
+        # when `private_key` is passed
+        path "<mount>/revoke-with-key" {
             capabilities = ["create", "update"]
         }
 
@@ -1467,6 +1470,8 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
     .. code-block:: bash
 
         salt '*' vault_pki.revoke_certificate 7e:85:c5:d1:85:94:9a:46:08:b5:1b:9c:22:cb:35:e5:ea:f3:56:3f
+        salt '*' vault_pki.revoke_certificate certificate=/etc/tls/my_cert.pem
+        salt '*' vault_pki.revoke_certificate certificate=/etc/tls/my_cert.pem private_key=/etc/tls/my_key.pem
 
     serial
         Specifies the serial of the certificate to revoke. Either ``serial`` or ``certificate`` must be specified.
@@ -1477,6 +1482,17 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
         .. note::
             This parameter requires the :py:mod:`x509_v2 execution module <salt.modules.x509_v2>` to be available.
 
+    private_key
+        .. versionadded:: 1.9.0
+
+        Private key corresponding to the certificate issued by Vault that is attempted to be revoked.
+        Optional. When this is passed, a different, less trusted API endpoint is used.
+
+    private_key_passphrase
+        .. versionadded:: 1.9.0
+
+        Passphrase for ``private_key``, if specified and encrypted. Optional.
+
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
@@ -1484,18 +1500,23 @@ def revoke_certificate(serial=None, certificate=None, mount="pki"):
     payload = {}
 
     hlp.one_of(serial=serial, certificate=certificate)
+    if private_key:
+        endpoint += "-with-key"
 
     try:
         if certificate is not None:
-            payload["certificate"] = __salt__["x509.encode_certificate"](
-                certificate, encoding="pem"
-            )
+            payload["certificate"] = _x509v2("encode_certificate", certificate)
         elif serial is not None:
             if isinstance(serial, int):
                 serial = hlp.dec2hex(serial)
             payload["serial_number"] = serial
         else:  # pragma: no cover
             raise RuntimeError("This path should not have been hit")
+
+        if private_key:
+            payload["private_key"] = _x509v2(
+                "encode_private_key", private_key, private_key_passphrase=private_key_passphrase
+            )
 
         vault.query("POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True)
         return True
@@ -1546,3 +1567,13 @@ def _split_csr_kwargs(kwargs):
         else:
             extra_args[k] = v
     return csr_args, extra_args
+
+
+def _x509v2(fun, *args, **kwargs):
+    try:
+        func = __salt__[f"x509.{fun}"]
+    except KeyError as err:  # pragma: no cover
+        raise CommandExecutionError(
+            f"Missing `x509.{fun}`, provided by the builtin `x509_v2` execution module"
+        ) from err
+    return func(*args, **kwargs)
