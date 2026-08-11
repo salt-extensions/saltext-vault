@@ -21,7 +21,7 @@ from saltext.vault.utils.vault.helpers import timestring_map
 try:
     from salt.utils import x509 as x509util
 
-    from saltext.vault.utils.vault.pki import check_cert_for_changes
+    from saltext.vault.utils.vault import pki
 
     HAS_CRYPTOGRAPHY = True
 except ImportError:  # pragma: no cover
@@ -219,7 +219,7 @@ def certificate_managed(
             raise SaltInvocationError("The ttl_remaning cannot be larger or equal to ttl.")
 
         # check file.managed changes early to avoid using unnecessary resources
-        file_managed_test = _file_managed(name, test=True, replace=False, **file_args)
+        file_managed_test = _run_state("file.managed", name, test=True, replace=False, **file_args)
         if file_managed_test["result"] is False:
             ret["result"] = False
             ret["comment"] = "Problem while testing file.managed changes, see its output"
@@ -270,7 +270,7 @@ def certificate_managed(
                 # No need to make any checks, just replace the cert
                 changes["replaced"] = True
             else:
-                changes = check_cert_for_changes(
+                changes = pki.check_cert_for_changes(
                     current=name,
                     append_chain=ca_chain,
                     common_name=common_name,
@@ -338,7 +338,7 @@ def certificate_managed(
             if encoding not in ["pem", "pkcs7_pem"]:
                 # file.managed does not support binary contents, so create
                 # an empty file first (makedirs). This does not work with check_cmd!
-                file_managed_ret = _file_managed(name, replace=False, **file_args)
+                file_managed_ret = _run_state("file.managed", name, replace=False, **file_args)
                 _add_sub_state_run(ret, file_managed_ret)
                 if not _check_file_ret(file_managed_ret, ret, file_exists):
                     return ret
@@ -352,7 +352,9 @@ def certificate_managed(
         if not changes or encoding in ["pem", "pkcs7_pem"]:
             replace = bool(encoding in ["pem", "pkcs7_pem"] and changes)
             contents = cert if replace else None
-            file_managed_ret = _file_managed(name, contents=contents, replace=replace, **file_args)
+            file_managed_ret = _run_state(
+                "file.managed", name, contents=contents, replace=replace, **file_args
+            )
             _add_sub_state_run(ret, file_managed_ret)
             if not _check_file_ret(file_managed_ret, ret, file_exists):
                 return ret
@@ -553,12 +555,13 @@ def _add_sub_state_run(ret, sub):
     ret["sub_state_run"].append(sub)
 
 
-def _file_managed(name, test=None, **kwargs):
+def _run_state(func, name, test=None, **kwargs):
     if test not in [None, True]:  # pragma: no cover
         raise SaltInvocationError("test param can only be None or True")
-    # work around https://github.com/saltstack/salt/issues/62590
     test = test or __opts__["test"]
-    res = __salt__["state.single"]("file.managed", name, test=test, **kwargs)
+    res = __salt__["state.single"](func, name, test=test, concurrent=True, **kwargs)
+    if not isinstance(res, dict):
+        raise CommandExecutionError(f"Failed running {func}: {res}")
     return res[next(iter(res))]
 
 
