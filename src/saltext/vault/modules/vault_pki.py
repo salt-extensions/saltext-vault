@@ -406,6 +406,8 @@ def update_issuer(
     name=None,
     aia_url_templating=None,
     delta_crl_endpoints=None,
+    leaf_not_after_behavior=None,
+    revocation_signature_algorithm=None,
 ):
     """
     Update issuer's information.
@@ -473,33 +475,42 @@ def update_issuer(
         (Requires Vault 1.20+ or OpenBao)
         Specifies the URL values for the Delta CRL Distribution Points field.
         This can be an array or a comma- separated string list.
+
+    leaf_not_after_behavior
+        .. versionadded:: 1.9.0
+
+        Behavior of a leaf's ``NotAfter`` field during issuance when it exceeds the issuer's validity.
+        Valid options:
+
+        * ``err``: Error, unless during CA/ACME issuance. (default)
+        * ``always_enforce_err``: Error, including during CA/ACME issuance.
+        * ``truncate``: Silently truncate the requested NotAfter to that of the issuer.
+        * ``permit``: Allow signed certificate validities to exceed that of the issuer.
+
+    revocation_signature_algorithm
+        .. versionadded:: 1.9.0
+
+        Which signature algorithm to use when building CRLs.
+        See Go's `x509.SignatureAlgorithm <https://pkg.go.dev/crypto/x509#SignatureAlgorithm>`__ constant for possible values.
+        Default (empty string) is to autoselect.
     """
     endpoint = f"{mount}/issuer/{ref}"
     payload = {}
 
-    if manual_chain is not None:
-        payload["manual_chain"] = manual_chain
-
-    if usage:
-        payload["usage"] = usage
-
-    if aia_urls is not None:
-        payload["issuing_certificates"] = aia_urls
-
-    if crl_endpoints is not None:
-        payload["crl_distribution_points"] = crl_endpoints
-
-    if ocsp_servers is not None:
-        payload["ocsp_servers"] = ocsp_servers
-
-    if name is not None:
-        payload["issuer_name"] = name
-
-    if aia_url_templating is not None:
-        payload["enable_aia_url_templating"] = aia_url_templating
-
-    if delta_crl_endpoints is not None:
-        payload["delta_crl_distribution_points"] = delta_crl_endpoints
+    for param, val in (
+        ("manual_chain", manual_chain),
+        ("usage", usage),
+        ("issuing_certificates", aia_urls),
+        ("crl_distribution_points", crl_endpoints),
+        ("ocsp_servers", ocsp_servers),
+        ("issuer_name", name),
+        ("enable_aia_url_templating", aia_url_templating),
+        ("delta_crl_distribution_points", delta_crl_endpoints),
+        ("leaf_not_after_behavior", leaf_not_after_behavior),
+        ("revocation_signature_algorithm", revocation_signature_algorithm),
+    ):
+        if val is not None:
+            payload[param] = val
 
     try:
         vault.query(

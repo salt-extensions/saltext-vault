@@ -9,6 +9,7 @@ from salt.utils.x509 import NAME_ATTRS_OID
 from salt.utils.x509 import generate_rsa_privkey
 from salt.utils.x509 import load_cert
 
+from saltext.vault.utils.vault import helpers as hlp
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
@@ -277,14 +278,7 @@ def roles_setup(request):  # pylint: disable=unused-argument
 
 
 def _wipe_issuers():
-    # Ensure the mount does not contain any leftover issuers or keys.
-    # When importing a CA bundle whose issuers/keys partially exist already,
-    # the imported_issuers/imported_keys response fields can be null,
-    # breaking the setup of subsequent tests.
-    for issuer in vault_list("pki/issuers"):
-        vault_delete(f"pki/issuer/{issuer}")
-    for key in vault_list("pki/keys"):
-        vault_delete(f"pki/key/{key}")
+    vault_delete("pki/root")
 
 
 @pytest.fixture
@@ -1036,3 +1030,281 @@ def test_role_absent_already_absent(vault_pki, testmode):
     assert ret.result is True
     assert not ret.changes
     assert "already absent" in ret.comment
+
+
+@pytest.fixture
+def clean_pki_mount():
+    try:
+        yield
+    finally:
+        _wipe_issuers()
+
+
+@pytest.fixture
+def int_ca_args(ca_cert, ca_key):
+    return {
+        "name": "Test Intermediate CA",
+        "signing_private_key": ca_key,
+        "signing_cert": ca_cert,
+        "days_valid": 90,
+    }
+
+
+@pytest.fixture
+def existing_intermediate(
+    vault_pki, int_ca_args, clean_pki_mount, request, container
+):  # pylint: disable=unused-argument
+    int_ca_args.update(getattr(request, "param", {}))
+    if "delta_crl_endpoints" in int_ca_args and (
+        "vault" in container and "latest" not in container
+    ):
+        int_ca_args.pop("delta_crl_endpoints", None)
+    ret = vault_pki.intermediate_ca_present(**int_ca_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+    return _default_issuer()
+
+
+def _default_issuer():
+    return vault_read("pki/issuer/default")["data"]
+
+
+def _subject_cn(cert):
+    return cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["CN"])[0].value
+
+
+@pytest.mark.usefixtures("clean_pki_mount")
+def test_intermediate_ca_present_create(vault_pki, int_ca_args, testmode):
+    ret = vault_pki.intermediate_ca_present(**int_ca_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert "created" in ret.changes
+    assert (
+        f"Intermediate CA certificate {'would have' if testmode else 'has'} been created"
+        in ret.comment
+    )
+    if testmode:
+        assert not vault_list("pki/issuers")
+        return
+    issuer_info = _default_issuer()
+    cert = load_cert(issuer_info["certificate"])
+    assert _subject_cn(cert) == int_ca_args["name"]
+    basic_constraints = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
+    assert basic_constraints.value.ca is True
+    assert basic_constraints.value.path_length == 0
+
+
+@pytest.mark.usefixtures("existing_intermediate")
+def test_intermediate_ca_present_ok(vault_pki, int_ca_args, testmode):
+    ret = vault_pki.intermediate_ca_present(**int_ca_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    assert "present as specified" in ret.comment
+
+
+@pytest.mark.usefixtures("existing_intermediate")
+def test_intermediate_ca_present_issuer_changes(vault_pki, int_ca_args, testmode, container):
+    issuer_params = {
+        "issuer_name": "my_root_ca",
+        "leaf_not_after_behavior": "truncate",
+        "usage": ["issuing-certificates"],
+        "revocation_signature_algorithm": "SHA384WithRSA",
+        "aia_urls": "https://my.root.ca",
+        "crl_endpoints": ["https://crl.my.root.ca"],
+        "delta_crl_endpoints": ["https://delta.crl.my.root.ca"],
+        "ocsp_servers": ["https://ocsp.my.root.ca"],
+        "aia_url_templating": True,
+    }
+    int_ca_args.update(issuer_params)
+    ret = vault_pki.intermediate_ca_present(**int_ca_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert (
+        f"Intermediate CA issuer {'would have' if testmode else 'has'} been updated" in ret.comment
+    )
+    assert "cert" not in ret.changes
+
+    issuer_changes = ret.changes.get("issuer")
+    assert issuer_changes
+    assert issuer_changes["issuer_name"] == {"old": "", "new": "my_root_ca"}
+    assert issuer_changes["leaf_not_after_behavior"] == {"old": "err", "new": "truncate"}
+    assert issuer_changes["usage"] == {"added": [], "removed": ["crl-signing", "ocsp-signing"]}
+    assert issuer_changes["revocation_signature_algorithm"]["new"] == "SHA384WithRSA"
+    assert issuer_changes["aia_urls"] == {"added": [issuer_params["aia_urls"]], "removed": []}
+    assert issuer_changes["crl_endpoints"] == {
+        "added": issuer_params["crl_endpoints"],
+        "removed": [],
+    }
+    if "vault" not in container or "latest" in container:
+        assert issuer_changes["delta_crl_endpoints"] == {
+            "added": issuer_params["delta_crl_endpoints"],
+            "removed": [],
+        }
+    assert issuer_changes["ocsp_servers"] == {"added": issuer_params["ocsp_servers"], "removed": []}
+    assert issuer_changes["aia_url_templating"] == {"old": False, "new": True}
+
+    issuer_info = _default_issuer()
+    assert (issuer_info["issuer_name"] != issuer_params["issuer_name"]) is testmode
+    assert (
+        issuer_info["leaf_not_after_behavior"] != issuer_params["leaf_not_after_behavior"]
+    ) is testmode
+    assert (
+        set(hlp.deserialize_csl(issuer_info["usage"]))
+        != set(issuer_params["usage"] + ["read-only"])
+    ) is testmode
+    assert (issuer_info["issuing_certificates"] != [issuer_params["aia_urls"]]) is testmode
+    assert (issuer_info["crl_distribution_points"] != issuer_params["crl_endpoints"]) is testmode
+    if "vault" not in container or "latest" in container:
+        assert (
+            issuer_info["delta_crl_distribution_points"] != issuer_params["delta_crl_endpoints"]
+        ) is testmode
+    assert (issuer_info["ocsp_servers"] != issuer_params["ocsp_servers"]) is testmode
+    assert (
+        issuer_info.get("enable_aia_url_templating", False) != issuer_params["aia_url_templating"]
+    ) is testmode
+
+
+@pytest.mark.usefixtures("existing_intermediate")
+@pytest.mark.parametrize(
+    "existing_intermediate",
+    (
+        {
+            "issuer_name": "my_root_ca",
+            "leaf_not_after_behavior": "truncate",
+            "usage": ["issuing-certificates"],
+            "revocation_signature_algorithm": "",
+            "aia_urls": "https://my.root.ca,https://my2.root.ca",
+            "crl_endpoints": ["https://crl1.my.root.ca", "https://crl2.my.root.ca"],
+            "delta_crl_endpoints": [
+                "https://delta.crl.my.root.ca"
+            ],  # filtered in exisiting_intermediate
+            "ocsp_servers": "https://ocsp.my.root.ca",
+            "aia_url_templating": True,
+        },
+    ),
+    indirect=True,
+)
+def test_intermediate_ca_present_issuer_ok(vault_pki, int_ca_args, testmode):
+    issuer_info = _default_issuer()
+    ret = vault_pki.intermediate_ca_present(**int_ca_args, test=testmode)
+    assert ret.result is True
+    assert "Intermediate CA issuer is present as specified" in ret.comment
+    assert not ret.changes
+    new_info = _default_issuer()
+    assert new_info == issuer_info
+
+
+def test_intermediate_ca_present_changes(vault_pki, int_ca_args, existing_intermediate, testmode):
+    old_cert = load_cert(existing_intermediate["certificate"])
+
+    int_ca_args["name"] = "Rotated Intermediate CA"
+    int_ca_args["max_path_length"] = None
+    ret = vault_pki.intermediate_ca_present(**int_ca_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert ret.changes["cert"]["subject_name"] == "CN=Rotated Intermediate CA"
+    assert "basicConstraints" in ret.changes["cert"]["extensions"]["changed"]
+    assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
+
+    new_info = _default_issuer()
+    if testmode:
+        assert new_info["issuer_id"] == existing_intermediate["issuer_id"]
+        return
+    assert new_info["issuer_id"] != existing_intermediate["issuer_id"]
+    new_cert = load_cert(new_info["certificate"])
+    assert _subject_cn(new_cert) == "Rotated Intermediate CA"
+    basic_constraints = new_cert.extensions.get_extension_for_class(cx509.BasicConstraints)
+    # This will break soon. IIRC, issuing cert has a pathlen and x509_v2 not accounting for that was fixed
+    assert basic_constraints.value.path_length is None
+    # The key should have been reused
+    assert new_info["key_id"] == existing_intermediate["key_id"]
+    assert new_cert.public_key().public_numbers() == old_cert.public_key().public_numbers()
+
+
+def test_intermediate_ca_present_changes_rotate_key(
+    vault_pki, int_ca_args, existing_intermediate, testmode
+):
+    old_cert = load_cert(existing_intermediate["certificate"])
+
+    int_ca_args["name"] = "Rotated Intermediate CA"
+    int_ca_args["rotate_key"] = True
+    ret = vault_pki.intermediate_ca_present(**int_ca_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert ret.changes.get("cert", {}).get("private_key") is True
+
+    new_info = _default_issuer()
+    if testmode:
+        assert new_info["issuer_id"] == existing_intermediate["issuer_id"]
+        assert new_info["key_id"] == existing_intermediate["key_id"]
+        return
+    assert new_info["issuer_id"] != existing_intermediate["issuer_id"]
+    assert new_info["key_id"] != existing_intermediate["key_id"]
+    new_cert = load_cert(new_info["certificate"])
+    assert new_cert.public_key().public_numbers() != old_cert.public_key().public_numbers()
+
+
+@pytest.mark.usefixtures("clean_pki_mount")
+def test_intermediate_ca_present_changes_existing_key(vault_pki, int_ca_args, testmode):
+    key_1 = vault_write("pki/keys/generate/internal", key_name="old_key")["data"]
+    key_2 = vault_write("pki/keys/generate/internal")["data"]
+    int_ca_args["key_ref"] = key_1["key_name"]
+    ret = vault_pki.intermediate_ca_present(**int_ca_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+    issuer_info = _default_issuer()
+    assert issuer_info["key_id"] == key_1["key_id"]
+
+    # Ensure key_ref is idempotent when specified via name
+    ret = vault_pki.intermediate_ca_present(**int_ca_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    assert _default_issuer() == issuer_info
+
+    # Ensure existing issuer key is kept, even if key_ref is removed
+    int_ca_args.pop("key_ref")
+    ret = vault_pki.intermediate_ca_present(**int_ca_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    assert _default_issuer() == issuer_info
+
+    # Now change the explicit key_ref to a key_id
+    int_ca_args["key_ref"] = key_2["key_id"]
+    ret = vault_pki.intermediate_ca_present(**int_ca_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
+    assert ret.changes
+    cert_changes = ret.changes.get("cert")
+    assert cert_changes
+    assert "private_key" in cert_changes
+    assert "subjectKeyIdentifier" in cert_changes["extensions"]["changed"]
+    new_info = _default_issuer()
+    assert (new_info == issuer_info) is testmode
+    if testmode:
+        return
+    assert new_info["key_id"] == key_2["key_id"]
+
+    # And ensure key_ref via key_id is idempotent as well
+    ret = vault_pki.intermediate_ca_present(**int_ca_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    assert _default_issuer() == new_info
+
+
+@pytest.mark.parametrize("existing_intermediate", ({"days_valid": 20},), indirect=True)
+def test_intermediate_ca_present_changes_expiry(vault_pki, int_ca_args, existing_intermediate):
+    int_ca_args["days_valid"] = 90
+    ret = vault_pki.intermediate_ca_present(**int_ca_args)
+    assert ret.result is True
+    assert "expiration" in ret.changes.get("cert", {})
+    assert _default_issuer()["issuer_id"] != existing_intermediate["issuer_id"]
+
+
+def test_intermediate_ca_present_invalid_key_type(vault_pki, int_ca_args, testmode):
+    int_ca_args["key_type"] = "banana"
+    ret = vault_pki.intermediate_ca_present(**int_ca_args, test=testmode)
+    assert ret.result is False
+    assert not ret.changes
+    assert "Invalid value 'banana' for `key_type`" in ret.comment
+    assert "Traceback" not in ret.comment

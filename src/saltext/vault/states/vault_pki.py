@@ -10,6 +10,8 @@ Manage the Vault (or OpenBao) PKI secret engine and Vault-issued X.509 certifica
 import base64
 import logging
 import os
+import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from salt.exceptions import CommandExecutionError
@@ -529,6 +531,445 @@ def role_absent(name, mount="pki"):
     return ret
 
 
+def intermediate_ca_present(
+    name,
+    days_remaining=30,
+    key_ref=None,
+    rotate_key=False,
+    key_type=None,
+    key_algo=None,
+    key_bits=None,
+    max_path_length=0,
+    managed_key_name=None,
+    managed_key_id=None,
+    issuer_name=None,
+    leaf_not_after_behavior=None,
+    usage=None,
+    revocation_signature_algorithm=None,
+    aia_urls=None,
+    crl_endpoints=None,
+    delta_crl_endpoints=None,
+    ocsp_servers=None,
+    aia_url_templating=None,
+    mount="pki",
+    **kwargs,
+):
+    """
+    .. versionadded:: 1.9.0
+
+    Ensure an issuer representing an intermediate CA is present **as the default issuer** on the mount.
+    Rotates the issuer when necessary by generating a new certificate via :py:func:`x509.create_certificate <salt.modules.x509_v2.create_certificate>`.
+    Does not support certificate import.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        # read default issuer to check for necessary changes
+        path "<mount>/issuer/default" {
+            capabilities = ["read"]
+        }
+
+        # when key_ref is not set
+        path "<mount>/keys/generate/<key_type>" {
+            capabilities = ["create", "update"]
+        }
+
+        # generate a CSR to derive the public key
+        path "<mount>/intermediate/generate/<key_type>" {
+            capabilities = ["create", "update"]
+        }
+
+        # import the signed cert
+        path "<mount>/intermediate/set-signed" {
+            capabilities = ["create", "update"]
+        }
+
+        # set default issuer
+        path "<mount>/config/issuers" {
+            capabilities = ["create", "update"]
+        }
+
+        # update issuer configuration
+        path "<mount>/issuer/<name>" {
+            capabilities = ["patch"]
+        }
+
+    **Certificate/Key configuration:**
+
+    name
+        Common name (CN) of the certificate subject.
+
+    days_remaining
+        Attempt to recreate the certificate if the number of days the certificate
+        is valid for is less than the number specified. Defaults to ``30``.
+
+    key_ref
+        Instead of managing the key, use the one associated with this key ID/name.
+        When specified, disables key generation/rotation.
+
+    rotate_key
+        When rotating the default issuer, rotate its key along with it. Defaults to false.
+        Not respected when ``key_ref`` is specified.
+
+        .. note::
+
+            Key parameters are not managed statefully, meaning changes to ``key_type``, ``key_algo``
+            and ``key_bits`` are only applied when generating a new key.
+            ``key_ref`` changes are applied though.
+
+    key_type
+        Type of key to generate when necessary and ``key_ref`` is not specified.
+        Either ``internal``, ``exported`` or ``kms``.
+        Defaults to ``internal``.
+
+    key_algo
+        Key algorithm. Either ``rsa``, ``ed25519`` or ``ec``. Defaults to ``rsa``.
+
+    key_bits
+        Number of bits to use for the generated keys. Valid values depend on the ``key_algo``.
+
+        * ``rsa``: 2048 (default), 3072, 4096, 8192.
+        * ``ec``: 224, 256 (default), 384, 521
+        * ``ed25519``: ignored
+
+        Defaults to ``0`` (universal default).
+
+    managed_key_name
+        When ``key_type`` is ``kms``, the managed key's configured name. Either this or ``managed_key_id`` is required then.
+
+    managed_key_id
+        When ``key_type`` is ``kms``, the managed key's UUID. Either this or ``managed_key_name`` is required then.
+
+    max_path_length
+        basicConstraints ``pathlen`` parameter, which indicates the maximum number of CAs that can appear below this one in a chain.
+        If set to ``0``, this CA can only issue leaf certificates, not other CAs.
+        A negative value means no limit, unless the issuer certificate has a maximum path length,
+        in which case it means one less than the issuer's pathlen.
+        Defaults to ``0``.
+
+    kwargs
+        Unknown keyword arguments are passed to :py:func:`x509.create_certificate <salt.modules.x509_v2.create_certificate>`.
+        See there for details.
+
+        The following arguments are enforced by this function:
+
+        * ``CN``
+        * ``basicConstraints``
+        * ``csr``
+        * ``format``
+        * ``private_key`` (empty)
+        * ``public_key`` (empty)
+        * ``raw`` (empty)
+
+        These receive defaults if not specified:
+
+        * ``keyUsage``: ``[critical, cRLSign, keyCertSign]``
+        * ``subjectKeyIdentifier``: ``hash``
+        * ``authorityKeyIdentifier``: ``keyid:always,issuer``
+
+    **Issuer configuration:**
+
+    issuer_name
+        Custom name for the issuer. Must be unique and not equal to ``default``.
+
+    leaf_not_after_behavior
+        Behavior of a leaf's ``NotAfter`` field during issuance when it exceeds the issuer's validity.
+        Valid options:
+
+        * ``err``: Error, unless during CA/ACME issuance. (default)
+        * ``always_enforce_err``: Error, including during CA/ACME issuance.
+        * ``truncate``: Silently truncate the requested NotAfter to that of the issuer.
+        * ``permit``: Allow signed certificate validities to exceed that of the issuer.
+
+    usage
+        Allowed usages for this issuer. Valid options are:
+
+        * ``read-only`` - to allow this issuer to be read; implict; always allowed;
+        * ``issuing-certificates`` - to allow this issuer to be used for issuing other certificates;
+        * ``crl-signing`` -  to allow this issuer to be used for signing CRLs.
+          This is separate from the CRLSign KeyUsage on the x509 certificate, but this usage cannot be set
+          unless that KeyUsage is allowed on the x509 certificate;
+        * ``ocsp-signing`` -  to allow this issuer to be used for signing OCSP responses.
+
+    revocation_signature_algorithm
+        Which signature algorithm to use when building CRLs.
+        See Go's `x509.SignatureAlgorithm <https://pkg.go.dev/crypto/x509#SignatureAlgorithm>`__ constant for possible values.
+        Default (empty string) is to autoselect.
+
+    aia_urls
+        Specifies the URL values for the Issuing Certificate field as an array.
+
+    crl_endpoints
+        Specifies the URL values for the CRL Distribution Points field as an array.
+
+    delta_crl_endpoints
+        (Requires Vault 1.20+ or OpenBao)
+        Specifies the URL values for the Delta CRL Distribution Points field.
+        This can be an array or a comma- separated string list.
+
+    ocsp_servers
+        Specifies the URL values for the OCSP Servers field as an array.
+
+    aia_url_templating
+        Render ``aia_urls``/``crl_endpoints``/``ocsp_servers``/``delta_crl_endpoints`` as templates.
+        Supported variables: `{{issuer_id}}`, ``{{cluster_path}}``, ``{{cluster_aia_path}}``
+
+    mount
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
+    """
+    ret = {
+        "name": name,
+        "result": True,
+        "comment": "Intermediate CA issuer is present as specified",
+        "changes": {},
+    }
+    changes = {}
+    cert_affected = issuer_affected = False
+    issuer_id = None
+    msg = []
+
+    basic_constraints = {"critical": True, "ca": True}
+    if max_path_length is not None:
+        basic_constraints["pathlen"] = max_path_length
+    kwargs["basicConstraints"] = basic_constraints
+    kwargs["CN"] = name
+    kwargs["format"] = "pem"
+    kwargs.pop("path", None)
+    kwargs.pop("private_key", None)
+    kwargs.pop("public_key", None)
+    kwargs.pop("csr", None)
+    kwargs.setdefault("keyUsage", ["critical", "cRLSign", "keyCertSign"])
+    kwargs.setdefault("subjectKeyIdentifier", "hash")
+    kwargs.setdefault("authorityKeyIdentifier", "keyid:always,issuer")
+
+    try:
+        key_type = hlp.in_vals(("internal", "exported", "kms", None), key_type=key_type)
+        if key_ref is not None:
+            key_type = "existing"
+            rotate_key = False
+        if not (current := __salt__["vault_pki.read_issuer"](mount=mount)):
+            changes["created"] = name
+            cert_affected = True
+            issuer_affected = any(
+                val is not None
+                for val in (
+                    issuer_name,
+                    leaf_not_after_behavior,
+                    usage,
+                    revocation_signature_algorithm,
+                    aia_urls,
+                    crl_endpoints,
+                    delta_crl_endpoints,
+                    ocsp_servers,
+                    aia_url_templating,
+                )
+            )
+        else:
+            issuer_id = current["issuer_id"]
+            if key_ref is None:
+                key_ref = current.get("key_id")
+                if key_ref is None:  # pragma: no cover
+                    # Unsure if this is allowed to happen, need to check
+                    raise CommandExecutionError("Default issuer key_id not set")
+            kwargs["csr"] = __salt__["vault_pki.generate_intermediate_csr"](
+                "existing", key_ref=key_ref, mount=mount
+            )["csr"]
+            with tempfile.TemporaryDirectory() as tmpdir:
+                path = Path(tmpdir) / "issuer.pem"
+                path.write_text("".join(current["ca_chain"]))
+                x509_ret = _run_state(
+                    "x509.certificate_managed",
+                    str(path),
+                    test=True,
+                    days_remaining=days_remaining,
+                    **kwargs,
+                )
+            if x509_ret["result"] is False:
+                ret["result"] = False
+                ret["comment"] = f"Failed running x509.certificate_managed: {x509_ret['comment']}"
+                return ret
+            cert_changes = x509_ret["changes"]
+
+            if cert_changes and rotate_key:
+                cert_changes["private_key"] = True
+                ext_changes = cert_changes.setdefault(
+                    "extensions", {"added": [], "changed": [], "removed": []}
+                )
+                if "subjectKeyIdentifier" not in ext_changes["changed"]:
+                    ext_changes["changed"].append("subjectKeyIdentifier")
+            if cert_changes:
+                changes["cert"], cert_affected = cert_changes, True
+
+            if issuer_changes := _check_issuer_config_changes(
+                current,
+                issuer_name=issuer_name,
+                leaf_not_after_behavior=leaf_not_after_behavior,
+                usage=usage,
+                revocation_signature_algorithm=revocation_signature_algorithm,
+                aia_urls=aia_urls,
+                crl_endpoints=crl_endpoints,
+                delta_crl_endpoints=delta_crl_endpoints,
+                ocsp_servers=ocsp_servers,
+                aia_url_templating=aia_url_templating,
+            ):
+                changes["issuer"], issuer_affected = issuer_changes, True
+
+        if not changes:
+            return ret
+
+        if __opts__["test"]:
+            ret["result"] = None
+            if cert_affected:
+                msg.append(
+                    f"Intermediate CA certificate would have been {'rotated' if current else 'created'}"
+                )
+            if issuer_affected:
+                msg.append(
+                    f"Intermediate CA issuer would have been {'updated' if current else 'created'}"
+                )
+            ret["comment"] = ". ".join(msg) + "."
+            ret["changes"] = changes
+            return ret
+
+        if cert_affected:
+            if key_ref is None or rotate_key:
+                key_ref = __salt__["vault_pki.generate_key"](
+                    key_type or "internal",
+                    key_algo=key_algo,
+                    key_bits=key_bits,
+                    managed_key_name=managed_key_name,
+                    managed_key_id=managed_key_id,
+                    mount=mount,
+                )["key_id"]
+            if "csr" not in kwargs or rotate_key:
+                kwargs["csr"] = __salt__["vault_pki.generate_intermediate_csr"](
+                    "existing", key_ref=key_ref, mount=mount
+                )["csr"]
+
+            cert = __salt__["x509.create_certificate"](**kwargs)
+            res = __salt__["vault_pki.import_issuer_intermediate"](cert, mount=mount)
+            try:
+                issuer_id = res["imported_issuers"][0]
+            except (IndexError, KeyError) as err:  # pragma: no cover
+                raise CommandExecutionError(
+                    "Generated certificate, but failed importing it"
+                ) from err
+
+            try:
+                __salt__["vault_pki.set_default_issuer"](issuer_id, mount=mount)
+            except CommandExecutionError as err:
+                ret["result"] = False
+                ret["comment"] = (
+                    f"Generated and imported certificate as issuer `{issuer_id}`, but failed to set it as default issuer: {err}"
+                )
+                ret["changes"]["imported"] = issuer_id
+                return ret
+            if current is not None:
+                ret["changes"]["cert"] = changes["cert"]
+            msg.append(
+                f"Intermediate CA certificate has been {'rotated' if current else 'created'}"
+            )
+
+        if issuer_affected:
+            __salt__["vault_pki.update_issuer"](
+                ref=issuer_id,
+                name=issuer_name,
+                leaf_not_after_behavior=leaf_not_after_behavior,
+                usage=usage,
+                revocation_signature_algorithm=revocation_signature_algorithm,
+                aia_urls=aia_urls,
+                crl_endpoints=crl_endpoints,
+                delta_crl_endpoints=delta_crl_endpoints,
+                ocsp_servers=ocsp_servers,
+                aia_url_templating=aia_url_templating,
+                mount=mount,
+            )
+            if current is not None:
+                ret["changes"]["issuer"] = changes["issuer"]
+            msg.append(f"Intermediate CA issuer has been {'updated' if current else 'created'}")
+
+        if current is None:
+            ret["changes"]["created"] = name
+        ret["comment"] = ". ".join(msg) + "."
+    except (CommandExecutionError, SaltInvocationError) as err:
+        ret["result"] = False
+        if msg:
+            ret["comment"] = ". ".join(msg) + f", but received an exception later: {err}"
+        else:
+            ret["comment"] = str(err)
+
+    return ret
+
+
+def _check_issuer_config_changes(
+    current,
+    *,
+    issuer_name: str | None = None,
+    leaf_not_after_behavior: str | None = None,
+    usage: list[str] | str | None = None,
+    revocation_signature_algorithm: str | None = None,
+    aia_urls: list[str] | str | None = None,
+    crl_endpoints: list[str] | str | None = None,
+    delta_crl_endpoints: list[str] | str | None = None,
+    ocsp_servers: list[str] | str | None = None,
+    aia_url_templating: bool | None = None,
+):
+    changes = {}
+    for vault_param, saltext_param, val in (
+        ("issuer_name", "issuer_name", issuer_name),
+        ("leaf_not_after_behavior", "leaf_not_after_behavior", leaf_not_after_behavior),
+        (
+            "revocation_signature_algorithm",
+            "revocation_signature_algorithm",
+            revocation_signature_algorithm,
+        ),
+        ("enable_aia_url_templating", "aia_url_templating", aia_url_templating),
+    ):
+        if val is not None:
+            # At least on OpenBao and older Vault releases, this is not reported if no URLs are set
+            if vault_param == "enable_aia_url_templating" and vault_param not in current:
+                current["enable_aia_url_templating"] = False
+            if vault_param not in current:
+                log.warning(
+                    "Ignoring specified param %s during changes check, the server likely does not support it",
+                    saltext_param,
+                )
+                continue
+            if current[vault_param] != val:
+                changes[saltext_param] = {"old": current[vault_param], "new": val}
+    if usage is not None:
+        wanted = set(hlp.deserialize_csl(usage))
+        cur = set(hlp.deserialize_csl(current["usage"]))
+        cur.discard("read-only")  # always allowed
+        wanted.discard("read-only")
+        if cur != wanted:
+            changes["usage"] = {
+                "added": list(sorted(wanted - cur)),
+                "removed": list(sorted(cur - wanted)),
+            }
+    for vault_param, saltext_param, val in (
+        ("issuing_certificates", "aia_urls", hlp.deserialize_csl(aia_urls)),
+        ("crl_distribution_points", "crl_endpoints", hlp.deserialize_csl(crl_endpoints)),
+        (
+            "delta_crl_distribution_points",
+            "delta_crl_endpoints",
+            hlp.deserialize_csl(delta_crl_endpoints),
+        ),
+        ("ocsp_servers", "ocsp_servers", hlp.deserialize_csl(ocsp_servers)),
+    ):
+        if val is not None:
+            # At least on OpenBao and older Vault releases, none of these are reported if all are unset
+            if vault_param not in current:
+                current[vault_param] = []
+            if current[vault_param] != val:
+                changes[saltext_param] = {
+                    "added": list(sorted(set(val) - set(current[vault_param]))),
+                    "removed": list(sorted(set(current[vault_param]) - set(val))),
+                }
+    return changes
+
+
 def _split_file_kwargs(kwargs):
     file_args = {"show_changes": False}
     extra_args = {}
@@ -556,7 +997,7 @@ def _add_sub_state_run(ret, sub):
 
 
 def _run_state(func, name, test=None, **kwargs):
-    if test not in [None, True]:  # pragma: no cover
+    if test not in (None, True):  # pragma: no cover
         raise SaltInvocationError("test param can only be None or True")
     test = test or __opts__["test"]
     res = __salt__["state.single"](func, name, test=test, concurrent=True, **kwargs)
