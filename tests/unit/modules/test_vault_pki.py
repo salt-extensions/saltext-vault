@@ -290,17 +290,17 @@ def test_list_roles_return_empty_array_if_not_found():
 
 
 @pytest.mark.parametrize(
-    "common_name,root_type,args",
+    "common_name,root_type,kwargs",
     [
         (
             "root_ca",
             "exported",
             {
                 "issuer_name": "root-ca",
-                "key-name": "root-ca-key",
+                "key_name": "root-ca-key",
                 "max_path_length": 4,
                 "key_bits": 384,
-                "key_type": "ec",
+                "key_algo": "ec",
             },
         ),
         (
@@ -308,14 +308,14 @@ def test_list_roles_return_empty_array_if_not_found():
             "internal",
             {
                 "key_bits": 384,
-                "key_type": "ec",
+                "key_algo": "ec",
             },
         ),
         ("root_ca", "internal", {}),
     ],
 )
-def test_generate_root_payload(query, common_name, root_type, args):
-    vault_pki.generate_root(common_name=common_name, type=root_type, mount="mount", **args)
+def test_generate_root_payload(query, common_name, root_type, kwargs):
+    vault_pki.generate_root(common_name=common_name, key_type=root_type, mount="mount", **kwargs)
 
     endpoint = query.call_args[0][1]
     payload = query.call_args[1]["payload"]

@@ -612,20 +612,23 @@ def set_default_issuer(name, mount="pki"):
 def generate_root(
     common_name,
     mount="pki",
-    type="internal",  # pylint: disable=redefined-builtin
+    key_type="internal",
     issuer_name=None,
     key_name=None,
     ttl=None,
-    key_type="rsa",
+    key_algo="rsa",
     key_bits=0,
     max_path_length=-1,
+    key_ref=None,
+    managed_key_name=None,
+    managed_key_id=None,
     **kwargs,
 ):
     """
     Generate a new root issuer.
 
     Returns ``{ "certificate" : "-----BEGIN CERTIFICATE...", "issuer_id": "...", "key_id": "...", }``.
-    If type is ``exported``, also returns the private key.
+    If key_type is ``exported``, also returns the private key.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#generate-root>`__.
 
@@ -633,7 +636,7 @@ def generate_root(
 
     .. code-block:: vaultpolicy
 
-        path "<mount>/root/generate/<type>" {
+        path "<mount>/root/generate/<key_type>" {
             capabilities = ["create", "update"]
         }
 
@@ -649,9 +652,19 @@ def generate_root(
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
-    type
-        Specifies the type of the root to create. If ``exported``, the private key is returned in the response;
-        if ``internal``, the private key is not returned and cannot be retrieved later. Defaults to ``internal``.
+    key_type
+        .. versionchanged:: 1.9.0
+
+            This parameter used to be called ``type``.
+
+        Key type of the root to generate. Valid values are:
+
+        * ``existing``: Use an existing key for the generated root, specified in ``key_ref``.
+        * ``internal``: The private key is not returned and cannot be retrieved later.
+        * ``exported``: The private key is returned in the response.
+        * ``kms``: Request a key from a key management system. The private key is not returned and cannot be retrieved later.
+
+        Defaults to ``internal``.
 
     issuer_name
         Provides a name to the specified issuer. The name must be unique across all issuers and not be the reserved value ``default``.
@@ -662,21 +675,65 @@ def generate_root(
     ttl
         Specifies the requested Time To Live (after which the certificate expires). This cannot be larger than the engine's max (or, if not set, the system max).
 
-    key_type
-        Specifies the desired key type; must be ``rsa``, ``ed25519`` or ``ec``. Defaults to ``rsa``.
+    key_algo
+        .. versionchanged:: 1.9.0
+
+            This parameter used to be called ``key_type``, which now refers to key generation/exportability instead.
+
+        Specifies the desired key algorithm, either ``rsa``, ``ed25519`` or ``ec``. Defaults to ``rsa``.
 
     key_bits
-        Specifies the number of bits to use for the generated keys.
-        Allowed values are 0 (universal default);
-        with ``key_type=rsa``, allowed values are: 2048 (default), 3072, 4096 or 8192;
-        with ``key_type=ec``, allowed values are: 224, 256 (default), 384, or 521;
-        ignored with ``key_type=ed25519``.
+        Number of bits to use for the generated key. Valid values depend on the ``key_type``:
+
+        * ``rsa``: 2048 (default), 3072, 4096, 8192.
+        * ``ec``: 224, 256 (default), 384, 521
+        * ``ed25519``: ignored
+
+        Defaults to ``0`` (universal default).
 
     max_path_length
-        Specifies the maximum path length to encode in the generated certificate. ``-1`` means no limit,
-        unless the signing certificate has a maximum path length set, in which case the path length is set to one
-        less than that of the signing certificate. A limit of 0 means a literal path length of zero.
+        basicConstraints ``pathlen`` parameter, which indicates the maximum number of CAs that can appear below this one in a chain.
+        If set to ``0``, this CA can only issue leaf certificates, not other CAs.
+        A negative value means no limit. Defaults to ``-1``.
+
+    managed_key_name
+        When ``key_type`` is ``kms``, the managed key's configured name. Either this or ``managed_key_id`` is required then.
+
+    managed_key_id
+        When ``key_type`` is ``kms``, the managed key's UUID. Either this or ``managed_key_name`` is required then.
+
+    kwargs
+        Unknown keyword arguments are passed through. See the API method docs linked above for details.
     """
+    if key_type in ("rsa", "ec", "ed25519"):
+        log.warning(
+            "The `key_type` parameter to this function has changed meaning. To specify a key's algorithm, use ``key_algo`` instead."
+        )
+        key_algo = key_type
+    if "type" in kwargs:
+        log.warning(
+            "The `type` parameter to this function is deprecated. Use ``key_type`` instead."
+        )
+        key_type = kwargs.pop("type")
+
+    key_type = hlp.in_vals(("existing", "exported", "internal", "kms"), key_type=key_type)
+    if key_type == "kms":
+        hlp.one_of(
+            _reason="key_type is `kms`",
+            managed_key_name=managed_key_name,
+            managed_key_id=managed_key_id,
+        )
+    else:
+        hlp.none_of(
+            _reason="key_type is not `kms`",
+            managed_key_name=managed_key_name,
+            managed_key_id=managed_key_id,
+        )
+        if key_type == "existing":
+            if key_ref is None:
+                raise SaltInvocationError("key_type `existing` requires `key_ref` to be set")
+        else:
+            hlp.none_of(_reason="key_type is not `existing`", key_ref=key_ref)
 
     if issuer_name == "default":
         raise SaltInvocationError("issuer_name cannot be `default`. This is a reserved word.")
@@ -684,25 +741,30 @@ def generate_root(
     if key_name == "default":
         raise SaltInvocationError("key_name cannot be `default`. This is a reserved word.")
 
-    endpoint = f"{mount}/root/generate/{type}"
+    endpoint = f"{mount}/root/generate/{key_type}"
 
     payload = {k: v for k, v in kwargs.items() if not k.startswith("_")}
-
     payload["common_name"] = common_name
-    payload["key_type"] = key_type
 
     if issuer_name is not None:
         payload["issuer_name"] = issuer_name
-    if key_name is not None:
-        payload["key_name"] = key_name
     if ttl is not None:
         payload["ttl"] = ttl
-
-    if key_bits > 0:
-        payload["key_bits"] = key_bits
-
     if max_path_length > -1:
         payload["max_path_length"] = max_path_length
+
+    if key_type == "existing":
+        payload["key_ref"] = key_ref
+    else:
+        payload["key_type"] = key_algo
+        if key_name is not None:
+            payload["key_name"] = key_name
+        if key_bits > 0:
+            payload["key_bits"] = key_bits
+        if managed_key_name is not None:
+            payload["managed_key_name"] = managed_key_name
+        if managed_key_id is not None:
+            payload["managed_key_id"] = managed_key_id
 
     try:
         resp = vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
@@ -712,12 +774,12 @@ def generate_root(
             "key_id": resp["key_id"],
         }
 
-        if type == "exported":
+        if key_type == "exported":
             ret["private_key"] = resp["private_key"]
 
         return ret
     except vault.VaultException as err:
-        raise CommandExecutionError(f"{err.__class__}: {err}") from err
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
 def delete_key(ref, mount="pki"):

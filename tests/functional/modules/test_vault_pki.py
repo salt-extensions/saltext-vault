@@ -1,4 +1,5 @@
 import contextlib
+import logging
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -751,15 +752,13 @@ def test_set_default_issuer(vault_pki):
 
 
 @pytest.mark.usefixtures("generated_root")
-def test_generate_root(vault_pki):
-    ret = vault_pki.list_issuers()
-    assert ret == {}
-
+def test_generate_root(vault_pki, empty_pki_mount):
     ret = vault_pki.generate_root(
         common_name="generated root",
         issuer_name="generated-root",
         key_name="generated-root-key",
         ttl="2h",
+        mount=empty_pki_mount,
     )
 
     assert "certificate" in ret
@@ -769,25 +768,65 @@ def test_generate_root(vault_pki):
     validity = certificate.not_valid_after_utc - certificate.not_valid_before_utc
     assert timedelta(hours=2) <= validity <= timedelta(hours=2, minutes=5)
 
-    assert vault_read(f"pki/key/{ret['key_id']}")["data"]["key_name"] == "generated-root-key"
+    assert (
+        vault_read(f"{empty_pki_mount}/key/{ret['key_id']}")["data"]["key_name"]
+        == "generated-root-key"
+    )
 
-    ret = vault_pki.list_issuers()
+    ret = vault_pki.list_issuers(mount=empty_pki_mount)
     assert len(ret) == 1
 
 
 @pytest.mark.usefixtures("generated_root")
-def test_generate_root_exported(vault_pki):
-    ret = vault_pki.list_issuers()
-    assert ret == {}
-
+def test_generate_root_exported(vault_pki, empty_pki_mount):
     ret = vault_pki.generate_root(
         common_name="generated root",
-        issuer_name="generated-root",
-        type="exported",
+        key_type="exported",
+        mount=empty_pki_mount,
     )
 
     assert "certificate" in ret
     assert "private_key" in ret
+
+
+@pytest.mark.usefixtures("generated_root")
+def test_generate_root_deprecated_params(vault_pki, caplog, empty_pki_mount):
+    with caplog.at_level(logging.DEBUG):
+        ret = vault_pki.generate_root(
+            common_name="generated root", type="exported", key_type="rsa", mount=empty_pki_mount
+        )
+
+    assert "certificate" in ret
+    assert "private_key" in ret
+    assert "use ``key_algo`` instead" in caplog.text
+    assert "Use ``key_type`` instead" in caplog.text
+
+
+def test_generate_root_invalid_key_type(vault_pki):
+    with pytest.raises(SaltInvocationError, match="Invalid value 'boom' for `key_type`"):
+        vault_pki.generate_root("root", key_type="boom")
+
+
+def test_generate_root_kms_requires_managed_arg(vault_pki):
+    with pytest.raises(
+        SaltInvocationError, match=r"Either `managed\w+` or `managed\w+`.* key_type is `kms`"
+    ):
+        vault_pki.generate_root("root", key_type="kms")
+
+
+def test_generate_root_existing_requires_key_ref(vault_pki):
+    with pytest.raises(SaltInvocationError, match=r"requires `key_ref`"):
+        vault_pki.generate_root("root", key_type="existing")
+
+
+def test_generate_root_reserved_key_name(vault_pki):
+    with pytest.raises(SaltInvocationError, match="reserved word"):
+        vault_pki.generate_root("root", key_name="default")
+
+
+def test_generate_root_reserved_issuer_name(vault_pki):
+    with pytest.raises(SaltInvocationError, match="reserved word"):
+        vault_pki.generate_root("root", issuer_name="default")
 
 
 @pytest.mark.usefixtures("issuers_setup")
