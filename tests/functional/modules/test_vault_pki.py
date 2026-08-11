@@ -577,6 +577,51 @@ def test_update_issuer(vault_pki):
     assert set(ret["usage"].split(",")) == {"read-only", "issuing-certificates", "crl-signing"}
 
 
+@pytest.mark.usefixtures("issuers_setup")
+def test_update_issuer_name_and_templating(vault_pki):
+    issuer_id = vault_pki.read_issuer("testissuer")["issuer_id"]
+    aia_urls = ["http://aia.example.com/{{issuer_id}}/ca.der"]
+    try:
+        # The templating flag is stored alongside the AIA URLs,
+        # it does not stick when patched without any of them set.
+        assert (
+            vault_pki.update_issuer(
+                "testissuer",
+                name="testissuer-renamed",
+                aia_urls=aia_urls,
+                aia_url_templating=True,
+            )
+            is True
+        )
+        ret = vault_pki.read_issuer("testissuer-renamed")
+        assert ret["issuer_id"] == issuer_id
+        assert ret["issuer_name"] == "testissuer-renamed"
+        assert ret["issuing_certificates"] == aia_urls
+        assert ret["enable_aia_url_templating"] is True
+    finally:
+        # Restore the name, otherwise the issuers_setup teardown does not find the issuer
+        vault_write(f"pki/issuer/{issuer_id}", issuer_name="testissuer")
+
+
+@pytest.mark.usefixtures("issuers_setup")
+def test_update_issuer_delta_crl_endpoints(vault_pki):
+    if "delta_crl_distribution_points" not in vault_pki.read_issuer("testissuer"):
+        pytest.skip("Server does not support delta CRL distribution points on issuers")
+    # The delta CRL endpoints are stored alongside the other AIA URLs,
+    # they do not stick when patched without any of them set.
+    assert (
+        vault_pki.update_issuer(
+            "testissuer",
+            crl_endpoints=["http://crl.example.com/ca.crl"],
+            delta_crl_endpoints=["http://crl.example.com/delta.crl"],
+        )
+        is True
+    )
+    ret = vault_pki.read_issuer("testissuer")
+    assert ret["crl_distribution_points"] == ["http://crl.example.com/ca.crl"]
+    assert ret["delta_crl_distribution_points"] == ["http://crl.example.com/delta.crl"]
+
+
 def test_read_urls(vault_pki):
     urls = {
         "issuing_certificates": ["http://aia.example.com/ca.list"],
