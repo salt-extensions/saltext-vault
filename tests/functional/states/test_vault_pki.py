@@ -1,9 +1,12 @@
+from datetime import datetime
 from datetime import timedelta
+from datetime import timezone
 from pathlib import Path
 
 import pytest
 from cryptography import x509 as cx509
 from cryptography.hazmat import asn1
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
 from salt.utils.x509 import NAME_ATTRS_OID
 from salt.utils.x509 import generate_rsa_privkey
@@ -1308,3 +1311,675 @@ def test_intermediate_ca_present_invalid_key_type(vault_pki, int_ca_args, testmo
     assert not ret.changes
     assert "Invalid value 'banana' for `key_type`" in ret.comment
     assert "Traceback" not in ret.comment
+
+
+@pytest.fixture
+def root_ca_args():
+    return {
+        "name": "test.root.ca",
+        "ou": ["an org unit", "Org Unit 1", "Another Org Unit 2"],
+        "organization": "Test Org",
+        "country": "US",
+        "locality": "Springfield",
+        "province": "Utah",
+        "street_address": "Test Rd 123",
+        "postal_code": "1337",
+        "subject_serial_number": "42",
+    }
+
+
+@pytest.fixture
+def existing_root(
+    vault_pki, root_ca_args, clean_pki_mount, request, aia_urls, container
+):  # pylint: disable=unused-argument
+    root_ca_args.update(getattr(request, "param", {}))
+    if "excluded_alt_names" in root_ca_args or any(
+        not val.lower().startswith("dns") for val in root_ca_args.get("permitted_alt_names", [])
+    ):
+        if "vault" not in container or "latest" not in container:
+            root_ca_args.pop("excluded_alt_names", None)
+            if "permitted_alt_names" in root_ca_args:
+                root_ca_args["permitted_alt_names"] = [
+                    val
+                    for val in root_ca_args["permitted_alt_names"]
+                    if val.lower().startswith("dns")
+                ]
+    if (
+        "delta_crl_endpoints" in root_ca_args
+        or "key_usage" in root_ca_args
+        and ("vault" in container and "latest" not in container)
+    ):
+        root_ca_args.pop("delta_crl_endpoints", None)
+        root_ca_args.pop("key_usage", None)
+    ret = vault_pki.root_ca_present(**root_ca_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+    return _default_issuer()
+
+
+@pytest.fixture
+def aia_urls(request):
+    urls = getattr(request, "param", {})
+    vault_write("pki/config/urls", **urls)
+    try:
+        yield urls
+    finally:
+        vault_write(
+            "pki/config/urls",
+            issuing_certificates="",
+            ocsp_servers="",
+            crl_endpoints="",
+            delta_crl_endpoints="",
+            enable_templating=False,
+        )
+
+
+@pytest.mark.usefixtures("clean_pki_mount")
+@pytest.mark.parametrize(
+    "testmode,pathlen,aia_urls",
+    (
+        (False, -1, {}),
+        (False, 3, {}),
+        (True, -1, {}),
+        (
+            False,
+            -1,
+            {
+                "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
+                "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
+            },
+        ),
+        (
+            False,
+            -1,
+            {
+                "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
+            },
+        ),
+        (
+            False,
+            -1,
+            {
+                "delta_crl_distribution_points": [
+                    "https://deltacrl1.root.ca",
+                    "https://deltacrl2.root.ca",
+                ],
+            },
+        ),
+        (
+            False,
+            -1,
+            {
+                "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
+                "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
+                "delta_crl_distribution_points": [
+                    "https://deltacrl1.root.ca",
+                    "https://deltacrl2.root.ca",
+                ],
+                "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
+            },
+        ),
+    ),
+    indirect=("testmode", "aia_urls"),
+)
+def test_root_ca_present_create(vault_pki, root_ca_args, testmode, aia_urls, pathlen, container):
+    if pathlen >= 0:
+        root_ca_args["max_path_length"] = pathlen
+    ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert "created" in ret.changes
+    assert f"Root CA certificate {'would have' if testmode else 'has'} been created" in ret.comment
+    if testmode:
+        assert not vault_list("pki/issuers")
+        return
+    issuer_info = _default_issuer()
+    cert = load_cert(issuer_info["certificate"])
+    if aia_urls.get("issuing_certificates") or aia_urls.get("ocsp_servers"):
+        cert.extensions.get_extension_for_class(cx509.AuthorityInformationAccess)
+    if aia_urls.get("crl_distribution_points"):
+        cert.extensions.get_extension_for_class(cx509.CRLDistributionPoints)
+    if aia_urls.get("delta_crl_distribution_points"):
+        if "vault" not in container or "latest" in container:
+            cert.extensions.get_extension_for_class(cx509.FreshestCRL)
+    basic_constraints = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
+    assert basic_constraints.value.ca is True
+    assert basic_constraints.value.path_length is (pathlen if pathlen >= 0 else None)
+
+
+@pytest.mark.usefixtures("existing_root")
+def test_root_ca_present_issuer_changes(vault_pki, root_ca_args, testmode, container):
+    issuer_params = {
+        "issuer_name": "my_root_ca",
+        "leaf_not_after_behavior": "truncate",
+        "usage": ["issuing-certificates"],
+        "revocation_signature_algorithm": "",
+        "aia_urls": "https://my.root.ca",
+        "crl_endpoints": ["https://crl.my.root.ca"],
+        "delta_crl_endpoints": ["https://delta.crl.my.root.ca"],
+        "ocsp_servers": ["https://ocsp.my.root.ca"],
+        "aia_url_templating": True,
+    }
+    root_ca_args.update(issuer_params)
+    ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert f"Root CA issuer {'would have' if testmode else 'has'} been updated" in ret.comment
+    assert "cert" not in ret.changes
+
+    issuer_changes = ret.changes.get("issuer")
+    assert issuer_changes
+    assert issuer_changes["issuer_name"] == {"old": "", "new": "my_root_ca"}
+    assert issuer_changes["leaf_not_after_behavior"] == {"old": "err", "new": "truncate"}
+    assert issuer_changes["usage"] == {"added": [], "removed": ["crl-signing", "ocsp-signing"]}
+    assert issuer_changes["revocation_signature_algorithm"]["new"] == ""
+    assert issuer_changes["aia_urls"] == {"added": [issuer_params["aia_urls"]], "removed": []}
+    assert issuer_changes["crl_endpoints"] == {
+        "added": issuer_params["crl_endpoints"],
+        "removed": [],
+    }
+    if "vault" not in container or "latest" in container:
+        assert issuer_changes["delta_crl_endpoints"] == {
+            "added": issuer_params["delta_crl_endpoints"],
+            "removed": [],
+        }
+    assert issuer_changes["ocsp_servers"] == {"added": issuer_params["ocsp_servers"], "removed": []}
+    assert issuer_changes["aia_url_templating"] == {"old": False, "new": True}
+
+    issuer_info = _default_issuer()
+    assert (issuer_info["issuer_name"] != issuer_params["issuer_name"]) is testmode
+    assert (
+        issuer_info["leaf_not_after_behavior"] != issuer_params["leaf_not_after_behavior"]
+    ) is testmode
+    assert (
+        set(hlp.deserialize_csl(issuer_info["usage"]))
+        != set(issuer_params["usage"] + ["read-only"])
+    ) is testmode
+    assert (issuer_info["issuing_certificates"] != [issuer_params["aia_urls"]]) is testmode
+    assert (issuer_info["crl_distribution_points"] != issuer_params["crl_endpoints"]) is testmode
+    if "vault" not in container or "latest" in container:
+        assert (
+            issuer_info["delta_crl_distribution_points"] != issuer_params["delta_crl_endpoints"]
+        ) is testmode
+    assert (issuer_info["ocsp_servers"] != issuer_params["ocsp_servers"]) is testmode
+    assert (
+        issuer_info.get("enable_aia_url_templating", False) != issuer_params["aia_url_templating"]
+    ) is testmode
+
+
+@pytest.mark.usefixtures("existing_root")
+@pytest.mark.parametrize(
+    "existing_root",
+    (
+        {
+            "issuer_name": "my_root_ca",
+            "leaf_not_after_behavior": "truncate",
+            "usage": ["issuing-certificates"],
+            "revocation_signature_algorithm": "",
+            "aia_urls": "https://my.root.ca,https://my2.root.ca",
+            "crl_endpoints": ["https://crl1.my.root.ca", "https://crl2.my.root.ca"],
+            "delta_crl_endpoints": ["https://delta.crl.my.root.ca"],  # filtered in existing_root
+            "ocsp_servers": "https://ocsp.my.root.ca",
+            "aia_url_templating": True,
+        },
+    ),
+    indirect=True,
+)
+def test_root_ca_present_issuer_ok(vault_pki, root_ca_args, testmode):
+    issuer_info = _default_issuer()
+    ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
+    assert ret.result is True
+    assert "Root CA issuer is present as specified" in ret.comment
+    assert not ret.changes
+    new_info = _default_issuer()
+    assert new_info == issuer_info
+
+
+@pytest.mark.usefixtures("existing_root")
+@pytest.mark.parametrize(
+    "existing_root",
+    (
+        {},
+        {
+            "signature_bits": 384,
+            "not_after": "2345-12-31T23:59:59Z",
+            "alt_names": [
+                "dns:test2.root.ca",
+                "ip:1.2.3.4",
+                "uri:https://root.ca",
+                "email:test@root.ca",
+            ],
+            "max_path_length": 2,
+            "key_usage": ["DigitalSignature"],
+            "exclude_cn_from_sans": True,
+            "permitted_alt_names": [  # types other than dns require Vault 1.19+, filtered in existing_root
+                "dns:.foo.bar",
+                "email:.foo.bar",
+                "ip:0.0.0.0/1",
+                "ip:2001:500::/30",
+                "uri:.bar.baz",
+            ],
+            "excluded_alt_names": [  # requires Vault 1.19+, also filtered in existing_root
+                "dns:no.foo.bar",
+                "email:no.foo.bar",
+                "ip:0.0.0.0/24",
+                "ip:2001:500::/32",
+                "uri:no.bar.baz",
+            ],
+        },
+    ),
+    indirect=True,
+)
+def test_root_ca_present_ok(vault_pki, root_ca_args, testmode, container):
+    issuer_info = _default_issuer()
+    ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
+    assert ret.result is True
+    assert "Root CA issuer is present as specified" in ret.comment
+    assert not ret.changes
+    new_info = _default_issuer()
+    assert new_info == issuer_info
+
+    if "signature_bits" not in root_ca_args:
+        return
+
+    cert = load_cert(new_info["certificate"])
+    assert isinstance(cert.signature_hash_algorithm, hashes.SHA384)
+    basic_constraints = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
+    assert basic_constraints.value.ca is True
+    assert basic_constraints.value.path_length == 2
+    if "key_usage" in root_ca_args:
+        key_usage = cert.extensions.get_extension_for_class(cx509.KeyUsage)
+        assert key_usage.value.crl_sign
+        assert key_usage.value.key_cert_sign
+        assert key_usage.value.digital_signature
+    sans = cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName)
+    assert len(sans.value._general_names._general_names) == 4  # cn is excluded
+    nc = cert.extensions.get_extension_for_class(cx509.NameConstraints)
+    if "vault" not in container or "latest" not in container:
+        assert len(nc.value.permitted_subtrees) == 1
+        assert nc.value.excluded_subtrees is None
+    else:
+        assert len(nc.value.permitted_subtrees) == 5
+        assert len(nc.value.excluded_subtrees) == 5
+
+
+@pytest.mark.usefixtures("existing_root")
+@pytest.mark.parametrize(
+    "existing_root",
+    (
+        {
+            "signature_bits": 384,
+            "not_after": "2345-12-31T23:59:59Z",
+            "alt_names": [
+                "dns:test2.root.ca",
+                "ip:1.2.3.4",
+                "uri:https://root.ca",
+                "email:test@root.ca",
+            ],
+            "max_path_length": 2,
+            "key_usage": ["DigitalSignature"],
+            "exclude_cn_from_sans": True,
+            "permitted_alt_names": [
+                "dns:.foo.bar",
+                "dns:foo.bar.baz",
+                "email:.foo.bar",
+                "ip:0.0.0.0/1",
+                "ip:2001:500::/30",
+                "uri:foo.bar.baz",  # there's a bug in x509_v2 when parsing uri nameconstraints (leading dot not allowed)
+            ],
+            "excluded_alt_names": [
+                "dns:no.foo.bar",
+                "email:no.foo.bar",
+                "ip:0.0.0.0/24",
+                "ip:2001:500::/32",
+                "uri:no.bar.baz",
+            ],
+        },
+    ),
+    indirect=True,
+)
+def test_root_ca_present_changes(vault_pki, root_ca_args, testmode, container):
+    root_ca_args = root_ca_args.copy()  # we modify the dict, which is shared
+    issuer_info = _default_issuer()
+    cert = load_cert(issuer_info["certificate"])
+    basic_constraints = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
+    assert basic_constraints.value.ca is True
+    assert basic_constraints.value.path_length == 2
+    nc = cert.extensions.get_extension_for_class(cx509.NameConstraints)
+    if "vault" not in container or "latest" not in container:
+        assert len(nc.value.permitted_subtrees) == 2
+        assert nc.value.excluded_subtrees is None
+    else:
+        assert len(nc.value.permitted_subtrees) == 6
+        assert len(nc.value.excluded_subtrees) == 5
+    expected_ext_changes = {
+        "basicConstraints",
+        "subjectAltName",
+        "nameConstraints",
+        "subjectKeyIdentifier",
+    }
+    root_ca_args["rotate_key"] = True
+    root_ca_args["signature_bits"] = 512
+    root_ca_args["max_path_length"] = None
+    if "key_usage" in root_ca_args:  # Vault 1.20+/OpenBao
+        root_ca_args["key_usage"] = None
+        expected_ext_changes.add("keyUsage")
+    root_ca_args["exclude_cn_from_sans"] = False
+    root_ca_args["permitted_alt_names"] = root_ca_args["permitted_alt_names"][:-1]
+    if "excluded_alt_names" in root_ca_args:  # Vault 1.19+ only
+        root_ca_args["excluded_alt_names"] = root_ca_args["excluded_alt_names"][:-1]
+    root_ca_args["locality"] = "Salt Lake City"
+    root_ca_args.pop("subject_serial_number")
+
+    ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
+    assert ret.changes
+    cert_changes = ret.changes.get("cert")
+    assert cert_changes
+    assert "subject_name" in cert_changes
+    assert cert_changes["signature_bits"] == {"old": 384, "new": 512}
+    assert set(cert_changes["extensions"]["changed"]) == expected_ext_changes
+    assert cert_changes["private_key"]
+    new_info = _default_issuer()
+    assert (new_info == issuer_info) is testmode
+    assert (new_info["key_id"] == issuer_info["key_id"]) is testmode
+    new_cert = load_cert(new_info["certificate"])
+    if testmode:
+        assert new_cert == cert
+        return
+    basic_constraints = new_cert.extensions.get_extension_for_class(cx509.BasicConstraints)
+    assert basic_constraints.value.ca is True
+    assert basic_constraints.value.path_length is None
+    if "key_usage" in root_ca_args:
+        key_usage = new_cert.extensions.get_extension_for_class(cx509.KeyUsage)
+        assert key_usage.value.crl_sign
+        assert key_usage.value.key_cert_sign
+        assert not key_usage.value.digital_signature
+    nc = new_cert.extensions.get_extension_for_class(cx509.NameConstraints)
+    if "vault" not in container or "latest" not in container:
+        assert len(nc.value.permitted_subtrees) == 1
+        assert nc.value.excluded_subtrees is None
+    else:
+        assert len(nc.value.permitted_subtrees) == 5
+        assert len(nc.value.excluded_subtrees) == 4
+
+
+@pytest.mark.usefixtures("existing_root")
+@pytest.mark.parametrize(
+    "existing_root",
+    ({"days_valid": 100},),
+    indirect=True,
+)
+def test_root_ca_present_changes_expiry(vault_pki, root_ca_args, testmode):
+    issuer_info = _default_issuer()
+    root_ca_args["days_remaining"], root_ca_args["days_valid"] = (
+        root_ca_args["days_valid"] + 1,
+        root_ca_args["days_valid"] + 1000,
+    )
+    ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
+    assert ret.changes
+    cert_changes = ret.changes.get("cert")
+    assert cert_changes
+    assert "expiration" in cert_changes
+    old_year = int(cert_changes["expiration"]["old"].split("-", maxsplit=1)[0])
+    new_year = int(cert_changes["expiration"]["new"].split("-", maxsplit=1)[0])
+    assert new_year > old_year
+    assert (_default_issuer() == issuer_info) is testmode
+
+
+@pytest.mark.usefixtures("existing_root")
+@pytest.mark.parametrize(
+    "existing_root",
+    ({"days_valid": 100},),
+    indirect=True,
+)
+def test_root_ca_present_changes_not_after(vault_pki, root_ca_args, testmode):
+    """
+    Ensure an explicit not_after is always respected.
+    """
+    issuer_info = _default_issuer()
+    root_ca_args["days_remaining"] = 1
+    not_after = (datetime.now(tz=timezone.utc) + timedelta(days=1000)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+
+    root_ca_args["not_after"] = not_after
+    ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
+    assert ret.changes
+    cert_changes = ret.changes.get("cert")
+    assert cert_changes
+    assert "expiration" in cert_changes
+    old_year = int(cert_changes["expiration"]["old"].split("-", maxsplit=1)[0])
+    new_year = int(cert_changes["expiration"]["new"].split("-", maxsplit=1)[0])
+    assert new_year > old_year
+    assert cert_changes["expiration"]["new"] == not_after
+    assert (_default_issuer() == issuer_info) is testmode
+
+
+@pytest.mark.usefixtures("clean_pki_mount")
+def test_root_ca_present_changes_existing_key(vault_pki, root_ca_args, testmode):
+    key_1 = vault_write("pki/keys/generate/internal", key_name="old_key")["data"]
+    key_2 = vault_write("pki/keys/generate/internal")["data"]
+    root_ca_args["key_ref"] = key_1["key_name"]
+    ret = vault_pki.root_ca_present(**root_ca_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+    issuer_info = _default_issuer()
+    assert issuer_info["key_id"] == key_1["key_id"]
+
+    # Ensure key_ref is idempotent when specified via name
+    ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    assert _default_issuer() == issuer_info
+
+    # Ensure existing issuer key is kept, even if key_ref is removed
+    root_ca_args.pop("key_ref")
+    ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    assert _default_issuer() == issuer_info
+
+    # Now change the explicit key_ref to a key_id
+    root_ca_args["key_ref"] = key_2["key_id"]
+    ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
+    assert ret.changes
+    cert_changes = ret.changes.get("cert")
+    assert cert_changes
+    assert "private_key" in cert_changes
+    assert "subjectKeyIdentifier" in cert_changes["extensions"]["changed"]
+    new_info = _default_issuer()
+    assert (new_info == issuer_info) is testmode
+    if testmode:
+        return
+    assert new_info["key_id"] == key_2["key_id"]
+
+    # And ensure key_ref via key_id is idempotent as well
+    ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    assert _default_issuer() == new_info
+
+
+@pytest.mark.usefixtures("existing_root")
+@pytest.mark.parametrize(
+    "aia_urls",
+    (
+        {},
+        {
+            "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
+            "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
+        },
+        {
+            "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
+        },
+        {
+            "delta_crl_distribution_points": [
+                "https://deltacrl1.root.ca",
+                "https://deltacrl2.root.ca",
+            ],
+        },
+        {
+            "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
+            "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
+            "delta_crl_distribution_points": [
+                "https://deltacrl1.root.ca",
+                "https://deltacrl2.root.ca",
+            ],
+            "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
+        },
+    ),
+    indirect=True,
+)
+def test_root_ca_present_ok_aia(vault_pki, root_ca_args, testmode):
+    issuer_info = _default_issuer()
+    ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
+    assert ret.result is True
+    assert "Root CA issuer is present as specified" in ret.comment
+    assert not ret.changes
+    new_info = _default_issuer()
+    assert new_info == issuer_info
+
+
+@pytest.mark.usefixtures("existing_root")
+@pytest.mark.parametrize(
+    "aia_urls",
+    (
+        {},
+        {
+            "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
+            "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
+        },
+        {
+            "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
+        },
+        {
+            "delta_crl_distribution_points": [
+                "https://deltacrl1.root.ca",
+                "https://deltacrl2.root.ca",
+            ],
+        },
+        {
+            "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
+            "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
+            "delta_crl_distribution_points": [
+                "https://deltacrl1.root.ca",
+                "https://deltacrl2.root.ca",
+            ],
+            "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
+        },
+    ),
+    indirect=True,
+)
+def test_root_ca_present_changes_aia(vault_pki, root_ca_args, testmode, aia_urls, container):
+    exp = act = None
+    if not aia_urls:
+        aia_urls, exp, act = (
+            {"issuing_certificates": ["https://one.root.ca"]},
+            {"authorityInfoAccess"},
+            "added",
+        )
+    elif len(aia_urls) >= 4:
+        aia_urls, exp, act = (
+            {
+                "issuing_certificates": "",
+                "crl_distribution_points": "",
+                "delta_crl_distribution_points": "",
+                "ocsp_servers": "",
+            },
+            {"authorityInfoAccess", "cRLDistributionPoints", "freshestCRL"},
+            "removed",
+        )
+        if "vault" in container and "latest" not in container:
+            aia_urls.pop("delta_crl_distribution_points")
+            exp.remove("freshestCRL")
+    elif "issuing_certificates" in aia_urls:
+        _, exp, act = (
+            aia_urls["issuing_certificates"].append("https://three.root.ca"),
+            {"authorityInfoAccess"},
+            "changed",
+        )
+    elif "crl_distribution_points" in aia_urls:
+        _, exp, act = (
+            aia_urls["crl_distribution_points"].append("https://crl3.root.ca"),
+            {"cRLDistributionPoints"},
+            "changed",
+        )
+    elif "delta_crl_distribution_points" in aia_urls:
+        if "vault" in container and "latest" not in container:
+            pytest.skip("delta_crl_distribution_points requires Vault 2.0+ or OpenBao")
+        _, exp, act = (
+            aia_urls["delta_crl_distribution_points"].append("https://crl3.root.ca"),
+            {"freshestCRL"},
+            "changed",
+        )
+    elif "ocsp_servers" in aia_urls:  # pragma: no cover
+        _, exp, act = (
+            aia_urls["ocsp_servers"].append("https://ocsp3.root.ca"),
+            {"authorityInfoAccess"},
+            "changed",
+        )
+    vault_write("pki/config/urls", **aia_urls)
+    issuer_info = _default_issuer()
+    ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
+    cert_changes = ret.changes.get("cert")
+    assert cert_changes
+    if act:
+        assert "extensions" in cert_changes
+        assert set(cert_changes["extensions"][act]) == exp
+    new_info = _default_issuer()
+    assert (new_info == issuer_info) is testmode
+
+
+@pytest.mark.usefixtures("existing_root")
+def test_root_ca_present_alt_names(vault_pki, root_ca_args, existing_root, testmode):
+    # otherName requires x509_v2 support, otherwise the state is not idempotent
+    root_ca_args["alt_names"] = [
+        "dns:test2.root.ca",
+        "ip:1.2.3.4",
+        "uri:https://root.ca",
+        "email:test@root.ca",
+    ]
+    ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
+    cert_changes = ret.changes.get("cert")
+    assert cert_changes
+    ext_changes = cert_changes.get("extensions")
+    assert ext_changes
+    assert "subjectAltName" in ext_changes["changed"]
+    new_info = _default_issuer()
+    if testmode:
+        assert new_info["issuer_id"] == existing_root["issuer_id"]
+        return
+    cert = load_cert(new_info["certificate"])
+    sans = cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName)
+    assert len(sans.value._general_names._general_names) == 5  # cn is included
+    ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+
+    root_ca_args["exclude_cn_from_sans"] = True
+    ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
+    assert ret.result is True
+    assert ret.changes
+    cert_changes = ret.changes.get("cert")
+    assert cert_changes
+    ext_changes = cert_changes.get("extensions")
+    assert ext_changes
+    assert "subjectAltName" in ext_changes["changed"]

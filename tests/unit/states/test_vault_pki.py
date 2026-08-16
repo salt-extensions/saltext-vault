@@ -22,6 +22,13 @@ def read_role():
 
 
 @pytest.fixture
+def read_issuer():
+    _read_issuer = Mock(spec=vault_pki_exe.read_issuer)
+    with patch.dict(vault_pki.__salt__, {"vault_pki.read_issuer": _read_issuer}):
+        yield _read_issuer
+
+
+@pytest.fixture
 def file_mocks():
     file_managed_ret = {
         "file_|-test_|-test_|-managed": {"result": True, "comment": "", "changes": {}}
@@ -80,6 +87,16 @@ def test_certificate_managed_errors_are_reported(read_role, err):
 def test_role_errors_are_reported(read_role, func, err):
     read_role.side_effect = err("booh")
     res = getattr(vault_pki, func)("role")
+    assert res["result"] is False
+    assert res["comment"] == "booh"
+    assert not res["changes"]
+
+
+@pytest.mark.parametrize("func", ("intermediate_ca_present", "root_ca_present"))
+@pytest.mark.parametrize("err", (CommandExecutionError, SaltInvocationError))
+def test_issuer_errors_are_reported(read_issuer, func, err):
+    read_issuer.side_effect = err("booh")
+    res = getattr(vault_pki, func)("CA")
     assert res["result"] is False
     assert res["comment"] == "booh"
     assert not res["changes"]
