@@ -1,1 +1,0 @@
-Somewhat breaking change: Renamed `type` => `key_type` and `key_type` => `key_algo` parameters in `vault_pki.generate_root`. If you used to pass both by keyword, you need to migrate to the new names (the previous names still work). If you passed one positionally and the other by keyword, this upgrade will break that call.
