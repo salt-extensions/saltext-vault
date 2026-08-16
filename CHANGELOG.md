@@ -4,6 +4,29 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## 1.9.0 (2026-08-16)
+
+
+### Changed
+
+- Somewhat breaking change: Renamed `type` => `key_type` and `key_type` => `key_algo` parameters in `vault_pki.generate_root`. If you used to pass both by keyword, you need to migrate to the new names (the previous names still work). If you passed one positionally and the other by keyword, this upgrade will break that call.
+
+
+### Fixed
+
+- Fixed `vault_pki.read_issuer` reading missing default issuer raising an exception instead of returning `None`
+- Fixed running `vault_pki.certificate_managed` when another state run is queued
+
+
+### Added
+
+- Added `leaf_not_after_behavior` and `revocation_signature_algorithm` parameters to `vault_pki.update_issuer`
+- Added `list_keys`, `generate_key`, `get_key_id`, `generate_intermediate_csr`, `import_issuer_intermediate`, `import_issuer` and `write_urls` functions to `vault_pki` for the respective API methods. Also added `generate_intermediate`, which relies on the `x509_v2` modules to automatically sign an intermediate CA certificate for use by Vault.
+- Added `name`, `aia_url_templating` and `delta_crl_endpoints` parameters to `vault_pki.update_issuer`
+- Added `vault_pki.intermediate_issuer_present` state that manages an intermediate issuer as the default issuer on a mount. It signs the public key using the `x509_v2` modules.
+- Added `vault_pki.root_issuer_present` state that manages a root issuer as the default issuer on a mount
+- Added certificate revocation with private key. Access to this endpoint requires a lot less trust.
+
 ## 1.8.0 (2026-08-09)
 
 

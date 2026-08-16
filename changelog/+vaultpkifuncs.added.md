@@ -1,1 +1,0 @@
-Added `list_keys`, `generate_key`, `get_key_id`, `generate_intermediate_csr`, `import_issuer_intermediate`, `import_issuer` and `write_urls` functions to `vault_pki` for the respective API methods. Also added `generate_intermediate`, which relies on the `x509_v2` modules to automatically sign an intermediate CA certificate for use by Vault.
