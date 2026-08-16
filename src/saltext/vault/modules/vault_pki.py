@@ -928,7 +928,7 @@ def generate_root(
         payload["issuer_name"] = issuer_name
     if ttl is not None:
         payload["ttl"] = ttl
-    if max_path_length > -1:
+    if max_path_length is not None and max_path_length > -1:
         payload["max_path_length"] = max_path_length
 
     if key_type == "existing":
