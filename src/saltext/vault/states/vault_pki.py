@@ -92,7 +92,7 @@ VALID_FILE_ARGS = (
 )
 
 
-def certificate_managed(
+def certificate_managed(  # pylint: disable=too-many-locals
     name,
     common_name,
     role_name,
@@ -106,80 +106,115 @@ def certificate_managed(
     sign_verbatim=False,
     private_key_passphrase=None,
     reissue=False,
+    *,
+    # Vault sign args
+    alt_names=None,  # In theory sign-cert only, but the execution module syncs alt_names into subjectAltName
+    exclude_cn_from_sans=False,  # sign-cert only
+    not_after=None,
+    serial_number=None,  # With sign-verbatim, needs to be specified in CSR
+    user_ids=None,  # With sign-verbatim, needs to be specified in CSR, even though it's documented
+    # Vault sign-verbatim only args
+    key_usage=None,
+    ext_key_usage=None,
+    ext_key_usage_oids=None,
+    # Args for file.managed and x509.create_csr (no CN/subjectAltName though)
     **kwargs,
 ):
     """
     Ensure an X.509 certificate is present as specified.
 
     .. note::
-        The state can use ``sign-verbatim`` endpoint of Vault in which case CSR subject is fully
-        translated. If not used, anything from CSR subject, except CN is ignored.
+        This state can use the ``sign-verbatim`` endpoint, which allows minute control of
+        the certificate's subject name and most extensions (see ``sign_verbatim`` below).
+        If not used, only CN is preserved from the CSR subject, any other subject name
+        attributes are taken from the role instead.
         Check `this issue <https://github.com/hashicorp/vault/issues/17313>`__ for more information.
+
+    .. versionchanged:: 1.9.0
+
+        Now compares all certificate subject attributes and extensions, including those that are derived from PKI role parameters
+        and issuer URL configuration. This requires read access to the role, issuer and mount default URL configuration.
+        If read access to any of these endpoints is denied, this state is most likely not idempotent anymore.
 
     Required policy:
 
     .. code-block:: vaultpolicy
 
-            # Need to read the role configuration in case of missing issuer_ref
-            path "{mount}/roles/{role_name}" {
-                capabilities = ["read"]
-            }
+        # Need to read the role configuration in case of missing issuer_ref
+        # and to more accurately predict changes.
+        path "{mount}/roles/{role_name}" {
+            capabilities = ["read"]
+        }
 
-            path "{mount}/issuer/{issuer_ref}" {
-                capabilities = ["read"]
-            }
+        # Read mount default urls to account for cert extensions
+        # if the issuer has no configured URLs.
+        path "<mount>/config/urls" {
+            capabilities = ["read"]
+        }
 
-            path "{mount}/issuer/{issuer_ref}/sign/{role_name}" {
-                capabilities = ["update"]
-            }
+        path "{mount}/issuer/{issuer_ref}" {
+            capabilities = ["read"]
+        }
 
-            # in case of sign_verbatim
-            path "{mount}/issuer/{issuer_ref}/sign-verbatim/{role_name}" {
-                capabilities = ["update"]
-            }
+        path "{mount}/issuer/{issuer_ref}/sign/{role_name}" {
+            capabilities = ["update"]
+        }
+
+        # in case of sign_verbatim
+        path "{mount}/issuer/{issuer_ref}/sign-verbatim/{role_name}" {
+            capabilities = ["update"]
+        }
 
     name
-        Path to the certificate file.
+        Path to the managed certificate file.
 
     common_name
-        Common name to be set for the certificate.
+        Subject common name (``CN``) for the certificate.
 
     role_name
-        PKI role to be used for issuing the certificate from Vault.
+        PKI role to use for issuing the certificate.
 
     private_key
-        Path or PEM formatted text of the private key used to sign CSR for the certificate.
+        Path or PEM formatted text of the private key to use for signing the CSR and thus
+        as the private key for the certificate.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     ttl
-        Specifies the Time To Live value to be used for the validity period of the requested certificate,
-        provided as a string duration with time suffix. Hour is the largest suffix. Defaults to ``720h`` or 30 days.
+        Specifies the requested Time To Live (after which the certificate will be expired).
+        This cannot be larger than the engine's max (or, if not set, the system max).
+        Can be an integer, which is interpreted as seconds, or a time string such as ``1h``.
+        Hour is the largest suffix. Defaults to ``720h`` or 30 days.
 
     ttl_remaining
-        Specifies the Time To Live value to be used for checking remaining period before expiration
-        after which certificate should be renewed.
-        Provided as a string duration with time suffix. Hour is the largest suffix. Defaults to ``168h`` or 7 days.
+        If an existing certificate's remaining Time To Live undercuts this period, renew it.
+        Can be an integer, which is interpreted as seconds, or a time string such as ``1h``.
+        Hour is the largest suffix. Defaults to ``168h`` or 7 days.
 
     issuer_ref
-        Override role's issuer for the certificate. Defaults to the one specified in the role.
+        Override the specified role's issuer for the certificate.
+        Defaults to the one specified in the role.
 
     encoding
-        Encoding to be used for the certificate file. Valid options are ``pem``, ``pkcs7_pem``, ``der``, ``pkcs7_der``. Defaults to ``pem``.
+        Encoding of the managed certificate file.
+        Valid options are ``pem``, ``pkcs7_pem``, ``der``, ``pkcs7_der``.
+        Defaults to ``pem``.
 
     append_ca_chain
-        Whether to append CA chain to the certificate. Defaults to ``false``.
+        Whether to append the CA chain to the certificate.
+        Defaults to ``false``.
 
         .. note::
-            This appends all CA certificates except self-signed (as they shouldn't be in the chain anyway)!
+            This appends all CA chain certificates of the selected issuer except self-signed (root) ones.
 
     sign_verbatim
-        If set to true, the resulting certificate follows the CSR exactly.
-        Otherwise, only ``CN`` can be set for the subject, any other subject parameters (like ``O``) are ignored.
+        If set to true, the resulting certificate follows the CSR more or less exactly, including extensions.
+        Otherwise, only ``CN`` can be set for the subject, any other subject parameters (like ``O``) are
+        taken from the role.
 
         .. warning::
-            This option is using a potentially dangerous endpoint. Be careful when using that option, as roles
+            This option uses a potentially dangerous endpoint. Be careful when using that option, as roles
             are not restricting what can be issued anymore.
 
     private_key_passphrase
@@ -188,15 +223,75 @@ def certificate_managed(
     reissue
         Always reissue the certificate. Defaults to ``false``.
 
+    alt_names
+        Any alternative names to add to the certificate.
+        Can be specified either as dict (``{ "<type>": "<value>" }``),
+        a dict of lists (``{ "<type>": ["<value1>", "<value2>", ...] }``)
+        or list of SAN strings (``["<type1>:<value1>", ...]``).
+
+        ``<type>`` can be ``dns``, ``email``, ``uri``, ``ip`` or any OID for otherName SANs.
+        ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8:``.
+
+    exclude_cn_from_sans
+        If set to true, the Common Name is not added to the SANs.
+        Useful if the CN is not a hostname or email address.
+        Has no effect when ``sign_verbatim`` is true.
+
+    not_after
+        Absolute value of the Not After field of the certificate in UTC format ``YYYY-MM-ddTHH:MM:SSZ``.
+        When set, ``ttl`` is ignored.
+
+    serial_number
+        Single value for the **subject** SERIALNUMBER (OID: 2.5.4.5) name attribute (NOT the certificate's serial number!).
+
+    user_ids
+        List of User ID (``UID``) subject attributes.
+        Each one is added to the generated CSR's subject Name as a distinct RDN.
+
+    key_usage
+        When ``sign_verbatim`` is true, list of key usages to encode onto the certificate if the
+        CSR does not specify a ``keyUsage`` extension. For non-verbatim issuance, this parameter
+        must not be specified because Vault takes it from the role.
+        Valid values can be found at https://golang.org/pkg/crypto/x509/#KeyUsage - simply drop the
+        ``KeyUsage`` part of the value. Values are case-insensitive. Pass an empty list to specify
+        no constraints.
+
+    ext_key_usage
+        When ``sign_verbatim`` is true, list of extended key usages to encode onto the certificate if the
+        CSR does not specify a ``extendedKeyUsage`` extension. For non-verbatim issuance, this parameter
+        must not be specified because Vault takes it from the role.
+        Valid values can be found at https://golang.org/pkg/crypto/x509/#ExtKeyUsage - simply drop the
+        ``ExtKeyUsage`` part of the value. Values are case-insensitive. Pass an empty list to specify
+        no constraints.
+
+    ext_key_usage_oids
+        When ``sign_verbatim`` is true, list of extended key usage oids to encode onto the certificate if the
+        CSR does not specify a ``extendedKeyUsage`` extension.
+        Useful for adding EKUs not supported by the Go standard library.
+        For non-verbatim issuance, this parameter must not be specified because Vault takes it from the role.
+
     kwargs
         Most parameters for the :py:func:`file.managed <salt.states.file.managed>` state or any of the ones for
         the Vault PKI :py:func:`sign_certificate <saltext.vault.modules.vault_pki.sign_certificate>` execution module function
         are passed through.
 
-        .. note::
+        .. hint::
 
-            ``encoding`` is a valid parameter for both this function and ``file.managed``. If you need to pass
-            it to the latter, specify it as ``file_encoding`` instead.
+            This is a high-level state, which connects several different functions:
+
+            * Vault API (`sign-certificate <https://developer.hashicorp.com/vault/api-docs/secret/pki#sign-certificate>`__
+              or `sign-verbatim <https://developer.hashicorp.com/vault/api-docs/secret/pki#sign-verbatim>`__, depending on
+              the value of ``sign_verbatim``). Completely unknown keyword parameters end up there.
+            * :py:func:`x509.create_csr <salt.modules.x509_v2.create_csr>`: Used to generate a CSR that Vault should sign.
+              Any subject name attribute parameters (``O``, ``OU`` etc.) and most extension parameters
+              (``certificatePolicies``, ``keyUsage``, ``extendedKeyUsage`` etc.) end up here. Note that Vault does not
+              follow the CSR literally, even ``sign-verbatim`` e.g. prohibits ``basicConstraints`` with ``CA: true``.
+              The ``CN`` and ``subjectAltName`` parameters are synced with ``common_name`` and ``alt_names`` respectively,
+              so specifying them directly has no effect.
+            * :py:func:`file.managed <salt.states.file.managed>`: Parameters such as ``user``, ``group`` and ``mode``
+              end up influencing the certificate file on disk.
+              Note: ``encoding`` is a valid parameter for both this function and ``file.managed``. If you need to pass
+              it to the latter, specify it as ``file_encoding`` instead.
     """
 
     ret = {
@@ -220,8 +315,18 @@ def certificate_managed(
                 "Use pkcs7_der if you need a binary encoding including the chain."
             )
 
-        if timestring_map(ttl_remaining, cast=int) >= timestring_map(ttl, cast=int):
+        ttl_seconds = timestring_map(ttl, cast=int)
+
+        if timestring_map(ttl_remaining, cast=int) >= ttl_seconds:
             raise SaltInvocationError("The ttl_remaning cannot be larger or equal to ttl.")
+
+        if not sign_verbatim:
+            hlp.none_of(
+                key_usage=key_usage,
+                ext_key_usage=ext_key_usage,
+                ext_key_usage_oids=ext_key_usage_oids,
+                _reason="sign_verbatim is false",
+            )
 
         # check file.managed changes early to avoid using unnecessary resources
         file_managed_test = _run_state("file.managed", name, test=True, replace=False, **file_args)
@@ -250,16 +355,38 @@ def certificate_managed(
         if file_exists is None:
             file_exists = __salt__["file.file_exists"](name)
 
+        role_info = __salt__["vault_pki.read_role"](role_name, mount=mount) or {}
         if issuer_ref is None:
-            issuer_ref = (__salt__["vault_pki.read_role"](role_name, mount=mount) or {}).get(
-                "issuer_ref"
-            )
+            issuer_ref = role_info.get("issuer_ref")
             if issuer_ref is None:
                 raise CommandExecutionError(f"Role {role_name} does not exist.")
 
         issuer_info = __salt__["vault_pki.read_issuer"](issuer_ref, mount=mount)
         if issuer_info is None:
             raise CommandExecutionError(f"Issuer '{issuer_ref}' does not exist on mount {mount}")
+
+        url_configs = (
+            "issuing_certificates",
+            "crl_distribution_points",
+            "delta_crl_distribution_points",
+            "ocsp_servers",
+        )
+        if not any(issuer_info.get(url_config) for url_config in url_configs):
+            try:
+                # Mount default AIA URLs
+                urls = __salt__["vault_pki.read_urls"](mount=mount)
+            except CommandExecutionError:  # pragma: no cover
+                log.warning(
+                    "Failed reading default AIA url config. Consider allowing read access to "
+                    "`%s/config/urls`. This state will not be idempotent otherwise.",
+                    mount,
+                )
+                urls = {}
+        else:
+            urls = {"enable_templating": bool(issuer_info.get("enable_aia_url_templating"))}
+            for url in url_configs:
+                # Issuer-specific AIA URLs
+                urls[url] = hlp.deserialize_csl(issuer_info.get(url, []))
 
         if append_ca_chain:
             ca_chain = [x509util.load_cert(x) for x in issuer_info["ca_chain"]]
@@ -277,14 +404,25 @@ def certificate_managed(
             else:
                 changes = pki.check_cert_for_changes(
                     current=name,
-                    append_chain=ca_chain,
-                    common_name=common_name,
-                    encoding=encoding,
                     issuer=issuer_info["certificate"],
                     private_key=private_key,
-                    private_key_passphrase=private_key_passphrase,
-                    common_name_only=not sign_verbatim,
+                    encoding=encoding,
+                    sign_verbatim=sign_verbatim,
+                    alt_names=alt_names,
+                    append_chain=ca_chain,
+                    common_name=common_name,
+                    exclude_cn_from_sans=exclude_cn_from_sans,
                     expire_tolerance=ttl_remaining,
+                    ext_key_usage=ext_key_usage,
+                    ext_key_usage_oids=ext_key_usage_oids,
+                    key_usage=key_usage,
+                    not_after=not_after,
+                    private_key_passphrase=private_key_passphrase,
+                    role_info=role_info,
+                    serial_number=serial_number,
+                    ttl=ttl_seconds,
+                    urls=urls,
+                    user_ids=user_ids,
                     **cert_args,
                 )
 
@@ -330,6 +468,14 @@ def certificate_managed(
                     mount=mount,
                     sign_verbatim=sign_verbatim,
                     remove_roots_from_chain=False,
+                    alt_names=alt_names,
+                    exclude_cn_from_sans=exclude_cn_from_sans,
+                    not_after=not_after,
+                    serial_number=serial_number,
+                    user_ids=user_ids,
+                    key_usage=key_usage,
+                    ext_key_usage=ext_key_usage,
+                    ext_key_usage_oids=ext_key_usage_oids,
                     **cert_args,
                 )
                 cert = __salt__["x509.encode_certificate"](
@@ -716,7 +862,7 @@ def intermediate_ca_present(
 
     aia_url_templating
         Render ``aia_urls``/``crl_endpoints``/``ocsp_servers``/``delta_crl_endpoints`` as templates.
-        Supported variables: `{{issuer_id}}`, ``{{cluster_path}}``, ``{{cluster_aia_path}}``
+        Supported variables: ``{{issuer_id}}``, ``{{cluster_path}}``, ``{{cluster_aia_path}}``.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -929,7 +1075,7 @@ def root_ca_present(  # pylint: disable=too-many-locals,too-many-arguments
     province=None,
     street_address=None,
     postal_code=None,
-    subject_serial_number=None,
+    serial_number=None,
     signature_bits=0,
     not_before_duration=30,
     not_after=None,
@@ -959,7 +1105,7 @@ def root_ca_present(  # pylint: disable=too-many-locals,too-many-arguments
             capabilities = ["read"]
         }
 
-        # read urls to account for cert extensions
+        # Read mount default urls to account for cert extensions
         path "<mount>/config/urls" {
             capabilities = ["read"]
         }
@@ -1049,10 +1195,10 @@ def root_ca_present(  # pylint: disable=too-many-locals,too-many-arguments
         When set, ``days_valid`` is ignored.
 
     alt_names
-        Any alternative names to be added to the certificate.
+        Any alternative names to add to the certificate.
         Can be specified either as dict (``{ "<type>": "<value>" }``),
-        a dict of lists(``{ "<type>": ["<value1>", "<value2>", ...] }``)
-        or list of SAN strings (``["<type>:<value>"]``).
+        a dict of lists (``{ "<type>": ["<value1>", "<value2>", ...] }``)
+        or list of SAN strings (``["<type1>:<value1>", ...]``).
 
         ``<type>`` can be ``dns``, ``email``, ``uri``, ``ip`` or any OID for otherName SANs.
         ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8:``.
@@ -1070,7 +1216,8 @@ def root_ca_present(  # pylint: disable=too-many-locals,too-many-arguments
         Per the CA/B Forum, Vault ignores additional values other than DigitalSignature.
 
     exclude_cn_from_sans
-        If set to true, the Common Name is not part of the SANs.
+        If set to true, the Common Name is not added to the SANs.
+        Useful if the CN is not a hostname or email address.
 
     permitted_alt_names
         List of alternative names for which certificates are allowed to be issued
@@ -1097,7 +1244,7 @@ def root_ca_present(  # pylint: disable=too-many-locals,too-many-arguments
         * province
         * street_address
         * postal_code
-        * subject_serial_number (only a single value)
+        * serial_number (only a single value; NOT the certificate's serial number, just the SERIALNUMBER name attribute)
 
     **Issuer configuration:**
 
@@ -1149,7 +1296,7 @@ def root_ca_present(  # pylint: disable=too-many-locals,too-many-arguments
 
     aia_url_templating
         Render ``aia_urls``/``crl_endpoints``/``ocsp_servers``/``delta_crl_endpoints`` as templates.
-        Supported variables: `{{issuer_id}}`, ``{{cluster_path}}``, ``{{cluster_aia_path}}``
+        Supported variables: ``{{issuer_id}}``, ``{{cluster_path}}``, ``{{cluster_aia_path}}``.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -1210,7 +1357,7 @@ def root_ca_present(  # pylint: disable=too-many-locals,too-many-arguments
                 province=province,
                 street_address=street_address,
                 postal_code=postal_code,
-                subject_serial_number=subject_serial_number,
+                serial_number=serial_number,
                 signature_bits=signature_bits,
                 not_before_duration=not_before_duration,
                 not_after=not_after,
@@ -1318,7 +1465,7 @@ def root_ca_present(  # pylint: disable=too-many-locals,too-many-arguments
                 province=province,
                 street_address=street_address,
                 postal_code=postal_code,
-                serial_number=subject_serial_number,
+                serial_number=serial_number,
                 signature_bits=signature_bits,
                 not_before_duration=not_before_duration,
                 not_after=not_after,

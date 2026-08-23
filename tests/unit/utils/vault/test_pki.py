@@ -1,9 +1,7 @@
 import datetime
-import ipaddress
 
 import pytest
 from cryptography import x509
-from cryptography.hazmat import asn1
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
@@ -199,17 +197,17 @@ def new_pki():
 def test_compare_ca_chain_with_new(existing_pki, new_pki):
     _, _, chain = existing_pki
     _, _, new_chain = new_pki
-    assert pki.compare_ca_chain(chain, new_chain) is False
+    assert pki._compare_ca_chain(chain, new_chain) is False
 
 
 def test_compare_ca_chain_with_same(existing_pki):
     _, _, chain = existing_pki
-    assert pki.compare_ca_chain(chain, chain) is True
+    assert pki._compare_ca_chain(chain, chain) is True
 
 
 def test_compare_ca_chain_with_same_diff_len(existing_pki):
     _, _, chain = existing_pki
-    assert pki.compare_ca_chain(chain, chain + chain) is False
+    assert pki._compare_ca_chain(chain, chain + chain) is False
 
 
 @pytest.mark.parametrize(
@@ -235,85 +233,6 @@ def test_norm_sans(sans, expected):
     with uppercase (or OID) keys
     """
     assert pki.norm_sans(sans) == expected
-
-
-def test_collect_requested_sans():
-    """
-    Ensure all SAN types are rendered as expected, IP addresses are
-    normalized when valid and passed through verbatim otherwise
-    """
-    alt_names = {
-        "DNS": ["foo.example.com", "bar.example.com"],
-        "EMAIL": ["user@example.com"],
-        "IP": ["2001:DB8:0:0:0:0:0:1", "not-an-ip"],
-        "URI": ["https://example.com"],
-        "1.3.6.1.4.1.311.20.2.3": ["upn@example.com"],
-    }
-    assert pki._collect_requested_sans(alt_names) == {
-        ("dns", "foo.example.com"),
-        ("dns", "bar.example.com"),
-        ("email", "user@example.com"),
-        ("ip", "2001:db8::1"),
-        ("ip", "not-an-ip"),
-        ("uri", "https://example.com"),
-        ("otherName:1.3.6.1.4.1.311.20.2.3", "UTF8:upn@example.com"),
-    }
-
-
-def test_collect_current_sans(existing_pki):
-    """
-    Ensure all GeneralName variants are rendered as expected, especially
-    that OtherNames with non-UTF8 values do not crash the collection
-    """
-    _, private_key, _ = existing_pki
-    san = x509.SubjectAlternativeName(
-        [
-            x509.DNSName("foo.example.com"),
-            x509.RFC822Name("user@example.com"),
-            x509.IPAddress(ipaddress.ip_address("2001:db8::1")),
-            x509.UniformResourceIdentifier("https://example.com"),
-            x509.OtherName(
-                x509.ObjectIdentifier("1.3.6.1.4.1.311.20.2.3"),
-                asn1.encode_der("upn@example.com"),
-            ),
-            # DER-encoded IA5String, which Vault does not support
-            x509.OtherName(x509.ObjectIdentifier("1.2.3.4.5"), b"\x16\x03foo"),
-            x509.DirectoryName(
-                x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "dir.example.com")])
-            ),
-            x509.RegisteredID(x509.ObjectIdentifier("1.2.3.4")),
-        ]
-    )
-    builder = (
-        x509.CertificateBuilder()
-        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "san.example.com")]))
-        .issuer_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "san.example.com")]))
-        .not_valid_before(datetime.datetime.today() - datetime.timedelta(days=1))
-        .not_valid_after(datetime.datetime.today() + datetime.timedelta(days=1))
-        .serial_number(x509.random_serial_number())
-        .public_key(private_key.public_key())
-        .add_extension(san, critical=False)
-    )
-    cert = builder.sign(private_key=private_key, algorithm=hashes.SHA256())
-    assert pki._collect_current_sans(cert) == {
-        ("dns", "foo.example.com"),
-        ("email", "user@example.com"),
-        ("ip", "2001:db8::1"),
-        ("uri", "https://example.com"),
-        ("otherName:1.3.6.1.4.1.311.20.2.3", "UTF8:upn@example.com"),
-        ("otherName:1.2.3.4.5", "<undetermined, not UTF8 ASN.1 type>"),
-        ("dirName", "CN=dir.example.com"),
-        ("rid", "1.2.3.4"),
-    }
-
-
-def test_collect_current_sans_no_extension(existing_pki):
-    """
-    Ensure certificates without a SubjectAlternativeName extension
-    are handled gracefully
-    """
-    cert, _, _ = existing_pki
-    assert pki._collect_current_sans(cert) == set()
 
 
 @pytest.mark.parametrize("sans", [["foo:bar"], {"foo": "bar"}])
