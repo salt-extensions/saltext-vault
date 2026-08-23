@@ -1802,11 +1802,6 @@ def sign_certificate(
             capabilities = ["create", "update"]
         }
 
-        # When passing `private_key` and including otherName SANs
-        path "<mount>/roles/<role_name>" {
-            capabilities = ["read"]
-        }
-
     CLI Example:
 
     .. code-block:: bash
@@ -1852,12 +1847,6 @@ def sign_certificate(
 
         ``<type>`` can be ``dns``, ``email``, ``uri``, ``ip`` or any OID for otherName SANs.
         ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8:``.
-
-        .. note::
-            As of writing this, otherName SANs require very recent releases of the
-            :py:func:`x509_v2 module <salt.modules.x509_v2.create_csr>`, which is used to generate
-            a CSR when ``csr`` is not specified. If you need to make this work, in the affected role,
-            set ``use_csr_sans`` to ``false``, which circumvents this issue.
 
     ttl
         Specifies the requested Time To Live (after which the certificate be expire).
@@ -1912,11 +1901,16 @@ def sign_certificate(
     # In case private_key is passed, we're going to build a CSR in place.
     if private_key is not None:
         if norm_sans:
+            # Ensure we get the specified SANs, regardless of a role's use_csr_sans or sign_verbatim.
             csr_args["subjectAltName"] = [
                 f"{k}:{vv}" if k.upper() in pki.SUPPORTED_SAN_TYPES else f"otherName:{k};UTF8:{vv}"
                 for k, v in norm_sans.items()
                 for vv in v
             ]
+        else:
+            # Ensure alt_names is the only parameter to specify SANs
+            csr_args.pop("subjectAltName", None)
+        # Ensure we get the specified CN, regardless of a role's use_csr_common_name or sign_verbatim
         csr_args["CN"] = common_name
         try:
             csr = _x509v2(
@@ -1929,27 +1923,16 @@ def sign_certificate(
         except SaltInvocationError as err:
             if not norm_sans or "otherName is currently not implemented" not in str(err):
                 raise
-            # otherName SAN support requires Salt 3006.28/3008.3 (likely, if merged forward in time)
-            try:
-                role = read_role(role_name, mount=mount)
-            except CommandExecutionError as err2:
-                raise CommandExecutionError(
-                    "Cannot include otherName SANs when `private_key` is passed and the role "
-                    "has `use_csr_sans` set to true. Tried checking role for `use_csr_sans` "
-                    "but access was denied. Either permit access and ensure `use_csr_sans` "
-                    "is disabled, remove the otherName SANs or pass `csr` instead of `private_key`."
-                ) from err2
-            if role is None:
-                raise CommandExecutionError(
-                    f"Role '{role_name}' on mount '{mount}' does not exist"
-                ) from err
-            if role.get("use_csr_sans", True):
-                raise CommandExecutionError(
-                    "Cannot include otherName SANs when `private_key` is passed and the role "
-                    "has `use_csr_sans` set to true. Either set it to false, upgrade Salt, "
-                    "remove the otherName SANs or pass `csr` instead of `private_key`."
-                ) from err
-            csr_args.pop("subjectAltName")
+            # use_csr_sans does not matter for otherName SANs
+            csr_args["subjectAltName"] = [
+                f"{k}:{vv}"
+                for k, v in norm_sans.items()
+                if k.upper() in pki.SUPPORTED_SAN_TYPES
+                for vv in v
+            ]
+            _, _, _, other_sans = pki.split_sans(norm_sans)
+            # sign-verbatim does not document, but still respects this
+            payload["other_sans"] = ",".join(other_sans)
             csr = __salt__["x509.create_csr"](
                 private_key=private_key,
                 private_key_passphrase=private_key_passphrase,
