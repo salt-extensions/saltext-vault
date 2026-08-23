@@ -1,5 +1,4 @@
 import datetime
-from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
@@ -190,43 +189,36 @@ def test_sign_certificate_requires_exactly_one_of_csr_private_key(query, kwargs,
 
 @pytest.fixture
 def create_csr_othername_failure():
-    create_csr = Mock(
-        side_effect=SaltInvocationError(
-            "otherName is currently not implemented for x509.create_csr"
-        )
-    )
-    with patch.dict(vault_pki.__salt__, {"x509.create_csr": create_csr}):
-        yield create_csr
+    def _create_csr(*_, **kwargs):
+        if "subjectAltName" in kwargs and any(
+            san.lower().startswith("othername") for san in kwargs["subjectAltName"]
+        ):
+            raise SaltInvocationError("otherName is currently not implemented for x509.create_csr")
+        return "-----BEGIN CERTIFICATE REQUEST without SANs"
+
+    with patch.dict(vault_pki.__salt__, {"x509.create_csr": _create_csr}):
+        yield
 
 
-@pytest.mark.usefixtures("query", "create_csr_othername_failure")
-@pytest.mark.parametrize(
-    "read_role_effect,match",
-    (
-        (
-            [CommandExecutionError("permission denied")],
-            "Tried checking role for `use_csr_sans` but access was denied",
-        ),
-        ([None], "Role 'role' on mount 'pki' does not exist"),
-        ([{"use_csr_sans": True}], "has `use_csr_sans` set to true"),
-    ),
-)
-def test_sign_certificate_othername_sans_fallback_errors(read_role_effect, match):
+@pytest.mark.usefixtures("create_csr_othername_failure")
+@pytest.mark.parametrize("sign_verbatim", (False, True))
+def test_sign_certificate_othername_sans_fallback(query, sign_verbatim):
     """
     When the salt-native CSR creation does not support otherName SANs,
-    the module checks whether the role would ignore CSR SANs anyways.
-    Ensure errors during this fallback are informative.
+    the module checks whether we're signing verbatim or not.
+    The latter also takes SANs from request parameters, even when
+    the role does not disable use_csr_sans, when the CSR misses them.
     """
-    with patch(
-        "saltext.vault.modules.vault_pki.read_role", autospec=True, side_effect=read_role_effect
-    ):
-        with pytest.raises(CommandExecutionError, match=match):
-            vault_pki.sign_certificate(
-                "role",
-                "example.com",
-                private_key="-----BEGIN...",
-                alt_names={"1.3.6.1.4.1.311.20.2.3": "user@example.com"},
-            )
+    vault_pki.sign_certificate(
+        "role",
+        "example.com",
+        private_key="-----BEGIN...",
+        alt_names={"1.3.6.1.4.1.311.20.2.3": "user@example.com"},
+        sign_verbatim=sign_verbatim,
+    )
+    payload = query.call_args[1]["payload"]
+    assert "csr" in payload
+    assert "without SANs" in payload["csr"]
 
 
 @pytest.mark.usefixtures("list_roles")
