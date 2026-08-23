@@ -1,0 +1,1 @@
+Made `vault_pki.certificate_managed` check all certificate subject attributes/extensions, including those derived from role and issuer URL configuration. The state now requires read access to the role, issuer and mount default URL configuration to be idempotent.

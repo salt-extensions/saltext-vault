@@ -32,7 +32,6 @@ import typing
 from salt.exceptions import CommandExecutionError
 
 from saltext.vault.modules.vault_pki import _find_signing_issuer
-from saltext.vault.modules.vault_pki import _split_csr_kwargs
 from saltext.vault.modules.vault_pki import _x509v2
 from saltext.vault.modules.vault_pki import delete_issuer
 from saltext.vault.modules.vault_pki import delete_key
@@ -84,7 +83,6 @@ if typing.TYPE_CHECKING:
 globals_dict = globals()
 
 _find_signing_issuer = namespaced_function(_find_signing_issuer, globals_dict)
-_split_csr_kwargs = namespaced_function(_split_csr_kwargs, globals_dict)
 _x509v2 = namespaced_function(_x509v2, globals_dict)
 _import_issuer = namespaced_function(_import_issuer, globals_dict)
 _import_issuer_intermediate = namespaced_function(_import_issuer_intermediate, globals_dict)

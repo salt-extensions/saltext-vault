@@ -49,32 +49,6 @@ def __virtual__():
     return __virtualname__
 
 
-VALID_CSR_ARGS = (
-    "C",
-    "ST",
-    "L",
-    "STREET",
-    "O",
-    "OU",
-    "CN",
-    "MAIL",
-    "SN",
-    "GN",
-    "UID",
-    "authorityKeyIdentifier",
-    "basicConstraints",
-    "certificatePolicies",
-    "extendedKeyUsage",
-    "inhibitAnyPolicy",
-    "keyUsage",
-    "nameConstraints",
-    "noCheck",
-    "policyConstraints",
-    "subjectKeyIdentifier",
-    "tlsfeature",
-)
-
-
 def list_roles(mount="pki"):
     """
     List configured PKI roles.
@@ -1769,6 +1743,8 @@ def sign_certificate(
     sign_verbatim=False,
     encoding="pem",
     exclude_cn_from_sans=False,
+    serial_number=None,
+    user_ids=None,
     **kwargs,
 ):
     """
@@ -1810,10 +1786,10 @@ def sign_certificate(
         salt '*' vault_pki.sign_certificate myrole common_name="www.example.com" csr=/csr/path.csr
 
     role_name
-        Name of the role to be used for issuing the certificate.
+        PKI role to use for issuing the certificate.
 
     common_name
-        Common name to be set for the certificate.
+        Subject common name (``CN``) for the certificate.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -1823,52 +1799,68 @@ def sign_certificate(
         Either ``csr`` or ``private_key`` parameter can be set, not both.
 
     private_key
-        Private key for which certificate should be issued. Can be text or path.
+        Private key for which a certificate should be issued. Can be text or path.
         Either ``csr`` or ``private_key`` parameter can be set, not both.
 
         .. note::
             This parameter requires the :py:mod:`x509_v2 execution module <salt.modules.x509_v2>` to be available.
+            When this parameter is set, a CSR is generated in place. You can influence the resulting CSR by providing
+            keyword arguments for :py:func:`x509.create_csr <salt.modules.x509_v2.create_csr>`, which are passed through.
+            See ``kwargs`` below.
 
     private_key_passphrase
         Passphrase for the ``private_key``, if encrypted. Not used in case of ``csr``.
 
     digest
-        Digest to be used for generating the CSR. Not used in case of ``private_key``. Defaults to ``sha256``
+        Digest to be used for generating the CSR. Not used in case of ``csr``. Defaults to ``sha256``
 
     issuer_ref
         Specify an explicit issuer instead of taking it from the role definition.
         Can be issuer_name or issuer_id.
 
     alt_names
-        Any alternative names to be added to the certificate.
+        Any alternative names to add to the certificate.
         Can be specified either as dict (``{ "<type>": "<value>" }``),
-        a dict of lists(``{ "<type>": ["<value1>", "<value2>", ...] }``)
-        or list of SAN strings (``["<type>:<value>"]``).
+        a dict of lists (``{ "<type>": ["<value1>", "<value2>", ...] }``)
+        or list of SAN strings (``["<type1>:<value1>", ...]``).
 
         ``<type>`` can be ``dns``, ``email``, ``uri``, ``ip`` or any OID for otherName SANs.
         ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8:``.
 
     ttl
-        Specifies the requested Time To Live (after which the certificate be expire).
+        Specifies the requested Time To Live (after which the certificate will be expired).
         This cannot be larger than the engine's max (or, if not set, the system max).
+        Can be an integer, which is interpreted as seconds, or a time string such as ``1h``.
 
     sign_verbatim
-        If set to true, the resulting certificate follows the CSR exactly.
-        Otherwise, only ``CN`` can be set for the subject, any other subject parameter (like ``O``) is ignored.
+        If set to true, the resulting certificate follows the CSR more or less exactly, including extensions.
+        Otherwise, only ``CN`` can be set for the subject, any other subject parameters (like ``O``) are
+        taken from the role.
 
         .. warning::
-            This option is using a potentially dangerous endpoint. Be careful when using that option, as roles
+            This option uses a potentially dangerous endpoint. Be careful when using that option, as roles
             are not restricting what can be issued anymore.
 
     encoding
-        Can be either ``pem`` or ``der``. Defaults to ``pem``.
+        Output format. Can be either ``pem`` or ``der``. Defaults to ``pem``.
 
     exclude_cn_from_sans
-        If set to true, the Common Name is not part of the SANs.
+        If set to true, the Common Name is not added to the SANs.
+        Useful if the CN is not a hostname or email address.
+        Has no effect when ``sign_verbatim`` is true.
+
+    serial_number
+        Single value for the **subject** SERIALNUMBER (OID: 2.5.4.5) name attribute (NOT the certificate's serial number!).
+
+    user_ids
+        List of User ID (``UID``) subject attributes.
+        Each one is added to the generated CSR's subject Name as a distinct RDN.
 
     kwargs
-        Any additional parameter accepted by the Vault API or the
-        :py:func:`x509_v2 module <salt.modules.x509_v2.create_csr>`
+        Any additional parameter accepted by the Vault API or, if ``private_key`` is set, the
+        :py:func:`x509_v2 module <salt.modules.x509_v2.create_csr>`.
+        Note that ``CN`` and ``subjectAltName`` are overwritten with the
+        ``common_name``/``alt_names`` parameters to this function, regardless of ``sign_verbatim``.
     """
     hlp.one_of(csr=csr, private_key=private_key)
 
@@ -1876,14 +1868,19 @@ def sign_certificate(
     endpoint = f"{mount}/{sign}/{role_name}"
     if issuer_ref is not None:
         endpoint = f"{mount}/issuer/{issuer_ref}/{sign}/{role_name}"
-    csr_args, extra_args = _split_csr_kwargs(kwargs)
+    csr_args, extra_args = pki.split_csr_kwargs(kwargs)
 
-    payload = {k: v for k, v in extra_args.items() if not k.startswith("_")}
-    payload["common_name"] = common_name
+    payload = {k: v for k, v in extra_args.items() if not k.startswith("_") and v is not None}
+    if not sign_verbatim:
+        payload["common_name"] = common_name
+        payload["exclude_cn_from_sans"] = exclude_cn_from_sans
+        if serial_number is not None:
+            payload["serial_number"] = serial_number
+        if user_ids is not None:
+            payload["user_ids"] = user_ids
     if ttl is not None:
         payload["ttl"] = ttl
     payload["format"] = encoding
-    payload["exclude_cn_from_sans"] = exclude_cn_from_sans
 
     norm_sans = None
     if alt_names is not None:
@@ -1892,11 +1889,12 @@ def sign_certificate(
                 "Missing `cryptography` library, which is required for this operation"
             )
         norm_sans = pki.norm_sans(alt_names)
-        dns_sans, ip_sans, uri_sans, other_sans = pki.split_sans(norm_sans)
-        payload["alt_names"] = ",".join(dns_sans)
-        payload["ip_sans"] = ",".join(ip_sans)
-        payload["uri_sans"] = ",".join(uri_sans)
-        payload["other_sans"] = ",".join(other_sans)
+        if not sign_verbatim:
+            dns_sans, ip_sans, uri_sans, other_sans = pki.split_sans(norm_sans)
+            payload["alt_names"] = ",".join(dns_sans)
+            payload["ip_sans"] = ",".join(ip_sans)
+            payload["uri_sans"] = ",".join(uri_sans)
+            payload["other_sans"] = ",".join(other_sans)
 
     # In case private_key is passed, we're going to build a CSR in place.
     if private_key is not None:
@@ -1912,6 +1910,10 @@ def sign_certificate(
             csr_args.pop("subjectAltName", None)
         # Ensure we get the specified CN, regardless of a role's use_csr_common_name or sign_verbatim
         csr_args["CN"] = common_name
+        # Ensure user_ids and serial_number work the same across regular and verbatim signing
+        csr_args = pki.sync_verbatim_csr_subject(
+            csr_args, user_ids=user_ids, serial_number=serial_number
+        )
         try:
             csr = _x509v2(
                 "create_csr",
@@ -2135,17 +2137,6 @@ def write_urls(
         return vault.query("POST", endpoint, __opts__, __context__, payload=payload)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
-
-
-def _split_csr_kwargs(kwargs):
-    csr_args = {}
-    extra_args = {}
-    for k, v in kwargs.items():
-        if k in VALID_CSR_ARGS:
-            csr_args[k] = v
-        else:
-            extra_args[k] = v
-    return csr_args, extra_args
 
 
 def _x509v2(fun, *args, **kwargs):

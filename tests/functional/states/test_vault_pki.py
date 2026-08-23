@@ -1,3 +1,5 @@
+import ipaddress
+from copy import deepcopy
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -57,6 +59,8 @@ def testrole(request):
         "enforce_hostnames": False,
         "allowed_other_sans": ["*"],
         "allowed_uri_sans": ["*"],
+        "allowed_user_ids": ["*"],
+        "allowed_serial_numbers": ["*"],
     }
     defaults.update(getattr(request, "param", {}))
     return defaults
@@ -268,11 +272,13 @@ def private_key():
 @pytest.fixture(params=[["testrole"]])
 def roles_setup(request):  # pylint: disable=unused-argument
     try:
+        roles = {}
         for role_name in request.param:
             role_args = request.getfixturevalue(role_name)
+            roles[role_name] = role_args
             vault_write(f"pki/roles/{role_name}", **role_args)
             assert role_name in vault_list("pki/roles")
-        yield
+        yield roles
     finally:
         for role_name in request.param:
             if role_name in vault_list("pki/roles"):
@@ -285,28 +291,34 @@ def _wipe_issuers():
 
 
 @pytest.fixture
-def issuer_setup(ca_cert, ca_key):
+def issuer_setup(ca_cert, ca_key, request):
     try:
         ret_data = vault_write("/pki/config/ca", pem_bundle="\n".join([ca_cert, ca_key]))["data"]
         issuer_id = ret_data["imported_issuers"][0]
-        vault_write(f"/pki/issuer/{issuer_id}", issuer_name="root")
-        yield issuer_id
+        issuer_config = {"issuer_name": "root"}
+        issuer_config.update(deepcopy(getattr(request, "param", {})))
+        vault_write(f"/pki/issuer/{issuer_id}", **issuer_config)
+        issuer_config["issuer_id"] = issuer_id
+        yield issuer_config
     finally:
         _wipe_issuers()
 
 
 @pytest.fixture
-def issuer_setup_additional(ca2_cert, ca2_key):
+def issuer_setup_additional(ca2_cert, ca2_key, request):
     ret_data = vault_write("/pki/config/ca", pem_bundle="\n".join([ca2_cert, ca2_key]))["data"]
     issuer_id = ret_data["imported_issuers"][0]
-    vault_write(f"/pki/issuer/{issuer_id}", issuer_name="additional")
+    issuer_config = {"issuer_name": "additional"}
+    issuer_config.update(deepcopy(getattr(request, "param", {})))
+    vault_write(f"/pki/issuer/{issuer_id}", **issuer_config)
+    issuer_config["issuer_id"] = issuer_id
     # No teardown here: This fixture is only used together with issuer_setup,
     # which wipes all issuers and keys on the mount.
-    yield issuer_id
+    yield issuer_config
 
 
 @pytest.fixture
-def issuer_setup_sub(ca_cert, ca_sub_cert, ca_sub_key):
+def issuer_setup_sub(ca_cert, ca_sub_cert, ca_sub_key, request):
     try:
         ret_data = vault_write(
             "/pki/config/ca", pem_bundle="\n".join([ca_sub_cert, ca_sub_key, ca_cert])
@@ -317,14 +329,33 @@ def issuer_setup_sub(ca_cert, ca_sub_cert, ca_sub_key):
             sub_id = next(x for x in issuers if issuers[x] if issuers[x] == imported_key)
         except StopIteration as err:
             raise AssertionError("Unable to find issuer IDs") from err
-        vault_write(f"/pki/issuer/{sub_id}", issuer_name="sub")
-        yield sub_id
+        issuer_config = {"issuer_name": "sub"}
+        issuer_config.update(deepcopy(getattr(request, "param", {})))
+        vault_write(f"/pki/issuer/{sub_id}", **issuer_config)
+        issuer_config["issuer_id"] = sub_id
+        yield issuer_config
     finally:
         _wipe_issuers()
 
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.fixture
+def aia_urls(request):
+    urls = deepcopy(getattr(request, "param", {}))
+    vault_write("pki/config/urls", **urls)
+    try:
+        yield urls
+    finally:
+        vault_write(
+            "pki/config/urls",
+            issuing_certificates="",
+            ocsp_servers="",
+            crl_distribution_points="",
+            delta_crl_distribution_points="",
+            enable_templating=False,
+        )
+
+
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_certificate_managed_create(vault_pki, cert_args, testmode):
     ret = vault_pki.certificate_managed(**cert_args, test=testmode)
     assert ret.result is not False
@@ -334,8 +365,7 @@ def test_certificate_managed_create(vault_pki, cert_args, testmode):
     assert Path(cert_args["name"]).exists() is not testmode
 
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_certificate_managed_state_no_changes(vault_pki, cert_args, testmode):
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result
@@ -348,8 +378,7 @@ def test_certificate_managed_state_no_changes(vault_pki, cert_args, testmode):
     assert not ret.changes
 
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_certificate_managed_is_reissued_forcibly(vault_pki, cert_args, testmode):
     ret = vault_pki.certificate_managed(**cert_args)
     assert "created" in ret.changes
@@ -362,8 +391,7 @@ def test_certificate_managed_is_reissued_forcibly(vault_pki, cert_args, testmode
     assert (load_cert(cert_args["name"]).serial_number == serial) is testmode
 
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize("encoding", ["der", "pem", "pkcs7_der", "pkcs7_pem"])
 def test_certificate_managed_encoding(vault_pki, cert_args, encoding, testmode):
     cert_args["encoding"] = encoding
@@ -377,8 +405,7 @@ def test_certificate_managed_encoding(vault_pki, cert_args, encoding, testmode):
     assert not ret.changes
 
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_certificate_managed_no_create(vault_pki, cert_args, testmode):
     cert_args["create"] = False
     ret = vault_pki.certificate_managed(**cert_args, test=testmode)
@@ -387,8 +414,7 @@ def test_certificate_managed_no_create(vault_pki, cert_args, testmode):
     assert not Path(cert_args["name"]).exists()
 
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize("follow_symlinks", (False, True))
 def test_certificate_managed_symlink(vault_pki, cert_args, tmp_path, follow_symlinks, testmode):
     ret = vault_pki.certificate_managed(**cert_args)
@@ -484,7 +510,7 @@ def test_certificate_managed_local_changes_are_recreated(vault_pki, cert_args, c
 
 @pytest.fixture
 def existing_cert(
-    vault_pki, cert_args, issuer_setup, roles_setup, request
+    vault_pki, cert_args, issuer_setup, roles_setup, aia_urls, request
 ):  # pylint: disable=unused-argument
     cert_args.update(getattr(request, "param", {}))
     ret = vault_pki.certificate_managed(**cert_args)
@@ -493,8 +519,7 @@ def existing_cert(
     return load_cert(cert_args["name"]).serial_number
 
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize("existing_cert", ({"mode": "0644"},), indirect=True)
 def test_certificate_managed_file_param_changes_only(vault_pki, cert_args, existing_cert, testmode):
     """
@@ -548,8 +573,7 @@ def test_certificate_managed_expiry(vault_pki, cert_args, existing_cert):
     assert cert.not_valid_after_utc - cert.not_valid_before_utc > timedelta(minutes=15)
 
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_certificate_managed_existing_file_not_a_cert(vault_pki, cert_args):
     """
     When the target file exists, but does not contain a certificate,
@@ -588,6 +612,43 @@ def test_certificate_managed_exclude_cn_from_sans(vault_pki, cert_args, existing
     assert not ret.changes
 
 
+@pytest.mark.usefixtures("existing_cert")
+@pytest.mark.parametrize(
+    "existing_cert",
+    (
+        {"common_name": "foo.bar.baz"},
+        {"common_name": "foo@bar.baz"},
+        {"common_name": "Neither an email nor a domain"},
+    ),
+    indirect=True,
+)
+def test_certificate_managed_not_exclude_cn_from_sans(vault_pki, cert_args):
+    """
+    Ensure email common names are included as emails, domain common names as DNSName and
+    invalid ones are ignored.
+    """
+    cert = load_cert(cert_args["name"])
+    cn = cert_args["common_name"]
+    try:
+        sans = cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName).value
+    except cx509.ExtensionNotFound:
+        sans = None
+
+    if sans is None:
+        assert " " in cn
+    elif "@" in cn:
+        assert cert_args["common_name"] in sans.get_values_for_type(cx509.RFC822Name)
+    elif " " not in cn:
+        assert cert_args["common_name"] in sans.get_values_for_type(cx509.DNSName)
+    else:
+        raise AssertionError("No SANs expected for invalid email/dns CN")
+
+    # Ensure it's idempotent still
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+
 @pytest.mark.parametrize(
     "existing_cert", ({"sign_verbatim": True, "O": "Salt Project", "C": "US"},), indirect=True
 )
@@ -599,9 +660,9 @@ def test_certificate_managed_subject_attr_comparison(vault_pki, cert_args, exist
     cert_args["L"] = "Boston"
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result is True
-    assert ret.changes["subject"] == {
-        "C": {"old": "US", "new": "UK"},
-        "L": {"old": "", "new": "Boston"},
+    assert ret.changes["subject_name"] == {
+        "old": "CN=saltproject.io,O=Salt Project,C=US",
+        "new": "CN=saltproject.io,O=Salt Project,L=Boston,C=UK",
     }
     cert = load_cert(cert_args["name"])
     assert cert.serial_number != existing_cert
@@ -610,8 +671,36 @@ def test_certificate_managed_subject_attr_comparison(vault_pki, cert_args, exist
     assert cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["L"])[0].value == "Boston"
 
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup", "existing_cert")
+@pytest.mark.parametrize(
+    "existing_cert",
+    (
+        {"user_ids": "foo", "serial_number": "foobar"},
+        {"user_ids": "foo,bar"},
+        {"user_ids": ["bar", "foo"]},
+    ),
+    indirect=True,
+)
+def test_certificate_managed_user_ids_and_serial_number(vault_pki, cert_args):
+    cert: cx509.Certificate = load_cert(cert_args["name"])
+    user_ids = [uid.value for uid in cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["UID"])]
+    assert user_ids == (
+        cert_args["user_ids"].split(",")
+        if isinstance(cert_args["user_ids"], str)
+        else cert_args["user_ids"]
+    )
+    ssn = [sn.value for sn in cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["SERIALNUMBER"])]
+    if cert_args.get("serial_number"):
+        assert ssn == [cert_args["serial_number"]]
+    else:
+        assert not ssn
+
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_certificate_managed_missing_issuer(vault_pki, cert_args, testmode):
     cert_args["issuer_ref"] = "missing-issuer"
     cert_args["append_ca_chain"] = True
@@ -621,10 +710,9 @@ def test_certificate_managed_missing_issuer(vault_pki, cert_args, testmode):
     assert "'missing-issuer' does not exist" in ret.comment
 
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
-@pytest.mark.parametrize("testrole", ({}, {"use_csr_sans": False}), indirect=True)
-def test_certificate_managed_san(vault_pki, cert_args, testrole):
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
+@pytest.mark.parametrize("sign_verbatim", (False, True))
+def test_certificate_managed_san(vault_pki, cert_args, sign_verbatim):
     """
     Ensure changes to the requested SANs are detected and applied.
     This test is quite complex, when it should not be.
@@ -633,7 +721,14 @@ def test_certificate_managed_san(vault_pki, cert_args, testrole):
 
     def _assert_san(ass):
         cert = load_cert(cert_args["name"])
-        sans = cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName).value
+        try:
+            sans = cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName).value
+        except cx509.ExtensionNotFound:
+            if ass is False:
+                return
+            raise
+        if ass is False:
+            raise AssertionError(f"subjectAltName extension still present! Values: {list(sans)}")
         for typ, (in_vals, out_vals) in ass.items():
             typ_sans = sans.get_values_for_type(typ)
             if typ is cx509.IPAddress:
@@ -655,8 +750,10 @@ def test_certificate_managed_san(vault_pki, cert_args, testrole):
             in_vals = [in_vals]
             isl = False
         for in_val in in_vals:
-            if in_val.startswith(("dns", "email", "uri", "ip")):
-                ret.append(in_val)
+            if in_val.startswith("IP"):
+                ret.append("IP:" + ipaddress.ip_address(in_val.split(":", maxsplit=1)[1]).exploded)
+            elif in_val.startswith(("DNS", "email", "URI")):
+                ret.append(in_val.replace("überexample", "xn--berexample-8db"))
             else:
                 typ, val = in_val.split(":", maxsplit=1)
                 ret.append(f"otherName:{typ};UTF8:{val}")
@@ -673,44 +770,54 @@ def test_certificate_managed_san(vault_pki, cert_args, testrole):
     )
 
     # Add cert with diverse SANs
-    csr_sans = testrole.get("use_csr_sans", True)
     cert_args.pop("alt_names", None)
+    cert_args["sign_verbatim"] = sign_verbatim
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result is True
     assert "created" in ret.changes
     init_vals = [
-        "dns:foo.example.com",
-        "dns:foo2.example.com",
+        "1.2.3.4:Hi there!",
+        "1.2.3.4:You too :)",
+        "2.3.4.5:Are you guys seriously talking to yourselves?",
+        "DNS:foo.example.com",
+        "DNS:foo2.example.com",
+        "DNS:foo2.überexample.com",
         "email:foo@b.ar",
-        "uri:https://f.o.o/bar/baz",
-        "uri:https://f.o.o/bar/quux",
-        "ip:1.1.1.1",
-        "ip:13::17",
+        "IP:1.1.1.1",
+        "IP:13::17",
+        "URI:https://f.o.o/bar/baz",
+        "URI:https://f.o.o/bar/quux",
     ]
-    # expections of <type>: present[], absent[]
+    # expectations of <type>: present[], absent[]
     exp = {
-        dns: (["foo.example.com"], []),
+        dns: (["foo.example.com"] + ([] if sign_verbatim else [cert_args["common_name"]]), []),
         email: (["foo@b.ar"], []),
         uri: (["https://f.o.o/bar/baz"], []),
         ip: (["1.1.1.1", "13::17"], []),
+        other: (
+            [
+                "1.2.3.4:Hi there!",
+                "1.2.3.4:You too :)",
+                "2.3.4.5:Are you guys seriously talking to yourselves?",
+            ],
+            [],
+        ),
     }
-    if not csr_sans:
-        extra_init_vals = (
-            "1.2.3.4:Hi there!",
-            "1.2.3.4:You too :)",
-            "2.3.4.5:Are you guys seriously talking to yourselves?",
-        )
-        init_vals.extend(extra_init_vals)
-        exp[other] = (list(extra_init_vals), [])
+    cert_args["subjectAltName"] = ["DNS:this.should.not.matter"]
     cert_args["alt_names"] = init_vals.copy()
     added_vals = init_vals.copy()
 
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result is True
-    assert ret.changes["extensions"]["added"]["subjectAltName"] == {
-        "added": list(sorted(render_other(added_vals))),
-        "removed": [],
-    }
+    if sign_verbatim:
+        assert set(ret.changes["extensions"]["added"]["subjectAltName"]["value"]) == set(
+            render_other(added_vals)
+        )
+    else:
+        assert ret.changes["extensions"]["changed"]["subjectAltName"]["value"] == {
+            "added": list(sorted(render_other(added_vals))),
+            "removed": [],
+        }
 
     _assert_san(exp)
 
@@ -721,32 +828,42 @@ def test_certificate_managed_san(vault_pki, cert_args, testrole):
 
     # Now add more SANs
     change_vals = [
-        "dns:foo3.example.com",
+        "DNS:foo3.example.com",
         "email:bar@b.az",
-        "uri:https://f.o.o/bar/wut",
-        "ip:2.2.2.2",
+        "URI:https://f.o.o/bar/wut",
+        "IP:2.2.2.2",
+        "1.2.3.4:No! :|",
+        "1.3.6.1.5.5.7.8.9::::::!@#$%^&*",
     ]
-    if not csr_sans:
-        extra_change_vals = (
-            "1.2.3.4:No! :|",
-            "1.3.6.1.5.5.7.8.9::::::!@#$%^&*",
-        )
-        change_vals.extend(extra_change_vals)
-        exp[other][0].extend(extra_change_vals)
     cert_args["alt_names"].extend(change_vals)
     exp[dns][0].append("foo3.example.com")
     exp[email][0].append("bar@b.az")
     exp[uri][0].append("https://f.o.o/bar/wut")
     exp[ip][0].append("2.2.2.2")
+    exp[other][0].extend(["1.2.3.4:No! :|", "1.3.6.1.5.5.7.8.9::::::!@#$%^&*"])
 
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result is True
-    assert ret.changes["extensions"]["changed"]["subjectAltName"] == {
+    assert ret.changes["extensions"]["changed"]["subjectAltName"]["value"] == {
         "added": list(sorted(render_other(change_vals))),
         "removed": [],
     }
 
     _assert_san(exp)
+
+    if not sign_verbatim:
+        # Exclude CN from SANs
+        cert_args["exclude_cn_from_sans"] = True
+        exp[dns][0].remove(cert_args["common_name"])
+        exp[dns][1].append(cert_args["common_name"])
+        ret = vault_pki.certificate_managed(**cert_args)
+        assert ret.result is True
+        assert ret.changes["extensions"]["changed"]["subjectAltName"]["value"] == {
+            "added": [],
+            "removed": [f"DNS:{cert_args['common_name']}"],
+        }
+
+        _assert_san(exp)
 
     # Now remove the initial SANs
     cert_args["alt_names"] = list(change_vals)
@@ -754,11 +871,10 @@ def test_certificate_managed_san(vault_pki, cert_args, testrole):
     exp[email] = (["bar@b.az"], ["foo@b.ar"])
     exp[uri] = (["https://f.o.o/bar/wut"], ["https://f.o.o/bar/baz"])
     exp[ip] = (["2.2.2.2"], ["1.1.1.1", "13::17"])
-    if not csr_sans:
-        exp[other] = (["1.2.3.4:No! :|"], ["1.2.3.4:Hi there!"])
+    exp[other] = (["1.2.3.4:No! :|"], ["1.2.3.4:Hi there!"])
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result is True
-    assert ret.changes["extensions"]["changed"]["subjectAltName"] == {
+    assert ret.changes["extensions"]["changed"]["subjectAltName"]["value"] == {
         "added": [],
         "removed": list(sorted(render_other(init_vals))),
     }
@@ -769,7 +885,7 @@ def test_certificate_managed_san(vault_pki, cert_args, testrole):
     cert_args["alt_names"] = list(init_vals)
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result is True
-    assert ret.changes["extensions"]["changed"]["subjectAltName"] == {
+    assert ret.changes["extensions"]["changed"]["subjectAltName"]["value"] == {
         "added": list(sorted(render_other(init_vals))),
         "removed": list(sorted(render_other(change_vals))),
     }
@@ -780,14 +896,313 @@ def test_certificate_managed_san(vault_pki, cert_args, testrole):
     remove_vals = cert_args.pop("alt_names")
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result is True
-    assert ret.changes["extensions"]["removed"]["subjectAltName"] == {
-        "added": [],
-        "removed": list(sorted(render_other(remove_vals))),
+    assert set(ret.changes["extensions"]["removed"]["subjectAltName"]["value"]) == set(
+        render_other(remove_vals)
+    )
+    _assert_san(False)
+
+
+@pytest.mark.usefixtures("existing_cert")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
+@pytest.mark.parametrize(
+    "aia_urls,issuer_setup",
+    (
+        (
+            {
+                "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
+                "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
+                "delta_crl_distribution_points": [
+                    "https://deltacrl1.root.ca",
+                    "https://deltacrl2.root.ca",
+                ],
+                "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
+            },
+            {},
+        ),
+        (
+            {},
+            {
+                "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
+                "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
+                "delta_crl_distribution_points": [
+                    "https://deltacrl1.root.ca",
+                    "https://deltacrl2.root.ca",
+                ],
+                "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
+            },
+        ),
+        (
+            {
+                "issuing_certificates": [
+                    "https://one.root-general.ca",
+                    "https://two.root-general.ca",
+                ],
+                "crl_distribution_points": [
+                    "https://crl1.root-general.ca",
+                    "https://crl2.root-general.ca",
+                ],
+                "delta_crl_distribution_points": [
+                    "https://deltacrl1.root-general.ca",
+                    "https://deltacrl2.root-general.ca",
+                ],
+                "ocsp_servers": ["https://ocsp1.root-general.ca", "https://ocsp2.root-general.ca"],
+            },
+            {
+                "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
+                "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
+                "delta_crl_distribution_points": [
+                    "https://deltacrl1.root.ca",
+                    "https://deltacrl2.root.ca",
+                ],
+                "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
+            },
+        ),
+        (
+            {
+                "issuing_certificates": [
+                    "https://one.root-general.ca",
+                    "https://two.root-general.ca",
+                ],
+            },
+            {
+                "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
+            },
+        ),
+    ),
+    indirect=True,
+)
+def test_certificate_managed_urls(
+    vault_pki, cert_args, testmode, issuer_setup, aia_urls, container
+):
+    """
+    Ensure issuer URLs are added to the certificate as intended. If the issuer has any configured URL,
+    the mount default URLs are not applied.
+    """
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+
+    # Now check that we recognize URL changes.
+    # Whether issuer was not configured before (first test case)
+    issuer_first_configured = not any(
+        url in issuer_setup
+        for url in (
+            "issuing_certificates",
+            "ocsp_servers",
+            "crl_distribution_points",
+            "delta_crl_distribution_points",
+        )
+    )
+    had_crl_config = "crl_distribution_points" in (
+        issuer_setup if not issuer_first_configured else aia_urls
+    )
+    issuer_id = issuer_setup.pop("issuer_id")
+    issuer_setup["ocsp_servers"] = ["https://new-ocsp.root.ca"]
+    issuer_setup["crl_distribution_points"] = ["https://new-crl.root.ca"]
+    vault_write(f"/pki/issuer/{issuer_id}", **issuer_setup)
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert "extensions" in ret.changes
+    exp_aia = {
+        "added": {"OCSP": ["URI:https://new-ocsp.root.ca"]},
+        "removed": {
+            "OCSP": ["URI:https://ocsp1.root.ca", "URI:https://ocsp2.root.ca"],
+        },
     }
 
+    if issuer_first_configured:
+        exp_aia["removed"]["caIssuers"] = ["URI:https://one.root.ca", "URI:https://two.root.ca"]
+        # delta_crl_distribution_points requires recent releases, not present in 1.14.8
+        assert ("freshestCRL" in ret.changes["extensions"]["removed"]) is ("latest" in container)
+    else:
+        assert "freshestCRL" not in ret.changes["extensions"]["removed"]
+    assert ret.changes["extensions"]["changed"]["authorityInfoAccess"]["value"] == exp_aia
+    if had_crl_config:
+        exp_crl = {
+            "changed": [
+                {
+                    "fullname": {
+                        "new": ["URI:https://new-crl.root.ca"],
+                        "old": ["URI:https://crl1.root.ca"],
+                    }
+                }
+            ],
+            "removed": [
+                {
+                    "crlissuer": [],
+                    "fullname": ["URI:https://crl2.root.ca"],
+                    "reasons": [],
+                    "relativename": None,
+                }
+            ],
+        }
+        assert ret.changes["extensions"]["changed"]["cRLDistributionPoints"]["value"] == exp_crl
+    else:
+        assert "cRLDistributionPoints" in ret.changes["extensions"]["added"]
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
+    if not testmode:
+        # One final idempotency check
+        ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+        assert ret.result is True
+        assert not ret.changes
+
+
+@pytest.mark.usefixtures("existing_cert", "issuer_setup", "roles_setup")
+def test_certificate_managed_basic_constraints(vault_pki, cert_args, testmode, roles_setup):
+    roles_setup["testrole"]["basic_constraints_valid_for_non_ca"] = True
+    vault_write("pki/roles/testrole", **roles_setup["testrole"])
+
+    # Ensure we recognize the extension being added
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert "extensions" in ret.changes
+    assert "basicConstraints" in ret.changes["extensions"]["added"]
+
+    if not testmode:
+        # Ensure idempotency
+        ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+        assert ret.result is True
+        assert not ret.changes
+
+    # Ensure we recognize the extension not being added
+    roles_setup["testrole"]["basic_constraints_valid_for_non_ca"] = False
+    vault_write("pki/roles/testrole", **roles_setup["testrole"])
+
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is True
+    assert bool(ret.changes) is not testmode
+
+
+@pytest.mark.usefixtures("existing_cert", "issuer_setup", "roles_setup")
+def test_certificate_managed_key_usage(vault_pki, cert_args, testmode, roles_setup):
+    roles_setup["testrole"]["key_usage"] = [
+        "digitalsignature",
+        "keyagreement",  # needs to be set for encipheronly/decipheronly (cryptography fails, Vault succeeds)
+        # "keyencipherment",  # this is removed vs the defaults
+        "contentcommitment",
+        "dataencipherment",
+        "encipheronly",
+        "decipheronly",
+        "keycertsign",  # keyCertSign is not accepted by Vault,
+        "crlsign",  # but cRLsign is
+    ]
+    vault_write("pki/roles/testrole", **roles_setup["testrole"])
+
+    # Ensure we recognize the extension being changed
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert "extensions" in ret.changes
+    assert ret.changes["extensions"]["changed"]["keyUsage"]["value"] == {
+        "keyEncipherment": {"new": False, "old": True},
+        "nonRepudiation": {"new": True, "old": False},  # contentCommitment
+        "dataEncipherment": {"new": True, "old": False},
+        "encipherOnly": {"new": True, "old": False},
+        "decipherOnly": {"new": True, "old": False},
+        "cRLSign": {"new": True, "old": False},
+    }
+
+    if not testmode:
+        # Ensure idempotency
+        ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+        assert ret.result is True
+        assert not ret.changes
+
+    # Ensure we recognize the extension being removed
+    roles_setup["testrole"]["key_usage"] = []
+    vault_write("pki/roles/testrole", **roles_setup["testrole"])
+
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert "keyUsage" in ret.changes["extensions"]["removed"]
+
+    if not testmode:
+        ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+        assert ret.result is True
+        assert not ret.changes
+
+
+@pytest.mark.usefixtures("existing_cert", "issuer_setup", "roles_setup")
+def test_certificate_managed_ext_key_usage(vault_pki, cert_args, testmode, roles_setup):
+    roles_setup["testrole"]["ext_key_usage"] = ["timestamping", "serverauth"]
+    roles_setup["testrole"]["client_flag"] = False
+    roles_setup["testrole"]["code_signing_flag"] = True
+    roles_setup["testrole"]["email_protection_flag"] = True
+    roles_setup["testrole"]["ext_key_usage_oids"] = ["1.2.3.4.5.6.7.8"]
+    vault_write("pki/roles/testrole", **roles_setup["testrole"])
+
+    # Ensure we recognize the extension being changed
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert "extensions" in ret.changes
+    assert ret.changes["extensions"]["changed"]["extendedKeyUsage"]["value"] == {
+        "added": ["1.2.3.4.5.6.7.8", "codeSigning", "emailProtection", "timeStamping"],
+        "removed": ["clientAuth"],
+    }
+
+    if not testmode:
+        # Ensure idempotency
+        ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+        assert ret.result is True
+        assert not ret.changes
+
+    # Ensure we recognize the extension being removed
+    roles_setup["testrole"]["client_flag"] = False
+    roles_setup["testrole"]["server_flag"] = False
+    roles_setup["testrole"]["code_signing_flag"] = False
+    roles_setup["testrole"]["email_protection_flag"] = False
+    roles_setup["testrole"]["ext_key_usage"] = []
+    roles_setup["testrole"]["ext_key_usage_oids"] = []
+    vault_write("pki/roles/testrole", **roles_setup["testrole"])
+
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert "extendedKeyUsage" in ret.changes["extensions"]["removed"]
+
+    if not testmode:
+        ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+        assert ret.result is True
+        assert not ret.changes
+
+
+@pytest.mark.usefixtures("existing_cert", "issuer_setup", "roles_setup")
+def test_certificate_managed_certificate_policies(vault_pki, cert_args, testmode, roles_setup):
+    roles_setup["testrole"]["policy_identifiers"] = [
+        "2.3.4.5.6.7.8.9",
+        '{"oid":"1.2.3.4.5.6","notice":"foo"}',
+        '{"oid":"1.2.3.4.5.7","cps":"https://foo.bar/cps_pointer"}',
+        '{"oid":"1.2.3.4.5.8","cps":"https://foo.bar/cps_pointer","notice":"bar"}',
+    ]
+    vault_write("pki/roles/testrole", **roles_setup["testrole"])
+
+    # Ensure we recognize the extension being changed
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert "extensions" in ret.changes
+    cpo = {}
+    for pol in ret.changes["extensions"]["added"]["certificatePolicies"]["value"]:
+        cpo.update(pol)
+    assert cpo["2.3.4.5.6.7.8.9"] == []
+    assert cpo["1.2.3.4.5.6"][0]["explicit_text"] == "foo"
+    assert cpo["1.2.3.4.5.7"] == [{"practice_statement": "https://foo.bar/cps_pointer"}]
+    assert cpo["1.2.3.4.5.8"][0] == {"practice_statement": "https://foo.bar/cps_pointer"}
+    assert cpo["1.2.3.4.5.8"][1]["explicit_text"] == "bar"
+
+    if not testmode:
+        # Ensure idempotency
+        ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+        assert ret.result is True
+        assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize(
     "attr",
     [
@@ -798,27 +1213,206 @@ def test_certificate_managed_san(vault_pki, cert_args, testrole):
         ({"OU": "Salt Extensions"}),
     ],
 )
-def test_certificate_managed_sign_verbatim(vault_pki, cert_args, attr, testmode):
+def test_certificate_managed_sign_verbatim_subject(vault_pki, cert_args, attr):
     cert_args = {**cert_args, **attr}
     cert_args["sign_verbatim"] = True
-    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
-    assert ret.result is not False
-    assert (ret.result is None) is testmode
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
     assert "created" in ret.changes
-    if testmode:
-        assert not Path(cert_args["name"]).exists()  # type: ignore
-        return
 
     cert = load_cert(cert_args["name"])
-
     for k, v in attr.items():
         c_attrs = cert.subject.get_attributes_for_oid(NAME_ATTRS_OID[k])
         assert len(c_attrs) == 1
         assert c_attrs[0].value == v
 
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
+
+@pytest.mark.usefixtures("issuer_setup", "roles_setup", "existing_cert")
+@pytest.mark.parametrize(
+    "existing_cert",
+    (
+        {"sign_verbatim": True, "user_ids": "foo"},
+        {"sign_verbatim": True, "user_ids": "foo,bar", "serial_number": "foobar"},
+        {"sign_verbatim": True, "user_ids": ["bar", "foo"]},
+    ),
+    indirect=True,
+)
+def test_certificate_managed_sign_verbatim_user_ids_and_serial_number(vault_pki, cert_args):
+    cert: cx509.Certificate = load_cert(cert_args["name"])
+    user_ids = [uid.value for uid in cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["UID"])]
+    exp_uids = (
+        cert_args["user_ids"].split(",")
+        if isinstance(cert_args["user_ids"], str)
+        else cert_args["user_ids"]
+    )
+    assert user_ids == exp_uids
+    ssn = [sn.value for sn in cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["SERIALNUMBER"])]
+    if cert_args.get("serial_number"):
+        assert ssn == [cert_args["serial_number"]]
+        # Assert ASN1 order being the same as the one Vault encodes in regular mode
+        assert (
+            cert.subject.rfc4514_string()
+            == ",".join(f"UID={uid}" for uid in reversed(exp_uids))
+            + f",2.5.4.5={cert_args['serial_number']},CN=saltproject.io"
+        )
+    else:
+        assert not ssn
+        assert (
+            cert.subject.rfc4514_string()
+            == ",".join(f"UID={uid}" for uid in reversed(exp_uids)) + ",CN=saltproject.io"
+        )
+
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup", "roles_setup", "existing_cert")
+@pytest.mark.parametrize(
+    "existing_cert",
+    (
+        {
+            "sign_verbatim": True,
+            "alt_names": [
+                "DNS:*.saltproject.io",
+                "EMAIL:test@saltproject.io",
+                "IP:1.2.3.4",
+                "URI:https://foo.bar.baz",
+            ],
+            "common_name": "test.saltproject.io",
+        },
+    ),
+    indirect=True,
+)
+def test_certificate_managed_sign_verbatim_subject_alt_name(vault_pki, cert_args):
+    cert: cx509.Certificate = load_cert(cert_args["name"])
+    san = cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName)
+    assert san.critical is False
+    assert set(san.value.get_values_for_type(cx509.DNSName)) == {"*.saltproject.io"}
+    assert set(san.value.get_values_for_type(cx509.RFC822Name)) == {"test@saltproject.io"}
+    assert set(san.value.get_values_for_type(cx509.IPAddress)) == {ipaddress.ip_address("1.2.3.4")}
+    assert set(san.value.get_values_for_type(cx509.UniformResourceIdentifier)) == {
+        "https://foo.bar.baz"
+    }
+
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup", "roles_setup", "existing_cert")
+@pytest.mark.parametrize(
+    "existing_cert",
+    # intentionally leave keyUsage non-critical
+    (
+        pytest.param(
+            {"sign_verbatim": True, "keyUsage": ["digitalSignature", "keyAgreement"]}, id="from_csr"
+        ),
+        pytest.param(
+            {
+                "sign_verbatim": True,
+                "key_usage": ["digitalSignature", "keyAgreement"],
+            },
+            id="fallback",
+        ),
+    ),
+    indirect=True,
+)
+def test_certificate_managed_sign_verbatim_key_usage(vault_pki, cert_args):
+    cert = load_cert(cert_args["name"])
+    key_usage = cert.extensions.get_extension_for_class(cx509.KeyUsage)
+    assert key_usage.critical is ("key_usage" in cert_args)
+    assert key_usage.value.digital_signature is True
+    assert key_usage.value.key_agreement is True
+    assert key_usage.value.key_encipherment is False
+
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup", "roles_setup", "existing_cert")
+@pytest.mark.parametrize(
+    "existing_cert",
+    # intentionally make extendedKeyUsage critical
+    (
+        pytest.param(
+            {
+                "sign_verbatim": True,
+                "extendedKeyUsage": [
+                    "critical",
+                    "timeStamping",
+                    "emailProtection",
+                    "1.3.6.1.4.1.311.2.1.21",
+                ],
+            },
+            id="from_csr",
+        ),
+        pytest.param(
+            {
+                "sign_verbatim": True,
+                "ext_key_usage": [
+                    "timeStamping",
+                    "emailProtection",
+                ],
+                "ext_key_usage_oids": [
+                    "1.3.6.1.4.1.311.2.1.21",
+                ],
+            },
+            id="fallback",
+        ),
+    ),
+    indirect=True,
+)
+def test_certificate_managed_sign_verbatim_extended_key_usage(vault_pki, cert_args):
+    cert = load_cert(cert_args["name"])
+    ext_key_usage = cert.extensions.get_extension_for_class(cx509.ExtendedKeyUsage)
+    assert ext_key_usage.critical is ("extendedKeyUsage" in cert_args)
+    ext_key_usages = {usage.dotted_string for usage in ext_key_usage.value}
+    assert ext_key_usages == {"1.3.6.1.5.5.7.3.8", "1.3.6.1.5.5.7.3.4", "1.3.6.1.4.1.311.2.1.21"}
+
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup", "roles_setup", "existing_cert")
+@pytest.mark.parametrize(
+    "existing_cert",
+    ({"sign_verbatim": True, "subjectKeyIdentifier": "ca:fe:ba:be"},),
+    indirect=True,
+)
+def test_certificate_managed_sign_verbatim_explicit_subject_key_identifier(vault_pki, cert_args):
+    cert = load_cert(cert_args["name"])
+    ski = cert.extensions.get_extension_for_class(cx509.SubjectKeyIdentifier)
+    assert ski.value.digest.hex() == "cafebabe"
+
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup", "roles_setup", "existing_cert")
+@pytest.mark.parametrize(
+    "existing_cert",
+    ({"sign_verbatim": True, "tlsfeature": "status_request"},),
+    indirect=True,
+)
+def test_certificate_managed_sign_verbatim_other_ext(vault_pki, cert_args):
+    cert: cx509.Certificate = load_cert(cert_args["name"])
+    tls = cert.extensions.get_extension_for_class(cx509.TLSFeature)
+    assert list(tls.value) == [cx509.TLSFeatureType.status_request]
+
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_certificate_managed_changed_cn(vault_pki, cert_args, testmode):
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result
@@ -830,15 +1424,33 @@ def test_certificate_managed_changed_cn(vault_pki, cert_args, testmode):
     assert (ret.result is None) is testmode
     cert = load_cert(cert_args["name"])
 
-    assert "subject" in ret.changes
-    assert "CN" in ret.changes["subject"]
+    assert "subject_name" in ret.changes
+    assert f"CN={old_cn}" in ret.changes["subject_name"]["old"]
+    assert f"CN={cert_args['common_name']}" in ret.changes["subject_name"]["new"]
 
     c_attrs = cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["CN"])
     assert c_attrs[0].value == (old_cn if testmode else "brand new common name")
 
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup", "testrole")
+@pytest.mark.parametrize("testrole", ({}, {"use_csr_common_name": False}), indirect=True)
+def test_certificate_managed_use_csr_common_name(vault_pki, cert_args):
+    cert_args["CN"] = (
+        "cn.saltproject.io"  # Ensure this parameter for create_csr is synchronized with the common_name one
+    )
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result
+    assert "created" in ret.changes
+    cert = load_cert(cert_args["name"])
+    assert (
+        cert.subject.get_attributes_for_oid(cx509.NameOID.COMMON_NAME)[0].value == "saltproject.io"
+    )
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize(
     "attr,replace",
     [
@@ -877,12 +1489,11 @@ def test_certificate_managed_changed_subject(vault_pki, cert_args, attr, replace
     assert (ret.result is None) is testmode
     cert = load_cert(cert_args["name"])
 
-    assert "subject" in ret.changes
+    assert "subject_name" in ret.changes
 
     for k, v in replace.items():
-        assert k in ret.changes["subject"]
-        assert ret.changes["subject"][k]["old"] == attr[k]
-        assert ret.changes["subject"][k]["new"] == v
+        assert f"{k}={attr[k]}" in ret.changes["subject_name"]["old"]
+        assert f"{k}={v}" in ret.changes["subject_name"]["new"]
         c_attrs = cert.subject.get_attributes_for_oid(NAME_ATTRS_OID[k])
         assert len(c_attrs) == 1
         assert c_attrs[0].value == (attr[k] if testmode else v)
@@ -933,8 +1544,7 @@ def test_role_managed_correct_issuer(vault_pki, issuer_ref, testmode):
     assert role_info["issuer_ref"] == issuer_ref
 
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize(
     "params",
     [
@@ -961,8 +1571,7 @@ def test_role_managed_payload(vault_pki, params, testmode):
         assert (role_info[k] == v) is not testmode
 
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_role_managed_normalized_params_no_changes(vault_pki, testmode):
     """
     Ensure scalar values for list-type parameters and duration strings
@@ -984,8 +1593,7 @@ def test_role_managed_normalized_params_no_changes(vault_pki, testmode):
     assert not ret.changes
 
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize(
     "ttl,expected", [(60, 60), ("10m", 600), ("1h", 3600), ("1d", 86400), ("30d", 2592000)]
 )
@@ -1001,8 +1609,7 @@ def test_role_managed_ttl(vault_pki, ttl, expected, testmode):
         assert role_info["ttl"] == expected
 
 
-@pytest.mark.usefixtures("issuer_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize(
     "max_ttl,expected", [(60, 60), ("10m", 600), ("1h", 3600), ("1d", 86400), ("30d", 2592000)]
 )
@@ -1324,7 +1931,7 @@ def root_ca_args():
         "province": "Utah",
         "street_address": "Test Rd 123",
         "postal_code": "1337",
-        "subject_serial_number": "42",
+        "serial_number": "42",
     }
 
 
@@ -1355,23 +1962,6 @@ def existing_root(
     assert ret.result is True
     assert "created" in ret.changes
     return _default_issuer()
-
-
-@pytest.fixture
-def aia_urls(request):
-    urls = getattr(request, "param", {})
-    vault_write("pki/config/urls", **urls)
-    try:
-        yield urls
-    finally:
-        vault_write(
-            "pki/config/urls",
-            issuing_certificates="",
-            ocsp_servers="",
-            crl_endpoints="",
-            delta_crl_endpoints="",
-            enable_templating=False,
-        )
 
 
 @pytest.mark.usefixtures("clean_pki_mount")
@@ -1440,7 +2030,9 @@ def test_root_ca_present_create(vault_pki, root_ca_args, testmode, aia_urls, pat
     if aia_urls.get("crl_distribution_points"):
         cert.extensions.get_extension_for_class(cx509.CRLDistributionPoints)
     if aia_urls.get("delta_crl_distribution_points"):
-        if "vault" not in container or "latest" in container:
+        if ("vault" in container and "latest" in container) or (
+            "openbao" in container and aia_urls.get("crl_distribution_points")
+        ):
             cert.extensions.get_extension_for_class(cx509.FreshestCRL)
     basic_constraints = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
     assert basic_constraints.value.ca is True
@@ -1669,7 +2261,7 @@ def test_root_ca_present_changes(vault_pki, root_ca_args, testmode, container):
     if "excluded_alt_names" in root_ca_args:  # Vault 1.19+ only
         root_ca_args["excluded_alt_names"] = root_ca_args["excluded_alt_names"][:-1]
     root_ca_args["locality"] = "Salt Lake City"
-    root_ca_args.pop("subject_serial_number")
+    root_ca_args.pop("serial_number")
 
     ret = vault_pki.root_ca_present(**root_ca_args, test=testmode)
     assert ret.result is not False
@@ -1865,6 +2457,10 @@ def test_root_ca_present_ok_aia(vault_pki, root_ca_args, testmode):
             "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
         },
         {
+            "crl_distribution_points": [
+                "https://crl1.root.ca",
+                "https://crl2.root.ca",
+            ],  # required on OpenBao
             "delta_crl_distribution_points": [
                 "https://deltacrl1.root.ca",
                 "https://deltacrl2.root.ca",
@@ -1919,6 +2515,8 @@ def test_root_ca_present_changes_aia(vault_pki, root_ca_args, testmode, aia_urls
     elif "delta_crl_distribution_points" in aia_urls:
         if "vault" in container and "latest" not in container:
             pytest.skip("delta_crl_distribution_points requires Vault 2.0+ or OpenBao")
+        elif "openbao" in container and "crl_distribution_points" not in aia_urls:
+            pytest.skip("delta_crl_distribution_points requires crl_distribution_points on OpenBao")
         _, exp, act = (
             aia_urls["delta_crl_distribution_points"].append("https://crl3.root.ca"),
             {"freshestCRL"},
