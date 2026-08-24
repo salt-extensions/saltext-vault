@@ -92,7 +92,7 @@ def test_role_errors_are_reported(read_role, func, err):
     assert not res["changes"]
 
 
-@pytest.mark.parametrize("func", ("intermediate_ca_present", "root_ca_present"))
+@pytest.mark.parametrize("func", ("intermediate_issuer_managed", "root_issuer_managed"))
 @pytest.mark.parametrize("err", (CommandExecutionError, SaltInvocationError))
 def test_issuer_errors_are_reported(read_issuer, func, err):
     read_issuer.side_effect = err("booh")

@@ -721,9 +721,10 @@ def role_absent(name, mount="pki"):
     return ret
 
 
-def intermediate_ca_present(
+def intermediate_issuer_managed(
     name,
     days_remaining=30,
+    # key params
     key_ref=None,
     rotate_key=False,
     key_type=None,
@@ -732,6 +733,7 @@ def intermediate_ca_present(
     max_path_length=0,
     managed_key_name=None,
     managed_key_id=None,
+    # issuer params
     issuer_name=None,
     leaf_not_after_behavior=None,
     usage=None,
@@ -742,6 +744,7 @@ def intermediate_ca_present(
     ocsp_servers=None,
     aia_url_templating=None,
     mount="pki",
+    # params for x509.create_certificate
     **kwargs,
 ):
     """
@@ -1092,9 +1095,10 @@ def intermediate_ca_present(
     return ret
 
 
-def root_ca_present(  # pylint: disable=too-many-locals,too-many-arguments
+def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
     name,
     days_remaining=90,
+    # key params
     key_ref=None,
     rotate_key=False,
     key_type=None,
@@ -1102,6 +1106,7 @@ def root_ca_present(  # pylint: disable=too-many-locals,too-many-arguments
     key_bits=None,
     managed_key_name=None,
     managed_key_id=None,
+    # cert params
     alt_names=None,
     days_valid=3650,
     max_path_length=-1,
@@ -1120,6 +1125,7 @@ def root_ca_present(  # pylint: disable=too-many-locals,too-many-arguments
     signature_bits=0,
     not_before_duration=30,
     not_after=None,
+    # issuer params
     issuer_name=None,
     leaf_not_after_behavior=None,
     usage=None,

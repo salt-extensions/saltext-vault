@@ -146,7 +146,7 @@ def _subject_cn(cert):
 
 
 @pytest.mark.usefixtures("clean_pki_mount")
-def test_intermediate_ca_present_with_remote_signing(salt_call_cli, ca_minion):
+def test_intermediate_issuer_managed_with_remote_signing(salt_call_cli, ca_minion):
     """
     Ensure an intermediate CA can be provisioned and rotated when its
     certificate is signed by a CA minion via peer communication,
@@ -154,7 +154,7 @@ def test_intermediate_ca_present_with_remote_signing(salt_call_cli, ca_minion):
     """
 
     def _apply(**kwargs):
-        ret = salt_call_cli.run("state.single", "vault_pki.intermediate_ca_present", **kwargs)
+        ret = salt_call_cli.run("state.single", "vault_pki.intermediate_issuer_managed", **kwargs)
         assert ret.returncode == 0, ret.stderr
         assert isinstance(ret.data, dict)
         return ret.data[next(iter(ret.data))]
