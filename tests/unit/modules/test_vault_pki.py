@@ -145,7 +145,7 @@ def test_func_converts_errors(func, kwargs, query, request):
     if func == "write_role":
         # otherwise we would test read_role again
         request.getfixturevalue("_role_absent")
-    if func.startswith("import_issuer"):
+    if func.startswith("import_issuer") or func == "sign_certificate":
         # certificate encoding requires the x509 execution module
         request.getfixturevalue("_x509v2_mock")
     with pytest.raises(CommandExecutionError, match="booh"):

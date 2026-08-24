@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.x509.oid import NameOID
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
+from salt.modules.x509_v2 import create_csr
 from salt.utils.x509 import generate_rsa_privkey
 from salt.utils.x509 import load_cert
 
@@ -341,6 +342,38 @@ def test_sign_certificate_with_private_key(vault_pki, private_key):
         ttl="2h",
         alt_names=["dns:test2.example.com"],
     )
+    assert "certificate" in ret
+    certificate = load_cert(ret["certificate"])
+
+    assert certificate.issuer.rfc4514_string() == "CN=Test Issuer CA"
+
+    assert certificate.subject.rfc4514_string() == "CN=test.example.com"
+    san = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+    dns_sans = san.value.get_values_for_type(x509.DNSName)
+    assert certificate.not_valid_after_utc - run_time > timedelta(hours=1)
+    assert "test2.example.com" in dns_sans
+    assert "test.example.com" in dns_sans
+
+
+@pytest.mark.usefixtures("issuers_setup", "roles_setup")
+@pytest.mark.usefixtures("roles_setup")
+def test_sign_certificate_with_csr(vault_pki, private_key):
+    run_time = datetime.now(tz=timezone.utc)
+    csr = create_csr(
+        CN="test.example.com",
+        private_key=private_key,
+        subjectAltName=["dns:test.example.com", "dns:test2.example.com"],
+    )
+
+    with pytest.helpers.temp_file(  # ty: ignore[unresolved-attribute]
+        "csr", contents=csr
+    ) as csr_file:
+        ret = vault_pki.sign_certificate(
+            "testrole",
+            common_name="test.example.com",
+            csr=str(csr_file),
+            ttl="2h",
+        )
     assert "certificate" in ret
     certificate = load_cert(ret["certificate"])
 
