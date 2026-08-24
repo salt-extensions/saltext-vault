@@ -1,3 +1,5 @@
+# pylint: disable=too-many-lines
+
 import ipaddress
 from copy import deepcopy
 from datetime import datetime
@@ -2319,7 +2321,10 @@ def test_root_ca_present_changes(vault_pki, root_ca_args, testmode, container):
         root_ca_args["key_usage"] = None
         expected_ext_changes.add("keyUsage")
     root_ca_args["exclude_cn_from_sans"] = False
-    root_ca_args["permitted_alt_names"] = root_ca_args["permitted_alt_names"][:-1]
+    root_ca_args["permitted_alt_names"], permitted_removed = (
+        root_ca_args["permitted_alt_names"][:-1],
+        root_ca_args["permitted_alt_names"][-1],
+    )
     if "excluded_alt_names" in root_ca_args:  # Vault 1.19+ only
         root_ca_args["excluded_alt_names"] = root_ca_args["excluded_alt_names"][:-1]
     root_ca_args["locality"] = "Salt Lake City"
@@ -2334,8 +2339,35 @@ def test_root_ca_present_changes(vault_pki, root_ca_args, testmode, container):
     assert cert_changes
     assert "subject_name" in cert_changes
     assert cert_changes["signature_bits"] == {"old": 384, "new": 512}
-    assert set(cert_changes["extensions"]["changed"]) == expected_ext_changes
     assert cert_changes["private_key"]
+
+    assert set(cert_changes["extensions"]["changed"]) == expected_ext_changes
+    changed_exts = cert_changes["extensions"]["changed"]
+    assert changed_exts["basicConstraints"]["value"]["pathlen"] == {
+        "old": 2,
+        "new": None,
+    }
+    assert changed_exts["subjectAltName"]["value"]["added"] == ["DNS:test.root.ca"]
+    assert changed_exts["subjectAltName"]["value"]["removed"] == []
+    assert changed_exts["nameConstraints"]["value"]["permitted_subtrees"]["added"] == []
+    pm_typ, pm_val = permitted_removed.split(":", maxsplit=1)
+    assert changed_exts["nameConstraints"]["value"]["permitted_subtrees"]["removed"] == [
+        f"{pm_typ.upper()}:{pm_val}"
+    ]
+    if "excluded_alt_names" in root_ca_args:
+        assert changed_exts["nameConstraints"]["value"]["excluded_subtrees"]["added"] == []
+        assert changed_exts["nameConstraints"]["value"]["excluded_subtrees"]["removed"] == [
+            "URI:no.bar.baz"
+        ]
+    else:
+        assert "excluded_subtrees" not in changed_exts["nameConstraints"]["value"]
+    assert (changed_exts["subjectKeyIdentifier"]["value"]["new"] == "<TBD>") is testmode
+    if "key_usage" in root_ca_args:
+        assert changed_exts["keyUsage"]["value"]["digitalSignature"] == {
+            "new": False,
+            "old": True,
+        }
+
     new_info = _default_issuer()
     assert (new_info == issuer_info) is testmode
     assert (new_info["key_id"] == issuer_info["key_id"]) is testmode
@@ -2343,6 +2375,7 @@ def test_root_ca_present_changes(vault_pki, root_ca_args, testmode, container):
     if testmode:
         assert new_cert == cert
         return
+
     basic_constraints = new_cert.extensions.get_extension_for_class(cx509.BasicConstraints)
     assert basic_constraints.value.ca is True
     assert basic_constraints.value.path_length is None
@@ -2453,6 +2486,9 @@ def test_root_ca_present_changes_existing_key(vault_pki, root_ca_args, testmode)
     assert cert_changes
     assert "private_key" in cert_changes
     assert "subjectKeyIdentifier" in cert_changes["extensions"]["changed"]
+    assert (
+        cert_changes["extensions"]["changed"]["subjectKeyIdentifier"]["value"]["new"] == "<TBD>"
+    ) is testmode
     new_info = _default_issuer()
     assert (new_info == issuer_info) is testmode
     if testmode:

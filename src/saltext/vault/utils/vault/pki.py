@@ -30,15 +30,8 @@ from salt.utils import immutabletypes
 from saltext.vault.utils.vault.helpers import deserialize_csl
 from saltext.vault.utils.vault.helpers import timestring_map
 
-try:
-    _compare_cert = x509util._compare_cert
-except AttributeError:
-    from salt.states.x509_v2 import (  # pylint: disable=no-name-in-module  # isort:skip
-        _compare_cert,  # ty: ignore[unresolved-import]
-    )
-
-
 log = logging.getLogger(__name__)
+
 Privkey: typing.TypeAlias = (
     ec.EllipticCurvePrivateKey
     | ed448.Ed448PrivateKey
@@ -861,6 +854,8 @@ def check_root_issuer_for_changes(
     permitted_alt_names: dict[str, str | list[str]] | list[str] | None,
     postal_code: list[str] | str | None,
     province: list[str] | str | None,
+    replace_key: bool,
+    rotate_key: bool,
     signature_bits: int,
     street_address: list[str] | str | None,
     serial_number: str | None,
@@ -987,6 +982,7 @@ def check_root_issuer_for_changes(
         # naive datetime object, release <42 (it's always UTC)
         curr_not_after = cert.not_valid_after.replace(tzinfo=timezone.utc)
     new_not_after = _getattr_safe(builder, "_not_valid_after").replace(tzinfo=timezone.utc)
+
     if (not_after is not None and curr_not_after != new_not_after) or (
         not_after is None
         and curr_not_after < datetime.now(tz=timezone.utc) + timedelta(days=days_remaining)
@@ -995,16 +991,40 @@ def check_root_issuer_for_changes(
             "old": curr_not_after.strftime(TIME_FMT),
             "new": new_not_after.strftime(TIME_FMT),
         }
-    changes.update(_compare_cert(cert, builder, None, None, None, None))
-    if "freshestCRL" in changes.get("extensions", {}).get("added", []) and not urls.get(
-        "crl_distribution_points"
+
+    if _getattr_safe(builder, "_subject_name") != cert.subject:
+        changes["subject_name"] = {
+            "old": cert.subject.rfc4514_string(),
+            "new": _getattr_safe(builder, "_subject_name").rfc4514_string(),
+        }
+
+    ext_changes = _compare_exts(cert, builder)
+    if (
+        ext_changes
+        and "freshestCRL" in ext_changes["added"]
+        and not urls.get("crl_distribution_points")
     ):
         # OpenBao does not add a freshestCRL extension without a cRLDistributionPoints one.
         # Vault only warns about it.
-        changes["extensions"]["added"].remove("freshestCRL")
-        if not any(changes["extensions"].values()):
-            changes.pop("extensions")
+        ext_changes["added"].pop("freshestCRL")
+    if any(ext_changes.values()):
+        changes["extensions"] = ext_changes
 
+    if (changes and rotate_key) or replace_key:
+        changes["private_key"] = True
+        ext_changes = changes.setdefault("extensions", {"added": {}, "changed": {}, "removed": {}})
+        if "subjectKeyIdentifier" not in ext_changes["changed"]:
+            try:
+                ski = cert.extensions.get_extension_for_class(cx509.SubjectKeyIdentifier)
+            except cx509.ExtensionNotFound:  # pragma: no cover
+                ext_changes["added"]["subjectKeyIdentifier"] = {
+                    "critical": False,
+                    "value": "<TBD>",
+                }
+            else:
+                ext_changes["changed"]["subjectKeyIdentifier"] = {
+                    "value": {"old": _render_extension(ski)["value"], "new": "<TBD>"}
+                }
     return changes
 
 
@@ -1145,11 +1165,11 @@ def _build_root_issuer_cert(
 
 
 def _compare_cert_signing(
-    current: cx509.Certificate, signing_ca: cx509.Certificate | None, private_key: Privkey
+    current: cx509.Certificate, signing_ca: cx509.Certificate, private_key: Privkey
 ) -> dict[str, typing.Any]:
     changes = {}
 
-    if signing_ca and not x509util.verify_signature(current, signing_ca.public_key()):
+    if not x509util.verify_signature(current, signing_ca.public_key()):
         changes["signing_private_key"] = True
 
     # Check correctly if issuer is the same
@@ -1371,6 +1391,18 @@ def sync_verbatim_csr_subject(csr_args, *, serial_number, user_ids):
             subject_list.append(f"{oid.dotted_string}={subject_kwargs[subject_attr]}")
     csr_args["subject"] = subject_list
     return csr_args
+
+
+def get_ski(cert: str | bytes | cx509.Certificate) -> str | None:
+    """
+    Get a certificate's subjectKeyIdentifier in pretty hex.
+    """
+    loaded_cert = x509util.load_cert(cert)
+    try:
+        ski = loaded_cert.extensions.get_extension_for_class(cx509.SubjectKeyIdentifier)
+    except cx509.ExtensionNotFound:
+        return None
+    return _render_extension(ski)["value"]
 
 
 def _getattr_safe(obj: object, attr: str) -> typing.Any:
@@ -1609,13 +1641,17 @@ def _compare_alt_names(
 
 
 def _compare_name_constraints(
-    old: cx509.NameConstraints, new: cx509.NameConstraints
+    old: cx509.Extension[cx509.NameConstraints], new: cx509.Extension[cx509.NameConstraints]
 ) -> dict[str, dict[ExtensionListChange, list[str]]]:
     changes = {}
-    permitted_changes = _compare_gn_list(old.permitted_subtrees or [], new.permitted_subtrees or [])
+    permitted_changes = _compare_gn_list(
+        old.value.permitted_subtrees or [], new.value.permitted_subtrees or []
+    )
     if permitted_changes:
         changes["permitted_subtrees"] = permitted_changes
-    excluded_changes = _compare_gn_list(old.excluded_subtrees or [], new.excluded_subtrees or [])
+    excluded_changes = _compare_gn_list(
+        old.value.excluded_subtrees or [], new.value.excluded_subtrees or []
+    )
     if excluded_changes:
         changes["excluded_subtrees"] = excluded_changes
     return changes
