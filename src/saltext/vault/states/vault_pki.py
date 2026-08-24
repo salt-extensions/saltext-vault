@@ -1349,7 +1349,7 @@ def root_ca_present(  # pylint: disable=too-many-locals,too-many-arguments
         "changes": {},
     }
     changes = {}
-    cert_affected = issuer_affected = False
+    cert_affected = issuer_affected = replace_key = False
     issuer_id = None
     msg = []
 
@@ -1381,41 +1381,35 @@ def root_ca_present(  # pylint: disable=too-many-locals,too-many-arguments
                 urls = __salt__["vault_pki.read_urls"](mount=mount)
             except CommandExecutionError:
                 urls = {}
-            cert_changes = pki.check_root_issuer_for_changes(
+            replace_key = key_ref is not None and current["key_id"] != __salt__[
+                "vault_pki.get_key_id"
+            ](key_ref, mount=mount)
+            if cert_changes := pki.check_root_issuer_for_changes(
                 "".join(current["ca_chain"]),
-                common_name=name,
                 alt_names=alt_names,
-                days_valid=days_valid,
-                max_path_length=max_path_length,
-                key_usage=key_usage,
-                exclude_cn_from_sans=exclude_cn_from_sans,
-                permitted_alt_names=permitted_alt_names,
-                excluded_alt_names=excluded_alt_names,
-                ou=ou,
-                organization=organization,
+                common_name=name,
                 country=country,
+                days_remaining=days_remaining,
+                days_valid=days_valid,
+                exclude_cn_from_sans=exclude_cn_from_sans,
+                excluded_alt_names=excluded_alt_names,
+                key_usage=key_usage,
                 locality=locality,
-                province=province,
-                street_address=street_address,
+                max_path_length=max_path_length,
+                not_after=not_after,
+                not_before_duration=not_before_duration,
+                organization=organization,
+                ou=ou,
+                permitted_alt_names=permitted_alt_names,
                 postal_code=postal_code,
+                province=province,
+                replace_key=replace_key,
+                rotate_key=rotate_key,
                 serial_number=serial_number,
                 signature_bits=signature_bits,
-                not_before_duration=not_before_duration,
-                not_after=not_after,
-                days_remaining=days_remaining,
+                street_address=street_address,
                 urls=urls,
-            )
-            if (cert_changes and rotate_key) or (
-                key_ref is not None
-                and current["key_id"] != __salt__["vault_pki.get_key_id"](key_ref, mount=mount)
             ):
-                cert_changes["private_key"] = True
-                ext_changes = cert_changes.setdefault(
-                    "extensions", {"added": [], "changed": [], "removed": []}
-                )
-                if "subjectKeyIdentifier" not in ext_changes["changed"]:
-                    ext_changes["changed"].append("subjectKeyIdentifier")
-            if cert_changes:
                 changes["cert"], cert_affected = cert_changes, True
 
             if issuer_changes := _check_issuer_config_changes(
@@ -1523,6 +1517,20 @@ def root_ca_present(  # pylint: disable=too-many-locals,too-many-arguments
                 )
                 return ret
             if current is not None:
+                # Correctly report new subjectKeyIdentifier, it's "<TBD>" right now
+                if rotate_key or replace_key:
+                    new_issuer = __salt__["vault_pki.read_issuer"](mount=mount)
+                    new_ski = pki.get_ski("".join(new_issuer["ca_chain"]))
+                    if (
+                        "subjectKeyIdentifier" in changes["cert"]["extensions"]["added"]
+                    ):  # pragma: no cover
+                        changes["cert"]["extensions"]["added"]["subjectKeyIdentifier"][
+                            "value"
+                        ] = new_ski
+                    else:
+                        changes["cert"]["extensions"]["changed"]["subjectKeyIdentifier"]["value"][
+                            "new"
+                        ] = new_ski
                 ret["changes"]["cert"] = changes["cert"]
             msg.append(f"Root CA certificate has been {'rotated' if current else 'created'}")
 
