@@ -92,11 +92,11 @@ VALID_FILE_ARGS = (
 )
 
 
-def certificate_managed(  # pylint: disable=too-many-locals
+def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
     name,
-    common_name,
-    role_name,
-    private_key,
+    common_name=None,
+    role_name=None,
+    private_key=None,
     mount="pki",
     ttl="720h",
     ttl_remaining="168h",
@@ -136,6 +136,9 @@ def certificate_managed(  # pylint: disable=too-many-locals
         and issuer URL configuration. This requires read access to the role, issuer and mount default URL configuration.
         If read access to any of these endpoints is denied, this state is most likely not idempotent anymore.
 
+        Also, when ``issuer_ref`` is unspecified, now uses the generic ``{mount}/sign*`` endpoints instead
+        of the issuer-specific ``{mount}/issuer/{issuer_ref}/sign/{role_name}`` with the explicit issuer_ref from the role.
+
     Required policy:
 
     .. code-block:: vaultpolicy
@@ -152,16 +155,38 @@ def certificate_managed(  # pylint: disable=too-many-locals
             capabilities = ["read"]
         }
 
+        # Read issuer for URL configuration and CA chain. issuer_ref becomes `default` if unspecified
         path "{mount}/issuer/{issuer_ref}" {
             capabilities = ["read"]
         }
 
-        path "{mount}/issuer/{issuer_ref}/sign/{role_name}" {
+        # When sign_verbatim is false and not specifying issuer_ref
+        path "<mount>/sign/<role_name>" {
             capabilities = ["update"]
         }
 
-        # in case of sign_verbatim
-        path "{mount}/issuer/{issuer_ref}/sign-verbatim/{role_name}" {
+        # When sign_verbatim is false and specifying issuer_ref
+        path "<mount>/issuer/<issuer_ref>/sign/<role_name>" {
+            capabilities = ["update"]
+        }
+
+        # When sign_verbatim is true and neither specifying issuer_ref nor role_name
+        path "<mount>/sign-verbatim" {
+            capabilities = ["update"]
+        }
+
+        # When sign_verbatim is true and specifying role_name, but not issuer_ref
+        path "<mount>/sign-verbatim/<role_name>" {
+            capabilities = ["update"]
+        }
+
+        # When sign_verbatim is true and specifying issuer_ref, but not role_name
+        path "<mount>/issuer/<issuer_ref>/sign-verbatim" {
+            capabilities = ["update"]
+        }
+
+        # When sign_verbatim is true and specifying both issuer_ref and role_name
+        path "<mount>/issuer/<issuer_ref>/sign-verbatim/<role_name>" {
             capabilities = ["update"]
         }
 
@@ -170,13 +195,17 @@ def certificate_managed(  # pylint: disable=too-many-locals
 
     common_name
         Subject common name (``CN``) for the certificate.
+        Required, unless the role explicitly sets ``require_cn`` to false or
+        ``sign_verbatim`` is true.
 
     role_name
         PKI role to use for issuing the certificate.
+        Required, unless ``sign_verbatim`` is true.
 
     private_key
         Path or PEM formatted text of the private key to use for signing the CSR and thus
         as the private key for the certificate.
+        Required.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -307,6 +336,11 @@ def certificate_managed(  # pylint: disable=too-many-locals
     file_args, cert_args = _split_file_kwargs(hlp.filter_state_internal_kwargs(kwargs))
 
     try:
+        if not private_key:  # pragma: no cover
+            raise SaltInvocationError("`private_key` is required")
+        if not sign_verbatim and not role_name:
+            raise SaltInvocationError("`role_name` is required when `sign_verbatim` is false")
+
         encoding = hlp.in_vals(("der", "pem", "pkcs7_der", "pkcs7_pem"), encoding=encoding)
 
         if encoding == "der" and append_ca_chain:
@@ -355,15 +389,22 @@ def certificate_managed(  # pylint: disable=too-many-locals
         if file_exists is None:
             file_exists = __salt__["file.file_exists"](name)
 
-        role_info = __salt__["vault_pki.read_role"](role_name, mount=mount) or {}
-        if issuer_ref is None:
-            issuer_ref = role_info.get("issuer_ref")
-            if issuer_ref is None:
-                raise CommandExecutionError(f"Role {role_name} does not exist.")
+        if role_name is not None:
+            role_info = __salt__["vault_pki.read_role"](role_name, mount=mount)
+            if role_info is None:
+                raise CommandExecutionError(f"Role {role_name} does not exist")
+        else:
+            # allowed when signing verbatim
+            role_info = {}
 
-        issuer_info = __salt__["vault_pki.read_issuer"](issuer_ref, mount=mount)
+        if issuer_ref is None:
+            issuer_ref = role_info.get("issuer_ref", "default")
+
+        issuer_info = __salt__["vault_pki.read_issuer"](issuer_ref or "default", mount=mount)
         if issuer_info is None:
-            raise CommandExecutionError(f"Issuer '{issuer_ref}' does not exist on mount {mount}")
+            raise CommandExecutionError(
+                f"Issuer '{issuer_ref or 'default'}' does not exist on mount {mount}"
+            )
 
         url_configs = (
             "issuing_certificates",
