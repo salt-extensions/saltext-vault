@@ -1812,7 +1812,7 @@ def sign_certificate(
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     csr
-        Pass the CSR which should be used for issuing the certificate.
+        Pass the CSR which should be used for issuing the certificate. Can be text or path.
         Either ``csr`` or ``private_key`` parameter can be set, not both.
 
     private_key
@@ -1966,6 +1966,9 @@ def sign_certificate(
                 digest=digest,
                 **csr_args,
             )
+    else:
+        # Ensure we load file paths and pass the CSR in PEM encoding
+        csr = _x509v2("encode_csr", csr)
 
     payload["csr"] = csr
 

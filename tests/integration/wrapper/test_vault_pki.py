@@ -39,6 +39,7 @@ from tests.functional.modules.test_vault_pki import test_read_issuer_crl
 from tests.functional.modules.test_vault_pki import test_revoke_certificate
 from tests.functional.modules.test_vault_pki import test_set_default_issuer
 from tests.functional.modules.test_vault_pki import test_sign_certificate_with_alternative_issuer
+from tests.functional.modules.test_vault_pki import test_sign_certificate_with_csr
 from tests.functional.modules.test_vault_pki import test_sign_certificate_with_der_encoding
 from tests.functional.modules.test_vault_pki import test_sign_certificate_with_private_key
 from tests.functional.modules.test_vault_pki import test_sign_certificate_with_sign_verbatim
