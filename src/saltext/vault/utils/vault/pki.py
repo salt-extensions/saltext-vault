@@ -290,6 +290,12 @@ def check_cert_for_changes(
     csr_args, _ = split_csr_kwargs(kwargs)
     if common_name is not None:
         csr_args["CN"] = common_name
+    elif not sign_verbatim and role_info.get("require_cn", True):
+        raise CommandExecutionError(
+            "`common_name` is required: Not signing verbatim and role does not specify require_cn=false"
+        )
+    else:
+        csr_args.pop("CN", None)
 
     # subjectAltName is always synced with alt_names by the execution module.
     # We currently rely on a workaround for otherName SANs, which would break if we passed them to create_csr.

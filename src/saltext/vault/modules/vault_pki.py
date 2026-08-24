@@ -799,7 +799,7 @@ def generate_root(
         salt '*' vault_pki.generate_root my-root
 
     common_name
-        Common Name to be used for the CA.
+        Subject common name (``CN``) for the certificate.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -1630,7 +1630,7 @@ def _find_signing_issuer(leaf_pem, authority_key_id=None, mount="pki"):
 
 def issue_certificate(
     role_name,
-    common_name,
+    common_name=None,
     mount="pki",
     issuer_ref=None,
     alt_names=None,
@@ -1650,12 +1650,12 @@ def issue_certificate(
 
         # When not specifying issuer_ref
         path "<mount>/issue/<role_name>" {
-            capabilities = ["create", "update"]
+            capabilities = ["update"]
         }
 
         # When specifying issuer_ref
         path "<mount>/issuer/<issuer_ref>/issue/<role_name>" {
-            capabilities = ["create", "update"]
+            capabilities = ["update"]
         }
 
     CLI Example:
@@ -1665,10 +1665,11 @@ def issue_certificate(
         salt '*' vault_pki.issue_certificate myrole common_name="www.example.com"
 
     role_name
-        Name of the role to be used for issuing the certificate.
+        PKI role to use for issuing the certificate. Required.
 
     common_name
-        Common name to be set for the certificate.
+        Subject common name (``CN``) for the certificate.
+        Required, unless the role explicitly sets ``require_cn`` to false.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -1678,23 +1679,25 @@ def issue_certificate(
         Can be issuer_name or issuer_id.
 
     alt_names
-        Any alternative names to be added to the certificate.
+        Any alternative names to add to the certificate.
         Can be specified either as dict (``{ "<type>": "<value>" }``),
-        a dict of lists(``{ "<type>": ["<value1>", "<value2>", ...] }``)
-        or list of SAN strings (``["<type>:<value>"]``).
+        a dict of lists (``{ "<type>": ["<value1>", "<value2>", ...] }``)
+        or list of SAN strings (``["<type1>:<value1>", ...]``).
 
         ``<type>`` can be ``dns``, ``email``, ``uri``, ``ip`` or any OID for otherName SANs.
         ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8:``.
 
     ttl
-        Specifies the requested Time To Live (after which the certificate expires).
+        Specifies the requested Time To Live (after which the certificate will be expired).
         This cannot be larger than the engine's max (or, if not set, the system max).
+        Can be an integer, which is interpreted as seconds, or a time string such as ``1h``.
 
     format
         Can be either ``pem`` or ``der``. Defaults to ``pem``.
 
     exclude_cn_from_sans
-        If set to true, the Common Name is not part of the SANs.
+        If set to true, the Common Name is not added to the SANs.
+        Useful if the CN is not a hostname or email address.
 
     kwargs
         Any additional parameter accepted by the Vault API.
@@ -1730,8 +1733,8 @@ def issue_certificate(
 
 
 def sign_certificate(
-    role_name,
-    common_name,
+    role_name=None,
+    common_name=None,
     mount="pki",
     csr=None,
     private_key=None,
@@ -1760,22 +1763,32 @@ def sign_certificate(
 
         # When sign_verbatim is false and not specifying issuer_ref
         path "<mount>/sign/<role_name>" {
-            capabilities = ["create", "update"]
+            capabilities = ["update"]
         }
 
         # When sign_verbatim is false and specifying issuer_ref
         path "<mount>/issuer/<issuer_ref>/sign/<role_name>" {
-            capabilities = ["create", "update"]
+            capabilities = ["update"]
         }
 
-        # When sign_verbatim is true and not specifying issuer_ref
+        # When sign_verbatim is true and neither specifying issuer_ref nor role_name
+        path "<mount>/sign-verbatim" {
+            capabilities = ["update"]
+        }
+
+        # When sign_verbatim is true and specifying role_name, but not issuer_ref
         path "<mount>/sign-verbatim/<role_name>" {
-            capabilities = ["create", "update"]
+            capabilities = ["update"]
         }
 
-        # When sign_verbatim is true and specifying issuer_ref
+        # When sign_verbatim is true and specifying issuer_ref, but not role_name
+        path "<mount>/issuer/<issuer_ref>/sign-verbatim" {
+            capabilities = ["update"]
+        }
+
+        # When sign_verbatim is true and specifying both issuer_ref and role_name
         path "<mount>/issuer/<issuer_ref>/sign-verbatim/<role_name>" {
-            capabilities = ["create", "update"]
+            capabilities = ["update"]
         }
 
     CLI Example:
@@ -1787,9 +1800,13 @@ def sign_certificate(
 
     role_name
         PKI role to use for issuing the certificate.
+        Required, unless ``sign_verbatim`` is true.
 
     common_name
         Subject common name (``CN``) for the certificate.
+        Required, unless the role explicitly sets ``require_cn`` to false,
+        ``sign_verbatim`` is true or the passed ``csr`` specifies it and
+        the role's ``use_csr_common_name`` is equal to the default value of true.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -1862,12 +1879,17 @@ def sign_certificate(
         Note that ``CN`` and ``subjectAltName`` are overwritten with the
         ``common_name``/``alt_names`` parameters to this function, regardless of ``sign_verbatim``.
     """
+    if not sign_verbatim and not role_name:
+        raise SaltInvocationError("`role_name` is required when `sign_verbatim` is false")
     hlp.one_of(csr=csr, private_key=private_key)
 
     sign = "sign-verbatim" if sign_verbatim else "sign"
-    endpoint = f"{mount}/{sign}/{role_name}"
     if issuer_ref is not None:
-        endpoint = f"{mount}/issuer/{issuer_ref}/{sign}/{role_name}"
+        endpoint = f"{mount}/issuer/{issuer_ref}/{sign}"
+    else:
+        endpoint = f"{mount}/{sign}"
+    if role_name:
+        endpoint += f"/{role_name}"
     csr_args, extra_args = pki.split_csr_kwargs(kwargs)
 
     payload = {k: v for k, v in extra_args.items() if not k.startswith("_") and v is not None}
@@ -1909,7 +1931,10 @@ def sign_certificate(
             # Ensure alt_names is the only parameter to specify SANs
             csr_args.pop("subjectAltName", None)
         # Ensure we get the specified CN, regardless of a role's use_csr_common_name or sign_verbatim
-        csr_args["CN"] = common_name
+        if common_name is not None:
+            csr_args["CN"] = common_name
+        else:
+            csr_args.pop("CN", None)
         # Ensure user_ids and serial_number work the same across regular and verbatim signing
         csr_args = pki.sync_verbatim_csr_subject(
             csr_args, user_ids=user_ids, serial_number=serial_number
