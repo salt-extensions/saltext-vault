@@ -1804,9 +1804,10 @@ def sign_certificate(
 
     common_name
         Subject common name (``CN``) for the certificate.
-        Required, unless the role explicitly sets ``require_cn`` to false,
-        ``sign_verbatim`` is true or the passed ``csr`` specifies it and
-        the role's ``use_csr_common_name`` is equal to the default value of true.
+        Required, unless the role explicitly sets ``require_cn`` to false or
+        ``sign_verbatim`` is true.
+        Ignored (i.e. also not required) when a ``csr`` is passed that specifies
+        it and the role's ``use_csr_common_name`` is true (the default value).
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -1843,6 +1844,8 @@ def sign_certificate(
 
         ``<type>`` can be ``dns``, ``email``, ``uri``, ``ip`` or any OID for otherName SANs.
         ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8:``.
+
+        Ignored when a ``csr`` is passed and the role's ``use_csr_sans`` is true (the default value).
 
     ttl
         Specifies the requested Time To Live (after which the certificate will be expired).

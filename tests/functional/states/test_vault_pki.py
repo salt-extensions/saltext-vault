@@ -1,6 +1,7 @@
 # pylint: disable=too-many-lines
 
 import ipaddress
+import logging
 from copy import deepcopy
 from datetime import datetime
 from datetime import timedelta
@@ -12,11 +13,14 @@ from cryptography import x509 as cx509
 from cryptography.hazmat import asn1
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
+from salt.modules.x509_v2 import create_csr
 from salt.utils.x509 import NAME_ATTRS_OID
 from salt.utils.x509 import generate_rsa_privkey
 from salt.utils.x509 import load_cert
 
 from saltext.vault.utils.vault import helpers as hlp
+from saltext.vault.utils.vault import pki
+from tests.conftest import CONTAINER_TARGETS
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
@@ -357,6 +361,23 @@ def aia_urls(request):
         )
 
 
+def pregen_csr(cert_args):
+    csr_args, _ = pki.split_csr_kwargs(cert_args)
+    for csr_arg in csr_args:
+        cert_args.pop(csr_arg)
+    private_key = cert_args.pop("private_key")
+    private_key_passphrase = cert_args.pop("private_key_passphrase", None)
+    digest = cert_args.pop("digest", "sha256")
+    csr = create_csr(
+        private_key=private_key,
+        private_key_passphrase=private_key_passphrase,
+        digest=digest,
+        **csr_args,
+    )
+    cert_args["csr"] = csr
+    return cert_args
+
+
 @pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_certificate_managed_create(vault_pki, cert_args, testmode):
     ret = vault_pki.certificate_managed(**cert_args, test=testmode)
@@ -367,12 +388,49 @@ def test_certificate_managed_create(vault_pki, cert_args, testmode):
     assert Path(cert_args["name"]).exists() is not testmode
 
 
-@pytest.mark.usefixtures("issuer_setup", "roles_setup")
-def test_certificate_managed_state_no_changes(vault_pki, cert_args, testmode):
+@pytest.mark.usefixtures("issuer_setup", "roles_setup", "testrole")
+@pytest.mark.parametrize(
+    "csr,testrole,cn_in_csr,cn_in_args,exp",
+    (
+        pytest.param(False, {}, False, "a.b", "a.b", id="regular_common_name"),
+        pytest.param(True, {}, False, "a.b", "a.b", id="csr_common_name_only"),
+        pytest.param(True, {}, "a.b", False, "a.b", id="csr_cn_only"),
+        pytest.param(True, {}, "a.b", "c.d", "a.b", id="csr_cn_mismatch"),
+        pytest.param(True, {"require_cn": False}, False, False, None, id="csr_no_require_cn_empty"),
+        pytest.param(
+            True, {"use_csr_common_name": False}, "a.b", "c.d", "c.d", id="csr_ignore_cn_mismatch"
+        ),
+        pytest.param(
+            True,
+            {"use_csr_common_name": False, "require_cn": False},
+            "a.b",
+            False,
+            None,
+            id="csr_no_require_ignore_cn_empty",
+        ),
+    ),
+    indirect=["testrole"],
+)
+def test_certificate_managed_state_no_changes(
+    vault_pki, cert_args, testmode, csr, cn_in_csr, cn_in_args, exp
+):
+    if cn_in_args:
+        cert_args["common_name"] = cn_in_args
+    else:
+        cert_args.pop("common_name")
+    if csr:
+        if cn_in_csr:
+            cert_args["CN"] = cn_in_csr
+        pregen_csr(cert_args)
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result
     assert ret.changes
     assert "created" in ret.changes
+
+    cert = load_cert(cert_args["name"])
+    assert [cn.value for cn in cert.subject.get_attributes_for_oid(cx509.NameOID.COMMON_NAME)] == (
+        [exp] if exp else []
+    )
 
     # Try again
     ret = vault_pki.certificate_managed(**cert_args, test=testmode)
@@ -577,9 +635,13 @@ def test_certificate_managed_verbatim_without_role_name(vault_pki, cert_args):
 
 @pytest.fixture
 def existing_cert(
-    vault_pki, cert_args, issuer_setup, roles_setup, aia_urls, request
+    vault_pki, cert_args, issuer_setup, roles_setup, aia_urls, request, modules
 ):  # pylint: disable=unused-argument
-    cert_args.update(getattr(request, "param", {}))
+    overrides = getattr(request, "param", {})
+    generate_csr = overrides.pop("generate_csr", False)
+    cert_args.update(overrides)
+    if generate_csr:
+        pregen_csr(cert_args)
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result is True
     assert "created" in ret.changes
@@ -969,6 +1031,140 @@ def test_certificate_managed_san(vault_pki, cert_args, sign_verbatim):
     _assert_san(False)
 
 
+@pytest.mark.usefixtures("issuer_setup", "roles_setup", "existing_cert", "testrole")
+@pytest.mark.parametrize(
+    "existing_cert,testrole,additional",
+    (
+        pytest.param(
+            {
+                "generate_csr": True,
+                "subjectAltName": [
+                    "critical",
+                    "DNS:*.saltproject.io",
+                    "EMAIL:test@saltproject.io",
+                    "IP:1.2.3.4",
+                    "URI:https://foo.bar.baz",
+                ],
+                "CN": "test.saltproject.io",
+                "common_name": None,
+            },
+            {},
+            ("dns", "test.saltproject.io"),
+            id="CN",
+        ),
+        pytest.param(
+            {
+                "generate_csr": True,
+                "subjectAltName": [
+                    "critical",
+                    "DNS:*.saltproject.io",
+                    "EMAIL:test@saltproject.io",
+                    "IP:1.2.3.4",
+                    "URI:https://foo.bar.baz",
+                ],
+                "CN": "Something neither DNS nor EMAIL",
+                "common_name": None,
+            },
+            {},
+            (),
+            id="CN_invalid",
+        ),
+        pytest.param(
+            {
+                "exclude_cn_from_sans": True,
+                "generate_csr": True,
+                "subjectAltName": [
+                    "critical",
+                    "DNS:*.saltproject.io",
+                    "EMAIL:test@saltproject.io",
+                    "IP:1.2.3.4",
+                    "URI:https://foo.bar.baz",
+                ],
+                "CN": "test.saltproject.io",
+                "common_name": None,
+            },
+            {},
+            (),
+            id="exclude_cn",
+        ),
+        pytest.param(
+            {
+                "generate_csr": True,
+                "subjectAltName": [
+                    "critical",
+                    "DNS:*.saltproject.io",
+                    "EMAIL:test@saltproject.io",
+                    "IP:1.2.3.4",
+                    "URI:https://foo.bar.baz",
+                ],
+                "CN": "wrong.saltproject.io",
+                "common_name": "test.saltproject.io",
+            },
+            {"use_csr_common_name": False},
+            ("dns", "test.saltproject.io"),
+            id="ignore_CN",
+        ),
+        pytest.param(
+            {
+                "generate_csr": True,
+                "subjectAltName": [
+                    "critical",
+                    "DNS:*.saltproject.san",
+                    "EMAIL:test@saltproject.san",
+                    "IP:1.2.3.5",
+                    "URI:https://foo.bar.san",
+                ],
+                "alt_names": [
+                    "DNS:*.saltproject.io",
+                    "EMAIL:test@saltproject.io",
+                    "IP:1.2.3.4",
+                    "URI:https://foo.bar.baz",
+                ],
+                "CN": "test.saltproject.io",
+                "common_name": "wrong.saltproject.io",
+            },
+            {"use_csr_sans": False},
+            ("dns", "test.saltproject.io"),
+            id="ignore_sans",
+        ),
+        pytest.param(
+            {
+                "generate_csr": True,
+                "CN": "test.saltproject.io",
+                "common_name": None,
+                # still need DNS: prefix because the execution module does not have role insight and needs to parse it a bit
+                "alt_names": ["DNS:this_should_not_even_be_parsed"],
+            },
+            {},
+            ("dns", "test.saltproject.io"),
+            id="no_sans",
+        ),
+    ),
+    indirect=["existing_cert", "testrole"],
+)
+def test_certificate_managed_san_from_csr(vault_pki, cert_args, additional):
+    cert: cx509.Certificate = load_cert(cert_args["name"])
+    san = cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName)
+    assert san.critical is False
+
+    exp = {"dns": set(), "mail": set(), "ip": set(), "uri": set()}
+    if "DNS:this_should_not_even_be_parsed" not in cert_args.get("alt_names", []):
+        exp["dns"] = {"*.saltproject.io"}
+        exp["mail"] = {"test@saltproject.io"}
+        exp["ip"] = {ipaddress.ip_address("1.2.3.4")}
+        exp["uri"] = {"https://foo.bar.baz"}
+    if additional:
+        exp[additional[0]].add(additional[1])
+    assert set(san.value.get_values_for_type(cx509.DNSName)) == exp["dns"]
+    assert set(san.value.get_values_for_type(cx509.RFC822Name)) == exp["mail"]
+    assert set(san.value.get_values_for_type(cx509.IPAddress)) == exp["ip"]
+    assert set(san.value.get_values_for_type(cx509.UniformResourceIdentifier)) == exp["uri"]
+
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+
 @pytest.mark.usefixtures("existing_cert", "issuer_setup", "roles_setup")
 @pytest.mark.parametrize(
     "aia_urls,issuer_setup",
@@ -1269,6 +1465,82 @@ def test_certificate_managed_certificate_policies(vault_pki, cert_args, testmode
 
 
 @pytest.mark.usefixtures("issuer_setup", "roles_setup")
+@pytest.mark.parametrize("container", (CONTAINER_TARGETS[0],), indirect=True)
+def test_certificate_managed_csr_ignored_warnings(
+    vault_pki, cert_args, caplog, testrole, private_key
+):
+    csr_args = {
+        "CN": "test.saltproject.io",
+        "subjectAltName": ["DNS:test.saltproject.io"],
+        "private_key": private_key,
+    }
+    cert_args.pop("common_name", None)
+    cert_args.update(csr_args)
+    cert_args = pregen_csr(cert_args)  # this removes CSR args from cert_args
+
+    # Ensure no warnings by default
+    with caplog.at_level(logging.WARN):
+        ret = vault_pki.certificate_managed(**cert_args)
+        assert ret.result is True and "created" in ret.changes
+        assert "Ignoring" not in caplog.text
+
+    # CSR with CN + common_name warns
+    caplog.clear()
+    with caplog.at_level(logging.WARN):
+        ret = vault_pki.certificate_managed(**cert_args, common_name="this.is.warned.about")
+        assert ret.result is True and not ret.changes
+        assert "Ignoring passed `common_name`" in caplog.text
+
+    # CSR without CN + common_name does not warn, even if use_csr_common_name is at its default of true
+    cert_args.update(csr_args)  # need to add CN back in
+    cert_args.pop("CN")
+    cert_args = pregen_csr(cert_args)
+    caplog.clear()
+    with caplog.at_level(logging.WARN):
+        ret = vault_pki.certificate_managed(**cert_args, common_name="test.saltproject.io")
+        assert ret.result is True and not ret.changes
+        assert "Ignoring passed `common_name`" not in caplog.text
+
+    # CSR with CN + common_name does not warn when use_csr_common_name is false
+    cert_args.update(csr_args)  # need to add CN back in
+    cert_args = pregen_csr(cert_args)
+    testrole["use_csr_common_name"] = False
+    cert_args["common_name"] = "test.saltproject.io"
+    vault_write("pki/roles/testrole", **testrole)
+    caplog.clear()
+    with caplog.at_level(logging.WARN):
+        ret = vault_pki.certificate_managed(**cert_args)
+        assert ret.result is True and not ret.changes
+        assert "Ignoring passed `common_name`" not in caplog.text
+
+    # CSR with or without SANs + alt_names warns
+    caplog.clear()
+    with caplog.at_level(logging.WARN):
+        ret = vault_pki.certificate_managed(**cert_args, alt_names=["DNS:this.is.warned.about"])
+        assert ret.result is True and not ret.changes
+        assert "Ignoring passed `alt_names`" in caplog.text
+
+    # CSR with or without SANs + alt_names does not warn when use_csr_sans is false
+    testrole["use_csr_sans"] = False
+    cert_args["alt_names"] = ["DNS:test.saltproject.io"]
+    vault_write("pki/roles/testrole", **testrole)
+    caplog.clear()
+    with caplog.at_level(logging.WARN):
+        ret = vault_pki.certificate_managed(**cert_args)
+        assert ret.result is True and not ret.changes
+        assert "Ignoring passed `alt_names`" not in caplog.text
+
+    # CSR + CSR generation kwargs warns
+    caplog.clear()
+    with caplog.at_level(logging.WARN):
+        ret = vault_pki.certificate_managed(
+            **cert_args, CN="this.is.warned.about", keyUsage="critical,crlSign,keyCertSign"
+        )
+        assert ret.result is True and not ret.changes
+        assert "received CSR generation arguments. Ignoring: `CN`, `keyUsage`" in caplog.text
+
+
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize(
     "attr",
     [
@@ -1341,23 +1613,60 @@ def test_certificate_managed_sign_verbatim_user_ids_and_serial_number(vault_pki,
 @pytest.mark.parametrize(
     "existing_cert",
     (
-        {
-            "sign_verbatim": True,
-            "alt_names": [
-                "DNS:*.saltproject.io",
-                "EMAIL:test@saltproject.io",
-                "IP:1.2.3.4",
-                "URI:https://foo.bar.baz",
-            ],
-            "common_name": "test.saltproject.io",
-        },
+        pytest.param(
+            {
+                "generate_csr": True,
+                "subjectAltName": [
+                    "critical",
+                    "DNS:*.saltproject.io",
+                    "EMAIL:test@saltproject.io",
+                    "IP:1.2.3.4",
+                    "URI:https://foo.bar.baz",
+                ],
+                "CN": "test.saltproject.io",
+                "common_name": None,
+                "sign_verbatim": True,
+            },
+            id="from_csr",
+        ),
+        pytest.param(
+            {
+                "generate_csr": True,
+                "subjectAltName": [
+                    "critical",
+                    "DNS:*.saltproject.io",
+                    "EMAIL:test@saltproject.io",
+                    "IP:1.2.3.4",
+                    "URI:https://foo.bar.baz",
+                ],
+                # still need DNS: prefix because the execution module does not have role insight and needs to parse it a bit
+                "alt_names": ["DNS:this_should_not_even_be_parsed"],
+                "CN": "test.saltproject.io",
+                "common_name": None,
+                "sign_verbatim": True,
+            },
+            id="from_csr_ignore_alt_names",
+        ),
+        pytest.param(
+            {
+                "sign_verbatim": True,
+                "alt_names": [
+                    "DNS:*.saltproject.io",
+                    "EMAIL:test@saltproject.io",
+                    "IP:1.2.3.4",
+                    "URI:https://foo.bar.baz",
+                ],
+                "common_name": "test.saltproject.io",
+            },
+            id="from_alt_names",
+        ),
     ),
     indirect=True,
 )
 def test_certificate_managed_sign_verbatim_subject_alt_name(vault_pki, cert_args):
     cert: cx509.Certificate = load_cert(cert_args["name"])
     san = cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName)
-    assert san.critical is False
+    assert san.critical is ("csr" in cert_args)
     assert set(san.value.get_values_for_type(cx509.DNSName)) == {"*.saltproject.io"}
     assert set(san.value.get_values_for_type(cx509.RFC822Name)) == {"test@saltproject.io"}
     assert set(san.value.get_values_for_type(cx509.IPAddress)) == {ipaddress.ip_address("1.2.3.4")}
@@ -1376,7 +1685,16 @@ def test_certificate_managed_sign_verbatim_subject_alt_name(vault_pki, cert_args
     # intentionally leave keyUsage non-critical
     (
         pytest.param(
-            {"sign_verbatim": True, "keyUsage": ["digitalSignature", "keyAgreement"]}, id="from_csr"
+            {
+                "generate_csr": True,
+                "sign_verbatim": True,
+                "keyUsage": ["digitalSignature", "keyAgreement"],
+            },
+            id="from_csr",
+        ),
+        pytest.param(
+            {"sign_verbatim": True, "keyUsage": ["digitalSignature", "keyAgreement"]},
+            id="from_csr_on_the_fly",
         ),
         pytest.param(
             {
@@ -1493,6 +1811,9 @@ def test_certificate_managed_changed_cn(vault_pki, cert_args, testmode):
     assert "subject_name" in ret.changes
     assert f"CN={old_cn}" in ret.changes["subject_name"]["old"]
     assert f"CN={cert_args['common_name']}" in ret.changes["subject_name"]["new"]
+    # The new CN is not a valid DNS/EMAIL SAN and no alt_names are specified
+    assert "extensions" in ret.changes
+    assert "subjectAltName" in ret.changes["extensions"]["removed"]
 
     c_attrs = cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["CN"])
     assert c_attrs[0].value == (old_cn if testmode else "brand new common name")
