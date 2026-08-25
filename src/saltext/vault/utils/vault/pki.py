@@ -21,6 +21,7 @@ from cryptography.hazmat.primitives.asymmetric import ed448
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.types import CertificateIssuerPublicKeyTypes
+from cryptography.hazmat.primitives.asymmetric.types import CertificatePublicKeyTypes
 from cryptography.x509.extensions import ExtensionTypeVar
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
@@ -37,6 +38,10 @@ Privkey: typing.TypeAlias = (
     | ed448.Ed448PrivateKey
     | ed25519.Ed25519PrivateKey
     | rsa.RSAPrivateKey
+)
+
+Pubkey: typing.TypeAlias = (
+    ec.EllipticCurvePublicKey | ed448.Ed448PublicKey | ed25519.Ed25519PublicKey | rsa.RSAPublicKey
 )
 
 Encoding: typing.TypeAlias = (
@@ -122,7 +127,8 @@ NAME_ATTRS_OID = immutabletypes.freeze(
 def check_cert_for_changes(
     current: str,
     issuer: str,
-    private_key: str,
+    private_key: str | None,
+    csr: str | None,
     encoding: Encoding = "pem",
     sign_verbatim: bool = False,
     *,
@@ -270,25 +276,56 @@ def check_cert_for_changes(
         }
 
     ca = x509util.load_cert(issuer)
-    privkey: Privkey = x509util.load_privkey(private_key, passphrase=private_key_passphrase)
+    csr_loaded: cx509.CertificateSigningRequest | None = None
+    pk_loaded: Privkey | None = None
+
+    if private_key:
+        pk_loaded: Privkey = x509util.load_privkey(private_key, passphrase=private_key_passphrase)
+        pubkey = pk_loaded.public_key()
+    else:
+        csr_loaded: cx509.CertificateSigningRequest = x509util.load_csr(csr)
+        pubkey = csr_loaded.public_key()
+
     changes.update(
         _compare_cert_signing(
             current=cert,
             signing_ca=ca,
-            private_key=privkey,
+            public_key=pubkey,
         )
     )
 
     # CN is synced by the execution module.
     csr_args, _ = split_csr_kwargs(kwargs)
     if common_name is not None:
-        csr_args["CN"] = common_name
-    elif not sign_verbatim and role_info.get("require_cn", True):
+        if not csr_loaded:
+            csr_args["CN"] = common_name
+        elif role_info.get(
+            "use_csr_common_name", True
+        ) and csr_loaded.subject.get_attributes_for_oid(NAME_ATTRS_OID["CN"]):
+            log.warning(
+                "Ignoring passed `common_name`: Received a pre-generated CSR with CN and "
+                "the role does not specify use_csr_common_name=false"
+            )
+    elif sign_verbatim or not role_info.get("require_cn", True):
+        csr_args.pop("CN", None)
+    elif (
+        csr_loaded
+        and role_info.get("use_csr_common_name", True)
+        and csr_loaded.subject.get_attributes_for_oid(NAME_ATTRS_OID["CN"])
+    ):
+        pass
+    else:
         raise CommandExecutionError(
             "`common_name` is required: Not signing verbatim and role does not specify require_cn=false"
+            + (" and passed csr does not specify CN" if csr_loaded else "")
         )
-    else:
-        csr_args.pop("CN", None)
+
+    if csr_loaded and csr_args:
+        log.warning(
+            "A pre-generated CSR was passed, but received CSR generation arguments. Ignoring: %s",
+            ", ".join(f"`{arg}`" for arg in csr_args),
+        )
+        csr_args = {}
 
     # subjectAltName is always synced with alt_names by the execution module.
     # We currently rely on a workaround for otherName SANs, which would break if we passed them to create_csr.
@@ -300,13 +337,13 @@ def check_cert_for_changes(
         builder = _build_verbatim_cert(
             ca,
             alt_names=alt_names,
-            csr=None,
+            csr=csr_loaded,
             ext_key_usage=ext_key_usage,
             ext_key_usage_oids=ext_key_usage_oids,
             key_usage=key_usage,
             not_after=not_after,
             not_before_duration=not_before_duration,
-            private_key=privkey,
+            private_key=pk_loaded,
             serial_number=serial_number,
             ttl=ttl,
             urls=urls,
@@ -318,11 +355,11 @@ def check_cert_for_changes(
             ca,
             alt_names=alt_names,
             common_name=common_name,
-            csr=None,
+            csr=csr_loaded,
             exclude_cn_from_sans=exclude_cn_from_sans,
             not_after=not_after,
             not_before_duration=not_before_duration,
-            private_key=privkey,
+            private_key=pk_loaded,
             role_info=role_info,
             serial_number=serial_number,
             ttl=ttl,
@@ -376,24 +413,25 @@ def _build_regular_cert(
 ) -> cx509.CertificateBuilder:
     if private_key is not None:
         public_key = private_key.public_key()
-        csr, _ = x509util.build_csr(private_key, **csr_args)
+        csr_eff, _ = typing.cast(
+            tuple[cx509.CertificateSigningRequestBuilder, typing.Any],
+            x509util.build_csr(private_key, **csr_args),
+        )
     elif csr is not None:
-        # Not available currently
+        csr_eff = csr
         public_key = csr.public_key()
-    else:
+    else:  # pragma: no cover
         raise TypeError("Either csr or private_key must be set")
     builder = cx509.CertificateBuilder(public_key=public_key)
 
     try:
-        csr_subject = csr.subject
+        csr_subject = csr_eff.subject  # ty: ignore[unresolved-attribute]
     except AttributeError:
         # CSRBuilder (created by x509util.build_csr())
-        csr_subject = _getattr_safe(csr, "_subject_name")
+        csr_subject = _getattr_safe(csr_eff, "_subject_name")
 
     subject_rdns = []
     if role_info.get("use_csr_common_name", True):
-        # This is just a loop currently because the state does not account for the ``csr`` param
-        # and the one we generate in place is ensured to have the same value.
         # NOTE: There is also `serial_number_source` (`json-csr`, `json`)
         try:
             common_name = csr_subject.get_attributes_for_oid(cx509.NameOID.COMMON_NAME)[
@@ -437,10 +475,10 @@ def _build_regular_cert(
     )
     builder = builder.not_valid_before(not_before).not_valid_after(not_after_dt)
 
-    csr_exts = _getattr_safe(csr, "_extensions")
-    if not isinstance(csr_exts, cx509.Extensions):
-        # CSRBuilder (created by x509util.build_csr()) just contains a list of extensions
-        csr_exts = cx509.Extensions(csr_exts)
+    try:
+        csr_exts: cx509.Extensions = csr_eff.extensions  # ty: ignore[unresolved-attribute]
+    except AttributeError:
+        csr_exts = cx509.Extensions(_getattr_safe(csr_eff, "_extensions"))
 
     # subjectAlternativeName
     builder = _add_sans(
@@ -448,7 +486,11 @@ def _build_regular_cert(
         common_name,
         alt_names,
         exclude_cn_from_sans=exclude_cn_from_sans,
-        csr_exts=csr_exts if role_info.get("use_csr_sans", True) else None,
+        # csr_exts should only be passed when we received an actual csr.
+        # Our on-the-fly CSR for change checking intentionally does not contain a SAN extension to enable our otherName workaround,
+        # but Vault ignores `alt_names` when a CSR is passed and the role does not set use_csr_sans to false.
+        # Once we don't need the workaround anymore and can include a SAN ext, `csr and` can be removed here.
+        csr_exts=csr_exts if csr and role_info.get("use_csr_sans", True) else None,
     )
 
     # basicConstraints
@@ -518,19 +560,23 @@ def _build_verbatim_cert(
         csr_args = sync_verbatim_csr_subject(
             csr_args, user_ids=user_ids, serial_number=serial_number
         )
-        csr, _ = x509util.build_csr(private_key, **csr_args)
+        csr_eff, _ = typing.cast(
+            tuple[cx509.CertificateSigningRequestBuilder, typing.Any],
+            x509util.build_csr(private_key, **csr_args),
+        )
     elif csr is not None:
-        # Not available currently
+        csr_eff = csr
         public_key = csr.public_key()
-    else:
+    else:  # pragma: no cover
         raise TypeError("Either csr or private_key must be set")
 
     # Subject Name
     try:
-        csr_subject = csr.subject
+        csr_subject = csr_eff.subject  # ty: ignore[unresolved-attribute]
     except AttributeError:
         # CSRBuilder (created by x509util.build_csr())
-        csr_subject = _getattr_safe(csr, "_subject_name")
+        csr_subject = _getattr_safe(csr_eff, "_subject_name")
+
     builder = (
         cx509.CertificateBuilder(public_key=public_key)
         .subject_name(csr_subject)
@@ -547,10 +593,10 @@ def _build_verbatim_cert(
     builder = builder.not_valid_before(not_before).not_valid_after(not_after_dt)
 
     # Verbatim copy extensions from CSR
-    csr_exts = _getattr_safe(csr, "_extensions")
-    if not isinstance(csr_exts, cx509.Extensions):
-        # CSRBuilder (created by x509util.build_csr()) just contains a list of extensions
-        csr_exts = cx509.Extensions(csr_exts)
+    try:
+        csr_exts: cx509.Extensions = csr_eff.extensions  # ty: ignore[unresolved-attribute]
+    except AttributeError:
+        csr_exts = cx509.Extensions(_getattr_safe(csr_eff, "_extensions"))
     for ext in csr_exts:
         builder = builder.add_extension(ext.value, ext.critical)
 
@@ -576,7 +622,6 @@ def _build_verbatim_cert(
 
     # SubjectAlternativeName simulation (for otherName workaround, this would actually be in the generated CSR)
     try:
-        # Not possible atm, would need csr arg in state
         csr_exts.get_extension_for_class(cx509.SubjectAlternativeName)
     except cx509.ExtensionNotFound:
         builder = _add_sans(
@@ -584,6 +629,7 @@ def _build_verbatim_cert(
             None,
             alt_names,
             exclude_cn_from_sans=True,
+            verbatim=True,
         )
 
     # AuthorityInformationAccess/CRLDistributionPoints/FreshestCRL
@@ -676,40 +722,48 @@ def _add_sans(
     *,
     exclude_cn_from_sans: bool,
     csr_exts: cx509.Extensions | None = None,
+    verbatim: bool = False,
 ) -> cx509.CertificateBuilder:
+    def _cn_san_typ(common_name: str):
+        if "@" in common_name:
+            # Vault checks emails the same way
+            try:
+                _parse_general_names([("EMAIL", common_name)])
+            except CommandExecutionError as err:
+                allowed_msgs = ("Codepoint", "Email address username must not")
+                if all(msg not in str(err) for msg in allowed_msgs):
+                    raise
+                return None
+            return "EMAIL"
+        try:
+            _parse_general_names([("DNS", common_name)])
+        except CommandExecutionError as err:
+            if "Codepoint" not in str(err):
+                raise
+            return None
+        return "DNS"
+
     sans, sans_critical = None, False
-    if csr_exts:
+    if csr_exts is not None:
+        # This only happens when an actual CSR was passed, not when alt_names is translated on the fly
         try:
             sans_ext = csr_exts.get_extension_for_class(cx509.SubjectAlternativeName)
         except cx509.ExtensionNotFound:
             pass
         else:
-            # This cannot be reached currently because the state does not account for the ``csr`` param
-            # and the one we generate in place is ensured to not contain any.
-            sans, sans_critical = sans_ext.value, sans_ext.critical
-
-    if sans is None:
+            sans, sans_critical = sans_ext.value, verbatim and sans_ext.critical
+        if not verbatim and (not exclude_cn_from_sans and common_name is not None):
+            cn_san = _cn_san_typ(common_name)
+            if cn_san:
+                sans_gns = _parse_general_names([(cn_san, common_name)]) + list(sans or [])
+                sans = cx509.SubjectAlternativeName(sans_gns)
+    else:
         if alt_names or (not exclude_cn_from_sans and common_name is not None):
             normalized_sans = norm_sans(alt_names or [])
             if common_name is not None and not exclude_cn_from_sans:
-                if "@" in common_name:
-                    # Vault checks emails the same way
-                    try:
-                        _parse_general_names([("EMAIL", common_name)])
-                    except CommandExecutionError as err:
-                        allowed_msgs = ("Codepoint", "Email address username must not")
-                        if all(msg not in str(err) for msg in allowed_msgs):
-                            raise
-                    else:
-                        normalized_sans.setdefault("EMAIL", []).insert(0, common_name)
-                else:
-                    try:
-                        _parse_general_names([("DNS", common_name)])
-                    except CommandExecutionError as err:
-                        if "Codepoint" not in str(err):
-                            raise
-                    else:
-                        normalized_sans.setdefault("DNS", []).insert(0, common_name)
+                cn_san = _cn_san_typ(common_name)
+                if cn_san:
+                    normalized_sans.setdefault(cn_san, []).insert(0, common_name)
             # x509util needs another format still
             flattened_sans = []
             # We can also ensure the order is the same as Vault's, but it does not affect idempotency
@@ -973,7 +1027,6 @@ def check_root_issuer_for_changes(
         not_before_duration=not_before_duration,
         not_after=not_after,
         urls=urls,
-        signing_cert=None,
         public_key=cert.public_key(),  # type: ignore
     )
     try:
@@ -1049,7 +1102,6 @@ def _build_root_issuer_cert(
     not_before_duration: str | int,
     not_after: str | None,
     urls: dict[str, list[str] | bool],
-    signing_cert: cx509.Certificate | None,
     public_key: CertificateIssuerPublicKeyTypes,
 ) -> cx509.CertificateBuilder:
     builder = cx509.CertificateBuilder(public_key=public_key)
@@ -1075,9 +1127,7 @@ def _build_root_issuer_cert(
             cx509.RelativeDistinguishedName(cx509.NameAttribute(oid, val) for val in vals)
         )
     subject_dn = cx509.Name(subject_rdns)
-    builder = builder.subject_name(subject_dn).issuer_name(
-        subject_dn if signing_cert is None else signing_cert.subject
-    )
+    builder = builder.subject_name(subject_dn).issuer_name(subject_dn)
 
     # Validity
     not_before = datetime.now(tz=timezone.utc) - timedelta(
@@ -1165,7 +1215,7 @@ def _build_root_issuer_cert(
 
 
 def _compare_cert_signing(
-    current: cx509.Certificate, signing_ca: cx509.Certificate, private_key: Privkey
+    current: cx509.Certificate, signing_ca: cx509.Certificate, public_key: CertificatePublicKeyTypes
 ) -> dict[str, typing.Any]:
     changes = {}
 
@@ -1179,7 +1229,7 @@ def _compare_cert_signing(
             "new": _getattr_safe(signing_ca, "subject").rfc4514_string(),
         }
 
-    if not x509util.is_pair(current.public_key(), private_key):
+    if current.public_key() != public_key:
         changes["private_key"] = True
 
     return changes

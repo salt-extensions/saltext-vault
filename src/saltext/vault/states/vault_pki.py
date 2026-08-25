@@ -97,6 +97,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
     common_name=None,
     role_name=None,
     private_key=None,
+    csr=None,
     mount="pki",
     ttl="720h",
     ttl_remaining="168h",
@@ -197,15 +198,23 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
         Subject common name (``CN``) for the certificate.
         Required, unless the role explicitly sets ``require_cn`` to false or
         ``sign_verbatim`` is true.
+        Ignored (i.e. also not required) when a ``csr`` is passed that specifies
+        it and the role's ``use_csr_common_name`` is true (the default value).
 
     role_name
         PKI role to use for issuing the certificate.
         Required, unless ``sign_verbatim`` is true.
 
     private_key
-        Path or PEM formatted text of the private key to use for signing the CSR and thus
+        Path or text of the private key to use for signing the CSR and thus
         as the private key for the certificate.
-        Required.
+        Either this or ``csr`` is required.
+
+    csr
+        .. versionadded:: 1.9.0
+
+        Path or text of the CSR to use for issuing the certificate.
+        Either this or ``private_key`` is required.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -260,6 +269,8 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
 
         ``<type>`` can be ``dns``, ``email``, ``uri``, ``ip`` or any OID for otherName SANs.
         ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8:``.
+
+        Ignored when a ``csr`` is passed and the role's ``use_csr_sans`` is true (the default value).
 
     exclude_cn_from_sans
         If set to true, the Common Name is not added to the SANs.
@@ -317,6 +328,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
               follow the CSR literally, even ``sign-verbatim`` e.g. prohibits ``basicConstraints`` with ``CA: true``.
               The ``CN`` and ``subjectAltName`` parameters are synced with ``common_name`` and ``alt_names`` respectively,
               so specifying them directly has no effect.
+              Ignored when ``csr`` is defined.
             * :py:func:`file.managed <salt.states.file.managed>`: Parameters such as ``user``, ``group`` and ``mode``
               end up influencing the certificate file on disk.
               Note: ``encoding`` is a valid parameter for both this function and ``file.managed``. If you need to pass
@@ -336,8 +348,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
     file_args, cert_args = _split_file_kwargs(hlp.filter_state_internal_kwargs(kwargs))
 
     try:
-        if not private_key:  # pragma: no cover
-            raise SaltInvocationError("`private_key` is required")
+        hlp.one_of(private_key=private_key, csr=csr)
         if not sign_verbatim and not role_name:
             raise SaltInvocationError("`role_name` is required when `sign_verbatim` is false")
 
@@ -397,6 +408,14 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
             # allowed when signing verbatim
             role_info = {}
 
+        if csr and alt_names and role_info.get("use_csr_sans", True):
+            # SANs don't fall back to alt_names (we simulate that when generating a CSR on the fly).
+            # This is in contrast to common_name.
+            log.warning(
+                "Ignoring passed `alt_names`: Received a pre-generated CSR and the role does not specify use_csr_sans=false"
+            )
+            alt_names = None
+
         if issuer_ref is None:
             issuer_ref = role_info.get("issuer_ref", "default")
 
@@ -447,6 +466,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
                     current=name,
                     issuer=issuer_info["certificate"],
                     private_key=private_key,
+                    csr=csr,
                     encoding=encoding,
                     sign_verbatim=sign_verbatim,
                     alt_names=alt_names,
@@ -504,6 +524,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
                     role_name=role_name,
                     private_key=private_key,
                     private_key_passphrase=private_key_passphrase,
+                    csr=csr,
                     ttl=ttl,
                     issuer_ref=issuer_ref,
                     mount=mount,
