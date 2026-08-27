@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from cryptography import x509
+from cryptography.hazmat import asn1
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
 from cryptography.x509.oid import NameOID
@@ -546,6 +547,160 @@ def test_sign_certificate_verbatim_without_role_name(vault_pki, private_key, iss
     assert "certificate" in ret
     cert = load_cert(ret["certificate"])
     assert cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value == "test.example.com"
+
+
+@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.parametrize(
+    "call_type", ("pk", "pk_verbatim", "pk_verbatim_kwargs", "csr", "csr_verbatim")
+)
+def test_sign_intermediate(vault_pki, private_key, container, call_type):
+    csr = "csr" in call_type
+    sign_verbatim = "verbatim" in call_type
+    issuer_ref = None
+    if call_type in ("pk_verbatim", "csr"):
+        issuer_ref = "testissuer"  # ensure we test that endpoint as well
+
+    key_usage = None
+    permitted_alt_names = [
+        "DNS:.example.com",
+        "EMAIL:example.com",
+        "IP:0.0.0.0/1",
+        "URI:.uri.example.com",
+    ]
+    excluded_alt_names = [
+        "DNS:no.example.com",
+        "EMAIL:info@example.com",
+        "IP:1.2.3.0/24",
+        "URI:nouri.example.com",
+    ]
+    alt_names = [
+        "DNS:test2.example.com",
+        "EMAIL:test@example.com",
+        "IP:1.2.3.4",
+        "URI:https://foo.bar",
+    ]
+    other_alt_names = [
+        "1.2.3.4:some identifier",
+    ]
+
+    call_args = {}
+    csr_args = {}
+    if (csr and sign_verbatim) or "kwargs" in call_type:
+        csr_args = {
+            "keyUsage": ["keyCertSign", "digitalSignature"],
+        }
+        csr_args["subjectAltName"] = alt_names
+        csr_args["subject"] = (
+            "2.5.4.5=serialnumber,CN=bar.example.com,OU=ou,O=organization,2.5.4.17=postal_code,STREET=street_address,L=locality,ST=province,C=US,C=UK"
+        )
+        csr_args["nameConstraints"] = {
+            "permitted": permitted_alt_names,
+            "excluded": excluded_alt_names,
+        }
+    else:
+        if "vault" not in container or "latest" in container:
+            key_usage = "DigitalSignature"
+        call_args = {
+            "common_name": "bar.example.com",
+            "ou": "ou",
+            "organization": "organization",
+            "country": ["UK", "US"],
+            "locality": "locality",
+            "province": "province",
+            "street_address": "street_address",
+            "postal_code": "postal_code",
+            "serial_number": "serialnumber",
+            "alt_names": alt_names + other_alt_names,
+            "key_usage": key_usage,
+            "exclude_cn_from_sans": True,
+            "permitted_alt_names": permitted_alt_names,
+            "excluded_alt_names": excluded_alt_names,
+        }
+    if csr:
+        csr_args["CN"] = "foo.example.com"
+        call_args["csr"] = create_csr(private_key=private_key, **csr_args)
+        csr_args = {}
+    else:
+        call_args["private_key"] = private_key
+
+    ret = vault_pki.sign_intermediate(
+        sign_verbatim=sign_verbatim,
+        issuer_ref=issuer_ref,
+        ttl="2h",
+        max_path_length=2,
+        **call_args,
+        **csr_args,
+    )
+    assert "certificate" in ret
+    cert: x509.Certificate = load_cert(ret["certificate"])
+
+    def _get_vals(typ):
+        return [rdn.value for rdn in cert.subject.get_attributes_for_oid(typ)]
+
+    assert _get_vals(NameOID.COUNTRY_NAME) == ["UK", "US"]
+    assert _get_vals(NameOID.STATE_OR_PROVINCE_NAME) == ["province"]
+    assert _get_vals(NameOID.LOCALITY_NAME) == ["locality"]
+    assert _get_vals(NameOID.STREET_ADDRESS) == ["street_address"]
+    assert _get_vals(NameOID.POSTAL_CODE) == ["postal_code"]
+    assert _get_vals(NameOID.ORGANIZATION_NAME) == ["organization"]
+    assert _get_vals(NameOID.ORGANIZATIONAL_UNIT_NAME) == ["ou"]
+    assert _get_vals(NameOID.COMMON_NAME) == ["bar.example.com"]
+    assert _get_vals(NameOID.SERIAL_NUMBER) == ["serialnumber"]
+
+    bc = cert.extensions.get_extension_for_class(x509.BasicConstraints)
+    assert bc.critical is True
+    assert bc.value.ca is True
+    assert bc.value.path_length == 2
+
+    used_x509_csr_args = bool((csr and sign_verbatim) or "kwargs" in call_type)
+
+    ku = cert.extensions.get_extension_for_class(x509.KeyUsage)
+    assert ku.critical is not used_x509_csr_args
+    assert ku.value.crl_sign is not used_x509_csr_args
+    assert ku.value.key_cert_sign is True
+    assert ku.value.digital_signature is bool(used_x509_csr_args or key_usage)
+    assert ku.value.content_commitment is False
+    assert ku.value.data_encipherment is False
+    assert ku.value.key_agreement is False
+    assert ku.value.key_encipherment is False
+
+    san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+    assert san.critical is False
+    assert san.value.get_values_for_type(x509.DNSName) == ["test2.example.com"]
+    assert san.value.get_values_for_type(x509.RFC822Name) == ["test@example.com"]
+    assert [gn.exploded for gn in san.value.get_values_for_type(x509.IPAddress)] == ["1.2.3.4"]
+    assert san.value.get_values_for_type(x509.UniformResourceIdentifier) == ["https://foo.bar"]
+    if not used_x509_csr_args:
+        assert (
+            asn1.decode_der(str, san.value.get_values_for_type(x509.OtherName)[0].value)
+            == "some identifier"
+        )
+
+    nc = cert.extensions.get_extension_for_class(x509.NameConstraints)
+    assert nc.critical is not used_x509_csr_args
+
+    pst = nc.value.permitted_subtrees or []
+    pst_vals = [str(gn.value) for gn in pst]
+    assert ".example.com" in pst_vals
+    if sign_verbatim or ("vault" in container and "latest" in container):
+        assert len(pst) == 4
+        assert ".uri.example.com" in pst_vals
+        assert "example.com" in pst_vals
+        assert "0.0.0.0/1" in pst_vals
+    else:
+        assert len(pst) == 1
+
+    est = nc.value.excluded_subtrees
+    if sign_verbatim or ("vault" in container and "latest" in container):
+        assert est is not None
+        assert len(est) == 4
+        est_vals = [str(gn.value) for gn in est]
+        assert "no.example.com" in est_vals
+        assert "nouri.example.com" in est_vals
+        assert "info@example.com" in est_vals
+        assert "1.2.3.0/24" in est_vals
+    else:
+        assert est is None
 
 
 @pytest.mark.usefixtures("issuers_setup")

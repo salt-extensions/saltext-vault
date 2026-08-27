@@ -1,4 +1,5 @@
 import datetime
+import logging
 from unittest.mock import patch
 
 import pytest
@@ -135,6 +136,10 @@ def _x509v2_mock():
             "sign_certificate",
             {"role_name": "foo", "common_name": "foo.example.com", "csr": "-----BEGIN..."},
         ),
+        (
+            "sign_intermediate",
+            {"common_name": "foo.example.com", "csr": "-----BEGIN..."},
+        ),
         ("revoke_certificate", {"serial": "00:11:22"}),
         ("read_urls", {}),
         ("write_urls", {"ocsp_servers": ["http://ocsp.example.com"]}),
@@ -145,7 +150,7 @@ def test_func_converts_errors(func, kwargs, query, request):
     if func == "write_role":
         # otherwise we would test read_role again
         request.getfixturevalue("_role_absent")
-    if func.startswith("import_issuer") or func == "sign_certificate":
+    if func.startswith(("import_issuer", "sign_")):
         # certificate encoding requires the x509 execution module
         request.getfixturevalue("_x509v2_mock")
     with pytest.raises(CommandExecutionError, match="booh"):
@@ -340,6 +345,148 @@ def test_generate_root_raise_err_with_default_name():
 
     with pytest.raises(SaltInvocationError):
         vault_pki.generate_root("my root", key_name="default")
+
+
+@pytest.mark.parametrize(
+    "verbatim,csr,kwargs,msg,exp,missing",
+    (
+        (
+            False,
+            True,
+            {"subject": "CN=foo", "keyUsage": ["cRLSign"]},
+            "Got CSR generation parameters when a `csr` was already passed. Ignoring: `subject`, `keyUsage`",
+            {},
+            {},
+        ),
+        (
+            False,
+            False,
+            {"subject": "CN=foo", "keyUsage": ["cRLSign"]},
+            "Not signing verbatim, any CSR generation parameters are ignored. Ignoring: `subject`, `keyUsage`",
+            {},
+            {},
+        ),
+        (
+            True,
+            False,
+            {"country": "US", "C": "UK"},
+            "Received both `country` and `C` parameters. Ignoring `C`.",
+            {"subject": "C=US"},
+            {"C"},
+        ),
+        (
+            True,
+            False,
+            {"CN": "foo", "subject": "CN=bar"},
+            "Received both `subject` and `CN` parameters. Ignoring `CN`.",
+            {"subject": "CN=bar"},
+            {"CN"},
+        ),
+        (
+            True,
+            False,
+            {"locality": "foo", "subject": "CN=bar"},
+            "Received both `subject` and `locality` parameters. Ignoring `locality`.",
+            {"subject": "CN=bar"},
+            {"L"},
+        ),
+        (
+            True,
+            True,
+            {"alt_names": ["dns:foo.bar.baz"]},
+            "Received both `alt_names` and `csr` parameters for verbatim signing. Ignoring `alt_names`.",
+            {},
+            {"alt_names"},
+        ),
+        (
+            True,
+            False,
+            {"alt_names": ["dns:foo.bar.baz"], "subjectAltName": ["dns:bar.baz"]},
+            "Received both `alt_names` and `subjectAltName` parameters for verbatim signing. Ignoring `alt_names`.",
+            {"subjectAltName": ["dns:bar.baz"]},
+            {"alt_names"},
+        ),
+        (
+            True,
+            True,
+            {"permitted_alt_names": ["dns:foo.bar.baz"]},
+            "Received `permitted_alt_names`/`excluded_alt_names` in addition to `csr` parameter for verbatim signing. Ignoring `permitted_alt_names`/`excluded_alt_names`.",
+            {},
+            {"permitted_dns_domains"},
+        ),
+        (
+            True,
+            False,
+            {
+                "permitted_alt_names": ["dns:foo.bar.baz"],
+                "nameConstraints": {"permitted": ["dns:bar.baz"]},
+            },
+            "Received `permitted_alt_names`/`excluded_alt_names` in addition to `nameConstraints` parameter for verbatim signing. Ignoring `permitted_alt_names`/`excluded_alt_names`.",
+            {"nameConstraints": {"permitted": ["dns:bar.baz"]}},
+            {"permitted_dns_domains"},
+        ),
+        (
+            True,
+            True,
+            {"key_usage": ["digitalsignature"]},
+            "Received both `key_usage` and `csr` parameters for verbatim signing. Ignoring `key_usage`.",
+            {},
+            {"key_usage"},
+        ),
+        (
+            True,
+            False,
+            {"key_usage": ["digitalsignature"], "keyUsage": ["cRLSign", "keyCertSign"]},
+            "Received both `key_usage` and `keyUsage` parameters for verbatim signing. Ignoring `key_usage`.",
+            {"keyUsage": ["cRLSign", "keyCertSign"]},
+            {"key_usage"},
+        ),
+    ),
+)
+def test_sign_intermediate_warnings(
+    query, caplog, kwargs, msg, csr, verbatim, exp, missing, _x509v2_mock
+):
+    if csr:
+        kwargs["csr"] = "csr"
+    else:
+        kwargs["private_key"] = "pk"
+    if verbatim:
+        kwargs["sign_verbatim"] = True
+    with caplog.at_level(logging.WARN):
+        vault_pki.sign_intermediate(**kwargs)
+        assert msg in caplog.text
+    if exp:
+        if csr:
+            args = query.call_args[1]["payload"]
+        else:
+            args = _x509v2_mock.call_args[1]
+        for param, val in exp.items():
+            assert param in args
+            assert args[param] == val
+    if missing:
+        args = query.call_args[1]["payload"]
+        assert not set(args).intersection(missing)
+
+
+@pytest.mark.usefixtures("query")
+@pytest.mark.parametrize(
+    "kwargs,exp",
+    (
+        ({"C": "US"}, "C=US"),
+        ({"ST": "province"}, "ST=province"),
+        ({"L": "locality"}, "L=locality"),
+        ({"STREET": "street"}, "STREET=street"),
+        ({"O": "organization"}, "O=organization"),
+        ({"OU": "unit"}, "OU=unit"),
+        ({"CN": "foo"}, "CN=foo"),
+        ({"SERIALNUMBER": "foo"}, "2.5.4.5=foo"),
+    ),
+)
+def test_sign_intermediate_fallback(kwargs, exp, _x509v2_mock):
+    vault_pki.sign_intermediate(private_key="pk", sign_verbatim=True, **kwargs)
+    args = _x509v2_mock.call_args[1]
+    assert "subject" in args
+    assert args["subject"] == exp
 
 
 def _gen_cert(

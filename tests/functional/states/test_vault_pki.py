@@ -138,24 +138,24 @@ tClJiP0NZQ8YBJ+vi2VB1iQ=
 def ca_cert():
     return """\
 -----BEGIN CERTIFICATE-----
-MIIDODCCAiCgAwIBAgIIbfpgqP0VGPgwDQYJKoZIhvcNAQELBQAwKzELMAkGA1UE
-BhMCVVMxDTALBgNVBAMMBFRlc3QxDTALBgNVBAoMBFNhbHQwHhcNMjIxMTE1MTQw
-NDMzWhcNMzIxMTEyMTQwNDMzWjArMQswCQYDVQQGEwJVUzENMAsGA1UEAwwEVGVz
-dDENMAsGA1UECgwEU2FsdDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEB
-AOGTScvrjcEt6vsJcG9RUp6fKaDNDWZnJET0omanK9ZwaoGpJPp8UDYe/8ADeI7N
-10wdyB4oDM9gRDjInBtdQO/PsrmKZF6LzqVFgLMxu2up+PHMi9z6B2P4esIAzMu9
-PYxc9zH4HzLImHqscVD2HCabsjp9X134Af7hVY5NN/W/4qTP7uOM20wSG2TPI6+B
-tA9VyPbEPMPRzXzrqc45rVYe6kb2bT84GE93Vcu/e5JZ/k2AKD8Hoa2cxLPsTLq5
-igl+D+k+dfUtiABiKPvVQiYBsD1fyHDn2m7B6pCgvrGqHjsoAKufgFnXy6PJRg7n
-vQfaxSiusM5s+VS+fjlvgwsCAwEAAaNgMF4wDwYDVR0TBAgwBgEB/wIBATALBgNV
-HQ8EBAMCAQYwHQYDVR0OBBYEFFzy8fRTKSOe7kBakqO0Ki71potnMB8GA1UdIwQY
-MBaAFFzy8fRTKSOe7kBakqO0Ki71potnMA0GCSqGSIb3DQEBCwUAA4IBAQBZS4MP
-fXYPoGZ66seM+0eikScZHirbRe8vHxHkujnTBUjQITKm86WeQgeBCD2pobgBGZtt
-5YFozM4cERqY7/1BdemUxFvPmMFFznt0TM5w+DfGWVK8un6SYwHnmBbnkWgX4Srm
-GsL0HHWxVXkGnFGFk6Sbo3vnN7CpkpQTWFqeQQ5rHOw91pt7KnNZwc6I3ZjrCUHJ
-+UmKKrga16a4Q+8FBpYdphQU609npo/0zuaE6FyiJYlW3tG+mlbbNgzY/+eUaxt2
-9Bp9mtA+Hkox551Mfpq45Oi+ehwMt0xjZCjuFCM78oiUdHCGO+EmcT7ogiYALiOF
-LN1w5sybsYwIw6QN
+MIIDSjCCAjKgAwIBAgIUQJgxgogKKjEPk+XPj9QLMvDSAUAwDQYJKoZIhvcNAQEL
+BQAwKzELMAkGA1UEBhMCVVMxDTALBgNVBAoMBFNhbHQxDTALBgNVBAMMBFRlc3Qw
+HhcNMjYwODI2MTU0NjUzWhcNMzYwODIzMTU0NjUzWjArMQswCQYDVQQGEwJVUzEN
+MAsGA1UECgwEU2FsdDENMAsGA1UEAwwEVGVzdDCCASIwDQYJKoZIhvcNAQEBBQAD
+ggEPADCCAQoCggEBAI4J6LlZiujOIyg7k3cGTkXHULH8gsOmIRvtpMpecgLF87mm
+Bh8O44W8mbYJ68zos/IK+Ztaz9ltiB8jFeJ7jy1uCKEiW4avMSVlxN7airHsNK/y
+fFdTCb2G+j3k8USrbltAmXCmndkWE8pdM9hLzL0Ti+az7TC5Ls61mJPbSWvfMqlV
+jXT8krjEEw3F2RRPj7Mg0gSrBN9b08u/w6GQEwXaK5MKGbyjiitWpjbtrrKU5baG
+In9CLH5hSRFwYDOEI1qClSmAwZcsHj6g5W7o9+cG55u8RjtkRF7Ee1AIRiEcH9ZI
+1WLEIh3MdP0HZcHEulwsQzuG+27hiG5nbXDyCYsCAwEAAaNmMGQwEgYDVR0TAQH/
+BAgwBgEB/wIBAzAOBgNVHQ8BAf8EBAMCAQYwHQYDVR0OBBYEFFVAaieIyOMr672d
+ynDMNOZT80PWMB8GA1UdIwQYMBaAFFVAaieIyOMr672dynDMNOZT80PWMA0GCSqG
+SIb3DQEBCwUAA4IBAQBYc0yJaffxH56HrEITQeojsM5eDsngp4gU9bCxdghoKCsu
+KrZoDy6k+XrDDeqwFn5i3LrptcwO6raU1r2fAaWC4CGF3AD2V8eD3IM8bxULyULJ
+lSIffDVnus86U1WhCKTOb+nbBz/ykcvYycQfkBGxgh3a/yHylqHpCxHoPs/KbhUm
+UeMxPnobR/Yukd5/R1KW6hN80hc0+MRsc//M//8OQ4Ws8grTSI/wK3UbH39Kr9W6
+kLkpn/PbZsWP4IRN2HjR+EWnC+4ZeuQF0YvbceDHdUYsDBqZH8QfviUwKU779Mrx
+6jgz75V8jaGr6B9h5zcSh+aSW3KQ0f0L+GJih/mh
 -----END CERTIFICATE-----
 """
 
@@ -163,65 +163,33 @@ LN1w5sybsYwIw6QN
 @pytest.fixture
 def ca_key():
     return """\
------BEGIN RSA PRIVATE KEY-----
-MIIEowIBAAKCAQEA4ZNJy+uNwS3q+wlwb1FSnp8poM0NZmckRPSiZqcr1nBqgakk
-+nxQNh7/wAN4js3XTB3IHigMz2BEOMicG11A78+yuYpkXovOpUWAszG7a6n48cyL
-3PoHY/h6wgDMy709jFz3MfgfMsiYeqxxUPYcJpuyOn1fXfgB/uFVjk039b/ipM/u
-44zbTBIbZM8jr4G0D1XI9sQ8w9HNfOupzjmtVh7qRvZtPzgYT3dVy797kln+TYAo
-PwehrZzEs+xMurmKCX4P6T519S2IAGIo+9VCJgGwPV/IcOfabsHqkKC+saoeOygA
-q5+AWdfLo8lGDue9B9rFKK6wzmz5VL5+OW+DCwIDAQABAoIBAFfImc9hu6iR1gAb
-jEXFwAE6r1iEc9KGEPdEvG52X/jzhn8u89UGy7BEIAL5VtE8Caz1agtSSqnpLKNs
-blO31q18hnDuCmFAxwpKIeuaTvV3EAoJL+Su6HFfIWaeKRSgcHNPOmOXy4xXw/75
-XJ/FJu9fZ9ybLaHEAgLObh0Sr9RSPQbZ72ZawPP8+5WCbR+2w90RApHXQL0piSbW
-lIx1NE6o5wQb3vik8z/k5FqLCY2a8++WNyfvS+WWFY5WXGI7ZiDDQk46gnslquH2
-Lon5CEn3JlTGQFhxaaa2ivssscf2lA2Rvm2E8o1rdZJS2OpSE0ai4TXY9XnyjZj1
-5usWIwECgYEA+3Mwu03A7PyLEBksS/u3MSo/176S9lF/uXcecQNdhAIalUZ8AgV3
-7HP2yI9ZC0ekA809ZzFjGFostXm9VfUOEZ549jLOMzvBtCdaI0aBUE8icu52fX4r
-fT2NY6hYgz5/fxD8sq1XH/fqNNexABwtViH6YAly/9A1/8M3BOWt72UCgYEA5ag8
-sIfiBUoWd1sS6qHDuugWlpx4ZWYC/59XEJyCN2wioP8qFji/aNZxF1wLfyQe/zaa
-YBFusjsBnSfBU1p4UKCRHWQ9/CnC0DzqTkyKC4Fv8GuxgywNm5W9gPKk7idHP7mw
-e+7Uvf1pOQccqEPh7yltpW+Xw27gfsC2DMAIGa8CgYByv/q5P56PiCCeVB6W/mR3
-l2RTPLEsn7y+EtJdmL+QgrVG8kedVImJ6tHwbRqhvyvmYD9pXGxwrJZCqy/wjkjB
-WaSyFjVrxBV99Yd5Ga/hyntaH+ELHA0UtoZTuHvMSTU9866ei+R6vlSvkM9B0ZoO
-+KqeMTG99HLwKVJudbKO0QKBgQCd33U49XBOqoufKSBr4yAmUH2Ws6GgMuxExUiY
-xr5NUyzK+B36gLA0ZZYAtOnCURZt4x9kgxdRtnZ5jma74ilrY7XeOpbRzfN6KyX3
-BW6wUh6da6rvvUztc5Z+Gk9+18mG6SOFTr04jgfTiCwPD/s06YnSfFAbrRDukZOU
-WD45SQKBgBvjSwl3AbPoJnRjZjGuCUMKQKrLm30xCeorxasu+di/4YV5Yd8VUjaO
-mYyqXW6bQndKLuXT+AXtCd/Xt2sI96z8mc0G5fImDUxQjMUuS3RyQK357cEOu8Zy
-HdI7Pfaf/l0HozAw/Al+LXbpmSBdfmz0U/EGAKRqXMW5+vQ7XHXD
------END RSA PRIVATE KEY-----"""
-
-
-@pytest.fixture
-def ca_sub_key():
-    return """\
 -----BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCqbHMHARaW7ncu
-bcgLhHEyo9wEOh4a82D5B1Y1VH/XJvwBD4Bt59HS46zqYNtXXRbWnWkISL8wvWmC
-JEXZ7GmoTL+e8s/h8C1A0vqeThBv0TJyZK93CRD80vG/v+NiLd2SjlPknXibDwFz
-wrkZnGLryRqmswvG12ahOYQYWlPCv+BIUxDUL/Pz0z4ZEgoZgArVXMiqXlCfvsPy
-Uenx5VLNQZB95K88TMhr/fCbrncddlvDzUPlW4IpLbyfKE9MCCiWnXYqgMr/WzJx
-6u6Pf9B4G+2GVCYNEeNFcsbYOgRuZAz5tSrIvIaiWqz0Uy8/+7xRHV/80EO4eUGA
-aNJUWRoxAgMBAAECggEAIVNetPZuA+qyzJX0IehuuE/ZlMwGmg+QnXHlVj1lWF3L
-tqtg2l0UJ1CVPindinpuHl6erNuI44+Og7/zFtfHm30SlZL2usBcIQqArpcmWK9I
-VZ1BwJ25wC7BzlTIMqk0ZFXHqvNuI6guCQSBbLQrld74ArQNb/8sFwfnwFlder33
-cEEkxzkz1+tjDVPllJqhDHC4pWHfGiU/NzfLnMKTnlViOYHywYLPKi4T5H4PA/Nd
-Lwqnv4AURmBXxi0pYc/7640pZiBuyNfAW6zik4m4hZMPdznpRyLC2VAZMZWLdxry
-38a1HHK4ZgQtq7hgS10GtJLqoB/hfFQPVTLdKKg2DwKBgQDqmrFaL7UodukHoTQT
-Ob7WmizCCRRjYfljREJMHa7DgLODjVfrBcHWgKV6sB8OFESx+FJA9IW8yOaGwmKJ
-m2PlNTeAXt6wfLdX2pq+8Wb4PFmYeqxrAubItYdiQEnVYZOWCpTx+aByHz76F5if
-DHXvaeYztyjE7b88e+gIWv1fjwKBgQC591SvojZ57J1yQGUutNese/QqqhFbBJz9
-RWCm217ksoqVZYZWxsG+wGH6R0pDjRYxn0wXrrqCLag4TI73qPawUV22C/+m7L2o
-mmJ4BXxklmrtYBXd/xdMTOvzvxskClbK1oYmloWGh4LmZFBKq7DTsWXzyidZJz5i
-1rwM0A0KPwKBgQCKEs8sgAWDsjBF8EdAxWyeyxBqhoN8Vk47cRH/0DxqDZYZZ5eF
-19aUUxSRV5R/achgYgCu//qx+B9M0pzB1jV90cs/fxZbEpupVhxbIqJymLo2doSB
-WqzPFZ9/YMzTi+EbnlC49SzL3b3n3PlTKjdC17XHXBXfiPlTNK2ENWEH2wKBgFHE
-fmf7WxihAVmLFvJCcdJVbjaUMK1kieKS7rxvGHpWRrkJutfM7MOCs5HoZq7tCiUn
-db20Bi3XBXA7uWEL2ewM2reA7xfmYD4SI9nCD7/qo3lcFkFWOFhEOjsifDyMjz0A
-tluhM3TDgLrswKEUfNuX1MwsxsBckQHEiUrY7+LhAoGABk3BBSVayHrTCT4xJipk
-PIlGdKHjzdnI4adfJEWlGQA5EUv+fiorfeFW0u1yKyiftbCrkwG8z4S5JB3PkBZc
-kbVyt+nUh7+gOoNE0ebGJzirkLiFzeulFmQFE3VzwxXuuBm/Zl8ruOiRjftooJx0
-A1vWs/C545K2v/LLxc55Cug=
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCOCei5WYroziMo
+O5N3Bk5Fx1Cx/ILDpiEb7aTKXnICxfO5pgYfDuOFvJm2CevM6LPyCvmbWs/ZbYgf
+IxXie48tbgihIluGrzElZcTe2oqx7DSv8nxXUwm9hvo95PFEq25bQJlwpp3ZFhPK
+XTPYS8y9E4vms+0wuS7OtZiT20lr3zKpVY10/JK4xBMNxdkUT4+zINIEqwTfW9PL
+v8OhkBMF2iuTChm8o4orVqY27a6ylOW2hiJ/Qix+YUkRcGAzhCNagpUpgMGXLB4+
+oOVu6PfnBuebvEY7ZERexHtQCEYhHB/WSNVixCIdzHT9B2XBxLpcLEM7hvtu4Yhu
+Z21w8gmLAgMBAAECggEALoGME3QACW3FER1AkU4dPred8kjtP8YbPRu4QxJdXg8W
+WAjGJFEpqdYwtevVqwfeMzfotjcrqtM0KI3CUp+GJ6fJZ4jqUtT10Hrb1OPVWaAv
+OBS7JZRosgeJ084sOQGwZmxmUP4c3MFfxXhyyzU2WgoWWnk7BiL78m5/AJpiFdFH
+qnizBtoBdLkfUMMDxMTvNSHQlAdPgC93l5MFdAoNRTIyCYk5srhBOVOQ4xrJL56C
+g7dJ317A26RMGEV0fSBqMjmyz7eOiE9fUfMyrKymzxFD1sNzGr8+t3X6prFHgzhu
+SxIcvAn5F3Nsw7BxHGqQE7CsRAC0IxhUSDjLoTK3wQKBgQDIrJpwtHgGz/ZuBvfj
+1gzCbXp+FZ20FkB/q1yGw9Gt4nkWDkxfg8N6Q9gWT3kbUCmM8dsm4M9HO6b8Mv//
+OFTwH8LjErEKnudr7dm+hjdJd2/zudsOTdSPQJXq5d0m2kUDPW508/CKLdBI1P1k
+XKthM3vjw+VmJf548KKRdD7JMQKBgQC1Mt29bzZmRcfxBhvPBWqsUeDEDnQvH9QP
+TNs+f/pE+65/Mz4CzoFiUtuFNOMF1rgm/g4Ojm5PxP4deZwO9yo+xTaCR43bSYPD
+sbGAxPV/0NIRfjLlDtGd5KVRGskBTUiG2qfXo3RaPas8ITNYpIxTkpK9Fo4KJ/pI
+xiAOYXWPewKBgF4TrQORV4O6EwlZ8vS48JplwLtDXv+CPxKbP3Fec/pU5fdVFLDi
+kM3M6IztDRWk6xXMfLUpR4NZj9tD/Yek3Q0FltPle2JDRLLwetg7C8hBWhak1vFJ
+w5C08pOA18DTKu9t6U6i3e2ptK+wSmq2lxGmlToeKHlO7pG8HjqaiKTBAoGAB0CM
+7WsJE1jRoszqygNefJ0eUNp/Pe+ZLi+WSs8WdjJYjpC/d59KQGQukwtF1tL8NdtP
+NrfupFSvEwDuBQ9Raoe8IcS5YcB0fJ2dDBlV9hKmhbq2UMKiEx62myNmTh4IvBT+
+SLwrCP2U3+g4ROD5GNMx+k1vy+pDsyvy1oCCEwcCgYEAmV7Pofi1LX2FGEl4XVh3
+mRSBkQWVAhy+64mHIVYtlmPGdoX9g/jpLqFOSmTJU4ay8aDSoVm1OYQ7E4s4q+75
+qBLJJ/qz3r23VjMoEP3vgFwVR5sn3HScacnKL06zwfEjhpfk/4aCIEV3qxYvVW+7
+pUE+01oL9IcXo04uEPvJekc=
 -----END PRIVATE KEY-----
 """
 
@@ -230,25 +198,118 @@ A1vWs/C545K2v/LLxc55Cug=
 def ca_sub_cert():
     return """\
 -----BEGIN CERTIFICATE-----
-MIIDTTCCAjWgAwIBAgIUJ8/bURqv1pOka8sHUVqp+C4+FWIwDQYJKoZIhvcNAQEL
-BQAwKzELMAkGA1UEBhMCVVMxDTALBgNVBAMMBFRlc3QxDTALBgNVBAoMBFNhbHQw
-HhcNMjUwNTA0MTQyMjUxWhcNMzUwNTAyMTQyMjUxWjAuMQswCQYDVQQGEwJVUzEN
+MIIDTTCCAjWgAwIBAgIUAyLX8kCZwSl74iK/rbMwUeLo+MMwDQYJKoZIhvcNAQEL
+BQAwKzELMAkGA1UEBhMCVVMxDTALBgNVBAoMBFNhbHQxDTALBgNVBAMMBFRlc3Qw
+HhcNMjYwODI2MTU1MzI3WhcNMzYwODIzMTU1MzI3WjAuMQswCQYDVQQGEwJVUzEN
 MAsGA1UECgwEU2FsdDEQMA4GA1UEAwwHVGVzdFN1YjCCASIwDQYJKoZIhvcNAQEB
-BQADggEPADCCAQoCggEBAKpscwcBFpbudy5tyAuEcTKj3AQ6HhrzYPkHVjVUf9cm
-/AEPgG3n0dLjrOpg21ddFtadaQhIvzC9aYIkRdnsaahMv57yz+HwLUDS+p5OEG/R
-MnJkr3cJEPzS8b+/42It3ZKOU+SdeJsPAXPCuRmcYuvJGqazC8bXZqE5hBhaU8K/
-4EhTENQv8/PTPhkSChmACtVcyKpeUJ++w/JR6fHlUs1BkH3krzxMyGv98Juudx12
-W8PNQ+VbgiktvJ8oT0wIKJaddiqAyv9bMnHq7o9/0Hgb7YZUJg0R40Vyxtg6BG5k
-DPm1Ksi8hqJarPRTLz/7vFEdX/zQQ7h5QYBo0lRZGjECAwEAAaNmMGQwEgYDVR0T
-AQH/BAgwBgEB/wIBADAOBgNVHQ8BAf8EBAMCAQYwHQYDVR0OBBYEFDru5IneLp7q
-OrwVwHw6i3deyooOMB8GA1UdIwQYMBaAFFzy8fRTKSOe7kBakqO0Ki71potnMA0G
-CSqGSIb3DQEBCwUAA4IBAQBJQJcAMsbKJObyn9uX5JTy/pFptden0c9XXmwdNq53
-fY85pWWSN4E5880yWzhVtB60z4hR4V0hI07928rx+zqgYSRvFJD4Sv50ju7QzjtK
-cMm0oySqBACJBoQvQjffpnFxsMiPVpbVuEDmDYGrlAkAaXy9O/AMD5D3476QuMsV
-4IPOZ65ISOE7yTlYsIXMcEvAej8Rv1uRSScWwoxU7F0XsULMXMfVdW6b0/x/Js2N
-UfxmAJVK8gpR1J2uT0LZgZ5QHgGagYtDwiWYyW/w5fSzxCA43KrOg6g4x+y/PBFj
-cYpgWHc7NNeYGs6uKgA+IJJalICKGMSJpStncc6SGeKi
+BQADggEPADCCAQoCggEBAKh5GjzqPb8gzC1Xx7zj/TDWBZzYjQreovzwuYdSXSPo
+E4cn6AMZGoyZBrhKeMZimxOrS8Y5l3OiG158WC+8CHAzVkd4dU4cGFdIhyjpkbGz
+YGMJ7ylYqq0g7GlLEsxdLNamtDMb+axtedlmPNTmmzATeJNNkYJcseCOUE1yOWgH
+krSTIsl87XL+cAfZxBtAhsL29vIqFv0UFGXBFHmNt0fHbfAEoidJ+R4yFdsg9rig
+q7gDjSYbuJ9SLfHjoMTF5cZeGDliYMOXy9GaJyu3WDpJZU5Dt/UKzQtmrNsfINYl
+FzAWED99EDo4PsCC82cg0c1eFkw/tMy7hUX4AM212f0CAwEAAaNmMGQwEgYDVR0T
+AQH/BAgwBgEB/wIBAjAOBgNVHQ8BAf8EBAMCAQYwHQYDVR0OBBYEFMj6WOA8feXl
+gS2/ux8UEjSwxL2HMB8GA1UdIwQYMBaAFFVAaieIyOMr672dynDMNOZT80PWMA0G
+CSqGSIb3DQEBCwUAA4IBAQBGN10GoJuA60VwIsOQrrd5Y/TmZMj0Lr/cBORYMqT2
+WllXuB207ckLALvnY3wteNawCH1cYH/uwmb+HO6CYfUY9uqkts/ljrfoUvulkNfJ
+JpH2w0HvmdeuPmmi4gjBzBMWIq36v7QueGNc+c+7oFkiyM4aFW1zb9kbeVRiGu9/
+JmyF9aG+94bwmn/OWgQOu5u44R+se+ZmICwKhXMTgLPf8IkRfnWZfaYlLeTaqtPl
+5prqXLjPKtBrVf+Jyj+5jppQ0bncyhHtiZJ8J8irsL/P0BZ3Bqb+yMCht1LE8U8E
+wZitSD0qHEKg8bHsGGLdvGFjXOs4XN5ssKQaJTAk2fKi
 -----END CERTIFICATE-----
+"""
+
+
+@pytest.fixture
+def ca_sub_key():
+    return """\
+-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCoeRo86j2/IMwt
+V8e84/0w1gWc2I0K3qL88LmHUl0j6BOHJ+gDGRqMmQa4SnjGYpsTq0vGOZdzohte
+fFgvvAhwM1ZHeHVOHBhXSIco6ZGxs2BjCe8pWKqtIOxpSxLMXSzWprQzG/msbXnZ
+ZjzU5pswE3iTTZGCXLHgjlBNcjloB5K0kyLJfO1y/nAH2cQbQIbC9vbyKhb9FBRl
+wRR5jbdHx23wBKInSfkeMhXbIPa4oKu4A40mG7ifUi3x46DExeXGXhg5YmDDl8vR
+micrt1g6SWVOQ7f1Cs0LZqzbHyDWJRcwFhA/fRA6OD7AgvNnINHNXhZMP7TMu4VF
++ADNtdn9AgMBAAECggEAAxn7pCxxx498gscva6hM1HXUM59+9TjFCmAKIlYfVdZj
+aaUP7eKr7POyPnlMgOZ20WVhZzxPL/dHhrVGUFanVx1y1K0Ah9gXkJ/KsTOflYRm
+XVxk9T9nIPnOsF+L8Iw0k50NCzXUIlr/l8N8kjTOnZN2MEwIxjwboDUugEZ+jQ4y
+9L+vEuTVdIN4mPvYKhs7BosOd2gUccLc2/CtgprgenE1CQ8qXDERbgrO/KvQvqk5
+6Tdl0/Tmlj6euS1P1pT5WAm4sOpTmm9tQo0/Tnkjp2uA/bvIMCdPcSx7lowZQL/s
+leM+NakIyZAD3mfk0R++YfVlH17ktu6fdCSzEAJcZwKBgQDj5Tol0SI41AxxlixT
++ynBYF8Ww2qnDK9O0DqUHxqVl7fxZcTYIMS3cb/HCryReUL+FIpendmcuovllzwA
+g4xIVtSFD+dqRROMgPtVCYBPu4BpqqpUikZQyUah7/FjNLcdW/fotAIZ1eJFsy4z
+qtxZV5l5NA84KmFzrjE8nMqH3wKBgQC9P+GsHI0hnBixpJ0sqUnF9q4nKn6KY8Gu
+0O3YdK2tPLL6oHxigo6sRc4SPWP9LR/PtM6TkA9+bBqh8FfXcfYM1GrCczXknX00
+LghplhQ1QOZjqjmamTx0hFevdgNz0p5jiUDTbzVFaPCQP/zAXkHRHCrefzOLoVNN
+lZ9Bp1WJowKBgCWX+8afQDD1sfPO3RMhfJrcxfLgW6ig7A5pRTCIDP+eXoagzh8F
+EM5eIk+4UrEAuu9k/gprqak0EL3X+9rt2Gdag4ZLwFYEfRwRbuRxQ8xjVuSXda+q
+e7z55v/xr/U4jfh24mdtwmb2pHPxAe8eAWlvjO60isouG5NUqeSgzLwrAoGAPly6
+pNiTuSuTB5bTJFB0uwNayBU8taXBwTWf6uAoCxohcG1KD7wt/57RFTmdpWQlQ3C1
+UfL66BH/hLWKfLhU+E1XENSeQcOT6onww7ps1k+Ym+cQLF2qikrCClO9N4GEKBCm
+iAXxa/n0q9QqGcn1rk614bPQ7IYwyTQw0pWtnjkCgYEAgZbGQStSxR1MwHG8Y8A9
+rNcQTv2PTvd19O1iEAxJHzQNZOciqgbNvAXxuChNSnOikrtjqbl9v99WnjqOE1TQ
+oYMtPj6yNSeTRJgROi2kF4kjgnCeiLe2FhFFQqP6o5oAjrFRCDEgVTDkSzWOQgX/
+/xuWR2NlXTxYrdB56Lgi4xM=
+-----END PRIVATE KEY-----
+"""
+
+
+@pytest.fixture
+def ca_cert_no_pathlen():
+    return """\
+-----BEGIN CERTIFICATE-----
+MIIDHjCCAgagAwIBAgIUKm99KrqdfPb1J4sQe+SorjMC+LYwDQYJKoZIhvcNAQEL
+BQAwJzElMCMGA1UEAwwcU2FsdCBUZXN0IFJvb3QgVW5jb25zdHJhaW5lZDAeFw0y
+NjA4MjYyMTQ2NDZaFw0zNjA4MjQyMTQ2NDZaMCcxJTAjBgNVBAMMHFNhbHQgVGVz
+dCBSb290IFVuY29uc3RyYWluZWQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK
+AoIBAQDkK41XGREvMVzKkkZAW+fpVmfSyg7UntvKzXecfu++8fwCEVKAJG4icfhc
+9AVdaZIKvHPRxdUWJY1tHe13tJYerqn/Vbf/vh1XwmxvcYut0nKE1sLN+1x42ihN
+9Fl36tudmrTAGAn4sX4Qnqivu8r14Lz4g4XyEXK35zCeX6tBnzI444JNq2CDYyqB
+5peAAVFO7YWdpQYqnJ9YJL6VlUQ0FYBNNqaAn95RHZ2H1+nkBwE/zSyNXcg0q4S+
+O1LQh+S1s5FAUcjCwsW0Q7wS6zhApM+yRYa2MNl72MXd+3ViPpOXL5Xw9k4qNO+G
+sqveQFSZ6dydcMMM0ggBKQNeBtE9AgMBAAGjQjBAMA8GA1UdEwEB/wQFMAMBAf8w
+DgYDVR0PAQH/BAQDAgGGMB0GA1UdDgQWBBTnoHneVRD2W/AFwtadSawyQGElDzAN
+BgkqhkiG9w0BAQsFAAOCAQEAfsiwbppfrFjev4JH8P/Jy68+ZWSfQ/JNaqTxhzIm
+43vF/MzHXt9IDJLsXfi3D/ZTYq1u7+vGDKXaoh8KG8oVL4/Lc4iihu2EAei8uUwF
+Bna+MHet/PwXTAt5k21LlQvoyU9/kZyY5e5NdNJ9ULDhCoKxvNhXYZbH9mO6VYuA
+uOKd0pAvlAfA+EpOYkDYw3AhWch9QFXvByGfxgONj1zY4qQCPV3BxqonOQAU957p
+qU04BK9da2gtGyUzlABXK1jrO2csYRl4FK6xZS0+NszPh+8y2gy6jat8OofbGjmb
+nd+qcrHZSuAiKK/WR5uZurNC25yHwvP0othH96QFVYw01w==
+-----END CERTIFICATE-----
+"""
+
+
+@pytest.fixture
+def ca_key_no_pathlen():
+    return """\
+-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDkK41XGREvMVzK
+kkZAW+fpVmfSyg7UntvKzXecfu++8fwCEVKAJG4icfhc9AVdaZIKvHPRxdUWJY1t
+He13tJYerqn/Vbf/vh1XwmxvcYut0nKE1sLN+1x42ihN9Fl36tudmrTAGAn4sX4Q
+nqivu8r14Lz4g4XyEXK35zCeX6tBnzI444JNq2CDYyqB5peAAVFO7YWdpQYqnJ9Y
+JL6VlUQ0FYBNNqaAn95RHZ2H1+nkBwE/zSyNXcg0q4S+O1LQh+S1s5FAUcjCwsW0
+Q7wS6zhApM+yRYa2MNl72MXd+3ViPpOXL5Xw9k4qNO+GsqveQFSZ6dydcMMM0ggB
+KQNeBtE9AgMBAAECggEAARAP3jg8a4EaGspwH9Qdwik4HhP5WjWsNedbl4PC15uW
+bicJAJZK2ge4Xax4Su1XNAwZKQC4I5yEql2xkbVqXpW3LnyGeR84UUSTTziS6zoX
+9PTwHtf9IAX6GpTZBtU19Se3kE58W2duPCMVC45/HUKQ9sJcERrSMzeVMyOkb0+N
+grJTNeBIm2YiUF21sfkUSW01p0OIvsD4aMoiOAZRLkuRYdyVyj9KBNEne0J8gCwg
+9DWuhJoPrtlDMp4GuQjlts9EcDyaqputWY6jWh8MsfO8yzdUPN2gC815CG1WV/cl
+i7CAP4+ZGe/INnvWdSkr7yDJUmIsEzk2ag291xsuSQKBgQDz288CxSC0XIIMSCDW
+/ETWjwHcqqm653fQIaaRFAF4ewD0c7dj639bo6YFMfsDReHHxbJXU3ueXAihzVme
+xWMhGtPn5FN7vd/V74shZYgtL/ZpgftitbtP8Z4oP+PW9EXoK6f/gFQ2q9z4xezy
+bpuBLIZGex0Gl6EC+HH3xyNRiQKBgQDvh8ehHuA6x7MF55ByKBes2sK1V3aRrXj1
+J1xqLQ1wNxbp1pbTLojo55vTiGtBD0FsWemUnxW2L+b9CkXY5KygoIzYh8cH3I1t
+yi64psKYKvIfx8YXQjLwIFUr2pWcFD5E0m+HStAU8s4W0YDLQj96fO3MFcCWLT69
+8bseKuTZFQKBgQCqQUEasf7PbfbuFD25W4/ELTwjkJPIBmtESPo+ODV+pIJaKaBU
+hsr4dB0pa2fRNS0ZiRGmnoakXaU5MmHr0+wN5Okl8efHcR2iBAijXHvi8KWdrD6T
+AEay3gKKH3E3VnyoSDKW1EX3la5FkgqIiGjRmwB0nOf6/kpQBJ2tXL9v4QKBgBlH
+5mz9+kKZ8y4rW5aA3sbSq/xBx/TmLz8IsXtPV/zBA70YdgDCB5c1Yr/3xQIv3wLV
+lo6mH7+D3MhWPjr/H60wZM0xv3L390FgNoAssZsn5TgveJvZ09B+SR8AyguYI15W
+K4lG/yFG4zOLVyGc02BVMS/6F8KB8f5QNiSf+FllAoGAafyS/xgOhqkSA4at1p4L
+DtqgCaeQgnUVYPV07RA+NgL91cnylJAFbnvDgHJJIZc4PuViLMZocC8JsatKRxeI
+U7Ur/g1Y3WmlWo15fojD2b8cdZ2nz+pTVdh5KzKQPgmMEGZsakHadQTNfdKueojL
+ooRkBy+9MR64RNyZ+gri1OA=
+-----END PRIVATE KEY-----
 """
 
 
@@ -258,6 +319,17 @@ def cert_args(tmp_path, private_key):
         "name": f"{tmp_path}/cert",
         "common_name": "saltproject.io",
         "role_name": "testrole",
+        "private_key": private_key,
+        "ttl": "30m",
+        "ttl_remaining": 0,
+    }
+
+
+@pytest.fixture
+def ca_cert_args(tmp_path, private_key):
+    return {
+        "name": f"{tmp_path}/cert",
+        "common_name": "saltproject.io",
         "private_key": private_key,
         "ttl": "30m",
         "ttl_remaining": 0,
@@ -345,6 +417,23 @@ def issuer_setup_sub(ca_cert, ca_sub_cert, ca_sub_key, request):
 
 
 @pytest.fixture
+def issuer_setup_no_pathlen(ca_cert_no_pathlen, ca_key_no_pathlen, request):
+    try:
+        ret_data = vault_write(
+            "/pki/config/ca",
+            pem_bundle="\n".join([ca_cert_no_pathlen, ca_key_no_pathlen]),
+        )["data"]
+        issuer_id = ret_data["imported_issuers"][0]
+        issuer_config = {"issuer_name": "root"}
+        issuer_config.update(deepcopy(getattr(request, "param", {})))
+        vault_write(f"/pki/issuer/{issuer_id}", **issuer_config)
+        issuer_config["issuer_id"] = issuer_id
+        yield issuer_config
+    finally:
+        _wipe_issuers()
+
+
+@pytest.fixture
 def aia_urls(request):
     urls = deepcopy(getattr(request, "param", {}))
     vault_write("pki/config/urls", **urls)
@@ -378,14 +467,48 @@ def pregen_csr(cert_args):
     return cert_args
 
 
+@pytest.fixture(params=("regular", "intermediate"))
+def cert_typ(request, vault_pki):
+    if request.param == "intermediate":
+        return vault_pki.ca_certificate_managed, request.getfixturevalue("ca_cert_args")
+    return vault_pki.certificate_managed, request.getfixturevalue("cert_args")
+
+
 @pytest.mark.usefixtures("issuer_setup", "roles_setup")
-def test_certificate_managed_create(vault_pki, cert_args, testmode):
-    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+def test_certificate_managed_create(cert_typ, testmode):
+    cert_managed, cert_args = cert_typ
+    ret = cert_managed(**cert_args, test=testmode)
     assert ret.result is not False
     assert (ret.result is None) is testmode
     assert ret.changes
     assert "created" in ret.changes
     assert Path(cert_args["name"]).exists() is not testmode
+
+
+@pytest.mark.usefixtures("issuer_setup", "existing_cert")
+def test_ca_certificate_managed_ok(cert_typ, testmode):
+    cert_managed, cert_args = cert_typ
+    ret = cert_managed(**cert_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup", "existing_cert")
+def test_ca_certificate_managed_signature_bits(vault_pki, ca_cert_args):
+    ca_cert_args["signature_bits"] = 256
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+    ca_cert_args["signature_bits"] = 384
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert "signature_bits" in ret.changes
+    assert ret.changes["signature_bits"] == {"old": 256, "new": 384}
+
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert not ret.changes
 
 
 @pytest.mark.usefixtures("issuer_setup", "roles_setup", "testrole")
@@ -411,9 +534,7 @@ def test_certificate_managed_create(vault_pki, cert_args, testmode):
     ),
     indirect=["testrole"],
 )
-def test_certificate_managed_state_no_changes(
-    vault_pki, cert_args, testmode, csr, cn_in_csr, cn_in_args, exp
-):
+def test_certificate_managed_cn_ok(vault_pki, cert_args, csr, cn_in_csr, cn_in_args, exp):
     if cn_in_args:
         cert_args["common_name"] = cn_in_args
     else:
@@ -433,7 +554,52 @@ def test_certificate_managed_state_no_changes(
     )
 
     # Try again
-    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup")
+@pytest.mark.parametrize(
+    "csr,verbatim,cn_in_csr,cn_in_args,exp",
+    (
+        pytest.param(False, False, False, "a.b", "a.b", id="regular_common_name"),
+        pytest.param(False, True, False, "a.b", "a.b", id="regular_common_name_verbatim"),
+        pytest.param(False, False, False, False, False, id="regular_missing"),
+        pytest.param(False, True, False, False, False, id="regular_missing_verbatim"),
+        pytest.param(True, False, False, "a.b", "a.b", id="csr_common_name_only"),
+        pytest.param(True, True, False, "a.b", False, id="csr_common_name_only_verbatim"),
+        pytest.param(True, False, "a.b", False, "a.b", id="csr_cn_only"),
+        pytest.param(True, True, "a.b", False, "a.b", id="csr_cn_only_verbatim"),
+        pytest.param(True, False, "a.b", "c.d", "c.d", id="csr_cn_mismatch"),
+        pytest.param(True, True, "a.b", "c.d", "a.b", id="csr_cn_mismatch_verbatim"),
+        pytest.param(True, False, False, False, False, id="csr_missing"),
+        pytest.param(True, True, False, False, False, id="csr_missing_verbatim"),
+    ),
+)
+def test_ca_certificate_managed_cn_ok(
+    vault_pki, ca_cert_args, csr, cn_in_csr, cn_in_args, verbatim, exp
+):
+    if cn_in_args:
+        ca_cert_args["common_name"] = cn_in_args
+    else:
+        ca_cert_args.pop("common_name")
+    if csr:
+        if cn_in_csr:
+            ca_cert_args["CN"] = cn_in_csr
+        pregen_csr(ca_cert_args)
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args, sign_verbatim=verbatim)
+    assert ret.result
+    assert ret.changes
+    assert "created" in ret.changes
+
+    cert = load_cert(ca_cert_args["name"])
+    assert [cn.value for cn in cert.subject.get_attributes_for_oid(cx509.NameOID.COMMON_NAME)] == (
+        [exp] if exp else []
+    )
+
+    # Try again
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args, sign_verbatim=verbatim)
     assert ret.result is True
     assert not ret.changes
 
@@ -453,22 +619,24 @@ def test_certificate_managed_is_reissued_forcibly(vault_pki, cert_args, testmode
 
 @pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize("encoding", ["der", "pem", "pkcs7_der", "pkcs7_pem"])
-def test_certificate_managed_encoding(vault_pki, cert_args, encoding, testmode):
+def test_certificate_managed_encoding(cert_typ, testmode, encoding):
+    cert_managed, cert_args = cert_typ
     cert_args["encoding"] = encoding
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert "created" in ret.changes
     _, enc, _, _ = load_cert(cert_args["name"], get_encoding=True)
     assert enc == encoding
-    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    ret = cert_managed(**cert_args, test=testmode)
     assert ret.result is True
     assert not ret.changes
 
 
 @pytest.mark.usefixtures("issuer_setup", "roles_setup")
-def test_certificate_managed_no_create(vault_pki, cert_args, testmode):
+def test_certificate_managed_no_create(cert_typ, testmode):
+    cert_managed, cert_args = cert_typ
     cert_args["create"] = False
-    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    ret = cert_managed(**cert_args, test=testmode)
     assert ret.result is True
     assert not ret.changes
     assert not Path(cert_args["name"]).exists()
@@ -476,14 +644,15 @@ def test_certificate_managed_no_create(vault_pki, cert_args, testmode):
 
 @pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize("follow_symlinks", (False, True))
-def test_certificate_managed_symlink(vault_pki, cert_args, tmp_path, follow_symlinks, testmode):
-    ret = vault_pki.certificate_managed(**cert_args)
+def test_certificate_managed_symlink(cert_typ, tmp_path, follow_symlinks, testmode):
+    cert_managed, cert_args = cert_typ
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     link = tmp_path / "cert_link"
     link.symlink_to(cert_args["name"])
     cert_args["name"] = str(link)
     cert_args["follow_symlinks"] = follow_symlinks
-    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    ret = cert_managed(**cert_args, test=testmode)
     assert ret.result is not False
     if follow_symlinks:
         # the managed file is the symlink target, which is in the correct state
@@ -499,20 +668,21 @@ def test_certificate_managed_symlink(vault_pki, cert_args, tmp_path, follow_syml
 
 @pytest.mark.usefixtures("issuer_setup_sub", "roles_setup")
 @pytest.mark.parametrize("encoding", ["der", "pem", "pkcs7_der", "pkcs7_pem"])
-def test_certificate_managed_includes_chain(vault_pki, cert_args, encoding, testmode):
+def test_certificate_managed_includes_chain(cert_typ, encoding, testmode):
+    cert_managed, cert_args = cert_typ
     cert_args["encoding"] = encoding
     cert_args["append_ca_chain"] = True
     cert_args["issuer_ref"] = "sub"
 
     is_der = encoding == "der"
     if is_der:
-        ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+        ret = cert_managed(**cert_args, test=testmode)
         assert ret.result is False
         assert "Cannot append the CA chain" in ret.comment
         assert not ret.changes
         return
 
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert "created" in ret.changes
     _, enc, chain, _ = load_cert(cert_args["name"], get_encoding=True)
@@ -520,7 +690,7 @@ def test_certificate_managed_includes_chain(vault_pki, cert_args, encoding, test
     assert len(chain) == 1
 
     # Ensure it's idempotent still
-    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    ret = cert_managed(**cert_args, test=testmode)
     assert ret.result is True
     assert not ret.changes
 
@@ -534,15 +704,31 @@ def test_certificate_managed_missing_role(vault_pki, cert_args, testmode):
     assert "Role missing-role does not exist" in ret.comment
 
 
+@pytest.mark.usefixtures("issuer_setup")
+def test_ca_certificate_managed_missing_cn(vault_pki, ca_cert_args):
+    ca_cert_args.pop("common_name")
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+
+    cert = load_cert(ca_cert_args["name"])
+    assert cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["CN"]) == []
+
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+
 @pytest.mark.usefixtures("issuer_setup_sub", "roles_setup")
 @pytest.mark.parametrize("change", ("ca_chain", "encoding"))
-def test_certificate_managed_local_changes_are_recreated(vault_pki, cert_args, change):
+def test_certificate_managed_local_changes_are_recreated(cert_typ, change):
     """
     Changes to the encoding or the appended CA chain only should not
     cause a reissuance, but be applied locally to the existing certificate.
     """
+    cert_managed, cert_args = cert_typ
     cert_args["issuer_ref"] = "sub"
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert "created" in ret.changes
     serial = load_cert(cert_args["name"]).serial_number
@@ -551,7 +737,7 @@ def test_certificate_managed_local_changes_are_recreated(vault_pki, cert_args, c
         cert_args["append_ca_chain"] = True
     else:
         cert_args["encoding"] = "pkcs7_pem"
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert ret.changes
     assert not set(ret.changes) - {"ca_chain", "encoding"}
@@ -635,14 +821,24 @@ def test_certificate_managed_verbatim_without_role_name(vault_pki, cert_args):
 
 @pytest.fixture
 def existing_cert(
-    vault_pki, cert_args, issuer_setup, roles_setup, aia_urls, request, modules
+    issuer_setup, roles_setup, aia_urls, request, modules, vault_pki
 ):  # pylint: disable=unused-argument
+    if "cert_typ" in request.fixturenames:
+        cert_managed, cert_args = request.getfixturevalue("cert_typ")
+    elif "ca_certificate_managed" in request.function.__name__:
+        cert_managed, cert_args = vault_pki.ca_certificate_managed, request.getfixturevalue(
+            "ca_cert_args"
+        )
+    else:
+        cert_managed, cert_args = vault_pki.certificate_managed, request.getfixturevalue(
+            "cert_args"
+        )
     overrides = getattr(request, "param", {})
     generate_csr = overrides.pop("generate_csr", False)
     cert_args.update(overrides)
     if generate_csr:
         pregen_csr(cert_args)
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert "created" in ret.changes
     return load_cert(cert_args["name"]).serial_number
@@ -650,17 +846,18 @@ def existing_cert(
 
 @pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize("existing_cert", ({"mode": "0644"},), indirect=True)
-def test_certificate_managed_file_param_changes_only(vault_pki, cert_args, existing_cert, testmode):
+def test_certificate_managed_file_param_changes_only(cert_typ, existing_cert, testmode):
     """
     Changes affecting only the managed file (like its mode) should be
     applied via file.managed without recreating the certificate.
     """
+    cert_managed, cert_args = cert_typ
     cert_path = Path(cert_args["name"])
     assert oct(cert_path.stat().st_mode)[-4:] == "0644"
     existing_cert = load_cert(cert_args["name"]).serial_number
 
     cert_args["mode"] = "0600"
-    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    ret = cert_managed(**cert_args, test=testmode)
     assert ret.result is True
     assert not ret.changes
     # the certificate itself should be unchanged
@@ -668,18 +865,19 @@ def test_certificate_managed_file_param_changes_only(vault_pki, cert_args, exist
     assert oct(cert_path.stat().st_mode)[-4:] == ("0644" if testmode else "0600")
 
 
-def test_certificate_managed_changed_private_key(vault_pki, cert_args, existing_cert):
+def test_certificate_managed_changed_private_key(cert_typ, existing_cert):
     """
     A certificate whose public key does not match the specified private
     key anymore should be reissued.
     """
+    cert_managed, cert_args = cert_typ
     new_privkey = generate_rsa_privkey(2048)
     cert_args["private_key"] = new_privkey.private_bytes(
         serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     ).decode()
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert "private_key" in ret.changes
     cert = load_cert(cert_args["name"])
@@ -688,13 +886,14 @@ def test_certificate_managed_changed_private_key(vault_pki, cert_args, existing_
 
 
 @pytest.mark.parametrize("existing_cert", ({"ttl": "10m"},), indirect=True)
-def test_certificate_managed_expiry(vault_pki, cert_args, existing_cert):
+def test_certificate_managed_expiry(cert_typ, existing_cert):
     """
     A certificate that expires within ``ttl_remaining`` should be reissued.
     """
+    cert_managed, cert_args = cert_typ
     cert_args["ttl"] = "30m"
     cert_args["ttl_remaining"] = "15m"
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert "expiration" in ret.changes
     cert = load_cert(cert_args["name"])
@@ -703,31 +902,33 @@ def test_certificate_managed_expiry(vault_pki, cert_args, existing_cert):
 
 
 @pytest.mark.usefixtures("issuer_setup", "roles_setup")
-def test_certificate_managed_existing_file_not_a_cert(vault_pki, cert_args):
+def test_certificate_managed_existing_file_not_a_cert(cert_typ):
     """
     When the target file exists, but does not contain a certificate,
     it should be replaced.
     """
+    cert_managed, cert_args = cert_typ
     Path(cert_args["name"]).write_text("banana")
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert "replaced" in ret.changes
     assert load_cert(cert_args["name"])
 
 
 @pytest.mark.parametrize("existing_cert", ({"alt_names": ["dns:foo.bar.baz"]},), indirect=True)
-def test_certificate_managed_exclude_cn_from_sans(vault_pki, cert_args, existing_cert):
+def test_certificate_managed_exclude_cn_from_sans(cert_typ, existing_cert):
     """
     By default, the common name is included in the SANs. Ensure setting
     ``exclude_cn_from_sans`` is detected as a change, honored during
     reissuance and idempotent.
     """
+    cert_managed, cert_args = cert_typ
     cert = load_cert(cert_args["name"])
     sans = cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName).value
     assert cert_args["common_name"] in sans.get_values_for_type(cx509.DNSName)
 
     cert_args["exclude_cn_from_sans"] = True
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert ret.changes
     cert = load_cert(cert_args["name"])
@@ -736,7 +937,7 @@ def test_certificate_managed_exclude_cn_from_sans(vault_pki, cert_args, existing
     assert cert_args["common_name"] not in sans.get_values_for_type(cx509.DNSName)
 
     # Ensure it's idempotent still
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert not ret.changes
 
@@ -830,10 +1031,11 @@ def test_certificate_managed_user_ids_and_serial_number(vault_pki, cert_args):
 
 
 @pytest.mark.usefixtures("issuer_setup", "roles_setup")
-def test_certificate_managed_missing_issuer(vault_pki, cert_args, testmode):
+def test_certificate_managed_missing_issuer(cert_typ, testmode):
+    cert_managed, cert_args = cert_typ
     cert_args["issuer_ref"] = "missing-issuer"
     cert_args["append_ca_chain"] = True
-    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    ret = cert_managed(**cert_args, test=testmode)
     assert ret.result is False
     assert not ret.changes
     assert "'missing-issuer' does not exist" in ret.comment
@@ -841,12 +1043,13 @@ def test_certificate_managed_missing_issuer(vault_pki, cert_args, testmode):
 
 @pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize("sign_verbatim", (False, True))
-def test_certificate_managed_san(vault_pki, cert_args, sign_verbatim):
+def test_certificate_managed_san(cert_typ, sign_verbatim):
     """
     Ensure changes to the requested SANs are detected and applied.
     This test is quite complex, when it should not be.
     TODO: Refactor into separate tests.
     """
+    cert_managed, cert_args = cert_typ
 
     def _assert_san(ass):
         cert = load_cert(cert_args["name"])
@@ -901,7 +1104,7 @@ def test_certificate_managed_san(vault_pki, cert_args, sign_verbatim):
     # Add cert with diverse SANs
     cert_args.pop("alt_names", None)
     cert_args["sign_verbatim"] = sign_verbatim
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert "created" in ret.changes
     init_vals = [
@@ -932,11 +1135,13 @@ def test_certificate_managed_san(vault_pki, cert_args, sign_verbatim):
             [],
         ),
     }
-    cert_args["subjectAltName"] = ["DNS:this.should.not.matter"]
+    if "role_name" in cert_args:
+        # sign_intermediate handles csr kwargs the other way around from sign_certificate
+        cert_args["subjectAltName"] = ["DNS:this.should.not.matter"]
     cert_args["alt_names"] = init_vals.copy()
     added_vals = init_vals.copy()
 
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     if sign_verbatim:
         assert set(ret.changes["extensions"]["added"]["subjectAltName"]["value"]) == set(
@@ -951,7 +1156,7 @@ def test_certificate_managed_san(vault_pki, cert_args, sign_verbatim):
     _assert_san(exp)
 
     # Ensure we're idempotent
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert not ret.changes
 
@@ -971,7 +1176,7 @@ def test_certificate_managed_san(vault_pki, cert_args, sign_verbatim):
     exp[ip][0].append("2.2.2.2")
     exp[other][0].extend(["1.2.3.4:No! :|", "1.3.6.1.5.5.7.8.9::::::!@#$%^&*"])
 
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert ret.changes["extensions"]["changed"]["subjectAltName"]["value"] == {
         "added": list(sorted(render_other(change_vals))),
@@ -985,7 +1190,7 @@ def test_certificate_managed_san(vault_pki, cert_args, sign_verbatim):
         cert_args["exclude_cn_from_sans"] = True
         exp[dns][0].remove(cert_args["common_name"])
         exp[dns][1].append(cert_args["common_name"])
-        ret = vault_pki.certificate_managed(**cert_args)
+        ret = cert_managed(**cert_args)
         assert ret.result is True
         assert ret.changes["extensions"]["changed"]["subjectAltName"]["value"] == {
             "added": [],
@@ -1001,7 +1206,7 @@ def test_certificate_managed_san(vault_pki, cert_args, sign_verbatim):
     exp[uri] = (["https://f.o.o/bar/wut"], ["https://f.o.o/bar/baz"])
     exp[ip] = (["2.2.2.2"], ["1.1.1.1", "13::17"])
     exp[other] = (["1.2.3.4:No! :|"], ["1.2.3.4:Hi there!"])
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert ret.changes["extensions"]["changed"]["subjectAltName"]["value"] == {
         "added": [],
@@ -1012,7 +1217,7 @@ def test_certificate_managed_san(vault_pki, cert_args, sign_verbatim):
 
     # Now swap both sets in one swoop
     cert_args["alt_names"] = list(init_vals)
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert ret.changes["extensions"]["changed"]["subjectAltName"]["value"] == {
         "added": list(sorted(render_other(init_vals))),
@@ -1023,7 +1228,7 @@ def test_certificate_managed_san(vault_pki, cert_args, sign_verbatim):
     _assert_san(exp)
 
     remove_vals = cert_args.pop("alt_names")
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert set(ret.changes["extensions"]["removed"]["subjectAltName"]["value"]) == set(
         render_other(remove_vals)
@@ -1165,6 +1370,66 @@ def test_certificate_managed_san_from_csr(vault_pki, cert_args, additional):
     assert not ret.changes
 
 
+@pytest.mark.usefixtures("issuer_setup", "existing_cert")
+@pytest.mark.parametrize(
+    "existing_cert,empty",
+    (
+        pytest.param(
+            {
+                "sign_verbatim": True,
+                "generate_csr": True,
+                "subjectAltName": [
+                    "critical",
+                    "DNS:*.saltproject.io",
+                    "EMAIL:test@saltproject.io",
+                    "IP:1.2.3.4",
+                    "URI:https://foo.bar.baz",
+                ],
+                "CN": "test.saltproject.io",
+                "common_name": None,
+            },
+            False,
+            id="verbatim",
+        ),
+        pytest.param(
+            {
+                "generate_csr": True,
+                "sign_verbatim": True,
+                "CN": "test.saltproject.io",
+                "common_name": None,
+                "alt_names": ["this_should_not_even_be_parsed"],
+            },
+            True,
+            id="verbatim_no_sans",
+        ),
+    ),
+    indirect=["existing_cert"],
+)
+def test_ca_certificate_managed_san_from_csr(vault_pki, ca_cert_args, empty):
+    """
+    sign_intermediate does not merge SANs from API and CSR and only respects them at all with sign_verbatim
+    """
+    cert: cx509.Certificate = load_cert(ca_cert_args["name"])
+    if empty:
+        with pytest.raises(cx509.ExtensionNotFound):
+            cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName)
+    else:
+        san = cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName)
+        assert san.critical is True
+        assert set(san.value.get_values_for_type(cx509.DNSName)) == {"*.saltproject.io"}
+        assert set(san.value.get_values_for_type(cx509.RFC822Name)) == {"test@saltproject.io"}
+        assert set(san.value.get_values_for_type(cx509.IPAddress)) == {
+            ipaddress.ip_address("1.2.3.4")
+        }
+        assert set(san.value.get_values_for_type(cx509.UniformResourceIdentifier)) == {
+            "https://foo.bar.baz"
+        }
+
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+
 @pytest.mark.usefixtures("existing_cert", "issuer_setup", "roles_setup")
 @pytest.mark.parametrize(
     "aia_urls,issuer_setup",
@@ -1233,14 +1498,13 @@ def test_certificate_managed_san_from_csr(vault_pki, cert_args, additional):
     ),
     indirect=True,
 )
-def test_certificate_managed_urls(
-    vault_pki, cert_args, testmode, issuer_setup, aia_urls, container
-):
+def test_certificate_managed_urls(cert_typ, issuer_setup, aia_urls, container):
     """
     Ensure issuer URLs are added to the certificate as intended. If the issuer has any configured URL,
     the mount default URLs are not applied.
     """
-    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    cert_managed, cert_args = cert_typ
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert not ret.changes
 
@@ -1262,10 +1526,9 @@ def test_certificate_managed_urls(
     issuer_setup["ocsp_servers"] = ["https://new-ocsp.root.ca"]
     issuer_setup["crl_distribution_points"] = ["https://new-crl.root.ca"]
     vault_write(f"/pki/issuer/{issuer_id}", **issuer_setup)
-    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    ret = cert_managed(**cert_args)
 
-    assert ret.result is not False
-    assert (ret.result is None) is testmode
+    assert ret.result is True
     assert "extensions" in ret.changes
     exp_aia = {
         "added": {"OCSP": ["URI:https://new-ocsp.root.ca"]},
@@ -1304,11 +1567,10 @@ def test_certificate_managed_urls(
     else:
         assert "cRLDistributionPoints" in ret.changes["extensions"]["added"]
 
-    if not testmode:
-        # One final idempotency check
-        ret = vault_pki.certificate_managed(**cert_args, test=testmode)
-        assert ret.result is True
-        assert not ret.changes
+    # One final idempotency check
+    ret = cert_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
 
 
 @pytest.mark.usefixtures("existing_cert", "issuer_setup", "roles_setup")
@@ -1336,6 +1598,151 @@ def test_certificate_managed_basic_constraints(vault_pki, cert_args, testmode, r
     ret = vault_pki.certificate_managed(**cert_args, test=testmode)
     assert ret.result is True
     assert bool(ret.changes) is not testmode
+
+
+@pytest.mark.usefixtures("issuer_setup")
+@pytest.mark.parametrize(
+    "call_type", ("pk", "pk_verbatim", "pk_verbatim_kwargs", "csr", "csr_verbatim")
+)
+def test_ca_certificate_managed_basic_constraints_issuer_constrained(
+    vault_pki, ca_cert_args, call_type
+):
+    csr = "csr" in call_type
+    verbatim = "verbatim" in call_type
+    ca_cert_args["sign_verbatim"] = verbatim
+    ca_cert_args.pop("max_path_length", None)
+    if (csr and verbatim) or "kwargs" in call_type:
+        ca_cert_args["basicConstraints"] = {"ca": True, "pathlen": 10}
+        if csr:
+            ca_cert_args = pregen_csr(ca_cert_args)
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+
+    cert = load_cert(ca_cert_args["name"])
+    bc = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
+    assert bc.critical is True
+    assert bc.value.ca is True
+    assert bc.value.path_length == 2
+
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+    ca_cert_args["max_path_length"] = -1
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is False
+    assert "unconstrained `max_path_length` is not allowed" in ret.comment
+    assert "only `2` or less can be requested" in ret.comment
+    assert not ret.changes
+
+    ca_cert_args["max_path_length"] = 3
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is False
+    assert "`3` exceeds the maximum" in ret.comment
+    assert "only `2` or less can be requested" in ret.comment
+    assert not ret.changes
+
+    ca_cert_args["max_path_length"] = 1
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert ret.changes
+    assert "basicConstraints" in ret.changes["extensions"]["changed"]
+    assert ret.changes["extensions"]["changed"]["basicConstraints"]["value"]["pathlen"] == {
+        "old": 2,
+        "new": 1,
+    }
+    cert = load_cert(ca_cert_args["name"])
+    bc = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
+    assert bc.critical is True
+    assert bc.value.ca is True
+    assert bc.value.path_length == 1
+
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+    ca_cert_args.pop("max_path_length")
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert ret.changes
+    assert "basicConstraints" in ret.changes["extensions"]["changed"]
+    assert ret.changes["extensions"]["changed"]["basicConstraints"]["value"]["pathlen"] == {
+        "old": 1,
+        "new": 2,
+    }
+    cert = load_cert(ca_cert_args["name"])
+    bc = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
+    assert bc.critical is True
+    assert bc.value.ca is True
+    assert bc.value.path_length == 2
+
+
+@pytest.mark.usefixtures("issuer_setup_no_pathlen")
+@pytest.mark.parametrize("call_type", ("pk", "pk_verbatim_kwargs", "csr_verbatim"))
+def test_ca_certificate_managed_basic_constraints_issuer_unconstrained(
+    vault_pki, ca_cert_args, call_type
+):
+    csr = "csr" in call_type
+    verbatim = "verbatim" in call_type
+    ca_cert_args["sign_verbatim"] = verbatim
+    ca_cert_args.pop("max_path_length", None)
+    if (csr and verbatim) or "kwargs" in call_type:
+        ca_cert_args["basicConstraints"] = {"ca": True, "pathlen": 10}
+        if csr:
+            ca_cert_args = pregen_csr(ca_cert_args)
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+
+    cert = load_cert(ca_cert_args["name"])
+    bc = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
+    assert bc.critical is True
+    assert bc.value.ca is True
+    assert bc.value.path_length is None
+
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+    ca_cert_args["max_path_length"] = -1
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+    ca_cert_args["max_path_length"] = 2
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert ret.changes
+    assert "basicConstraints" in ret.changes["extensions"]["changed"]
+    assert ret.changes["extensions"]["changed"]["basicConstraints"]["value"]["pathlen"] == {
+        "old": None,
+        "new": 2,
+    }
+    cert = load_cert(ca_cert_args["name"])
+    bc = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
+    assert bc.critical is True
+    assert bc.value.ca is True
+    assert bc.value.path_length == 2
+
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+    ca_cert_args.pop("max_path_length")
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert ret.changes
+    assert "basicConstraints" in ret.changes["extensions"]["changed"]
+    assert ret.changes["extensions"]["changed"]["basicConstraints"]["value"]["pathlen"] == {
+        "old": 2,
+        "new": None,
+    }
+    cert = load_cert(ca_cert_args["name"])
+    bc = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
+    assert bc.critical is True
+    assert bc.value.ca is True
+    assert bc.value.path_length is None
 
 
 @pytest.mark.usefixtures("existing_cert", "issuer_setup", "roles_setup")
@@ -1386,6 +1793,43 @@ def test_certificate_managed_key_usage(vault_pki, cert_args, testmode, roles_set
         ret = vault_pki.certificate_managed(**cert_args, test=testmode)
         assert ret.result is True
         assert not ret.changes
+
+
+@pytest.mark.usefixtures("existing_cert", "issuer_setup")
+@pytest.mark.parametrize(
+    "call_type", ("pk", "pk_verbatim", "pk_verbatim_kwargs", "csr", "csr_verbatim")
+)
+def test_ca_certificate_managed_key_usage(vault_pki, ca_cert_args, call_type, container):
+    if "vault" not in container or "latest" not in container:
+        pytest.skip("key_usage requires Vault 1.20/OpenBao")
+    csr = "csr" in call_type
+    verbatim = "verbatim" in call_type
+    # Ensure we recognize the extension being changed
+    if (csr and verbatim) or "kwargs" in call_type:
+        ca_cert_args["keyUsage"] = ["keyCertSign", "digitalSignature"]
+        exp_critical, exp_val = False, {
+            "cRLSign": {"old": True, "new": False},
+            "digitalSignature": {"old": False, "new": True},
+        }
+        if csr:
+            ca_cert_args = pregen_csr(ca_cert_args)
+    else:
+        ca_cert_args["key_usage"] = ["digitalsignature"]
+        exp_critical, exp_val = True, {"digitalSignature": {"old": False, "new": True}}
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args, sign_verbatim=verbatim)
+    assert ret.result is True
+    assert "extensions" in ret.changes
+    assert ret.changes["extensions"]["changed"]["keyUsage"]["value"] == exp_val
+    if not exp_critical:
+        assert ret.changes["extensions"]["changed"]["keyUsage"]["critical"] == {
+            "old": True,
+            "new": False,
+        }
+
+    # Ensure idempotency
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args, sign_verbatim=verbatim)
+    assert ret.result is True
+    assert not ret.changes
 
 
 @pytest.mark.usefixtures("existing_cert", "issuer_setup", "roles_setup")
@@ -1464,6 +1908,66 @@ def test_certificate_managed_certificate_policies(vault_pki, cert_args, testmode
         assert not ret.changes
 
 
+@pytest.mark.usefixtures("issuer_setup")
+@pytest.mark.parametrize(
+    "call_type", ("pk", "pk_verbatim", "pk_verbatim_kwargs", "csr", "csr_verbatim")
+)
+def test_ca_certificate_managed_name_constraints(vault_pki, ca_cert_args, container, call_type):
+    csr = "csr" in call_type
+    verbatim = "verbatim" in call_type
+    ca_cert_args["permitted_alt_names"] = ["dns:.foo.bar"]
+    if has_all_constraints := "vault" in container and "latest" in container:
+        ca_cert_args["permitted_alt_names"].extend(
+            ["email:.email.foo.bar", "ip:0.0.0.0/1", "uri:.uri.foo.bar"]
+        )
+        ca_cert_args["excluded_alt_names"] = [
+            "dns:no.foo.bar",
+            "email:info@email.foo.bar",
+            "ip:0.0.0.0/24",
+            "uri:no.uri.foo.bar",
+        ]
+    if (csr and verbatim) or "kwargs" in call_type:
+        nc_def = {
+            "permitted": ca_cert_args.pop("permitted_alt_names"),
+        }
+        if "excluded_alt_names" in ca_cert_args:
+            nc_def["excluded"] = ca_cert_args.pop("excluded_alt_names")
+        ca_cert_args["nameConstraints"] = nc_def
+        if csr:
+            ca_cert_args = pregen_csr(ca_cert_args)
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args, sign_verbatim=verbatim)
+    assert ret.result is True
+    assert "created" in ret.changes
+
+    cert = load_cert(ca_cert_args["name"])
+    nc = cert.extensions.get_extension_for_class(cx509.NameConstraints)
+    pst = nc.value.permitted_subtrees or []
+    pst_vals = [str(gn.value) for gn in pst]
+    assert ".foo.bar" in pst_vals
+    if has_all_constraints:
+        assert len(pst) == 4
+        assert ".email.foo.bar" in pst_vals
+        assert ".uri.foo.bar" in pst_vals
+        assert "0.0.0.0/1" in pst_vals
+    else:
+        assert len(pst) == 1
+    est = nc.value.excluded_subtrees
+    if has_all_constraints:
+        assert est is not None
+        assert len(est) == 4
+        est_vals = [str(gn.value) for gn in est]
+        assert "no.foo.bar" in est_vals
+        assert "info@email.foo.bar" in est_vals
+        assert "no.uri.foo.bar" in est_vals
+        assert "0.0.0.0/24" in est_vals
+    else:
+        assert est is None
+
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args, sign_verbatim=verbatim)
+    assert ret.result is True
+    assert not ret.changes
+
+
 @pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize("container", (CONTAINER_TARGETS[0],), indirect=True)
 def test_certificate_managed_csr_ignored_warnings(
@@ -1538,35 +2042,6 @@ def test_certificate_managed_csr_ignored_warnings(
         )
         assert ret.result is True and not ret.changes
         assert "received CSR generation arguments. Ignoring: `CN`, `keyUsage`" in caplog.text
-
-
-@pytest.mark.usefixtures("issuer_setup", "roles_setup")
-@pytest.mark.parametrize(
-    "attr",
-    [
-        ({"L": "Boston"}),
-        ({"C": "US"}),
-        ({"ST": "That Street"}),
-        ({"O": "Salt Project"}),
-        ({"OU": "Salt Extensions"}),
-    ],
-)
-def test_certificate_managed_sign_verbatim_subject(vault_pki, cert_args, attr):
-    cert_args = {**cert_args, **attr}
-    cert_args["sign_verbatim"] = True
-    ret = vault_pki.certificate_managed(**cert_args)
-    assert ret.result is True
-    assert "created" in ret.changes
-
-    cert = load_cert(cert_args["name"])
-    for k, v in attr.items():
-        c_attrs = cert.subject.get_attributes_for_oid(NAME_ATTRS_OID[k])
-        assert len(c_attrs) == 1
-        assert c_attrs[0].value == v
-
-    ret = vault_pki.certificate_managed(**cert_args)
-    assert ret.result is True
-    assert not ret.changes
 
 
 @pytest.mark.usefixtures("issuer_setup", "roles_setup", "existing_cert")
@@ -1770,12 +2245,13 @@ def test_certificate_managed_sign_verbatim_extended_key_usage(vault_pki, cert_ar
     ({"sign_verbatim": True, "subjectKeyIdentifier": "ca:fe:ba:be"},),
     indirect=True,
 )
-def test_certificate_managed_sign_verbatim_explicit_subject_key_identifier(vault_pki, cert_args):
+def test_certificate_managed_sign_verbatim_explicit_subject_key_identifier(cert_typ):
+    cert_managed, cert_args = cert_typ
     cert = load_cert(cert_args["name"])
     ski = cert.extensions.get_extension_for_class(cx509.SubjectKeyIdentifier)
     assert ski.value.digest.hex() == "cafebabe"
 
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert not ret.changes
 
@@ -1786,12 +2262,13 @@ def test_certificate_managed_sign_verbatim_explicit_subject_key_identifier(vault
     ({"sign_verbatim": True, "tlsfeature": "status_request"},),
     indirect=True,
 )
-def test_certificate_managed_sign_verbatim_other_ext(vault_pki, cert_args):
+def test_certificate_managed_sign_verbatim_other_ext(cert_typ):
+    cert_managed, cert_args = cert_typ
     cert: cx509.Certificate = load_cert(cert_args["name"])
     tls = cert.extensions.get_extension_for_class(cx509.TLSFeature)
     assert list(tls.value) == [cx509.TLSFeatureType.status_request]
 
-    ret = vault_pki.certificate_managed(**cert_args)
+    ret = cert_managed(**cert_args)
     assert ret.result is True
     assert not ret.changes
 
@@ -1864,17 +2341,24 @@ def test_certificate_managed_use_csr_common_name(vault_pki, cert_args):
         ),
     ],
 )
-def test_certificate_managed_changed_subject(vault_pki, cert_args, attr, replace, testmode):
-    cert_args["sign_verbatim"] = True
-    cert_args = {**cert_args, **attr}
-    ret = vault_pki.certificate_managed(**cert_args)
+def test_certificate_managed_subject(cert_typ, attr, replace, testmode):
+    cert_managed, args = cert_typ
+    args["sign_verbatim"] = True
+    args = {**args, **attr}
+    ret = cert_managed(**args)
     assert ret.result
     assert "created" in ret.changes
 
-    cert_args = {**cert_args, **replace}
-    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    cert = load_cert(args["name"])
+    for k, v in attr.items():
+        c_attrs = cert.subject.get_attributes_for_oid(NAME_ATTRS_OID[k])
+        assert len(c_attrs) == 1
+        assert c_attrs[0].value == v
+
+    args = {**args, **replace}
+    ret = cert_managed(**args, test=testmode)
     assert (ret.result is None) is testmode
-    cert = load_cert(cert_args["name"])
+    cert = load_cert(args["name"])
 
     assert "subject_name" in ret.changes
 

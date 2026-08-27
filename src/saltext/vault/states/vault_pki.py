@@ -122,7 +122,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
     **kwargs,
 ):
     """
-    Ensure an X.509 certificate is present as specified.
+    Ensure an X.509 **leaf** certificate is present as specified.
 
     .. note::
         This state can use the ``sign-verbatim`` endpoint, which allows minute control of
@@ -298,7 +298,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
 
     ext_key_usage
         When ``sign_verbatim`` is true, list of extended key usages to encode onto the certificate if the
-        CSR does not specify a ``extendedKeyUsage`` extension. For non-verbatim issuance, this parameter
+        CSR does not specify an ``extendedKeyUsage`` extension. For non-verbatim issuance, this parameter
         must not be specified because Vault takes it from the role.
         Valid values can be found at https://golang.org/pkg/crypto/x509/#ExtKeyUsage - simply drop the
         ``ExtKeyUsage`` part of the value. Values are case-insensitive. Pass an empty list to specify
@@ -306,7 +306,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
 
     ext_key_usage_oids
         When ``sign_verbatim`` is true, list of extended key usage oids to encode onto the certificate if the
-        CSR does not specify a ``extendedKeyUsage`` extension.
+        CSR does not specify an ``extendedKeyUsage`` extension.
         Useful for adding EKUs not supported by the Go standard library.
         For non-verbatim issuance, this parameter must not be specified because Vault takes it from the role.
 
@@ -363,7 +363,9 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
         ttl_seconds = timestring_map(ttl, cast=int)
 
         if timestring_map(ttl_remaining, cast=int) >= ttl_seconds:
-            raise SaltInvocationError("The ttl_remaning cannot be larger or equal to ttl.")
+            raise SaltInvocationError(
+                "The `ttl_remaining` cannot be larger than or equal to `ttl`."
+            )
 
         if not sign_verbatim:
             hlp.none_of(
@@ -538,6 +540,448 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
                     key_usage=key_usage,
                     ext_key_usage=ext_key_usage,
                     ext_key_usage_oids=ext_key_usage_oids,
+                    **cert_args,
+                )
+                cert = __salt__["x509.encode_certificate"](
+                    issued_cert["certificate"],
+                    append_certs=ca_chain,
+                    encoding=encoding,
+                )
+
+            ret["comment"] = f"The certificate has been {verb}d"
+
+            if encoding not in ["pem", "pkcs7_pem"]:
+                # file.managed does not support binary contents, so create
+                # an empty file first (makedirs). This does not work with check_cmd!
+                file_managed_ret = _run_state("file.managed", name, replace=False, **file_args)
+                _add_sub_state_run(ret, file_managed_ret)
+                if not _check_file_ret(file_managed_ret, ret, file_exists):
+                    return ret
+                hlp.safe_atomic_write(
+                    name,
+                    base64.b64decode(cert),
+                    __salt__["config.backup_mode"](file_args.get("backup", "")),
+                    __opts__["cachedir"],
+                )
+
+        if not changes or encoding in ["pem", "pkcs7_pem"]:
+            replace = bool(encoding in ["pem", "pkcs7_pem"] and changes)
+            contents = cert if replace else None
+            file_managed_ret = _run_state(
+                "file.managed", name, contents=contents, replace=replace, **file_args
+            )
+            _add_sub_state_run(ret, file_managed_ret)
+            if not _check_file_ret(file_managed_ret, ret, file_exists):
+                return ret
+
+    except (CommandExecutionError, SaltInvocationError) as err:
+        ret["result"] = False
+        ret["comment"] = str(err)
+        ret["changes"] = {}
+
+    return ret
+
+
+def ca_certificate_managed(  # pylint: disable=too-many-locals
+    name,
+    common_name=None,
+    *,
+    private_key=None,
+    private_key_passphrase=None,
+    csr=None,
+    issuer_ref=None,
+    sign_verbatim=False,
+    ttl="4320h",  # 180d
+    ttl_remaining="336h",  # 14d
+    encoding="pem",
+    append_ca_chain=False,
+    # Vault sign args
+    alt_names=None,
+    max_path_length=None,
+    key_usage=None,
+    exclude_cn_from_sans=False,
+    permitted_alt_names=None,
+    excluded_alt_names=None,
+    ou=None,
+    organization=None,
+    country=None,
+    locality=None,
+    province=None,
+    street_address=None,
+    postal_code=None,
+    serial_number=None,
+    signature_bits=0,
+    not_before_duration=30,
+    not_after=None,
+    mount="pki",
+    # Args for file.managed and x509.create_csr (no CN/subjectAltName though)
+    **kwargs,
+):
+    """
+    .. versionadded:: 1.9.0
+
+    Ensure an X.509 **CA** certificate is present as specified.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        # Read mount default urls to account for cert extensions
+        # if the issuer has no configured URLs.
+        path "<mount>/config/urls" {
+            capabilities = ["read"]
+        }
+
+        # Read issuer for URL configuration and CA chain. issuer_ref becomes `default` if unspecified
+        path "{mount}/issuer/{issuer_ref}" {
+            capabilities = ["read"]
+        }
+
+        # When issuer_ref is not specified
+        path "<mount>/root/sign-intermediate" {
+            capabilities = ["update"]
+        }
+
+        # When issuer_ref is specified
+        path "<mount>/issuer/<issuer_ref>/sign-intermediate" {
+            capabilities = ["update"]
+        }
+
+    name
+        Path to the managed certificate file.
+
+    common_name
+        Subject common name (``CN``) for the certificate. Required, unless
+        ``sign_verbatim`` is true.
+
+    private_key
+        Path or text of the private key to use for signing the CSR and thus
+        as the private key for the certificate.
+        Either this or ``csr`` is required.
+
+    private_key_passphrase
+        Password for the private key if encrypted.
+
+    csr
+        Path or text of the CSR to use for issuing the certificate.
+        Either this or ``private_key`` is required.
+
+    issuer_ref
+        Specify issuer_name or issuer_id of intended issuer.
+        Defaults to the mount default issuer.
+
+    sign_verbatim
+        If set to true, the resulting certificate follows the CSR more or less exactly, including
+        the full subject and all extensions.
+
+    ttl
+        Specifies the requested Time To Live (after which the certificate will be expired).
+        This cannot be larger than the engine's max (or, if not set, the system max).
+        Can be an integer, which is interpreted as seconds, or a time string such as ``1h``.
+        Hour is the largest suffix. Defaults to ``4320h`` or 180 days.
+
+    ttl_remaining
+        If an existing certificate's remaining Time To Live undercuts this period, renew it.
+        Can be an integer, which is interpreted as seconds, or a time string such as ``1h``.
+        Hour is the largest suffix. Defaults to ``336h`` or 14 days.
+
+    encoding
+        Encoding of the managed certificate file.
+        Valid options are ``pem``, ``pkcs7_pem``, ``der``, ``pkcs7_der``.
+        Defaults to ``pem``.
+
+    append_ca_chain
+        Whether to append the CA chain to the certificate.
+        Defaults to ``false``.
+
+        .. note::
+            This appends all CA chain certificates of the selected issuer except self-signed (root) ones.
+
+    alt_names
+        Any alternative names to add to the certificate.
+        Can be specified either as dict (``{ "<type>": "<value>" }``),
+        a dict of lists (``{ "<type>": ["<value1>", "<value2>", ...] }``)
+        or list of SAN strings (``["<type1>:<value1>", ...]``).
+
+        ``<type>`` can be ``dns``, ``email``, ``uri``, ``ip`` or any OID for otherName SANs.
+        ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8:``.
+
+        Ignored when a ``csr`` is passed and ``sign_verbatim`` is true.
+
+    max_path_length
+        basicConstraints ``pathlen`` parameter, which indicates the maximum number of CAs that can appear below this one in a chain.
+        If set to ``0``, this CA can only issue leaf certificates, not other CAs.
+        A negative value means no limit, unless the issuer certificate has a maximum path length,
+        in which case it means one less than the issuer's pathlen.
+        Defaults to ``-1``. Applies even when ``sign_verbatim`` is true:
+        Vault does not allow a CSR to specify a basicConstraints extension with ``CA:true``.
+
+    key_usage
+        (Requires Vault 1.20+ or OpenBao)
+        List of key usages to add to the existing set of key usages (CRLSign,CertSign).
+        Per the CA/B Forum, Vault ignores additional values other than DigitalSignature.
+        Ignored when a ``csr`` is passed and ``sign_verbatim`` is true.
+
+    exclude_cn_from_sans
+        If set to true, the Common Name is not added to the SANs.
+        Useful if the CN is not a hostname or email address.
+        Has no effect when ``sign_verbatim`` is true.
+
+    permitted_alt_names
+        List of alternative names for which certificates are allowed to be issued
+        or signed by this CA certificate. The format is similar to the one for ``alt_names``,
+        but ``<type>`` can only be ``dns``, ``email``, ``uri`` and ``ip``.
+        Ignored when a ``csr`` is passed and ``sign_verbatim`` is true.
+
+        .. important::
+
+            Types other than ``dns`` require Vault 1.19+.
+
+    excluded_alt_names
+        (Vault 1.19+ only)
+        List of alternative names for which certificates are not allowed to be issued
+        or signed by this CA certificate. The format is similar to the one for ``alt_names``,
+        but ``<type>`` can only be ``dns``, ``email``, ``uri`` and ``ip``.
+        Ignored when a ``csr`` is passed and ``sign_verbatim`` is true.
+
+    Subject DN fields
+        Most of these can be single strings or lists of strings (for multiple values).
+        Ignored when ``sign_verbatim`` is true.
+
+        * ou
+        * organization
+        * country
+        * locality
+        * province
+        * street_address
+        * postal_code
+        * serial_number (only a single value; NOT the certificate's serial number, just the SERIALNUMBER name attribute)
+
+    signature_bits
+        Number of bits to use in the signature algorithm.
+        Valid: ``256`` (SHA-2-256), ``384`` (SHA-2-384), ``512`` (SHA-2-512).
+        Defaults to ``0``, which automatically selects an algorithm based on
+        the issuer's key length.
+
+    not_before_duration
+        Duration by which to backdate the NotBefore property. Defaults to ``30s``.
+
+    not_after
+        Absolute value of the Not After field of the certificate in UTC format ``YYYY-MM-ddTHH:MM:SSZ``.
+        When set, ``ttl`` is ignored.
+
+    mount
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
+
+    kwargs
+        Most parameters for the :py:func:`file.managed <salt.states.file.managed>` state or any of the ones for
+        the Vault PKI :py:func:`sign_intermediate <saltext.vault.modules.vault_pki.sign_intermediate>` execution module function
+        are passed through.
+
+        .. hint::
+
+            This is a high-level state, which connects several different functions:
+
+            * Vault API (`sign-intermediate <https://developer.hashicorp.com/vault/api-docs/secret/pki#sign-intermediate>`__).
+              Completely unknown keyword parameters end up there.
+            * :py:func:`x509.create_csr <salt.modules.x509_v2.create_csr>`: Used to generate a CSR that Vault should sign.
+              Any subject name attribute parameters (``O``, ``OU`` etc.) and most extension parameters
+              (``certificatePolicies``, ``keyUsage``, ``extendedKeyUsage`` etc.) end up here.
+              Ignored when ``csr`` is defined or ``sign_verbatim`` is false (so by default).
+            * :py:func:`file.managed <salt.states.file.managed>`: Parameters such as ``user``, ``group`` and ``mode``
+              end up influencing the certificate file on disk.
+              Note: ``encoding`` is a valid parameter for both this function and ``file.managed``. If you need to pass
+              it to the latter, specify it as ``file_encoding`` instead.
+    """
+
+    ret = {
+        "name": name,
+        "changes": {},
+        "result": True,
+        "comment": "The certificate is in the correct state",
+    }
+
+    changes = {}
+    ca_chain = []
+    verb = "create"
+    file_args, cert_args = _split_file_kwargs(hlp.filter_state_internal_kwargs(kwargs))
+
+    try:
+        hlp.one_of(private_key=private_key, csr=csr)
+
+        encoding = hlp.in_vals(("der", "pem", "pkcs7_der", "pkcs7_pem"), encoding=encoding)
+
+        if encoding == "der" and append_ca_chain:
+            raise SaltInvocationError(
+                "Cannot append the CA chain to DER-encoded certificates. "
+                "Use pkcs7_der if you need a binary encoding including the chain."
+            )
+
+        ttl_seconds = timestring_map(ttl, cast=int)
+
+        if timestring_map(ttl_remaining, cast=int) >= ttl_seconds:
+            raise SaltInvocationError(
+                "The `ttl_remaining` cannot be larger than or equal to `ttl`."
+            )
+
+        # check file.managed changes early to avoid using unnecessary resources
+        file_managed_test = _run_state("file.managed", name, test=True, replace=False, **file_args)
+        if file_managed_test["result"] is False:
+            ret["result"] = False
+            ret["comment"] = "Problem while testing file.managed changes, see its output"
+            _add_sub_state_run(ret, file_managed_test)
+            return ret
+
+        if "is not present and is not set for creation" in file_managed_test["comment"]:
+            _add_sub_state_run(ret, file_managed_test)
+            return ret
+
+        file_exists = None
+        # handle follow_symlinks
+        if __salt__["file.is_link"](name):
+            if file_args.get("follow_symlinks", True):
+                name = os.path.realpath(name)
+            else:
+                if not __opts__["test"]:
+                    # workaround https://github.com/saltstack/salt/issues/31802
+                    __salt__["file.remove"](name)
+                changes["replaced"] = True
+                file_exists = False
+
+        if file_exists is None:
+            file_exists = __salt__["file.file_exists"](name)
+
+        issuer_info = __salt__["vault_pki.read_issuer"](issuer_ref or "default", mount=mount)
+        if issuer_info is None:
+            raise CommandExecutionError(
+                f"Issuer '{issuer_ref or 'default'}' does not exist on mount {mount}"
+            )
+
+        url_configs = (
+            "issuing_certificates",
+            "crl_distribution_points",
+            "delta_crl_distribution_points",
+            "ocsp_servers",
+        )
+        if not any(issuer_info.get(url_config) for url_config in url_configs):
+            try:
+                # Mount default AIA URLs
+                urls = __salt__["vault_pki.read_urls"](mount=mount)
+            except CommandExecutionError:  # pragma: no cover
+                log.warning(
+                    "Failed reading default AIA url config. Consider allowing read access to "
+                    "`%s/config/urls`. This state will not be idempotent otherwise.",
+                    mount,
+                )
+                urls = {}
+        else:
+            urls = {"enable_templating": bool(issuer_info.get("enable_aia_url_templating"))}
+            for url in url_configs:
+                # Issuer-specific AIA URLs
+                urls[url] = hlp.deserialize_csl(issuer_info.get(url, []))
+
+        if append_ca_chain:
+            ca_chain = [x509util.load_cert(x) for x in issuer_info["ca_chain"]]
+            # Filter self-signed CA, which shouldn't be in the chain.
+            ca_chain = [
+                cert
+                for cert in ca_chain
+                if cert.subject.rfc4514_string() != cert.issuer.rfc4514_string()
+            ]
+
+        if file_exists:
+            changes = pki.check_ca_cert_for_changes(
+                current=name,
+                issuer=issuer_info["certificate"],
+                private_key=private_key,
+                private_key_passphrase=private_key_passphrase,
+                csr=csr,
+                encoding=encoding,
+                append_chain=ca_chain,
+                sign_verbatim=sign_verbatim,
+                alt_names=alt_names,
+                common_name=common_name,
+                country=country,
+                exclude_cn_from_sans=exclude_cn_from_sans,
+                excluded_alt_names=excluded_alt_names,
+                ttl_remaining=ttl_remaining,
+                key_usage=key_usage,
+                locality=locality,
+                max_path_length=max_path_length,
+                not_after=not_after,
+                not_before_duration=not_before_duration,
+                organization=organization,
+                ou=ou,
+                permitted_alt_names=permitted_alt_names,
+                postal_code=postal_code,
+                province=province,
+                serial_number=serial_number,
+                signature_bits=signature_bits,
+                street_address=street_address,
+                ttl=ttl_seconds,
+                urls=urls,
+                **cert_args,
+            )
+
+        else:
+            changes["created"] = True
+
+        if not changes and file_managed_test["result"] and not file_managed_test["changes"]:
+            _add_sub_state_run(ret, file_managed_test)
+            return ret
+
+        ret["changes"] = changes
+        if changes and file_exists:
+            verb = "reissue"
+
+        if __opts__["test"]:
+            ret["result"] = None if changes else True
+            ret["comment"] = (
+                f"The certificate would have been {verb}d" if changes else ret["comment"]
+            )
+            _add_sub_state_run(ret, file_managed_test)
+            return ret
+
+        cert = None
+        if changes:
+            if not set(changes) - {
+                "ca_chain",
+                "encoding",
+            }:
+                verb = "recreate"
+                cert = __salt__["x509.encode_certificate"](
+                    name,
+                    append_certs=ca_chain,
+                    encoding=encoding,
+                )
+            else:
+                issued_cert = __salt__["vault_pki.sign_intermediate"](
+                    common_name=common_name,
+                    private_key=private_key,
+                    private_key_passphrase=private_key_passphrase,
+                    csr=csr,
+                    ttl=ttl,
+                    issuer_ref=issuer_ref,
+                    mount=mount,
+                    sign_verbatim=sign_verbatim,
+                    alt_names=alt_names,
+                    country=country,
+                    exclude_cn_from_sans=exclude_cn_from_sans,
+                    excluded_alt_names=excluded_alt_names,
+                    expire_tolerance=ttl_remaining,
+                    key_usage=key_usage,
+                    locality=locality,
+                    max_path_length=max_path_length,
+                    not_after=not_after,
+                    not_before_duration=not_before_duration,
+                    organization=organization,
+                    ou=ou,
+                    permitted_alt_names=permitted_alt_names,
+                    postal_code=postal_code,
+                    province=province,
+                    serial_number=serial_number,
+                    signature_bits=signature_bits,
+                    street_address=street_address,
                     **cert_args,
                 )
                 cert = __salt__["x509.encode_certificate"](
