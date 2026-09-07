@@ -42,30 +42,53 @@ def file_mocks():
         yield mocks
 
 
-def test_certificate_managed_invalid_encoding():
-    res = vault_pki.certificate_managed(
-        "/etc/pki/cert.pem", "example.com", "role", "pk", encoding="foo"
+@pytest.mark.parametrize("func", ("certificate_managed", "ca_certificate_managed"))
+def test_certificate_managed_invalid_encoding(func):
+    res = getattr(vault_pki, func)(
+        "/etc/pki/cert.pem",
+        common_name="example.com",
+        private_key="pk",
+        sign_verbatim=True,
+        encoding="foo",
     )
     assert res["result"] is False
     assert "Invalid value 'foo' for `encoding`" in res["comment"]
     assert not res["changes"]
 
 
-@pytest.mark.parametrize("ttl_remaining", ("720h", "1000h"))
-def test_certificate_managed_invalid_ttl_remaining(ttl_remaining):
-    res = vault_pki.certificate_managed(
-        "/etc/pki/cert.pem", "example.com", "role", "pk", ttl_remaining=ttl_remaining
+@pytest.mark.parametrize(
+    "func,ttl_remaining",
+    (
+        ("certificate_managed", "720h"),
+        ("certificate_managed", "1000h"),
+        ("ca_certificate_managed", "4320h"),
+        ("ca_certificate_managed", "5000h"),
+    ),
+)
+def test_certificate_managed_invalid_ttl_remaining(ttl_remaining, func):
+    res = getattr(vault_pki, func)(
+        "/etc/pki/cert.pem",
+        common_name="example.com",
+        private_key="pk",
+        sign_verbatim=True,
+        ttl_remaining=ttl_remaining,
     )
     assert res["result"] is False
-    assert "cannot be larger or equal to ttl" in res["comment"]
+    assert "`ttl_remaining` cannot be larger than or equal to `ttl`" in res["comment"]
     assert not res["changes"]
 
 
-def test_certificate_managed_file_test_failure_is_reported(file_mocks):
+@pytest.mark.parametrize("func", ("certificate_managed", "ca_certificate_managed"))
+def test_certificate_managed_file_test_failure_is_reported(file_mocks, func):
     file_mocks["state.single"].return_value = {
         "file_|-test_|-test_|-managed": {"result": False, "comment": "booh", "changes": {}}
     }
-    res = vault_pki.certificate_managed("/etc/pki/cert.pem", "example.com", "role", "pk")
+    res = getattr(vault_pki, func)(
+        "/etc/pki/cert.pem",
+        common_name="example.com",
+        private_key="pk",
+        sign_verbatim=True,
+    )
     assert res["result"] is False
     assert res["comment"] == "Problem while testing file.managed changes, see its output"
     assert not res["changes"]

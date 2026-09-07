@@ -1640,7 +1640,7 @@ def issue_certificate(
     **kwargs,
 ):
     """
-    Generate and issue a new certificate and private key.
+    Generate and issue a new leaf certificate and private key.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#generate-certificate-and-key>`__.
 
@@ -1751,7 +1751,7 @@ def sign_certificate(
     **kwargs,
 ):
     """
-    Issue a new certificate from an existing private key or CSR.
+    Issue a new leaf certificate from an existing private key or CSR.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#sign-certificate>`__.
 
@@ -1830,7 +1830,7 @@ def sign_certificate(
         Passphrase for the ``private_key``, if encrypted. Not used in case of ``csr``.
 
     digest
-        Digest to be used for generating the CSR. Not used in case of ``csr``. Defaults to ``sha256``
+        Digest to use for generating the CSR. Not used in case of ``csr``. Defaults to ``sha256``
 
     issuer_ref
         Specify an explicit issuer instead of taking it from the role definition.
@@ -1882,6 +1882,10 @@ def sign_certificate(
         Note that ``CN`` and ``subjectAltName`` are overwritten with the
         ``common_name``/``alt_names`` parameters to this function, regardless of ``sign_verbatim``.
     """
+    if not HAS_CRYPTOGRAPHY:  # pragma: no cover
+        raise CommandExecutionError(
+            "Missing `cryptography` library, which is required for this operation"
+        )
     if not sign_verbatim and not role_name:
         raise SaltInvocationError("`role_name` is required when `sign_verbatim` is false")
     hlp.one_of(csr=csr, private_key=private_key)
@@ -1909,10 +1913,6 @@ def sign_certificate(
 
     norm_sans = None
     if alt_names is not None:
-        if not HAS_CRYPTOGRAPHY:  # pragma: no cover
-            raise CommandExecutionError(
-                "Missing `cryptography` library, which is required for this operation"
-            )
         norm_sans = pki.norm_sans(alt_names)
         if not sign_verbatim:
             dns_sans, ip_sans, uri_sans, other_sans = pki.split_sans(norm_sans)
@@ -1972,6 +1972,343 @@ def sign_certificate(
     else:
         # Ensure we load file paths and pass the CSR in PEM encoding
         csr = _x509v2("encode_csr", csr)
+
+    payload["csr"] = csr
+
+    try:
+        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+    except vault.VaultException as err:
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
+
+
+def sign_intermediate(  # pylint: disable=too-many-locals
+    common_name=None,
+    private_key=None,
+    private_key_passphrase=None,
+    csr=None,
+    digest="sha256",
+    issuer_ref=None,
+    sign_verbatim=False,
+    encoding="pem",
+    signature_bits=0,
+    ttl=None,
+    not_before_duration=30,
+    not_after=None,
+    alt_names=None,
+    exclude_cn_from_sans=False,
+    max_path_length=None,
+    key_usage=None,
+    permitted_alt_names=None,
+    excluded_alt_names=None,
+    ou=None,
+    organization=None,
+    country=None,
+    locality=None,
+    province=None,
+    street_address=None,
+    postal_code=None,
+    serial_number=None,
+    mount="pki",
+    **kwargs,
+):
+    """
+    Issue a new CA certificate from an existing private key or CSR.
+
+    `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#sign-intermediate>`__.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        # When issuer_ref is not specified
+        path "<mount>/root/sign-intermediate" {
+            capabilities = ["update"]
+        }
+
+        # When issuer_ref is specified
+        path "<mount>/issuer/<issuer_ref>/sign-intermediate" {
+            capabilities = ["update"]
+        }
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault_pki.sign_intermediate common_name="www.my.ca" private_key=/private/key/path.key
+        salt '*' vault_pki.sign_intermediate common_name="www.my.ca" csr=/csr/path.csr
+
+    common_name
+        Subject common name (``CN``) for the certificate. Required, unless
+        ``sign_verbatim`` is true.
+
+    private_key
+        Path or text of the private key to use for signing the CSR and thus
+        as the private key for the certificate.
+        Either this or ``csr`` is required.
+
+    private_key_passphrase
+        Password for the private key if encrypted.
+
+    csr
+        Path or text of the CSR to use for issuing the certificate.
+        Either this or ``private_key`` is required.
+
+    digest
+        Digest to use for generating the CSR. Not used in case of ``csr``. Defaults to ``sha256``
+
+    issuer_ref
+        Specify issuer_name or issuer_id of intended issuer.
+        Defaults to the mount default issuer.
+
+    sign_verbatim
+        If set to true, the resulting certificate follows the CSR more or less exactly, including
+        the full subject and all extensions (exception: basicConstraints). Defaults to false.
+
+        When this is true and a ``private_key`` is used (i.e. a CSR is generated by this function),
+        most keyword arguments for :py:func:`x509.create_csr <salt.modules.x509_v2.create_csr>`
+        are effective, including ``subject``.
+
+        When this is false, most attributes of ``csr``/any CSR generation parameters are ignored.
+
+    encoding
+        Output format. Can be either ``pem`` or ``der``. Defaults to ``pem``.
+
+    signature_bits
+        Number of bits to use in the signature algorithm.
+        Valid: ``256`` (SHA-2-256), ``384`` (SHA-2-384), ``512`` (SHA-2-512).
+        Defaults to ``0``, which automatically selects an algorithm based on
+        the issuer's key length.
+
+    ttl
+        Specifies the requested Time To Live (after which the certificate will be expired).
+        This cannot be larger than the engine's max (or, if not set, the system max).
+        Can be an integer, which is interpreted as seconds, or a time string such as ``1h``.
+
+    not_before_duration
+        Duration by which to backdate the NotBefore property. Defaults to ``30s``.
+
+    not_after
+        Absolute value of the Not After field of the certificate in UTC format ``YYYY-MM-ddTHH:MM:SSZ``.
+        When set, ``ttl`` is ignored.
+
+    alt_names
+        Any alternative names to add to the certificate.
+        Can be specified either as dict (``{ "<type>": "<value>" }``),
+        a dict of lists (``{ "<type>": ["<value1>", "<value2>", ...] }``)
+        or list of SAN strings (``["<type1>:<value1>", ...]``).
+
+        ``<type>`` can be ``dns``, ``email``, ``uri``, ``ip`` or any OID for otherName SANs.
+        ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8:``.
+
+        Ignored when a ``csr`` is passed and ``sign_verbatim`` is true.
+
+    exclude_cn_from_sans
+        If set to true, the Common Name is not added to the SANs.
+        Useful if the CN is not a hostname or email address.
+        Has no effect when ``sign_verbatim`` is true.
+
+    max_path_length
+        basicConstraints ``pathlen`` parameter, which indicates the maximum number of CAs that can appear below this one in a chain.
+        If set to ``0``, this CA can only issue leaf certificates, not other CAs.
+        A negative value means no limit, unless the issuer certificate has a maximum path length,
+        in which case it means one less than the issuer's pathlen.
+        Defaults to ``-1``. Applies even when ``sign_verbatim`` is true:
+        Vault does not allow a CSR to specify a basicConstraints extension with ``CA:true``.
+
+    key_usage
+        (Requires Vault 1.20+ or OpenBao)
+        List of key usages to add to the existing set of key usages (CRLSign,CertSign).
+        Per the CA/B Forum, Vault ignores additional values other than DigitalSignature.
+        Ignored when a ``csr`` is passed and ``sign_verbatim`` is true.
+
+    permitted_alt_names
+        List of alternative names for which certificates are allowed to be issued
+        or signed by this CA certificate. The format is similar to the one for ``alt_names``,
+        but ``<type>`` can only be ``dns``, ``email``, ``uri`` and ``ip``.
+        Ignored when a ``csr`` is passed and ``sign_verbatim`` is true.
+
+        .. important::
+
+            Types other than ``dns`` require Vault 1.19+.
+
+    excluded_alt_names
+        (Vault 1.19+ only)
+        List of alternative names for which certificates are not allowed to be issued
+        or signed by this CA certificate. The format is similar to the one for ``alt_names``,
+        but ``<type>`` can only be ``dns``, ``email``, ``uri`` and ``ip``.
+        Ignored when a ``csr`` is passed and ``sign_verbatim`` is true.
+
+    Subject DN fields
+        Most of these can be single strings or lists of strings (for multiple values).
+        Ignored when a ``csr`` is passed and ``sign_verbatim`` is true.
+
+        * ou
+        * organization
+        * country
+        * locality
+        * province
+        * street_address
+        * postal_code
+        * serial_number (only a single value; NOT the certificate's serial number, just the SERIALNUMBER name attribute)
+
+    mount
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
+
+    kwargs
+        Any additional parameter accepted by the Vault API or, if ``private_key`` is set,
+        :py:func:`x509.create_csr <salt.modules.x509_v2.create_csr>`.
+        The latter arguments are ignored, unless ``sign_verbatim`` is true.
+    """
+    if not HAS_CRYPTOGRAPHY:  # pragma: no cover
+        raise CommandExecutionError(
+            "Missing `cryptography` library, which is required for this operation"
+        )
+    hlp.one_of(csr=csr, private_key=private_key)
+
+    if issuer_ref is not None:
+        endpoint = f"{mount}/issuer/{issuer_ref}/sign-intermediate"
+    else:
+        endpoint = f"{mount}/root/sign-intermediate"
+    csr_args, extra_args = pki.split_csr_kwargs(kwargs, ("subject",))
+
+    payload = {k: v for k, v in extra_args.items() if not k.startswith("_")}
+    payload["format"] = encoding
+
+    if sign_verbatim:
+        payload["use_csr_values"] = True
+    else:
+        payload.update(
+            hlp.filter_unset(
+                {
+                    "common_name": common_name,
+                    "exclude_cn_from_sans": exclude_cn_from_sans,
+                    # alt_names and permitted_*/excluded_* need parsing, only done if necessary
+                    "key_usage": key_usage,
+                    "ou": ou,
+                    "organization": organization,
+                    "country": country,
+                    "locality": locality,
+                    "province": province,
+                    "street_address": street_address,
+                    "postal_code": postal_code,
+                    "serial_number": serial_number,
+                }
+            )
+        )
+
+    if max_path_length is not None:
+        # CA basicConstraints cannot be set, even with use_csr_values
+        payload["max_path_length"] = max_path_length
+    if signature_bits:
+        payload["signature_bits"] = signature_bits
+    if ttl is not None:
+        payload["ttl"] = ttl
+    if not_before_duration is not None:
+        payload["not_before_duration"] = not_before_duration
+    if not_after is not None:
+        payload["not_after"] = not_after
+
+    if csr:
+        csr = _x509v2("encode_csr", csr)
+
+    csr_args, norm_sans, norm_permitted_nc, norm_excluded_nc = pki.norm_intermediate_params(
+        csr_args,
+        csr=csr,
+        sign_verbatim=sign_verbatim,
+        country=country,
+        province=province,
+        locality=locality,
+        street_address=street_address,
+        postal_code=postal_code,
+        organization=organization,
+        ou=ou,
+        common_name=common_name,
+        serial_number=serial_number,
+        alt_names=alt_names,
+        key_usage=key_usage,
+        permitted_alt_names=permitted_alt_names,
+        excluded_alt_names=excluded_alt_names,
+    )
+
+    if norm_sans:
+        if not sign_verbatim:
+            dns_sans, ip_sans, uri_sans, other_sans = pki.split_sans(norm_sans)
+            payload["alt_names"] = ",".join(dns_sans)
+            payload["ip_sans"] = ",".join(ip_sans)
+            payload["uri_sans"] = ",".join(uri_sans)
+            payload["other_sans"] = ",".join(other_sans)
+        else:
+            csr_args["subjectAltName"] = [
+                (
+                    f"{k}:{vv}"
+                    if k.upper() in pki.SUPPORTED_SAN_TYPES
+                    else f"otherName:{k};UTF8:{vv}"
+                )
+                for k, v in norm_sans.items()
+                for vv in v
+            ]
+
+    if norm_permitted_nc or norm_excluded_nc:
+        if not sign_verbatim:
+            if norm_permitted_nc:
+                dns_nc_allowed, email_nc_allowed, ip_nc_allowed, uri_nc_allowed = (
+                    pki.split_name_constraints(norm_permitted_nc)
+                )
+                payload["permitted_dns_domains"] = ",".join(dns_nc_allowed)
+                payload["permitted_email_addresses"] = ",".join(email_nc_allowed)
+                payload["permitted_ip_ranges"] = ",".join(ip_nc_allowed)
+                payload["permitted_uri_domains"] = ",".join(uri_nc_allowed)
+
+            if norm_excluded_nc:
+                dns_nc_denied, email_nc_denied, ip_nc_denied, uri_nc_denied = (
+                    pki.split_name_constraints(norm_excluded_nc)
+                )
+                payload["excluded_dns_domains"] = ",".join(dns_nc_denied)
+                payload["excluded_email_addresses"] = ",".join(email_nc_denied)
+                payload["excluded_ip_ranges"] = ",".join(ip_nc_denied)
+                payload["excluded_uri_domains"] = ",".join(uri_nc_denied)
+
+        else:
+            # There's a minor bug in x509.create_csr, we need to filter non-empty values
+            csr_args["nameConstraints"] = hlp.filter_unset(
+                {
+                    "critical": True,
+                    "permitted": [f"{k}:{vv}" for k, v in norm_permitted_nc.items() for vv in v]
+                    or None,
+                    "excluded": [f"{k}:{vv}" for k, v in norm_excluded_nc.items() for vv in v]
+                    or None,
+                }
+            )
+
+    if not csr:
+        # Generate a CSR in place when we received a private key
+        try:
+            csr = _x509v2(
+                "create_csr",
+                private_key=private_key,
+                private_key_passphrase=private_key_passphrase,
+                digest=digest,
+                **csr_args,
+            )
+        except SaltInvocationError as err:
+            if not norm_sans or "otherName is currently not implemented" not in str(err):
+                raise
+            # Can only happen with sign_verbatim, we don't create a SAN ext otherwise
+            csr_args["subjectAltName"] = [
+                f"{k}:{vv}"
+                for k, v in norm_sans.items()
+                if k.upper() in pki.SUPPORTED_SAN_TYPES
+                for vv in v
+            ]
+            _, _, _, other_sans = pki.split_sans(norm_sans)
+            # Still respected when signing verbatim (others are not)
+            payload["other_sans"] = ",".join(other_sans)
+            csr = __salt__["x509.create_csr"](
+                private_key=private_key,
+                private_key_passphrase=private_key_passphrase,
+                digest=digest,
+                **csr_args,
+            )
 
     payload["csr"] = csr
 
