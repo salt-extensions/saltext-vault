@@ -489,7 +489,7 @@ def test_get_config_without_version_but_pin(vault_plugin, db_plugin, secret_plug
     ),
     indirect=True,
 )
-def test_get_config_with_version(vault_plugin, auth_plugin, db_plugin, secret_plugin):
+def test_get_config_with_version(vault_plugin, auth_plugin, db_plugin, secret_plugin, container):
     # Explicit unversioned success
     res = vault_plugin.get_config("auth", auth_plugin["name"], version="")
     # remove OpenBao-specific, unmanaged output
@@ -498,7 +498,13 @@ def test_get_config_with_version(vault_plugin, auth_plugin, db_plugin, secret_pl
     assert res == expected
 
     # Explicit unversioned failure for versioned
-    with pytest.raises(CommandExecutionError, match="VaultNotFound.*"):
+    # Note: This does not test the special case where only a single version is registered,
+    # which started to matter in Vault 2.1.0+. It's still tested by the state module tests though.
+    is_vault_latest = "vault" in container and "latest" in container
+    with pytest.raises(
+        CommandExecutionError,
+        match="VaultNotFound" if not is_vault_latest else "VaultInvocationError",
+    ):
         vault_plugin.get_config("database", db_plugin["name"], version="")
 
     # Explicit versioned success

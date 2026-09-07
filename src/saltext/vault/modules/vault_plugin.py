@@ -408,15 +408,26 @@ def get_config(plugin_type, name, version=None):
     plugin_type = _check_type(plugin_type)
     endpoint = f"sys/plugins/catalog/{plugin_type}/{name}"
     try:
-        return vault.query(
+        ret = vault.query(
             "GET",
             endpoint,
             __opts__,
             __context__,
             payload={"version": version} if version else None,
         )["data"]
-    except vault.VaultNotFoundError as err:
-        if version is not None:
+
+        # If we have an explicit unversioned request, ensure the returned plugin is unversioned.
+        # Vault 2.1.0 started to fall back to the single defined version of versioned plugins with only one.
+        if version == "" and ret.get("version"):
+            raise vault.VaultNotFoundError()
+        return ret
+
+    except (vault.VaultNotFoundError, vault.VaultInvocationError) as err:
+        if version is not None or (
+            # Vault 2.1.0 changed a silent 404 to an explicit 400. Use the same fallback logic for that error.
+            isinstance(err, vault.VaultInvocationError)
+            and "not found in catalog without a version" not in str(err)
+        ):
             raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
         # version was unspecified, let's try to find a custom versioned plugin and return its default version for new mounts.
         try:
