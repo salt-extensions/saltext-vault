@@ -4,6 +4,42 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 # Changelog
 
+## 1.9.0 (2026-09-08)
+
+
+### Changed
+
+- Made `vault_pki.certificate_managed` check all certificate subject attributes/extensions, including those derived from role and issuer URL configuration. The state now requires read access to the role, performance cluster config as well as issuer and mount default URL configuration to be idempotent.
+- Made `vault_pki.certificate_managed` use the generic `<mount>/sign*` endpoints instead of the issuer-specific `<mount>/issuer/<issuer_ref>/sign*` ones where `<issuer_ref>` was looked up in the role, which means you can more easily restrict signing requests to the default issuer of the role
+- Somewhat breaking change: Renamed `type` => `key_type` and `key_type` => `key_algo` parameters in `vault_pki.generate_root`. If you used to pass both by keyword, you need to migrate to the new names (the previous names still work). If you passed one positionally and the other by keyword, this upgrade will break that call.
+
+
+### Fixed
+
+- Corrected missing otherName support workaround in `vault_pki.sign_certificate`: No user action is required to make the operation work
+- Fixed `vault_pki.(issue|sign)_certificate` and `vault_pki.certificate_managed` not working without specifying `common_name`, even if the role set `require_cn` to false or `sign_verbatim` was enabled
+- Fixed `vault_pki.read_issuer` reading missing default issuer raising an exception instead of returning `None`
+- Fixed `vault_pki.sign_certificate`/`vault_pki.certificate_managed` requiring a `role_name`, even if `sign_verbatim` was enabled
+- Fixed `vault_plugin.get_config` and thus `vault_plugin` state functions semantics on Vault 2.1.0+: Previous releases treated a missing `version` as a request for an unversioned plugin specifically and failed with a generic 404 if there wasn't any, even if a versioned plugin of that name was registered. 2.1.0 started returning a specific 400 error and falling back to a versioned plugin if it was the only registered version with that name, which broke our internal fallback logic and could interfere with the state module's explicit distinction between unversioned and versioned variants.
+- Fixed idempotency of `vault_pki.certificate_managed` when passing email values for `common_name` and `exclude_cn_from_sans` is not true
+- Fixed loading CSR from file path in `vault_pki.sign_certificate`
+- Fixed running `vault_pki.certificate_managed` when another state run is queued
+
+
+### Added
+
+- Added `csr` parameter to `vault_pki.certificate_managed`, allowing stateful certificate issuance based on a pre-generated CSR
+- Added `leaf_not_after_behavior` and `revocation_signature_algorithm` parameters to `vault_pki.update_issuer`
+- Added `list_keys`, `generate_key`, `get_key_id`, `generate_intermediate_csr`, `import_issuer_intermediate`, `import_issuer` and `write_urls` functions to `vault_pki` for the respective API methods. Also added `generate_intermediate`, which relies on the `x509_v2` modules to automatically sign an intermediate CA certificate for use by Vault.
+- Added `name`, `aia_url_templating` and `delta_crl_endpoints` parameters to `vault_pki.update_issuer`
+- Added `vault_pki.(read|write)_cluster_config` to manage performance cluster configuration/AIA url templating variables
+- Added `vault_pki.ca_certificate_managed` to statefully manage CA certificates
+- Added `vault_pki.get_issuer_id` to resolve an issuer reference
+- Added `vault_pki.intermediate_issuer_managed` state that manages an intermediate issuer as the default issuer on a mount. It signs the public key using the `x509_v2` modules.
+- Added `vault_pki.root_issuer_managed` state that manages a root issuer as the default issuer on a mount
+- Added `vault_pki.sign_intermediate`
+- Added certificate revocation with private key. Access to this endpoint requires a lot less trust.
+
 ## 1.8.0 (2026-08-09)
 
 
