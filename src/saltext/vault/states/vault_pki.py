@@ -10,12 +10,14 @@ Manage the Vault (or OpenBao) PKI secret engine and Vault-issued X.509 certifica
 import base64
 import logging
 import os
+import re
 import tempfile
+import typing
+from collections.abc import Mapping
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
@@ -33,7 +35,7 @@ except ImportError:  # pragma: no cover
     HAS_CRYPTOGRAPHY = False
 
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
 
     from saltext.vault.utils._types import SaltContext
     from saltext.vault.utils._types import SaltFunctions
@@ -158,6 +160,11 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
 
         # Read issuer for URL configuration and CA chain. issuer_ref becomes `default` if unspecified
         path "{mount}/issuer/{issuer_ref}" {
+            capabilities = ["read"]
+        }
+
+        # When URLs use templating with `{cluster_path}`/`{cluster_aia_path}` variables
+        path "<mount>/config/cluster" {
             capabilities = ["read"]
         }
 
@@ -427,28 +434,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
                 f"Issuer '{issuer_ref or 'default'}' does not exist on mount {mount}"
             )
 
-        url_configs = (
-            "issuing_certificates",
-            "crl_distribution_points",
-            "delta_crl_distribution_points",
-            "ocsp_servers",
-        )
-        if not any(issuer_info.get(url_config) for url_config in url_configs):
-            try:
-                # Mount default AIA URLs
-                urls = __salt__["vault_pki.read_urls"](mount=mount)
-            except CommandExecutionError:  # pragma: no cover
-                log.warning(
-                    "Failed reading default AIA url config. Consider allowing read access to "
-                    "`%s/config/urls`. This state will not be idempotent otherwise.",
-                    mount,
-                )
-                urls = {}
-        else:
-            urls = {"enable_templating": bool(issuer_info.get("enable_aia_url_templating"))}
-            for url in url_configs:
-                # Issuer-specific AIA URLs
-                urls[url] = hlp.deserialize_csl(issuer_info.get(url, []))
+        urls = _get_urls(issuer_info, mount=mount)
 
         if append_ca_chain:
             ca_chain = [x509util.load_cert(x) for x in issuer_info["ca_chain"]]
@@ -634,6 +620,11 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
 
         # Read issuer for URL configuration and CA chain. issuer_ref becomes `default` if unspecified
         path "{mount}/issuer/{issuer_ref}" {
+            capabilities = ["read"]
+        }
+
+        # When URLs use templating with `{cluster_path}`/`{cluster_aia_path}` variables
+        path "<mount>/config/cluster" {
             capabilities = ["read"]
         }
 
@@ -857,28 +848,7 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
                 f"Issuer '{issuer_ref or 'default'}' does not exist on mount {mount}"
             )
 
-        url_configs = (
-            "issuing_certificates",
-            "crl_distribution_points",
-            "delta_crl_distribution_points",
-            "ocsp_servers",
-        )
-        if not any(issuer_info.get(url_config) for url_config in url_configs):
-            try:
-                # Mount default AIA URLs
-                urls = __salt__["vault_pki.read_urls"](mount=mount)
-            except CommandExecutionError:  # pragma: no cover
-                log.warning(
-                    "Failed reading default AIA url config. Consider allowing read access to "
-                    "`%s/config/urls`. This state will not be idempotent otherwise.",
-                    mount,
-                )
-                urls = {}
-        else:
-            urls = {"enable_templating": bool(issuer_info.get("enable_aia_url_templating"))}
-            for url in url_configs:
-                # Issuer-specific AIA URLs
-                urls[url] = hlp.deserialize_csl(issuer_info.get(url, []))
+        urls = _get_urls(issuer_info, mount=mount)
 
         if append_ca_chain:
             ca_chain = [x509util.load_cert(x) for x in issuer_info["ca_chain"]]
@@ -1622,6 +1592,12 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
             capabilities = ["read"]
         }
 
+        # When URLs use templating with `{cluster_path}`/`{cluster_aia_path}` variables,
+        # but not `{issuer_id}` (URLs are excluded from the issuer certificate in that case)
+        path "<mount>/config/cluster" {
+            capabilities = ["read"]
+        }
+
         # when key_ref is not set
         path "<mount>/keys/generate/<key_type>" {
             capabilities = ["create", "update"]
@@ -1848,10 +1824,8 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
             )
         else:
             issuer_id = current["issuer_id"]
-            try:
-                urls = __salt__["vault_pki.read_urls"](mount=mount)
-            except CommandExecutionError:
-                urls = {}
+            urls = _get_urls(None, mount=mount)
+
             replace_key = key_ref is not None and current["key_id"] != __salt__[
                 "vault_pki.get_key_id"
             ](key_ref, mount=mount)
@@ -2149,3 +2123,79 @@ def _check_file_ret(fret, ret, current):
         ret["changes"] = {}
         return False
     return True
+
+
+class LazyAIAContext:
+    def __init__(self, issuer_id: str | None, mount: str):
+        self.issuer_id = issuer_id
+        self.mount = mount
+        self.cluster_config: dict[str, typing.Any] | None = None
+
+    def __getitem__(self, key: str) -> str:
+        if key == "issuer_id" and self.issuer_id is not None:
+            return self.issuer_id
+        if key in ("cluster_path", "cluster_aia_path"):
+            if self.cluster_config is None:
+                self.cluster_config = __salt__["vault_pki.read_cluster_config"](mount=self.mount)
+            if key == "cluster_path":
+                return self.cluster_config["path"]
+            return self.cluster_config["aia_path"]
+        raise KeyError(key)
+
+
+def _get_urls(issuer_info: Mapping[str, typing.Any] | None, mount: str) -> "pki.URLConfigs":
+    url_config_keys = (
+        "issuing_certificates",
+        "crl_distribution_points",
+        "delta_crl_distribution_points",
+        "ocsp_servers",
+    )
+    if issuer_info is None or not any(
+        issuer_info.get(url_config) for url_config in url_config_keys
+    ):
+        try:
+            # Mount default AIA URLs
+            url_configs = __salt__["vault_pki.read_urls"](mount=mount)
+        except CommandExecutionError:  # pragma: no cover
+            log.warning(
+                "Failed reading default AIA url config. Consider allowing read access to "
+                "`%s/config/urls`. This state will not be idempotent otherwise.",
+                mount,
+            )
+            return {}
+    else:
+        # Issuer-specific AIA URLs
+        url_configs = issuer_info
+
+    urls: pki.URLConfigs = {
+        url: hlp.deserialize_csl(url_configs.get(url, [])) for url in url_config_keys
+    }
+    if url_configs.get("enable_templating"):
+        urls = _render_aia_templating(
+            urls,
+            issuer_id=issuer_info["issuer_id"] if issuer_info is not None else None,
+            mount=mount,
+        )
+    return urls
+
+
+def _render_aia_templating(
+    urls: "pki.URLConfigs", *, issuer_id: str | None, mount: str
+) -> "pki.URLConfigs":
+    ctx = LazyAIAContext(issuer_id=issuer_id, mount=mount)
+
+    def _sub_id(match):
+        tgt = match.group(1).strip()
+        return str(ctx[tgt])
+
+    res = {}
+    for conf, vals in urls.items():
+        res[conf] = []
+        for url in hlp.deserialize_csl(vals):
+            try:
+                rendered = re.sub(r"{{(issuer_id|cluster_(?:aia_)?path)}}", _sub_id, url)
+            except KeyError:
+                # If any template is invalid, all URLs are dropped - usual case: issuer_id referenced in root issuer
+                return {}
+            res[conf].append(rendered)
+    return res

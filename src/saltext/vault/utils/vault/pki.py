@@ -7,6 +7,7 @@ Vault PKI helpers
 import json
 import logging
 import typing
+from collections.abc import Mapping
 from collections.abc import Sequence
 from datetime import datetime
 from datetime import timedelta
@@ -56,6 +57,14 @@ ExtensionChange: typing.TypeAlias = (
     typing.Literal["added"] | typing.Literal["changed"] | typing.Literal["removed"]
 )
 ExtensionListChange: typing.TypeAlias = typing.Literal["added"] | typing.Literal["removed"]
+
+URLConfigs: typing.TypeAlias = Mapping[
+    typing.Literal["issuing_certificates"]
+    | typing.Literal["crl_distribution_points"]
+    | typing.Literal["delta_crl_distribution_points"]
+    | typing.Literal["ocsp_servers"],
+    list[str],
+]
 
 SUPPORTED_SAN_TYPES = ("DNS", "EMAIL", "IP", "URI")
 TIME_FMT = "%Y-%m-%dT%H:%M:%SZ"
@@ -146,7 +155,7 @@ def check_cert_for_changes(
     role_info: dict[str, typing.Any],
     serial_number: str | None,
     ttl: int,
-    urls: dict[str, list[str] | bool],
+    urls: URLConfigs,
     user_ids: list[str] | str | None,
     **kwargs,
 ) -> dict[str, typing.Any]:
@@ -388,7 +397,7 @@ def _build_regular_cert(
     role_info: dict[str, typing.Any],
     serial_number: str | None,
     ttl: int,
-    urls: dict[str, list[str] | bool],
+    urls: URLConfigs,
     user_ids: list[str] | str | None,
     **csr_args,
 ) -> cx509.CertificateBuilder:
@@ -516,7 +525,7 @@ def _build_verbatim_cert(
     private_key: Privkey | None,
     serial_number: str | None,
     ttl: int,
-    urls: dict[str, list[str] | bool],
+    urls: URLConfigs,
     user_ids: list[str] | str | None,
     **csr_args,
 ) -> cx509.CertificateBuilder:
@@ -936,7 +945,7 @@ def check_root_issuer_for_changes(
     signature_bits: int,
     street_address: list[str] | str | None,
     serial_number: str | None,
-    urls: dict[str, list[str] | bool],
+    urls: URLConfigs,
 ):
     """
     Check whether an existing root CA issuer certificate matches expected parameters.
@@ -1120,7 +1129,7 @@ def _build_root_issuer_cert(
     serial_number: str | None,
     not_before_duration: str | int,
     not_after: str | None,
-    urls: dict[str, list[str] | bool],
+    urls: URLConfigs,
     public_key: CertificateIssuerPublicKeyTypes,
 ) -> cx509.CertificateBuilder:
     builder = cx509.CertificateBuilder(public_key=public_key)
@@ -1214,7 +1223,7 @@ def check_ca_cert_for_changes(  # pylint: disable=too-many-locals
     street_address: list[str] | str | None,
     ttl: int,
     ttl_remaining: str | int,
-    urls: dict[str, list[str] | bool],
+    urls: URLConfigs,
     **kwargs,
 ):
     """
@@ -1510,7 +1519,7 @@ def _build_regular_ca_cert(
     serial_number: str | None,
     street_address: list[str] | str | None,
     ttl: int,
-    urls: dict[str, list[str] | bool],
+    urls: URLConfigs,
 ):
     if private_key is not None:
         public_key = private_key.public_key()
@@ -1599,7 +1608,7 @@ def _build_verbatim_ca_cert(
     not_after: str | None,
     not_before_duration: str | int,
     ttl: int,
-    urls: dict[str, list[str] | bool],
+    urls: URLConfigs,
     **csr_args,
 ):
     if private_key is not None:
