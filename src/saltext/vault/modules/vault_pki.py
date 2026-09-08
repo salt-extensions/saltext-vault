@@ -325,6 +325,45 @@ def list_issuers(mount="pki"):
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
 
+def get_issuer_id(ref="default", mount="pki"):
+    """
+    .. versionadded:: 1.9.0
+
+    Get the issuer ID of a reference, which can be an issuer ID or an issuer name.
+    Ensures the returned issuer ID exists.
+
+    Required policy:  See :func:`list_issuers`
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault_pki.get_issuer_id foobar
+
+    ref
+        Reference to an issuer. Either ``issuer_name`` or ``issuer_id``.
+        Defaults to ``default``.
+
+    mount
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
+    """
+    if ref == "default":
+        issuer_id = get_default_issuer(mount=mount)
+        if issuer_id is None:
+            raise CommandExecutionError(f"No default issuer has been configured on mount '{mount}'")
+        return issuer_id
+
+    issuers = list_issuers(mount=mount)
+    if ref in issuers:
+        return ref
+    for issuer_id, info in issuers.items():
+        if info.get("issuer_name") == ref:
+            return issuer_id
+    raise CommandExecutionError(
+        f"No issuer is associated with reference '{ref}' on mount '{mount}'"
+    )
+
+
 def read_issuer(ref="default", mount="pki"):
     """
     Read an issuer's information.
@@ -2462,7 +2501,7 @@ def write_urls(
 
     .. code-block:: bash
 
-            salt '*' vault_pki.set_urls ocsp_servers=ocsp.my.ca
+        salt '*' vault_pki.set_urls ocsp_servers=ocsp.my.ca
 
     issuing_certificates
         Specifies the URL values for the Issuing Certificate field as a list.
@@ -2486,7 +2525,7 @@ def write_urls(
         Supported variables: `{{issuer_id}}`, ``{{cluster_path}}``, ``{{cluster_aia_path}}``
 
     mount
-        The mount path the PKI backend is mounted to. Defaults to ``pki``.
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
     endpoint = f"{mount}/config/urls"
     payload = hlp.filter_unset(
@@ -2503,6 +2542,87 @@ def write_urls(
 
     try:
         return vault.query("POST", endpoint, __opts__, __context__, payload=payload)
+    except vault.VaultException as err:
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
+
+
+def read_cluster_config(mount="pki"):
+    """
+    .. versionadded:: 1.9.0
+
+    Fetch cluster-local configuration, which is used in templated AIA URLs.
+    ``path`` populates ``{{cluster_path}}`` and ``aia_path`` populates ``{{cluster_aia_path}}``.
+
+    `API method docs <https://www.vaultproject.io/api-docs/secret/pki#read-cluster-configuration>`_.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/config/cluster" {
+            capabilities = ["read"]
+        }
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault_pki.read_cluster_config
+
+    mount
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
+    """
+    endpoint = f"{mount}/config/cluster"
+
+    try:
+        return vault.query("GET", endpoint, __opts__, __context__)["data"]
+    except vault.VaultException as err:
+        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
+
+
+def write_cluster_config(path=None, aia_path=None, mount="pki"):
+    """
+    .. versionadded:: 1.9.0
+
+    Set cluster-local configuration, which is used in templated AIA URLs.
+
+    `API method docs <https://www.vaultproject.io/api-docs/secret/pki#set-cluster-configuration>`_.
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "<mount>/config/cluster" {
+            capabilities = ["create", "update"]
+        }
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault_pki.write_cluster_config path='https://pr-a.vault.example.com/v1/ns1/pki-root'
+
+    path
+        URL of this performance replication cluster's API mount path,
+        including any namespaces as path components.
+        Example: ``https://pr-a.vault.example.com/v1/ns1/pki-root``.
+
+    aia_path
+        URL of this performance replication cluster's AIA distribution point;
+        may refer to an external, non-Vault responder.
+        This is for resolving AIA URLs and providing the ``{{cluster_aia_path}}`` template parameter
+        and will not be used for other purposes.
+        As such, unlike ``path``, this can safely use an insecure transit mechanism (like HTTP without TLS).
+
+    mount
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
+    """
+    hlp.x_of(_max=2, path=path, aia_path=aia_path)
+    endpoint = f"{mount}/config/cluster"
+    payload = hlp.filter_unset({"path": path, "aia_path": aia_path})
+
+    try:
+        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 

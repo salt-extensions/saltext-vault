@@ -387,7 +387,7 @@ def vault_read(path, default=..., raise_errors=False):
     return ret.data
 
 
-def vault_write(path, *args, _nofail=False, **kwargs):
+def vault_write(path, /, *args, _nofail=False, **kwargs):
     cmd = (
         ["write", "-format=json"]
         + (["-f"] if not (args or kwargs) else [])
