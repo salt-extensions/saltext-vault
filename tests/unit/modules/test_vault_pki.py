@@ -143,6 +143,8 @@ def _x509v2_mock():
         ("revoke_certificate", {"serial": "00:11:22"}),
         ("read_urls", {}),
         ("write_urls", {"ocsp_servers": ["http://ocsp.example.com"]}),
+        ("read_cluster_config", {}),
+        ("write_cluster_config", {"aia_path": "http://cluster.example.com"}),
     ),
 )
 def test_func_converts_errors(func, kwargs, query, request):

@@ -41,6 +41,7 @@ from saltext.vault.modules.vault_pki import generate_intermediate_csr
 from saltext.vault.modules.vault_pki import generate_key
 from saltext.vault.modules.vault_pki import generate_root
 from saltext.vault.modules.vault_pki import get_default_issuer
+from saltext.vault.modules.vault_pki import get_issuer_id
 from saltext.vault.modules.vault_pki import get_key_id
 from saltext.vault.modules.vault_pki import import_issuer as _import_issuer
 from saltext.vault.modules.vault_pki import (
@@ -54,6 +55,7 @@ from saltext.vault.modules.vault_pki import list_revoked_certificates
 from saltext.vault.modules.vault_pki import list_roles
 from saltext.vault.modules.vault_pki import read_certificate
 from saltext.vault.modules.vault_pki import read_certificate_full
+from saltext.vault.modules.vault_pki import read_cluster_config
 from saltext.vault.modules.vault_pki import read_issuer
 from saltext.vault.modules.vault_pki import read_issuer_certificate
 from saltext.vault.modules.vault_pki import read_issuer_crl
@@ -63,6 +65,7 @@ from saltext.vault.modules.vault_pki import revoke_certificate
 from saltext.vault.modules.vault_pki import set_default_issuer
 from saltext.vault.modules.vault_pki import sign_certificate
 from saltext.vault.modules.vault_pki import update_issuer
+from saltext.vault.modules.vault_pki import write_cluster_config
 from saltext.vault.modules.vault_pki import write_role
 from saltext.vault.modules.vault_pki import write_urls
 from saltext.vault.utils.functools import namespaced_function
@@ -77,8 +80,6 @@ if typing.TYPE_CHECKING:
     __context__: SaltContext
     __salt__: SaltFunctions
     __grains__: SaltGrains
-
-# generate_intermediate left out for now
 
 globals_dict = globals()
 
@@ -95,6 +96,7 @@ generate_key = namespaced_function(generate_key, globals_dict)
 generate_root = namespaced_function(generate_root, globals_dict)
 get_default_issuer = namespaced_function(get_default_issuer, globals_dict)
 get_key_id = namespaced_function(get_key_id, globals_dict)
+get_issuer_id = namespaced_function(get_issuer_id, globals_dict)
 issue_certificate = namespaced_function(issue_certificate, globals_dict)
 list_certificates = namespaced_function(list_certificates, globals_dict)
 list_issuers = namespaced_function(list_issuers, globals_dict)
@@ -103,6 +105,7 @@ list_revoked_certificates = namespaced_function(list_revoked_certificates, globa
 list_roles = namespaced_function(list_roles, globals_dict)
 read_certificate = namespaced_function(read_certificate, globals_dict)
 read_certificate_full = namespaced_function(read_certificate_full, globals_dict)
+read_cluster_config = namespaced_function(read_cluster_config, globals_dict)
 read_issuer = namespaced_function(read_issuer, globals_dict)
 read_issuer_certificate = namespaced_function(read_issuer_certificate, globals_dict)
 read_issuer_crl = namespaced_function(read_issuer_crl, globals_dict)
@@ -112,6 +115,7 @@ revoke_certificate = namespaced_function(revoke_certificate, globals_dict)
 set_default_issuer = namespaced_function(set_default_issuer, globals_dict)
 sign_certificate = namespaced_function(sign_certificate, globals_dict)
 update_issuer = namespaced_function(update_issuer, globals_dict)
+write_cluster_config = namespaced_function(write_cluster_config, globals_dict)
 write_role = namespaced_function(write_role, globals_dict)
 write_urls = namespaced_function(write_urls, globals_dict)
 

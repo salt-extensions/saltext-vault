@@ -9,6 +9,7 @@ from tests.conftest import CONTAINER_TARGETS
 
 # pylint: disable=unused-import
 from tests.functional.modules.test_vault_pki import clean_pki
+from tests.functional.modules.test_vault_pki import cluster_config
 from tests.functional.modules.test_vault_pki import empty_pki_mount
 from tests.functional.modules.test_vault_pki import generated_root
 from tests.functional.modules.test_vault_pki import issuers_setup
@@ -23,6 +24,7 @@ from tests.functional.modules.test_vault_pki import test_generate_key
 from tests.functional.modules.test_vault_pki import test_generate_root
 from tests.functional.modules.test_vault_pki import test_generate_root_exported
 from tests.functional.modules.test_vault_pki import test_get_default_issuer
+from tests.functional.modules.test_vault_pki import test_get_issuer_id
 from tests.functional.modules.test_vault_pki import test_get_key_id
 from tests.functional.modules.test_vault_pki import test_import_issuer_with_private_key
 from tests.functional.modules.test_vault_pki import test_issue_certificate
@@ -32,6 +34,7 @@ from tests.functional.modules.test_vault_pki import test_list_keys
 from tests.functional.modules.test_vault_pki import test_list_roles
 from tests.functional.modules.test_vault_pki import test_read_certificate
 from tests.functional.modules.test_vault_pki import test_read_certificate_full
+from tests.functional.modules.test_vault_pki import test_read_cluster_config
 from tests.functional.modules.test_vault_pki import test_read_issuer
 from tests.functional.modules.test_vault_pki import test_read_issuer_certificate
 from tests.functional.modules.test_vault_pki import test_read_issuer_certificate_with_chain
@@ -45,6 +48,7 @@ from tests.functional.modules.test_vault_pki import test_sign_certificate_with_p
 from tests.functional.modules.test_vault_pki import test_sign_certificate_with_sign_verbatim
 from tests.functional.modules.test_vault_pki import test_update_issuer
 from tests.functional.modules.test_vault_pki import test_update_role
+from tests.functional.modules.test_vault_pki import test_write_cluster_config
 from tests.functional.modules.test_vault_pki import test_write_role
 from tests.functional.modules.test_vault_pki import test_write_urls
 from tests.functional.modules.test_vault_pki import testissuer

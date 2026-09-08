@@ -33,6 +33,10 @@ pytestmark = [
     pytest.mark.parametrize("secret_mounts", ("pki",), indirect=True),
 ]
 
+# Can't reset these to empty, so define reliable defaults instead
+DEFAULT_CLUSTER_PATH = "https://cluster1.vault.local/v1/pki"
+DEFAULT_CLUSTER_AIA_PATH = "http://foo.bar.baz/aia/"
+
 
 @pytest.fixture(scope="module")
 def minion_config_overrides(salt_version):
@@ -97,12 +101,13 @@ def root_issuer_setup():
     root_ca_args = {"issuer_name": "test-issuer-root", "common_name": "Test Issuer Root CA"}
 
     vault_write("pki/root/generate/internal", **root_ca_args)
-    assert vault_read(f"pki/issuer/{root_ca_args['issuer_name']}")
+    return vault_read(f"pki/issuer/{root_ca_args['issuer_name']}")["data"]
 
 
 @pytest.fixture(params=[["testissuer"]])
 def issuers_setup(request, root_issuer_setup):  # pylint: disable=unused-argument
     try:
+        issuer_configs = {}
         for issuer_name in request.param:
             issuer_args = request.getfixturevalue(issuer_name)
 
@@ -116,7 +121,9 @@ def issuers_setup(request, root_issuer_setup):  # pylint: disable=unused-argumen
             for issuer in resp["imported_issuers"]:
                 vault_write(f"/pki/issuer/{issuer}", **issuer_args)
                 assert vault_read(f"pki/issuer/{issuer_name}")
-        yield
+                issuer_configs.setdefault(issuer_name, []).append(issuer_args.copy())
+                issuer_configs[issuer_name][-1]["issuer_id"] = issuer
+        yield issuer_configs
     finally:
         all_issuers = vault_list_detailed("pki/issuers")
         issuers_names = []
@@ -185,6 +192,32 @@ def test_update_role(vault_pki):
 def test_list_issuers(vault_pki):
     ret = [info["issuer_name"] for info in vault_pki.list_issuers().values()]
     assert set(ret) == {"test-issuer-root", "testissuer"}
+
+
+def test_get_issuer_id(vault_pki, issuers_setup, root_issuer_setup):
+    issuer_id = issuers_setup["testissuer"][0]["issuer_id"]
+
+    # by issuer_id
+    ret = vault_pki.get_issuer_id(issuer_id)
+    assert ret == issuer_id
+
+    # by name
+    ret = vault_pki.get_issuer_id("testissuer")
+    assert ret == issuer_id
+
+    # default
+    ret = vault_pki.get_issuer_id()
+    assert ret == root_issuer_setup["issuer_id"]
+
+    # missing
+    with pytest.raises(CommandExecutionError, match="No issuer is associated with reference"):
+        vault_pki.get_issuer_id("missing-issuer")
+
+
+def test_get_issuer_id_default_unconfigured(vault_pki):
+    # missing default issuer
+    with pytest.raises(CommandExecutionError, match="No default issuer has been configured"):
+        vault_pki.get_issuer_id()
 
 
 @pytest.mark.usefixtures("issuers_setup")
@@ -1417,3 +1450,43 @@ def test_write_urls_delta_crl_endpoints(vault_pki):
 def test_write_urls_requires_parameter(vault_pki):
     with pytest.raises(CommandExecutionError, match="at least one parameter"):
         vault_pki.write_urls()
+
+
+@pytest.fixture
+def cluster_config():
+    vault_write(  # pylint: disable=kwarg-superseded-by-positional-arg
+        "pki/config/cluster",
+        path=DEFAULT_CLUSTER_PATH,
+        aia_path=DEFAULT_CLUSTER_AIA_PATH,
+    )
+
+
+@pytest.mark.usefixtures("cluster_config")
+def test_read_cluster_config(vault_pki):
+    res = vault_pki.read_cluster_config()
+    assert res["path"] == DEFAULT_CLUSTER_PATH
+    assert res["aia_path"] == DEFAULT_CLUSTER_AIA_PATH
+
+
+def test_write_cluster_config(vault_pki):
+    try:
+        vault_pki.write_cluster_config(aia_path="http://my.cluster.com")
+        res = vault_read("pki/config/cluster")["data"]
+        assert res["path"] == DEFAULT_CLUSTER_PATH
+        assert res["aia_path"] == "http://my.cluster.com"
+
+        vault_pki.write_cluster_config(path="https://my.cluster.com")
+        res = vault_read("pki/config/cluster")["data"]
+        assert res["path"] == "https://my.cluster.com"
+        assert res["aia_path"] == "http://my.cluster.com"
+
+        vault_pki.write_cluster_config(path=DEFAULT_CLUSTER_PATH, aia_path=DEFAULT_CLUSTER_AIA_PATH)
+        res = vault_read("pki/config/cluster")["data"]
+        assert res["path"] == DEFAULT_CLUSTER_PATH
+        assert res["aia_path"] == DEFAULT_CLUSTER_AIA_PATH
+    finally:
+        vault_write(  # pylint: disable=kwarg-superseded-by-positional-arg
+            "pki/config/cluster",
+            path=DEFAULT_CLUSTER_PATH,
+            aia_path=DEFAULT_CLUSTER_AIA_PATH,
+        )
