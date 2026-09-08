@@ -21,6 +21,8 @@ from salt.utils.x509 import load_cert
 from saltext.vault.utils.vault import helpers as hlp
 from saltext.vault.utils.vault import pki
 from tests.conftest import CONTAINER_TARGETS
+from tests.functional.modules.test_vault_pki import DEFAULT_CLUSTER_AIA_PATH
+from tests.functional.modules.test_vault_pki import DEFAULT_CLUSTER_PATH
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
@@ -448,6 +450,17 @@ def aia_urls(request):
             delta_crl_distribution_points="",
             enable_templating=False,
         )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def cluster_config(secret_mounts):  # pylint: disable=unused-argument
+    # Can't reset these once they have been set on a mount,
+    # so just set them once.
+    vault_write(  # pylint: disable=kwarg-superseded-by-positional-arg
+        "pki/config/cluster",
+        path=DEFAULT_CLUSTER_PATH,
+        aia_path=DEFAULT_CLUSTER_AIA_PATH,
+    )
 
 
 def pregen_csr(cert_args):
@@ -1430,7 +1443,7 @@ def test_ca_certificate_managed_san_from_csr(vault_pki, ca_cert_args, empty):
     assert not ret.changes
 
 
-@pytest.mark.usefixtures("existing_cert", "issuer_setup", "roles_setup")
+@pytest.mark.usefixtures("existing_cert", "roles_setup")
 @pytest.mark.parametrize(
     "aia_urls,issuer_setup",
     (
@@ -1568,6 +1581,47 @@ def test_certificate_managed_urls(cert_typ, issuer_setup, aia_urls, container):
         assert "cRLDistributionPoints" in ret.changes["extensions"]["added"]
 
     # One final idempotency check
+    ret = cert_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup", "roles_setup", "cluster_config", "aia_urls")
+@pytest.mark.parametrize(
+    "aia_urls",
+    (
+        {
+            "enable_templating": True,
+            "issuing_certificates": [
+                "https://one.root.ca/{{issuer_id}}",
+                "{{cluster_aia_path}}issuer/{{issuer_id}}/der",
+            ],
+            "crl_distribution_points": [
+                "https://crl1.root.ca/{{issuer_id}}",
+                "{{cluster_path}}/crl/pem",
+            ],
+            "delta_crl_distribution_points": [
+                "https://deltacrl1.root.ca/{{issuer_id}}",
+                # cluster_aia_path includes a final /, ensure we're idempotent without normalization
+                "{{cluster_aia_path}}/issuer/{{issuer_id}}/crl/delta/der",
+            ],
+            "ocsp_servers": [
+                "https://ocsp1.root.ca/{{issuer_id}}",
+                "{{cluster_aia_path}}/ocsp",
+            ],
+        },
+    ),
+    indirect=True,
+)
+def test_certificate_managed_urls_templating(cert_typ):
+    """
+    Ensure templated issuer URLs are rendered as expected/don't cause non-idempotency.
+    """
+    cert_managed, cert_args = cert_typ
+    ret = cert_managed(**cert_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+
     ret = cert_managed(**cert_args)
     assert ret.result is True
     assert not ret.changes
@@ -3315,35 +3369,104 @@ def test_root_issuer_managed_changes_existing_key(vault_pki, root_ca_args, testm
 @pytest.mark.parametrize(
     "aia_urls",
     (
-        {},
-        {
-            "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
-            "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
-        },
-        {
-            "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
-        },
-        {
-            "delta_crl_distribution_points": [
-                "https://deltacrl1.root.ca",
-                "https://deltacrl2.root.ca",
-            ],
-        },
-        {
-            "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
-            "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
-            "delta_crl_distribution_points": [
-                "https://deltacrl1.root.ca",
-                "https://deltacrl2.root.ca",
-            ],
-            "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
-        },
+        pytest.param({}, id="no_urls"),
+        pytest.param(
+            {
+                "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
+                "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
+            },
+            id="aia_only",
+        ),
+        pytest.param(
+            {
+                "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
+            },
+            id="crl_only",
+        ),
+        pytest.param(
+            {
+                "delta_crl_distribution_points": [
+                    "https://deltacrl1.root.ca",
+                    "https://deltacrl2.root.ca",
+                ],
+            },
+            id="deltacrl_only",
+        ),
+        pytest.param(
+            {
+                "crl_distribution_points": [
+                    "https://crl1.root.ca",
+                    "https://crl2.root.ca",
+                ],  # required on OpenBao for FreshestCRL to be included
+                "delta_crl_distribution_points": [
+                    "https://deltacrl1.root.ca",
+                    "https://deltacrl2.root.ca",
+                ],
+            },
+            id="crl_and_deltacrl",
+        ),
+        pytest.param(
+            {
+                "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
+                "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
+                "delta_crl_distribution_points": [
+                    "https://deltacrl1.root.ca",
+                    "https://deltacrl2.root.ca",
+                ],
+                "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
+            },
+            id="all_urls",
+        ),
+        pytest.param(
+            {
+                "enable_templating": True,
+                "issuing_certificates": [
+                    "https://one.root.ca/{{issuer_id}}",
+                    "{{cluster_aia_path}}issuer/{{issuer_id}}/der",
+                ],
+                "crl_distribution_points": [
+                    "https://crl1.root.ca/{{issuer_id}}",
+                    "{{cluster_path}}/crl/pem",
+                ],
+                "delta_crl_distribution_points": [
+                    "https://deltacrl1.root.ca/{{issuer_id}}",
+                    "{{cluster_aia_path}}/issuer/{{issuer_id}}/crl/delta/der",
+                ],
+                "ocsp_servers": [
+                    "{{cluster_aia_path}}/ocsp",
+                ],
+            },
+            # Referencing issuer_id causes all URL extensions to be absent
+            id="templating_skipped",
+        ),
+        pytest.param(
+            {
+                "enable_templating": True,
+                "issuing_certificates": [
+                    "https://one.root.ca/my_issuer",
+                    "{{cluster_aia_path}}issuer/my_issuer/der",
+                ],
+                "crl_distribution_points": [
+                    "https://crl1.root.ca/my_issuer",
+                    "{{cluster_path}}/crl/pem",
+                ],
+                "delta_crl_distribution_points": [
+                    "https://deltacrl1.root.ca/my_issuer",
+                    # cluster_aia_path includes a final /, ensure we're idempotent without normalization
+                    "{{cluster_aia_path}}/issuer/my_issuer/crl/delta/der",
+                ],
+                "ocsp_servers": [
+                    "{{cluster_aia_path}}/ocsp",
+                ],
+            },
+            id="templating_included",
+        ),
     ),
     indirect=True,
 )
-def test_root_issuer_managed_ok_aia(vault_pki, root_ca_args, testmode):
+def test_root_issuer_managed_ok_aia(vault_pki, root_ca_args):
     issuer_info = _default_issuer()
-    ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
+    ret = vault_pki.root_issuer_managed(**root_ca_args)
     assert ret.result is True
     assert "Root CA issuer is present as specified" in ret.comment
     assert not ret.changes

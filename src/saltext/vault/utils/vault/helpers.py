@@ -247,7 +247,7 @@ def _pretty_hex(hex_str: str) -> str:
     return ":".join([hex_str[i : i + 2] for i in range(0, len(hex_str), 2)]).upper()
 
 
-def filter_state_internal_kwargs(kwargs: dict[str, typing.Any]) -> dict[str, typing.Any]:
+def filter_state_internal_kwargs(kwargs: Mapping[str, typing.Any]) -> dict[str, typing.Any]:
     """
     Removes state-internal kwargs from a kwargs dict.
     """
@@ -259,8 +259,8 @@ def filter_state_internal_kwargs(kwargs: dict[str, typing.Any]) -> dict[str, typ
 @typing.overload
 def deserialize_csl(data: None) -> None: ...
 @typing.overload
-def deserialize_csl(data: str | list[str]) -> list[str]: ...
-def deserialize_csl(data: str | list[str] | None) -> list[str] | None:
+def deserialize_csl(data: str | Sequence[str]) -> list[str]: ...
+def deserialize_csl(data: str | Sequence[str] | None) -> list[str] | None:
     """
     Ensure a value is a proper Python list, not a string containing
     a comma-separated list.
