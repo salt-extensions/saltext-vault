@@ -434,8 +434,6 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
                 f"Issuer '{issuer_ref or 'default'}' does not exist on mount {mount}"
             )
 
-        urls = _get_urls(issuer_info, mount=mount)
-
         if append_ca_chain:
             ca_chain = [x509util.load_cert(x) for x in issuer_info["ca_chain"]]
             # Filter self-signed CA, which shouldn't be in the chain.
@@ -470,7 +468,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
                     role_info=role_info,
                     serial_number=serial_number,
                     ttl=ttl_seconds,
-                    urls=urls,
+                    urls=_get_urls(issuer_info, mount=mount),
                     user_ids=user_ids,
                     **cert_args,
                 )
@@ -848,8 +846,6 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
                 f"Issuer '{issuer_ref or 'default'}' does not exist on mount {mount}"
             )
 
-        urls = _get_urls(issuer_info, mount=mount)
-
         if append_ca_chain:
             ca_chain = [x509util.load_cert(x) for x in issuer_info["ca_chain"]]
             # Filter self-signed CA, which shouldn't be in the chain.
@@ -889,7 +885,7 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
                 signature_bits=signature_bits,
                 street_address=street_address,
                 ttl=ttl_seconds,
-                urls=urls,
+                urls=_get_urls(issuer_info, mount=mount),
                 **cert_args,
             )
 
@@ -1824,11 +1820,10 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
             )
         else:
             issuer_id = current["issuer_id"]
-            urls = _get_urls(None, mount=mount)
-
             replace_key = key_ref is not None and current["key_id"] != __salt__[
                 "vault_pki.get_key_id"
             ](key_ref, mount=mount)
+
             if cert_changes := pki.check_root_issuer_for_changes(
                 "".join(current["ca_chain"]),
                 alt_names=alt_names,
@@ -1853,7 +1848,7 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
                 serial_number=serial_number,
                 signature_bits=signature_bits,
                 street_address=street_address,
-                urls=urls,
+                urls=_get_urls(None, mount=mount),
             ):
                 changes["cert"], cert_affected = cert_changes, True
 
