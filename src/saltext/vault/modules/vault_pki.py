@@ -813,6 +813,7 @@ def generate_root(
     key_ref=None,
     managed_key_name=None,
     managed_key_id=None,
+    encoding=None,
     **kwargs,
 ):
     """
@@ -838,7 +839,7 @@ def generate_root(
         salt '*' vault_pki.generate_root my-root
 
     common_name
-        Subject common name (``CN``) for the certificate.
+        Subject common name (``CN``) for the certificate. Required.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -858,13 +859,16 @@ def generate_root(
         Defaults to ``internal``.
 
     issuer_name
-        Provides a name to the specified issuer. The name must be unique across all issuers and not be the reserved value ``default``.
+        Provides a name to the specified issuer.
+        The name must be unique across all issuers and not be the reserved value ``default``.
 
     key_name
-        When a new key is created with this request, optionally specifies the name for this. The global ref ``default`` may not be used as a name.
+        When a new key is created with this request, optionally specifies the name for this.
+        The global ref ``default`` may not be used as a name.
 
     ttl
-        Specifies the requested Time To Live (after which the certificate expires). This cannot be larger than the engine's max (or, if not set, the system max).
+        Specifies the requested Time To Live (after which the certificate expires).
+        This cannot be larger than the engine's max (or, if not set, the system max).
 
     key_algo
         .. versionchanged:: 1.9.0
@@ -887,14 +891,51 @@ def generate_root(
         If set to ``0``, this CA can only issue leaf certificates, not other CAs.
         A negative value means no limit. Defaults to ``-1``.
 
+    key_ref
+        Reference to an existing private key on this ``mount``, either ``key_name`` or ``key_id``.
+        Required when ``key_type`` is ``existing``, otherwise ignored.
+
     managed_key_name
-        When ``key_type`` is ``kms``, the managed key's configured name. Either this or ``managed_key_id`` is required then.
+        When ``key_type`` is ``kms``, the managed key's configured name.
+        Either this or ``managed_key_id`` is required then.
 
     managed_key_id
-        When ``key_type`` is ``kms``, the managed key's UUID. Either this or ``managed_key_name`` is required then.
+        When ``key_type`` is ``kms``, the managed key's UUID.
+        Either this or ``managed_key_name`` is required then.
+
+    encoding
+        .. versionchanged:: 1.9.0
+            This parameter used to be called ``format``. To align it with other endpoints,
+            it was renamed to ``encoding``. The previous name still works, but is warned about.
+
+        Output format. Can be either ``pem`` or ``der``. Defaults to ``pem``.
 
     kwargs
-        Unknown keyword arguments are passed through. See the API method docs linked above for details.
+        Unknown keyword arguments are passed through to the Vault API.
+        See the API method docs linked above for details. Here is an incomplete list:
+
+        * key_name
+        * private_key_format
+        * pkcs12_encoder/pkcs12_password/jks_password/jks_private_key_alias
+        * alt_names/ip_sans/uri_sans/other_sans (in contrast to other functions in this module, no special handling for alt_names is applied)
+        * exclude_cn_from_sans
+        * key_usage
+        * permitted_dns_domains/excluded_dns_domains (no special handling for permitted_alt_names/excluded_alt_names either)
+        * permitted_ip_ranges/excluded_ip_ranges
+        * permitted_email_addresses/excluded_email_addresses
+        * permitted_uri_domains/excluded_uri_domains
+        * ou
+        * organization
+        * country
+        * locality
+        * province
+        * street_address
+        * postal_code
+        * serial_number
+        * signature_bits
+        * not_before_duration
+        * not_after
+        * use_pss
     """
     if key_type in ("rsa", "ec", "ed25519"):
         log.warning(
@@ -932,10 +973,20 @@ def generate_root(
     if key_name == "default":
         raise SaltInvocationError("key_name cannot be `default`. This is a reserved word.")
 
+    # Compatibility with releases pre-1.9.0
+    if "format" in kwargs:
+        log.warning(
+            "The `format` parameter to `vault_pki.generate_root` was renamed to `encoding`. Please update your call."
+        )
+        encoding = kwargs.pop("format")
+    if encoding is None:
+        encoding = "pem"
+
     endpoint = f"{mount}/root/generate/{key_type}"
 
     payload = {k: v for k, v in kwargs.items() if not k.startswith("_")}
     payload["common_name"] = common_name
+    payload["format"] = encoding
 
     if issuer_name is not None:
         payload["issuer_name"] = issuer_name
@@ -981,6 +1032,7 @@ def generate_intermediate_csr(
     key_ref=None,
     managed_key_name=None,
     managed_key_id=None,
+    encoding="pem",
     mount="pki",
     **kwargs,
 ):
@@ -1004,7 +1056,9 @@ def generate_intermediate_csr(
 
     .. code-block:: bash
 
-        salt '*' vault_pki.generate_root my-root
+        salt '*' vault_pki.generate_intermediate_csr "My Intermediate CA"
+        salt '*' vault_pki.generate_intermediate_csr "My Intermediate CA" key_type=existing key_ref=existing_key
+        salt '*' vault_pki.generate_intermediate_csr "My Intermediate CA" key_type=exported
 
     key_type
         Key type of the (future) intermediate issuer to generate. Valid values are:
@@ -1014,10 +1068,57 @@ def generate_intermediate_csr(
         * ``exported``: The private key is returned in the response.
         * ``kms``: Request a key from a key management system. The private key is not returned and cannot be retrieved later.
 
-    Defaults to ``internal``.
+        Defaults to ``internal``.
+
+    key_name
+        Specify a name for the generated key. Optional.
+
+    key_algo
+        Key algorithm. Either ``rsa``, ``ed25519`` or ``ec``. Defaults to ``rsa``.
+
+    key_bits
+        Number of bits to use for the generated key. Valid values depend on the ``key_type``:
+
+        * ``rsa``: 2048 (default), 3072, 4096, 8192.
+        * ``ec``: 224, 256 (default), 384, 521
+        * ``ed25519``: ignored
+
+        Defaults to ``0`` (universal default).
+
+    key_ref
+        Reference to an existing private key on this ``mount``, either ``key_name`` or ``key_id``.
+        Required when ``key_type`` is ``existing``, otherwise ignored.
+
+    managed_key_name
+        When ``key_type`` is ``kms``, the managed key's configured name. Either this or ``managed_key_id`` is required then.
+
+    managed_key_id
+        When ``key_type`` is ``kms``, the managed key's UUID. Either this or ``managed_key_name`` is required then.
+
+    encoding
+        Output format. Can be either ``pem`` or ``der``. Defaults to ``pem``.
+
+    mount
+        Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     kwargs
-        Unknown keyword arguments are passed through. See the API method docs linked above for details.
+        Unknown keyword arguments are passed through to the Vault API.
+        See the API method docs linked above for details. Here is an incomplete list:
+
+        * alt_names/ip_sans/uri_sans/other_sans (in contrast to other functions in this module, no special handling for alt_names is applied)
+        * exclude_cn_from_sans
+        * key_usage
+        * add_basic_constraints
+        * common_name
+        * ou
+        * organization
+        * country
+        * locality
+        * province
+        * street_address
+        * postal_code
+        * serial_number
+        * signature_bits
     """
     key_type = hlp.in_vals(("existing", "exported", "internal", "kms"), key_type=key_type)
     if key_type == "kms":
@@ -1056,6 +1157,7 @@ def generate_intermediate_csr(
             "key_ref": key_ref,
             "managed_key_name": managed_key_name,
             "managed_key_id": managed_key_id,
+            "format": encoding,
         }
     )
     try:
@@ -1674,7 +1776,7 @@ def issue_certificate(
     issuer_ref=None,
     alt_names=None,
     ttl=None,
-    format="pem",  # pylint: disable=redefined-builtin
+    encoding=None,
     exclude_cn_from_sans=False,
     **kwargs,
 ):
@@ -1731,8 +1833,12 @@ def issue_certificate(
         This cannot be larger than the engine's max (or, if not set, the system max).
         Can be an integer, which is interpreted as seconds, or a time string such as ``1h``.
 
-    format
-        Can be either ``pem`` or ``der``. Defaults to ``pem``.
+    encoding
+        .. versionchanged:: 1.9.0
+            This parameter used to be called ``format``. To align it with other endpoints,
+            it was renamed to ``encoding``. The previous name still works, but is warned about.
+
+        Output format. Can be either ``pem`` or ``der``. Defaults to ``pem``.
 
     exclude_cn_from_sans
         If set to true, the Common Name is not added to the SANs.
@@ -1745,14 +1851,22 @@ def issue_certificate(
     if issuer_ref is not None:
         endpoint = f"{mount}/issuer/{issuer_ref}/issue/{role_name}"
 
+    # Compatibility with releases pre-1.9.0
+    if "format" in kwargs:
+        log.warning(
+            "The `format` parameter to `vault_pki.issue_certificate` was renamed to `encoding`. Please update your call."
+        )
+        encoding = kwargs.pop("format")
+    if encoding is None:
+        encoding = "pem"
+
     payload = {k: v for k, v in kwargs.items() if not k.startswith("_")}
     payload["common_name"] = common_name
+    payload["format"] = encoding
+    payload["exclude_cn_from_sans"] = exclude_cn_from_sans
 
     if ttl is not None:
         payload["ttl"] = ttl
-
-    payload["format"] = format
-    payload["exclude_cn_from_sans"] = exclude_cn_from_sans
 
     if alt_names is not None:
         if not HAS_CRYPTOGRAPHY:  # pragma: no cover
@@ -1787,6 +1901,11 @@ def sign_certificate(
     exclude_cn_from_sans=False,
     serial_number=None,
     user_ids=None,
+    not_after=None,
+    # Vault sign-verbatim only args
+    key_usage=None,
+    ext_key_usage=None,
+    ext_key_usage_oids=None,
     **kwargs,
 ):
     """
@@ -1915,6 +2034,32 @@ def sign_certificate(
         List of User ID (``UID``) subject attributes.
         Each one is added to the generated CSR's subject Name as a distinct RDN.
 
+    not_after
+        Absolute value of the Not After field of the certificate in UTC format ``YYYY-MM-ddTHH:MM:SSZ``.
+        When set, ``ttl`` is ignored.
+
+    key_usage
+        When ``sign_verbatim`` is true, list of key usages to encode onto the certificate if the
+        CSR does not specify a ``keyUsage`` extension. For non-verbatim issuance, this parameter
+        must not be specified because Vault takes it from the role.
+        Valid values can be found at https://golang.org/pkg/crypto/x509/#KeyUsage - simply drop the
+        ``KeyUsage`` part of the value. Values are case-insensitive. Pass an empty list to specify
+        no constraints.
+
+    ext_key_usage
+        When ``sign_verbatim`` is true, list of extended key usages to encode onto the certificate if the
+        CSR does not specify an ``extendedKeyUsage`` extension. For non-verbatim issuance, this parameter
+        must not be specified because Vault takes it from the role.
+        Valid values can be found at https://golang.org/pkg/crypto/x509/#ExtKeyUsage - simply drop the
+        ``ExtKeyUsage`` part of the value. Values are case-insensitive. Pass an empty list to specify
+        no constraints.
+
+    ext_key_usage_oids
+        When ``sign_verbatim`` is true, list of extended key usage oids to encode onto the certificate if the
+        CSR does not specify an ``extendedKeyUsage`` extension.
+        Useful for adding EKUs not supported by the Go standard library.
+        For non-verbatim issuance, this parameter must not be specified because Vault takes it from the role.
+
     kwargs
         Any additional parameter accepted by the Vault API or, if ``private_key`` is set, the
         :py:func:`x509_v2 module <salt.modules.x509_v2.create_csr>`.
@@ -1925,9 +2070,16 @@ def sign_certificate(
         raise CommandExecutionError(
             "Missing `cryptography` library, which is required for this operation"
         )
-    if not sign_verbatim and not role_name:
-        raise SaltInvocationError("`role_name` is required when `sign_verbatim` is false")
     hlp.one_of(csr=csr, private_key=private_key)
+    if not sign_verbatim:
+        if not role_name:
+            raise SaltInvocationError("`role_name` is required when `sign_verbatim` is false")
+        hlp.none_of(
+            key_usage=key_usage,
+            ext_key_usage=ext_key_usage,
+            ext_key_usage_oids=ext_key_usage_oids,
+            _reason="sign_verbatim is false",
+        )
 
     sign = "sign-verbatim" if sign_verbatim else "sign"
     if issuer_ref is not None:
@@ -1946,8 +2098,18 @@ def sign_certificate(
             payload["serial_number"] = serial_number
         if user_ids is not None:
             payload["user_ids"] = user_ids
+    else:
+        if key_usage is not None:
+            payload["key_usage"] = key_usage
+        if ext_key_usage is not None:
+            payload["ext_key_usage"] = ext_key_usage
+        if ext_key_usage_oids is not None:
+            payload["ext_key_usage_oids"] = ext_key_usage_oids
+
     if ttl is not None:
         payload["ttl"] = ttl
+    if not_after is not None:
+        payload["not_after"] = not_after
     payload["format"] = encoding
 
     norm_sans = None
@@ -2051,6 +2213,8 @@ def sign_intermediate(  # pylint: disable=too-many-locals
     **kwargs,
 ):
     """
+    .. versionadded:: 1.9.0
+
     Issue a new CA certificate from an existing private key or CSR.
 
     `API method docs <https://developer.hashicorp.com/vault/api-docs/secret/pki#sign-intermediate>`__.
