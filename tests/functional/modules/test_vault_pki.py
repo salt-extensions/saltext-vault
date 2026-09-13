@@ -1347,8 +1347,9 @@ def test_generate_intermediate(vault_pki, testkey, local_ca):
     ):
         # files for wrapper test
         ret = vault_pki.generate_intermediate(
-            testkey["key_id"],
             "Test Generated Intermediate CA",
+            key_type="existing",
+            key_ref=testkey["key_id"],
             signing_private_key=str(signing_key_file),
             signing_cert=str(signing_cert_file),
             days_valid=7,

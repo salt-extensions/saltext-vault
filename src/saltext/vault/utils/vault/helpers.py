@@ -10,6 +10,7 @@ import string
 import typing
 from collections.abc import Mapping
 from collections.abc import Sequence
+from datetime import timedelta
 from types import EllipsisType
 
 import salt.utils.atomicfile
@@ -225,6 +226,89 @@ def timestring_map(
     raise RuntimeError("This path should not have been hit")  # pragma: no cover
 
 
+DurationUnit: typing.TypeAlias = typing.Literal["weeks", "days", "hours", "minutes", "seconds"]
+_UNITS: typing.Final[tuple[tuple[DurationUnit, int], ...]] = (
+    ("weeks", 7 * 24 * 3600),
+    ("days", 24 * 3600),
+    ("hours", 3600),
+    ("minutes", 60),
+    ("seconds", 1),
+)
+_UNIT_NAMES: typing.Final[tuple[DurationUnit, ...]] = tuple(name for name, _ in _UNITS)
+
+
+def pretty_td(
+    td: timedelta,
+    /,
+    now: bool | tuple[str, str] = False,
+    precision: DurationUnit | None = None,
+) -> str:
+    """
+    Get a human-readable timedelta representation.
+
+    td
+        Timedelta to render.
+
+    now
+        Report durations relative to now: ``in ...``/``... ago`` instead of
+        ``...``/``-(...)``.
+
+        If passed a tuple of two values instead of true, in addition to
+        ``in``/``ago``, prepends the first element if the duration is positive
+        and the second if it is negative.
+
+        For example, ``("expires", "expired")`` results in
+        ``"expires in 3 days"`` or ``"expired 3 days ago"``.
+
+        Defaults to false.
+
+    precision
+        Smallest unit to report, rounding the duration to that unit.
+
+        If omitted, automatically report the largest nonzero unit and the
+        adjacent smaller unit.
+
+        If the requested precision is larger than the duration itself, the
+        largest nonzero unit is used instead.
+
+        Microseconds are ignored.
+    """
+    negative, td = td.days < 0, abs(td)  # sign is always carried by days
+    total = td.days * 86400 + td.seconds  # microseconds ignored
+
+    if total == 0:
+        result = "an instant"
+    else:
+        major_i = next(i for i, (_, size) in enumerate(_UNITS) if total >= size)
+
+        if precision is None:
+            precision_i = min(major_i + 1, len(_UNITS) - 1)
+        else:
+            try:
+                # Raise precision to largest unit with a value > 0 if requested one would just render 0
+                precision_i = max(major_i, _UNIT_NAMES.index(precision))
+            except ValueError:
+                raise ValueError(f"Invalid duration precision: {precision!r}") from None
+
+        step = _UNITS[precision_i][1]
+        total = (total + step // 2) // step * step
+
+        parts = []
+        for name, size in _UNITS[: precision_i + 1]:
+            value, total = divmod(total, size)
+            if value:
+                parts.append(f"{value} {name[:-1] if value == 1 else name}")
+
+        result = parts[0] if len(parts) == 1 else f"{', '.join(parts[:-1])} and {parts[-1]}"
+
+    if not now:
+        return f"-({result})" if negative else result
+    if now is True:
+        return f"{result} ago" if negative else f"in {result}"
+    prefix = now[negative]
+    return f"{prefix} {result} ago" if negative else f"{prefix} in {result}"
+
+
 def dec2hex(decval: int | str) -> str:
     """
     Converts decimal values to nicely formatted hex strings
@@ -247,12 +331,22 @@ def _pretty_hex(hex_str: str) -> str:
     return ":".join([hex_str[i : i + 2] for i in range(0, len(hex_str), 2)]).upper()
 
 
-def filter_state_internal_kwargs(kwargs: Mapping[str, typing.Any]) -> dict[str, typing.Any]:
+def filter_state_internal_kwargs(
+    kwargs: Mapping[str, typing.Any], allow: Sequence[str] | None = None
+) -> dict[str, typing.Any]:
     """
-    Removes state-internal kwargs from a kwargs dict.
+    Remove state-internal kwargs from a kwargs dict.
+
+    kwargs
+        Pass received variadic keyword arguments.
+
+    allow
+        Optional list of arguments to un-ignore while filtering.
+        Example: ``check_cmd`` is valid for ``file.managed``.
     """
-    # check_cmd is a valid argument to file.managed
-    ignore = set(_STATE_INTERNAL_KEYWORDS) - {"check_cmd"}
+    if isinstance(allow, str):
+        allow = (allow,)
+    ignore = set(_STATE_INTERNAL_KEYWORDS) - set(allow or ())
     return {k: v for k, v in kwargs.items() if k not in ignore}
 
 
@@ -337,8 +431,8 @@ def try_base64(data: str | bytes) -> tuple[bytes, bool]:
             return data.encode("utf-8"), False  # type: ignore
     elif isinstance(data, bytes):
         pass
-    else:
-        raise TypeError("try_base64 only works with strings and bytes")  # pragma: no cover
+    else:  # pragma: no cover
+        raise TypeError("try_base64 only works with strings and bytes")
     try:
         decoded = base64.b64decode(data)
         if base64.b64encode(decoded) == data.replace(b"\n", b""):

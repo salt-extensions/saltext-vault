@@ -3,6 +3,7 @@ import re
 # this needs to be from! see test_iso_to_timestamp_polyfill
 from collections.abc import Sequence
 from datetime import datetime
+from datetime import timedelta as td
 from unittest.mock import patch
 
 import pytest
@@ -187,6 +188,48 @@ def test_timestring_map_invalid_type():
 def test_timestring_map_invalid_time_string(inpt):
     with pytest.raises(SaltInvocationError, match="Invalid time string format"):
         hlp.timestring_map(inpt)
+
+
+@pytest.mark.parametrize(
+    "inpt,now,precision,expected",
+    (
+        (td(days=14), False, None, "2 weeks"),
+        (td(days=14), True, None, "in 2 weeks"),
+        (td(days=14), ("expires", "expired"), None, "expires in 2 weeks"),
+        (td(days=-14), False, None, "-(2 weeks)"),
+        (td(days=-14), True, None, "2 weeks ago"),
+        (td(days=-14), ("expires", "expired"), None, "expired 2 weeks ago"),
+        (td(days=4), False, None, "4 days"),
+        (td(hours=1), False, None, "1 hour"),
+        (td(minutes=59), False, None, "59 minutes"),
+        (td(seconds=2), False, None, "2 seconds"),
+        (td(), False, None, "an instant"),
+        (td(microseconds=1), False, None, "an instant"),
+        (td(microseconds=-1), False, None, "-(an instant)"),
+        (td(), True, None, "in an instant"),
+        (td(microseconds=1), True, None, "in an instant"),
+        (td(microseconds=-1), True, None, "an instant ago"),
+        (td(days=15, hours=10, minutes=42, seconds=13), False, None, "2 weeks and 1 day"),
+        (td(hours=-25), False, None, "-(1 day and 1 hour)"),
+        (td(days=13, hours=20, minutes=42, seconds=13), False, None, "2 weeks"),
+        (td(days=13, hours=23, minutes=59, seconds=31), False, "minutes", "2 weeks"),
+        (
+            td(days=13, hours=20, minutes=42, seconds=13),
+            False,
+            "seconds",
+            "1 week, 6 days, 20 hours, 42 minutes and 13 seconds",
+        ),
+        (
+            td(days=13, hours=20, minutes=42, seconds=13),
+            False,
+            "hours",
+            "1 week, 6 days and 21 hours",
+        ),
+        (td(minutes=12, seconds=31), False, "weeks", "13 minutes"),
+    ),
+)
+def test_pretty_td(inpt, now, precision, expected):
+    assert hlp.pretty_td(inpt, now=now, precision=precision) == expected
 
 
 @pytest.mark.parametrize(

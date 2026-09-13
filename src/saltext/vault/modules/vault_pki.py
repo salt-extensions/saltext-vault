@@ -7,6 +7,8 @@ Manage the Vault (or OpenBao) PKI secret engine, request X.509 certificates.
     This module requires the general :ref:`Vault setup <vault-setup>`.
 """
 
+# pylint: disable=too-many-lines
+
 import logging
 import typing
 from datetime import datetime
@@ -1167,31 +1169,134 @@ def generate_intermediate_csr(
 
 
 def generate_intermediate(
-    key_ref,
     common_name,
+    # Vault issuer config for this issuer's cert - if ref is unspecified, uses x509_v2
+    issuer_ref=None,
+    issuer_mount=None,
+    # key params
+    key_type="internal",
+    key_name=None,
+    key_algo=None,
+    key_bits=None,
+    key_ref=None,
+    managed_key_name=None,
+    managed_key_id=None,
+    # cert params valid for both issuance methods
+    days_valid=180,
+    not_after=None,
+    # sign-intermediate params, when issuer_ref is specified, or as fallback when it is not
+    not_before_duration=30,  # Vault signing only
     max_path_length=0,
+    alt_names=None,
+    exclude_cn_from_sans=False,  # Vault signing only
+    key_usage=None,
+    permitted_alt_names=None,
+    excluded_alt_names=None,
+    ou=None,
+    organization=None,
+    country=None,
+    locality=None,
+    province=None,
+    street_address=None,
+    postal_code=None,
+    serial_number=None,
+    signature_bits=0,  # Vault signing only
     mount="pki",
+    # params for x509.create_certificate, if issuer_ref is unspecified
     **kwargs,
 ):
     """
     .. versionadded:: 1.9.0
 
-    Generate an intermediate CA from an existing key by signing it
-    via :py:func:`x509.create_certificate <salt.modules.x509_v2.create_certificate>`.
+    Generate an intermediate issuer by signing its certificate either via another Vault issuer
+    or a Salt-internal CA.
 
-    Required policy: see :func:`generate_intermediate_csr` and :func:`import_intermediate`
+    A Vault issuer is selected by specifying ``issuer_ref``. This function then works
+    like :func:`sign_intermediate`, but without the ability to force verbatim signing
+    or passing a pregenerated CSR.
+
+    When ``issuer_ref`` is unspecified, we rely on :py:func:`x509.create_certificate <salt.modules.x509_v2.create_certificate>`.
+    Any unknown keyword arguments to this function are passed through.
+    Vault-style parameters like ``alt_names`` are translated transparently (into ``subjectAltName`` and its format, in this example).
+    You can still pass x509_v2-style parameters directly, these translations only happen when the respective
+    ``x509.create_certificate`` parameter is not found in ``kwargs``.
+    Some ``x509.create_certificate`` parameters are enforced by this function, see ``kwargs`` below.
+    The final certificate also depends on a ``signing_policy``, if passed. It can override any parameter.
+
+    Required policy: see :func:`generate_intermediate_csr`, :func:`import_issuer_intermediate` and, if ``issuer_ref`` is specified, :func:`sign_intermediate`
 
     CLI Example:
 
     .. code-block:: bash
 
-        salt '*' vault_pki.generate_intermediate my-existing-named-key "My Intermediate CA"
-
-    key_ref
-        Reference to an existing private key on this ``mount``, either ``key_name`` or ``key_id``.
+        salt '*' vault_pki.generate_intermediate "My Salt-issued intermediate CA" ca_server=ca_minion signing_policy=vault_intermediate
+        salt '*' vault_pki.generate_intermediate "My Vault-issued intermediate CA" issuer_ref=root_issuer issuer_mount=pki_root
 
     common_name
         Subject ``CN``. Required.
+
+        .. note::
+
+            When ``issuer_ref`` is unspecified, the final ``CN`` can differ from this value
+            because of signing policy merging.
+
+    issuer_ref
+        Issuer name/ID of the issuer that should sign this issuer's certificate.
+        If unspecified, uses a Salt-internal CA via :py:func:`x509.create_certificate <salt.modules.x509_v2.create_certificate>`
+        to sign it instead.
+
+    issuer_mount
+        When ``issuer_ref`` is specified and the issuer is on a different mount,
+        specify it here. Defaults to the value of ``mount``.
+
+    key_type
+        Key type of the (future) intermediate issuer to generate. Valid values are:
+
+        * ``existing``: Use an existing key, specified in ``key_ref``.
+        * ``internal``: The private key is not returned and cannot be retrieved later.
+        * ``exported``: The private key is returned in the response.
+        * ``kms``: Request a key from a key management system. The private key is not returned and cannot be retrieved later.
+
+        Defaults to ``internal``.
+
+    key_name
+        Specify a name for the generated key. Optional.
+
+    key_algo
+        Key algorithm. Either ``rsa``, ``ed25519`` or ``ec``. Defaults to ``rsa``.
+
+    key_bits
+        Number of bits to use for the generated key. Valid values depend on the ``key_type``:
+
+        * ``rsa``: 2048 (default), 3072, 4096, 8192.
+        * ``ec``: 224, 256 (default), 384, 521
+        * ``ed25519``: ignored
+
+        Defaults to ``0`` (universal default).
+
+    key_ref
+        Reference to an existing private key on this ``mount``, either ``key_name`` or ``key_id``.
+        Required when ``key_type`` is ``existing``, otherwise ignored.
+
+    managed_key_name
+        When ``key_type`` is ``kms``, the managed key's configured name. Either this or ``managed_key_id`` is required then.
+
+    managed_key_id
+        When ``key_type`` is ``kms``, the managed key's UUID. Either this or ``managed_key_name`` is required then.
+
+    days_valid
+        Number of days the certificate should be valid for when (re-)issued.
+        Not respected when ``not_after`` is set explicitly.
+        Defaults to 180.
+
+    not_after
+        Absolute value of the Not After field of the certificate in UTC format ``YYYY-MM-ddTHH:MM:SSZ``.
+        When set, ``days_valid`` is ignored.
+
+    not_before_duration
+        Duration by which to backdate the NotBefore property. Defaults to ``30s``.
+
+        Has no effect when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
 
     max_path_length
         basicConstraints ``pathlen`` parameter, which indicates the maximum number of CAs that can appear below this one in a chain.
@@ -1200,44 +1305,203 @@ def generate_intermediate(
         in which case it means one less than the issuer's pathlen.
         Defaults to ``0``.
 
+        Forcibly translated into ``basicConstraints`` when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
+    alt_names
+        Any alternative names to add to the certificate.
+        Can be specified either as dict (``{ "<type>": "<value>" }``),
+        a dict of lists (``{ "<type>": ["<value1>", "<value2>", ...] }``)
+        or list of SAN strings (``["<type1>:<value1>", ...]``).
+
+        ``<type>`` can be ``dns``, ``email``, ``uri``, ``ip`` or any OID for otherName SANs.
+        ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8:``.
+
+        Translated into ``subjectAltName`` when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
+    exclude_cn_from_sans
+        If set to true, the Common Name is not added to the SANs.
+        Useful if the CN is not a hostname or email address.
+
+        Has no effect when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
+    key_usage
+        (Requires Vault 1.20+ or OpenBao when ``issuer_ref`` is specified)
+        List of key usages to add to the existing set of key usages (CRLSign,CertSign).
+        Per the CA/B Forum, Vault ignores additional values other than DigitalSignature.
+
+        Translated into ``keyUsage`` when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
+    permitted_alt_names
+        List of alternative names for which certificates are allowed to be issued
+        or signed by this CA certificate. The format is similar to the one for ``alt_names``,
+        but ``<type>`` can only be ``dns``, ``email``, ``uri`` and ``ip``.
+
+        .. important::
+
+            Types other than ``dns`` require Vault 1.19+ when ``issuer_ref`` is specified.
+
+        Translated into ``nameConstraints`` when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
+    excluded_alt_names
+        (Vault 1.19+ only when ``issuer_ref`` is specified)
+        List of alternative names for which certificates are not allowed to be issued
+        or signed by this CA certificate. The format is similar to the one for ``alt_names``,
+        but ``<type>`` can only be ``dns``, ``email``, ``uri`` and ``ip``.
+
+        Translated into ``nameConstraints`` when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
+    Subject DN fields
+        Most of these can be single strings or lists of strings (for multiple values).
+
+        * ou
+        * organization
+        * country
+        * locality
+        * province
+        * street_address
+        * postal_code
+        * serial_number (only a single value; NOT the certificate's serial number, just the SERIALNUMBER name attribute)
+
+        Translated into ``subject`` when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
+        .. note::
+
+            The resulting ``subject`` format depends on whether a ``signing_policy`` was specified or not, because
+            a signing policy that defines any subject attribute would override the default format completely.
+
+            * If no ``signing_policy`` is specified, it becomes a string that faithfully recreates subjects as rendered by Vault.
+            * When it is specified, it becomes a dictionary (e.g. ``{CN: Foo}``), which allows merging of attributes from
+              a signing policy that defines ``subject`` as a dictionary itself (e.g. + ``{C: US}`` => ``CN=Foo,C=US``).
+              There are several tradeoffs to using a dict: Parameters with more than one value are ignored, ``postal_code`` is ignored
+              and the subject name's RDN order differs a bit from the one Vault renders.
+
+            This translation is only meant as a helper, you can always specify ``subject`` yourself. It's possible to use
+            a list of RDN strings here and in the signing policy, which results in the signing policy's list being prepended
+            to the one passed in here (i.e. appended when visualizing its rfc4514 string representation).
+
+    signature_bits
+        Number of bits to use in the signature algorithm.
+        Valid: ``256`` (SHA-2-256), ``384`` (SHA-2-384), ``512`` (SHA-2-512).
+        Defaults to ``0``, which automatically selects an algorithm based on
+        the issuer's key length.
+
+        Has no effect when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
     kwargs
-        Unknown keyword arguments are passed to :py:func:`x509.create_certificate <salt.modules.x509_v2.create_certificate>`.
-        See there for details.
+        Unknown keyword arguments are passed to the certificate signing function, which depends
+        on whether ``issuer_ref`` is specified:
 
-        The following arguments are enforced by this function:
+        * A non-empty ``issuer_ref`` means we rely on :func:`sign_intermediate`.
 
-        * ``CN``
-        * ``basicConstraints``
-        * ``csr``
-        * ``format``
-        * ``private_key`` (empty)
-        * ``public_key`` (empty)
-        * ``raw`` (empty)
+          Note that its ``sign_verbatim`` parameter is forced to false and its ``csr``
+          parameter is enforced by this function, so CSR generation arguments won't have any effect
+          and you can't pass a pre-generated CSR.
 
-        These receive defaults if not specified:
+        * No ``issuer_ref`` means we rely on :py:func:`x509.create_certificate <salt.modules.x509_v2.create_certificate>`.
+          See there for details.
 
-        * ``keyUsage``: ``[critical, cRLSign, keyCertSign]``
-        * ``subjectKeyIdentifier``: ``hash``
-        * ``authorityKeyIdentifier``: ``keyid:always,issuer``
+          The following arguments are enforced by this function:
+
+          * ``basicConstraints`` (``{critical: true, ca: true, pathlen: <max_path_length>}``)
+          * ``csr``
+          * ``format``
+          * ``private_key``/``public_key``/``path``/``raw``/``serial_number`` (empty)
+
+          These receive defaults from specified Vault-style parameters to this function:
+
+          * ``subject``
+          * ``subjectAltName`` (not critical)
+          * ``nameConstraints`` (critical)
+          * ``keyUsage`` (critical)
+
+          These receive defaults if not specified at all:
+
+          * ``keyUsage``: ``[critical, cRLSign, keyCertSign]``
+          * ``subjectKeyIdentifier``: ``hash``
+          * ``authorityKeyIdentifier``: ``keyid:always``
     """
-    csr = generate_intermediate_csr("existing", key_ref=key_ref, mount=mount)  # source for pubkey
-    basic_constraints = {"critical": True, "ca": True}
-    if max_path_length >= 0:
-        basic_constraints["pathlen"] = max_path_length
-    kwargs["basicConstraints"] = basic_constraints
-    kwargs["CN"] = common_name
-    kwargs["csr"] = csr["csr"]
-    kwargs["format"] = "pem"
-    kwargs.pop("path", None)
-    kwargs.pop("private_key", None)
-    kwargs.pop("public_key", None)
-    kwargs.setdefault("keyUsage", ["critical", "cRLSign", "keyCertSign"])
-    kwargs.setdefault("subjectKeyIdentifier", "hash")
-    kwargs.setdefault("authorityKeyIdentifier", "keyid:always,issuer")
-    cert = __salt__["x509.create_certificate"](**kwargs)
+    if not HAS_CRYPTOGRAPHY:  # pragma: no cover
+        raise CommandExecutionError(
+            "Missing `cryptography` library, which is required for this operation"
+        )
+    if key_type == "existing" and not key_ref:
+        raise SaltInvocationError("key_type `existing` requires `key_ref` to be set")
+    issuer_mount = issuer_mount or mount
+
+    # Ensure we don't pass through params that interfere with our logic
+    # and make Vault-style params have an effect when using x509_v2/warn about ignored CSR generation params when not.
+    sign_kwargs, not_after, alt_names, permitted_alt_names, excluded_alt_names = (
+        pki.norm_generate_intermediate_params(
+            kwargs,
+            issuer_ref is not None,
+            country=country,
+            province=province,
+            locality=locality,
+            street_address=street_address,
+            postal_code=postal_code,
+            organization=organization,
+            ou=ou,
+            common_name=common_name,
+            serial_number=serial_number,
+            alt_names=alt_names,
+            key_usage=key_usage,
+            permitted_alt_names=permitted_alt_names,
+            excluded_alt_names=excluded_alt_names,
+            max_path_length=max_path_length,
+            not_after=not_after,
+        )
+    )
+
+    # Generate key (optionally) and CSR
+    csr = generate_intermediate_csr(
+        key_type=key_type,
+        key_name=key_name,
+        key_algo=key_algo,
+        key_bits=key_bits,
+        key_ref=key_ref,
+        managed_key_id=managed_key_id,
+        managed_key_name=managed_key_name,
+        mount=mount,
+    )["csr"]
+
+    if issuer_ref is not None:
+        cert = "".join(
+            sign_intermediate(
+                common_name=common_name,
+                csr=csr,
+                issuer_ref=issuer_ref,
+                sign_verbatim=False,
+                encoding="pem",
+                signature_bits=signature_bits,
+                ttl=None if not_after else days_valid * 86400,
+                not_before_duration=not_before_duration,
+                not_after=not_after,
+                alt_names=alt_names,
+                exclude_cn_from_sans=exclude_cn_from_sans,
+                max_path_length=max_path_length,
+                key_usage=key_usage,
+                permitted_alt_names=permitted_alt_names,
+                excluded_alt_names=excluded_alt_names,
+                ou=ou,
+                organization=organization,
+                country=country,
+                locality=locality,
+                province=province,
+                street_address=street_address,
+                postal_code=postal_code,
+                serial_number=serial_number,
+                mount=issuer_mount,
+                **sign_kwargs,
+            )["ca_chain"]
+        )
+    else:
+        cert = __salt__["x509.create_certificate"](
+            **sign_kwargs, csr=csr, encoding="pem", days_valid=days_valid, not_after=not_after
+        )
+        # Appended chain certificates are automatically imported by import_issuer_intermediate
     return import_issuer_intermediate(cert, mount=mount)
 
 

@@ -10,7 +10,6 @@ from salt.utils.x509 import load_cert
 from saltfactories.utils import random_string
 
 from tests.support.vault import vault_delete
-from tests.support.vault import vault_list
 from tests.support.vault import vault_read
 
 pytest.importorskip("docker")
@@ -114,6 +113,9 @@ def ca_minion(master, salt_version):
                 "keyUsage": "critical, cRLSign, keyCertSign",
                 "authorityKeyIdentifier": "keyid:always",
                 "subjectKeyIdentifier": "hash",
+                "subject": {
+                    "O": "Test Org",
+                },
             },
         },
     }
@@ -135,14 +137,11 @@ def clean_pki_mount():
     try:
         yield
     finally:
-        for issuer in vault_list("pki/issuers"):
-            vault_delete(f"pki/issuer/{issuer}")
-        for key in vault_list("pki/keys"):
-            vault_delete(f"pki/key/{key}")
+        vault_delete("pki/root")
 
 
-def _subject_cn(cert):
-    return cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["CN"])[0].value
+def _subject(cert, typ):
+    return cert.subject.get_attributes_for_oid(NAME_ATTRS_OID[typ])[0].value
 
 
 @pytest.mark.usefixtures("clean_pki_mount")
@@ -150,7 +149,7 @@ def test_intermediate_issuer_managed_with_remote_signing(salt_call_cli, ca_minio
     """
     Ensure an intermediate CA can be provisioned and rotated when its
     certificate is signed by a CA minion via peer communication,
-    without local access to the signing private key.
+    without local access to the signing private key/cert.
     """
 
     def _apply(**kwargs):
@@ -173,7 +172,8 @@ def test_intermediate_issuer_managed_with_remote_signing(salt_call_cli, ca_minio
     assert "created" in res["changes"]
     issuer_info = vault_read("pki/issuer/default")["data"]
     cert = load_cert(issuer_info["certificate"])
-    assert _subject_cn(cert) == "Test Remote Intermediate CA"
+    assert _subject(cert, "CN") == "Test Remote Intermediate CA"
+    assert _subject(cert, "O") == "Test Org"
     assert cert.issuer.get_attributes_for_oid(NAME_ATTRS_OID["CN"])[0].value == "Test"
     basic_constraints = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
     assert basic_constraints.value.ca is True
@@ -182,7 +182,7 @@ def test_intermediate_issuer_managed_with_remote_signing(salt_call_cli, ca_minio
     # completing the intermediate issuer's chain
     chain = issuer_info["ca_chain"]
     assert len(chain) == 2
-    assert _subject_cn(load_cert(chain[1])) == "Test"
+    assert _subject(load_cert(chain[1]), "CN") == "Test"
 
     # The state should be idempotent
     res = _apply(**state_args)
@@ -190,12 +190,30 @@ def test_intermediate_issuer_managed_with_remote_signing(salt_call_cli, ca_minio
     assert not res["changes"]
     assert "present as specified" in res["comment"]
 
+    # ... also when the signing policy overrides args (x509.certificate_managed works the same)
+    state_args["max_path_length"] = 1
+    state_args["subjectKeyIdentifier"] = "cafebabe"
+    state_args["O"] = "Other org"
+    res = _apply(**state_args)
+    assert res["result"] is True
+    assert not res["changes"]
+    assert "present as specified" in res["comment"]
+    cert = load_cert(vault_read("pki/issuer/default")["data"]["certificate"])
+    assert cert.extensions.get_extension_for_class(cx509.BasicConstraints).value.path_length == 0
+    assert (
+        cert.extensions.get_extension_for_class(cx509.SubjectKeyIdentifier).value.digest
+        != b"\xca\xfe\xba\xbe"
+    )
+
     # Rotation should replace the default issuer, but reuse its key
     state_args["name"] = "Rotated Remote Intermediate CA"
     res = _apply(**state_args)
     assert res["result"] is True
-    assert res["changes"]["cert"]["subject_name"] == "CN=Rotated Remote Intermediate CA"
+    assert res["changes"]["cert"]["subject_name"] == {
+        "old": "CN=Test Remote Intermediate CA,O=Test Org",
+        "new": "CN=Rotated Remote Intermediate CA,O=Test Org",
+    }
     new_info = vault_read("pki/issuer/default")["data"]
     assert new_info["issuer_id"] != issuer_info["issuer_id"]
     assert new_info["key_id"] == issuer_info["key_id"]
-    assert _subject_cn(load_cert(new_info["certificate"])) == "Rotated Remote Intermediate CA"
+    assert _subject(load_cert(new_info["certificate"]), "CN") == "Rotated Remote Intermediate CA"
