@@ -11,13 +11,11 @@ import base64
 import logging
 import os
 import re
-import tempfile
 import typing
 from collections.abc import Mapping
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
-from pathlib import Path
 
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
@@ -286,7 +284,8 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
 
     not_after
         Absolute value of the Not After field of the certificate in UTC format ``YYYY-MM-ddTHH:MM:SSZ``.
-        When set, ``ttl`` is ignored.
+        When set, ``ttl`` is ignored. ``ttl_remaining`` is still validated, but falling below it causes
+        state failure instead of a reissuance.
 
     serial_number
         Single value for the **subject** SERIALNUMBER (OID: 2.5.4.5) name attribute (NOT the certificate's serial number!).
@@ -352,7 +351,9 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
     changes = {}
     ca_chain = []
     verb = "create"
-    file_args, cert_args = _split_file_kwargs(hlp.filter_state_internal_kwargs(kwargs))
+    file_args, cert_args = _split_file_kwargs(
+        hlp.filter_state_internal_kwargs(kwargs, ("check_cmd",))
+    )
 
     try:
         hlp.one_of(private_key=private_key, csr=csr)
@@ -757,7 +758,8 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
 
     not_after
         Absolute value of the Not After field of the certificate in UTC format ``YYYY-MM-ddTHH:MM:SSZ``.
-        When set, ``ttl`` is ignored.
+        When set, ``ttl`` is ignored. ``ttl_remaining`` is still validated, but falling below it causes
+        state failure instead of a reissuance.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -793,7 +795,9 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
     changes = {}
     ca_chain = []
     verb = "create"
-    file_args, cert_args = _split_file_kwargs(hlp.filter_state_internal_kwargs(kwargs))
+    file_args, cert_args = _split_file_kwargs(
+        hlp.filter_state_internal_kwargs(kwargs, ("check_cmd",))
+    )
 
     try:
         hlp.one_of(private_key=private_key, csr=csr)
@@ -1152,18 +1156,40 @@ def role_absent(name, mount="pki"):
     return ret
 
 
-def intermediate_issuer_managed(
+def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-locals
     name,
     days_remaining=30,
+    rotate_key=False,
+    # Vault issuer config for this issuer's cert - if ref is unspecified, uses x509_v2
+    issuer_ref=None,
+    issuer_mount=None,
     # key params
     key_ref=None,
-    rotate_key=False,
     key_type=None,
     key_algo=None,
     key_bits=None,
-    max_path_length=0,
     managed_key_name=None,
     managed_key_id=None,
+    # cert params valid for both issuance methods
+    days_valid=180,
+    not_after=None,
+    # sign-intermediate params, when issuer_ref is specified, or as fallback when it is not
+    not_before_duration=30,  # Vault signing only
+    max_path_length=0,
+    alt_names=None,
+    exclude_cn_from_sans=False,  # Vault signing only
+    key_usage=None,
+    permitted_alt_names=None,
+    excluded_alt_names=None,
+    ou=None,
+    organization=None,
+    country=None,
+    locality=None,
+    province=None,
+    street_address=None,
+    postal_code=None,
+    serial_number=None,
+    signature_bits=0,  # Vault signing only
     # issuer params
     issuer_name=None,
     leaf_not_after_behavior=None,
@@ -1175,46 +1201,72 @@ def intermediate_issuer_managed(
     ocsp_servers=None,
     aia_url_templating=None,
     mount="pki",
-    # params for x509.create_certificate
+    # params for x509.create_certificate (no issuer_ref) or vault_pki.sign_intermediate (with issuer_ref)
     **kwargs,
 ):
     """
     .. versionadded:: 1.9.0
 
     Ensure an issuer representing an intermediate CA is present **as the default issuer** on the mount.
-    Rotates the issuer when necessary by generating a new certificate via :py:func:`x509.create_certificate <salt.modules.x509_v2.create_certificate>`.
+    Rotates the issuer when necessary by generating a new certificate.
+
+    Signs the issuer certificate either via another Vault issuer or a Salt-internal CA.
+
+    A Vault issuer is selected by specifying ``issuer_ref``. The resulting certificate can only
+    be influenced by valid parameters to the endpoint used by :py:func:`vault_pki.sign_intermediate <saltext.vault.modules.vault_pki.sign_intermediate>`;
+    passing ``sign_verbatim``, CSR generation arguments or a pre-generated CSR has no effect.
+
+    When ``issuer_ref`` is unspecified, we rely on :py:func:`x509.create_certificate <salt.modules.x509_v2.create_certificate>`.
+    Any unknown keyword arguments to this function are passed through.
+    Vault-style parameters like ``alt_names`` are translated transparently (into ``subjectAltName`` and its format, in this example).
+    You can still pass x509_v2-style parameters directly, these translations only happen when the respective
+    ``x509.create_certificate`` parameter is not found in ``kwargs``.
+    Some ``x509.create_certificate`` parameters are enforced by this function, see ``kwargs`` below.
+    The final certificate also depends on a ``signing_policy``, if passed. It can override any parameter without
+    this state failing or reporting necessary changes, similar to ``x509.certificate_managed``.
+
     Does not support certificate import.
 
     Required policy:
 
     .. code-block:: vaultpolicy
 
-        # read default issuer to check for necessary changes
+        # Read default issuer to check for necessary changes
         path "<mount>/issuer/default" {
             capabilities = ["read"]
         }
 
-        # when key_ref is not set
+        # When key_ref is not set, need to generate a key
         path "<mount>/keys/generate/<key_type>" {
             capabilities = ["create", "update"]
         }
 
-        # generate a CSR to derive the public key
-        path "<mount>/intermediate/generate/<key_type>" {
+        # When key_ref is set, need to resolve names to ids
+        path "<mount>/keys" {
+            capabilities = ["list"]
+        }
+
+        # Generate a CSR to derive the public key
+        path "<mount>/intermediate/generate/existing" {
             capabilities = ["create", "update"]
         }
 
-        # import the signed cert
+        # When issuer_ref is specified, we use that issuer to sign the certificate
+        path "<mount>/issuer/<issuer_ref>/sign-intermediate" {
+            capabilities = ["update"]
+        }
+
+        # Import the signed cert
         path "<mount>/intermediate/set-signed" {
             capabilities = ["create", "update"]
         }
 
-        # set default issuer
+        # Set default issuer
         path "<mount>/config/issuers" {
             capabilities = ["create", "update"]
         }
 
-        # update issuer configuration
+        # Update issuer configuration
         path "<mount>/issuer/<name>" {
             capabilities = ["patch"]
         }
@@ -1224,13 +1276,14 @@ def intermediate_issuer_managed(
     name
         Common name (CN) of the certificate subject.
 
+        .. note::
+
+            When ``issuer_ref`` is unspecified, the final ``CN`` can differ from this value
+            because of signing policy merging.
+
     days_remaining
         Attempt to recreate the certificate if the number of days the certificate
         is valid for is less than the number specified. Defaults to ``30``.
-
-    key_ref
-        Instead of managing the key, use the one associated with this key ID/name.
-        When specified, disables key generation/rotation.
 
     rotate_key
         When rotating the default issuer, rotate its key along with it. Defaults to false.
@@ -1241,6 +1294,19 @@ def intermediate_issuer_managed(
             Key parameters are not managed statefully, meaning changes to ``key_type``, ``key_algo``
             and ``key_bits`` are only applied when generating a new key.
             ``key_ref`` changes are applied though.
+
+    issuer_ref
+        Issuer name/ID of the issuer that should sign this issuer's certificate.
+        If unspecified, uses :py:func:`x509.create_certificate <salt.modules.x509_v2.create_certificate>`
+        to sign it instead.
+
+    issuer_mount
+        When ``issuer_ref`` is specified and the issuer is on a different mount,
+        specify it here. Defaults to the value of ``mount``.
+
+    key_ref
+        Instead of managing the key, use the one associated with this key ID/name.
+        When specified, disables key generation/rotation.
 
     key_type
         Type of key to generate when necessary and ``key_ref`` is not specified.
@@ -1265,6 +1331,27 @@ def intermediate_issuer_managed(
     managed_key_id
         When ``key_type`` is ``kms``, the managed key's UUID. Either this or ``managed_key_name`` is required then.
 
+    days_valid
+        Number of days the certificate should be valid for when (re-)issued.
+        Not respected when ``not_after`` is set explicitly.
+        Defaults to 180.
+
+    not_after
+        Absolute value of the Not After field of the certificate in UTC format,
+        either ``YYYY-MM-ddTHH:MM:SSZ`` or ``YYYY-MM-dd HH:MM:SS``.
+        When set, ``days_valid`` is ignored. ``days_remaining`` is still validated, but falling below it causes
+        state failure instead of a reissuance.
+
+        .. note::
+
+            This parameter is valid for both issuance methods and translated into the correct
+            format automatically.
+
+    not_before_duration
+        Duration by which to backdate the NotBefore property. Defaults to ``30s``.
+
+        Has no effect when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
     max_path_length
         basicConstraints ``pathlen`` parameter, which indicates the maximum number of CAs that can appear below this one in a chain.
         If set to ``0``, this CA can only issue leaf certificates, not other CAs.
@@ -1272,25 +1359,125 @@ def intermediate_issuer_managed(
         in which case it means one less than the issuer's pathlen.
         Defaults to ``0``.
 
+        Forcibly translated into ``basicConstraints`` when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
+    alt_names
+        Any alternative names to add to the certificate.
+        Can be specified either as dict (``{ "<type>": "<value>" }``),
+        a dict of lists (``{ "<type>": ["<value1>", "<value2>", ...] }``)
+        or list of SAN strings (``["<type1>:<value1>", ...]``).
+
+        ``<type>`` can be ``dns``, ``email``, ``uri``, ``ip`` or any OID for otherName SANs.
+        ``<value>`` is the corresponding value. Note that otherName SANs need to omit ``UTF8:``.
+
+        Translated into ``subjectAltName`` when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
+    exclude_cn_from_sans
+        If set to true, the Common Name is not added to the SANs.
+        Useful if the CN is not a hostname or email address.
+
+        Has no effect when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
+    key_usage
+        (Requires Vault 1.20+ or OpenBao when ``issuer_ref`` is specified)
+        List of key usages to add to the existing set of key usages (CRLSign,CertSign).
+        Per the CA/B Forum, Vault ignores additional values other than DigitalSignature.
+
+        Translated into ``keyUsage`` when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
+    permitted_alt_names
+        List of alternative names for which certificates are allowed to be issued
+        or signed by this CA certificate. The format is similar to the one for ``alt_names``,
+        but ``<type>`` can only be ``dns``, ``email``, ``uri`` and ``ip``.
+
+        .. important::
+
+            Types other than ``dns`` require Vault 1.19+ when ``issuer_ref`` is specified.
+
+        Translated into ``nameConstraints`` when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
+    excluded_alt_names
+        (Vault 1.19+ only when ``issuer_ref`` is specified)
+        List of alternative names for which certificates are not allowed to be issued
+        or signed by this CA certificate. The format is similar to the one for ``alt_names``,
+        but ``<type>`` can only be ``dns``, ``email``, ``uri`` and ``ip``.
+
+        Translated into ``nameConstraints`` when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
+    Subject DN fields
+        Most of these can be single strings or lists of strings (for multiple values).
+
+        * ou
+        * organization
+        * country
+        * locality
+        * province
+        * street_address
+        * postal_code
+        * serial_number (only a single value; NOT the certificate's serial number, just the SERIALNUMBER name attribute)
+
+        Translated into ``subject`` when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
+        .. note::
+
+            The resulting ``subject`` format depends on whether a ``signing_policy`` was specified or not, because
+            a signing policy that defines any subject attribute would override the default format completely.
+
+            * If no ``signing_policy`` is specified, it becomes a string that faithfully recreates subjects as rendered by Vault.
+            * When it is specified, it becomes a dictionary (e.g. ``{CN: Foo}``), which allows merging of attributes from
+              a signing policy that defines ``subject`` as a dictionary itself (e.g. + ``{C: US}`` => ``CN=Foo,C=US``).
+              There are several tradeoffs to using a dict: Parameters with more than one value are ignored, ``postal_code`` is ignored
+              and the subject name's RDN order differs a bit from the one Vault renders.
+
+            This translation is only meant as a helper, you can always specify ``subject`` yourself. It's possible to use
+            a list of RDN strings here and in the signing policy, which results in the signing policy's list being prepended
+            to the one passed in here (i.e. appended when visualizing its rfc4514 string representation).
+
+    signature_bits
+        Number of bits to use in the signature algorithm.
+        Valid: ``256`` (SHA-2-256), ``384`` (SHA-2-384), ``512`` (SHA-2-512).
+        Defaults to ``0``, which automatically selects an algorithm based on
+        the issuer's key length.
+
+        Has no effect when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
+
     kwargs
-        Unknown keyword arguments are passed to :py:func:`x509.create_certificate <salt.modules.x509_v2.create_certificate>`.
-        See there for details.
+        Unknown keyword arguments are passed to the certificate signing function, which depends
+        on whether ``issuer_ref`` is specified:
 
-        The following arguments are enforced by this function:
+        * A non-empty ``issuer_ref`` means we rely on :py:func:`vault_pki.sign_intermediate <saltext.vault.modules.vault_pki.sign_intermediate>`.
 
-        * ``CN``
-        * ``basicConstraints``
-        * ``csr``
-        * ``format``
-        * ``private_key`` (empty)
-        * ``public_key`` (empty)
-        * ``raw`` (empty)
+          Note that its ``sign_verbatim`` parameter is forced to false and its ``csr``
+          parameter is enforced by this function, so CSR generation arguments do not have any effect
+          and you cannot pass a pre-generated CSR.
 
-        These receive defaults if not specified:
+        * No ``issuer_ref`` means we rely on :py:func:`x509.create_certificate <salt.modules.x509_v2.create_certificate>`.
+          See there for details.
 
-        * ``keyUsage``: ``[critical, cRLSign, keyCertSign]``
-        * ``subjectKeyIdentifier``: ``hash``
-        * ``authorityKeyIdentifier``: ``keyid:always,issuer``
+          The following arguments are enforced by this function:
+
+          * ``basicConstraints`` (``{critical: true, ca: true, pathlen: <max_path_length>}``)
+          * ``csr``
+          * ``format`` (pem)
+          * ``private_key``/``public_key``/``path``/``raw``/``serial_number`` (empty)
+
+          These receive defaults from specified Vault-style parameters to this function:
+
+          * ``subject``
+          * ``subjectAltName`` (not critical)
+          * ``nameConstraints`` (critical)
+          * ``keyUsage`` (critical)
+
+          These receive defaults if not specified at all:
+
+          * ``keyUsage``: ``[critical, cRLSign, keyCertSign]``
+          * ``subjectKeyIdentifier``: ``hash``
+          * ``authorityKeyIdentifier``: ``keyid:always``
+
+          .. note::
+
+              Certificates passed to ``append_certs`` are imported together with the issuer certificate
+              when it is (re-)issued, but not handled statefully themselves.
 
     **Issuer configuration:**
 
@@ -1352,20 +1539,12 @@ def intermediate_issuer_managed(
     cert_affected = issuer_affected = False
     issuer_id = None
     msg = []
-
-    basic_constraints = {"critical": True, "ca": True}
-    if max_path_length is not None:
-        basic_constraints["pathlen"] = max_path_length
-    kwargs["basicConstraints"] = basic_constraints
-    kwargs["CN"] = name
-    kwargs["format"] = "pem"
-    kwargs.pop("path", None)
-    kwargs.pop("private_key", None)
-    kwargs.pop("public_key", None)
-    kwargs.pop("csr", None)
-    kwargs.setdefault("keyUsage", ["critical", "cRLSign", "keyCertSign"])
-    kwargs.setdefault("subjectKeyIdentifier", "hash")
-    kwargs.setdefault("authorityKeyIdentifier", "keyid:always,issuer")
+    issuer_mount = issuer_mount or mount
+    vault_signed = issuer_ref is not None
+    # Arguments for either vault_pki.sign_intermediate (but not CSR generation args, so very few/none)
+    # or x509.create_certificate, depending on issuer_ref being set or not.
+    cert_args = hlp.filter_state_internal_kwargs(kwargs)
+    replace_key = False
 
     try:
         key_type = hlp.in_vals(("internal", "exported", "kms", None), key_type=key_type)
@@ -1396,32 +1575,84 @@ def intermediate_issuer_managed(
                 if key_ref is None:  # pragma: no cover
                     # Unsure if this is allowed to happen, need to check
                     raise CommandExecutionError("Default issuer key_id not set")
-            kwargs["csr"] = __salt__["vault_pki.generate_intermediate_csr"](
-                "existing", key_ref=key_ref, mount=mount
-            )["csr"]
-            with tempfile.TemporaryDirectory() as tmpdir:
-                path = Path(tmpdir) / "issuer.pem"
-                path.write_text("".join(current["ca_chain"]))
-                x509_ret = _run_state(
-                    "x509.certificate_managed",
-                    str(path),
-                    test=True,
-                    days_remaining=days_remaining,
-                    **kwargs,
+            replace_key = current["key_id"] != __salt__["vault_pki.get_key_id"](
+                key_ref, mount=mount
+            )
+            # We need to correctly map/filter args for changes checking before passing to the utils func.
+            # Reuse the result later to avoid duplicate warnings.
+            cert_args, not_after, alt_names, permitted_alt_names, excluded_alt_names = (
+                pki.norm_generate_intermediate_params(
+                    cert_args,
+                    vault_signed,
+                    country=country,
+                    province=province,
+                    locality=locality,
+                    street_address=street_address,
+                    postal_code=postal_code,
+                    organization=organization,
+                    ou=ou,
+                    common_name=name,
+                    serial_number=serial_number,
+                    alt_names=alt_names,
+                    key_usage=key_usage,
+                    permitted_alt_names=permitted_alt_names,
+                    excluded_alt_names=excluded_alt_names,
+                    max_path_length=max_path_length,
+                    not_after=not_after,
                 )
-            if x509_ret["result"] is False:
-                ret["result"] = False
-                ret["comment"] = f"Failed running x509.certificate_managed: {x509_ret['comment']}"
-                return ret
-            cert_changes = x509_ret["changes"]
+            )
 
-            if cert_changes and rotate_key:
-                cert_changes["private_key"] = True
-                ext_changes = cert_changes.setdefault(
-                    "extensions", {"added": [], "changed": [], "removed": []}
+            if vault_signed:
+                issuer_info = __salt__["vault_pki.read_issuer"](issuer_ref, mount=issuer_mount)
+                if issuer_info is None:
+                    raise CommandExecutionError(
+                        f"Issuer '{issuer_ref}' does not exist on mount {issuer_mount}"
+                    )
+                cert_changes = pki.check_int_issuer_cert_for_changes_vault_ca(
+                    current=current["certificate"],
+                    issuer=issuer_info["certificate"],
+                    rotate_key=rotate_key,
+                    replace_key=replace_key,
+                    days_remaining=days_remaining,
+                    days_valid=days_valid,
+                    common_name=name,
+                    country=country,
+                    exclude_cn_from_sans=exclude_cn_from_sans,
+                    key_usage=key_usage,
+                    locality=locality,
+                    max_path_length=max_path_length,
+                    normalized_sans=alt_names,
+                    norm_excluded_nc=excluded_alt_names,
+                    norm_permitted_nc=permitted_alt_names,
+                    not_after=not_after,
+                    not_before_duration=not_before_duration,
+                    organization=organization,
+                    ou=ou,
+                    postal_code=postal_code,
+                    province=province,
+                    serial_number=serial_number,
+                    signature_bits=signature_bits,
+                    street_address=street_address,
+                    urls=_get_urls(issuer_info, mount=mount),
                 )
-                if "subjectKeyIdentifier" not in ext_changes["changed"]:
-                    ext_changes["changed"].append("subjectKeyIdentifier")
+            else:
+                if "signing_policy" in cert_args:
+                    x509_policy = __salt__["x509.get_signing_policy"](
+                        cert_args["signing_policy"], ca_server=cert_args.get("ca_server")
+                    )
+                else:
+                    x509_policy = {}
+                cert_changes = pki.check_int_issuer_cert_for_changes_salt_ca(
+                    current=current["certificate"],
+                    rotate_key=rotate_key,
+                    replace_key=replace_key,
+                    signing_policy_contents=x509_policy,
+                    days_remaining=days_remaining,
+                    # these are common to both Vault and x509_v2
+                    days_valid=days_valid,
+                    not_after=not_after,
+                    **cert_args,
+                )
             if cert_changes:
                 changes["cert"], cert_affected = cert_changes, True
 
@@ -1466,13 +1697,34 @@ def intermediate_issuer_managed(
                     managed_key_id=managed_key_id,
                     mount=mount,
                 )["key_id"]
-            if "csr" not in kwargs or rotate_key:
-                kwargs["csr"] = __salt__["vault_pki.generate_intermediate_csr"](
-                    "existing", key_ref=key_ref, mount=mount
-                )["csr"]
 
-            cert = __salt__["x509.create_certificate"](**kwargs)
-            res = __salt__["vault_pki.import_issuer_intermediate"](cert, mount=mount)
+            res = __salt__["vault_pki.generate_intermediate"](
+                common_name=name,
+                issuer_ref=issuer_ref,
+                issuer_mount=issuer_mount,
+                key_type="existing",
+                key_ref=key_ref,
+                days_valid=days_valid,
+                not_after=not_after,
+                not_before_duration=not_before_duration,
+                max_path_length=max_path_length,
+                alt_names=alt_names,
+                exclude_cn_from_sans=exclude_cn_from_sans,
+                key_usage=key_usage,
+                permitted_alt_names=permitted_alt_names,
+                excluded_alt_names=excluded_alt_names,
+                ou=ou,
+                organization=organization,
+                country=country,
+                locality=locality,
+                province=province,
+                street_address=street_address,
+                postal_code=postal_code,
+                serial_number=serial_number,
+                signature_bits=signature_bits,
+                mount=mount,
+                **cert_args,
+            )
             try:
                 issuer_id = res["imported_issuers"][0]
             except (IndexError, KeyError) as err:  # pragma: no cover
@@ -1490,6 +1742,9 @@ def intermediate_issuer_managed(
                 ret["changes"]["imported"] = issuer_id
                 return ret
             if current is not None:
+                # Correctly report new subjectKeyIdentifier, it's "<TBD>" right now
+                if rotate_key or replace_key:
+                    changes = _report_ski(changes, mount=mount)
                 ret["changes"]["cert"] = changes["cert"]
             msg.append(
                 f"Intermediate CA certificate has been {'rotated' if current else 'created'}"
@@ -1578,7 +1833,7 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
 
     .. code-block:: vaultpolicy
 
-        # read default issuer to check for necessary changes
+        # Read default issuer to check for necessary changes
         path "<mount>/issuer/default" {
             capabilities = ["read"]
         }
@@ -1594,22 +1849,22 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
             capabilities = ["read"]
         }
 
-        # when key_ref is not set
+        # When key_ref is not set, need to generate a key
         path "<mount>/keys/generate/<key_type>" {
             capabilities = ["create", "update"]
         }
 
-        # when key_ref is set
+        # When key_ref is set, need to resolve names to ids
         path "<mount>/keys" {
             capabilities = ["list"]
         }
 
-        # set default issuer
+        # Set default issuer
         path "<mount>/config/issuers" {
             capabilities = ["create", "update"]
         }
 
-        # update issuer configuration
+        # Update issuer configuration
         path "<mount>/issuer/<name>" {
             capabilities = ["patch"]
         }
@@ -1676,7 +1931,8 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
 
     not_after
         Absolute value of the Not After field of the certificate in UTC format ``YYYY-MM-ddTHH:MM:SSZ``.
-        When set, ``days_valid`` is ignored.
+        When set, ``days_valid`` is ignored. ``days_remaining`` is still validated, but falling below it causes
+        state failure instead of a reissuance.
 
     alt_names
         Any alternative names to add to the certificate.
@@ -1690,9 +1946,7 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
     max_path_length
         basicConstraints ``pathlen`` parameter, which indicates the maximum number of CAs that can appear below this one in a chain.
         If set to ``0``, this CA can only issue leaf certificates, not other CAs.
-        A negative value means no limit, unless the issuer certificate has a maximum path length,
-        in which case it means one less than the issuer's pathlen.
-        Defaults to ``0``.
+        A negative value means no limit. Defaults to ``-1``.
 
     key_usage
         (Requires Vault 1.20+ or OpenBao)
@@ -1959,18 +2213,7 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
             if current is not None:
                 # Correctly report new subjectKeyIdentifier, it's "<TBD>" right now
                 if rotate_key or replace_key:
-                    new_issuer = __salt__["vault_pki.read_issuer"](mount=mount)
-                    new_ski = pki.get_ski("".join(new_issuer["ca_chain"]))
-                    if (
-                        "subjectKeyIdentifier" in changes["cert"]["extensions"]["added"]
-                    ):  # pragma: no cover
-                        changes["cert"]["extensions"]["added"]["subjectKeyIdentifier"][
-                            "value"
-                        ] = new_ski
-                    else:
-                        changes["cert"]["extensions"]["changed"]["subjectKeyIdentifier"]["value"][
-                            "new"
-                        ] = new_ski
+                    changes = _report_ski(changes, mount=mount)
                 ret["changes"]["cert"] = changes["cert"]
             msg.append(f"Root CA certificate has been {'rotated' if current else 'created'}")
 
@@ -2194,3 +2437,14 @@ def _render_aia_templating(
                 return {}
             res[conf].append(rendered)
     return res
+
+
+def _report_ski(changes: dict[str, typing.Any], mount: str) -> dict[str, typing.Any]:
+    # Correctly report new subjectKeyIdentifier, it's "<TBD>" right now
+    new_issuer = __salt__["vault_pki.read_issuer"](mount=mount)
+    new_ski = pki.get_ski(new_issuer["certificate"])
+    if "subjectKeyIdentifier" in changes["cert"]["extensions"]["added"]:  # pragma: no cover
+        changes["cert"]["extensions"]["added"]["subjectKeyIdentifier"]["value"] = new_ski
+    else:
+        changes["cert"]["extensions"]["changed"]["subjectKeyIdentifier"]["value"]["new"] = new_ski
+    return changes

@@ -4,6 +4,7 @@ Vault PKI helpers
 .. versionadded:: 1.1.0
 """
 
+import copy
 import json
 import logging
 import typing
@@ -31,6 +32,7 @@ from salt.utils import immutabletypes
 
 from saltext.vault.utils.vault.helpers import deserialize_csl
 from saltext.vault.utils.vault.helpers import filter_unset
+from saltext.vault.utils.vault.helpers import pretty_td
 from saltext.vault.utils.vault.helpers import timestring_map
 
 log = logging.getLogger(__name__)
@@ -93,6 +95,14 @@ VALID_CSR_ARGS = (
     "subjectAltName",
     "subjectKeyIdentifier",
     "tlsfeature",
+)
+
+VALID_CERT_ARGS_ADDITIONAL = (
+    "authorityInfoAccess",
+    "authorityKeyIdentifier",
+    "issuerAltName",
+    "crlDistributionPoints",
+    "freshestCRL",
 )
 
 # https://github.com/golang/go/blob/72aa6db7943024b48c4d41c1fbc32b57b9fa036e/src/crypto/x509/x509.go
@@ -233,38 +243,11 @@ def check_cert_for_changes(
     kwargs
         All other kwargs passed to the cert signing endpoint or as CSR generation params.
     """
-    changes: dict[str, typing.Any] = {}
-    expire_tolerance = expire_tolerance or 0
-
-    try:
-        cert, current_encoding, current_chain = _load_cert_and_chain(current)
-    except CommandExecutionError as err:  # pragma: no cover
-        if "Invalid cert bundle" not in str(err):
-            raise
-        changes["replaced"] = True
+    cert, changes = _load_and_compare_cert_file(
+        current, encoding=encoding, append_chain=append_chain or []
+    )
+    if cert is None:
         return changes
-    except SaltInvocationError as err:
-        if any(
-            (
-                "Could not deserialize binary data" in str(err),
-                "Could not load PEM-encoded" in str(err),
-            )
-        ):
-            changes["replaced"] = True
-            return changes
-        raise
-
-    if not _compare_ca_chain(
-        current_chain or [], append_chain or [], unordered="pkcs7" in current_encoding
-    ):
-        changes["ca_chain"] = True
-
-    if encoding != current_encoding:
-        changes["encoding"] = {
-            "old": current_encoding,
-            "new": encoding,
-        }
-
     ca = x509util.load_cert(issuer)
     csr_loaded: cx509.CertificateSigningRequest | None = None
     pk_loaded: Privkey | None = None
@@ -357,31 +340,9 @@ def check_cert_for_changes(
             user_ids=user_ids,
             **csr_args,
         )
-
-    # Check if certificate should be renewed due to close to expiration
-    try:
-        curr_not_valid_after = cert.not_valid_after_utc
-    except AttributeError:  # pragma: no cover
-        curr_not_valid_after = cert.not_valid_after.replace(tzinfo=timezone.utc)
-
-    if curr_not_valid_after < datetime.now(timezone.utc) + timedelta(
-        seconds=timestring_map(expire_tolerance, cast=int)
-    ):
-        changes["expiration"] = {
-            "expire_in": (curr_not_valid_after - datetime.now(timezone.utc)).total_seconds(),
-            "toleration": timestring_map(expire_tolerance, cast=int),
-        }
-
-    if _getattr_safe(builder, "_subject_name") != cert.subject:
-        changes["subject_name"] = {
-            "old": cert.subject.rfc4514_string(),
-            "new": _getattr_safe(builder, "_subject_name").rfc4514_string(),
-        }
-
-    ext_changes = _compare_exts(cert, builder)
-    if any(ext_changes.values()):
-        changes["extensions"] = ext_changes
-    return changes
+    return changes | _compare_cert_with_builder(
+        cert, builder, ttl_remaining=expire_tolerance, urls=urls
+    )
 
 
 def _build_regular_cert(
@@ -402,25 +363,24 @@ def _build_regular_cert(
     **csr_args,
 ) -> cx509.CertificateBuilder:
     if private_key is not None:
-        public_key = private_key.public_key()
+        public_key = typing.cast(CertificateIssuerPublicKeyTypes, private_key.public_key())
         csr_eff, _ = typing.cast(
             tuple[cx509.CertificateSigningRequestBuilder, typing.Any],
             x509util.build_csr(private_key, **csr_args),
         )
     elif csr is not None:
         csr_eff = csr
-        public_key = csr.public_key()
+        public_key = typing.cast(CertificateIssuerPublicKeyTypes, csr.public_key())
     else:  # pragma: no cover
         raise TypeError("Either csr or private_key must be set")
     builder = cx509.CertificateBuilder(public_key=public_key)
 
-    try:
-        csr_subject = csr_eff.subject  # ty: ignore[unresolved-attribute]
-    except AttributeError:
-        # CSRBuilder (created by x509util.build_csr())
-        csr_subject = _getattr_safe(csr_eff, "_subject_name")
-
     if role_info.get("use_csr_common_name", True):
+        try:
+            csr_subject = csr_eff.subject  # ty: ignore[unresolved-attribute]
+        except AttributeError:
+            # CSRBuilder (created by x509util.build_csr())
+            csr_subject = _getattr_safe(csr_eff, "_subject_name") or cx509.Name([])
         # NOTE: There is also `serial_number_source` (`json-csr`, `json`)
         try:
             common_name = csr_subject.get_attributes_for_oid(cx509.NameOID.COMMON_NAME)[
@@ -428,6 +388,7 @@ def _build_regular_cert(
             ].value  # ty: ignore[invalid-assignment]
         except IndexError:
             pass
+
     subject_dn = _build_subject(
         country=role_info.get("country"),
         province=role_info.get("province"),
@@ -530,7 +491,7 @@ def _build_verbatim_cert(
     **csr_args,
 ) -> cx509.CertificateBuilder:
     if private_key is not None:
-        public_key = private_key.public_key()
+        public_key = typing.cast(CertificateIssuerPublicKeyTypes, private_key.public_key())
         # Leaving alt_names out here to not break otherName workaround.
         # SANs are added as an extension explicitly below.
         csr_args = sync_verbatim_csr_subject(
@@ -542,7 +503,7 @@ def _build_verbatim_cert(
         )
     elif csr is not None:
         csr_eff = csr
-        public_key = csr.public_key()
+        public_key = typing.cast(CertificateIssuerPublicKeyTypes, csr.public_key())
     else:  # pragma: no cover
         raise TypeError("Either csr or private_key must be set")
 
@@ -551,7 +512,7 @@ def _build_verbatim_cert(
         csr_subject = csr_eff.subject  # ty: ignore[unresolved-attribute]
     except AttributeError:
         # CSRBuilder (created by x509util.build_csr())
-        csr_subject = _getattr_safe(csr_eff, "_subject_name")
+        csr_subject = _getattr_safe(csr_eff, "_subject_name") or cx509.Name([])
 
     builder = (
         cx509.CertificateBuilder(public_key=public_key)
@@ -623,7 +584,995 @@ def _build_verbatim_cert(
     return builder
 
 
-def _add_authority_info(builder: cx509.CertificateBuilder, urls):
+def check_root_issuer_for_changes(
+    current,
+    *,
+    alt_names: dict[str, str | list[str]] | list[str] | None,
+    common_name: str,
+    country: list[str] | str | None,
+    days_remaining: int,
+    days_valid: int,
+    exclude_cn_from_sans: bool,
+    excluded_alt_names: dict[str, str | list[str]] | list[str] | None,
+    key_usage: list[str] | str | None,
+    locality: list[str] | str | None,
+    max_path_length: int,
+    not_after: str | None,
+    not_before_duration: str | int,
+    organization: list[str] | str | None,
+    ou: list[str] | str | None,
+    permitted_alt_names: dict[str, str | list[str]] | list[str] | None,
+    postal_code: list[str] | str | None,
+    province: list[str] | str | None,
+    replace_key: bool,
+    rotate_key: bool,
+    signature_bits: int,
+    street_address: list[str] | str | None,
+    serial_number: str | None,
+    urls: URLConfigs,
+) -> dict[str, typing.Any]:
+    """
+    Check whether an existing root CA issuer certificate matches expected parameters.
+
+    current
+        Existing certificate text.
+
+    alt_names
+        Requested Subject Alternative Names.
+
+    common_name
+        Subject CN (commonName) name attribute.
+
+    country
+        Subject C (countryName) name attribute(s).
+
+    days_remaining
+        Minimum TTL in days to allow before requesting a fresh certificate.
+
+    days_valid
+        Requested Time To Live in integer days.
+
+    exclude_cn_from_sans
+        Whether the subject CN should be included in the SANs (either as ``email`` or ``dns`` type).
+
+    excluded_alt_names
+        List of alternative names for which certificates are not allowed to be issued
+        or signed by this CA certificate.
+
+    key_usage
+        List of key usages to add to the existing set of key usages (CRLSign,CertSign).
+
+    locality
+        Subject L (localityName) name attribute(s).
+
+    max_path_length
+        Basic Constraints ``pathlen`` parameter.
+
+    not_after
+        Absolute value of the Not After field of the certificate in UTC format ``YYYY-MM-ddTHH:MM:SSZ``.
+        When set, ``days_valid`` is ignored.
+
+    not_before_duration
+        Duration by which to backdate the NotBefore property.
+
+    organization
+        Subject O (organizationName) name attribute(s).
+
+    ou
+        Subject OU (organizationalUnitName) name attribute(s).
+
+    permitted_alt_names
+        List of alternative names for which certificates are allowed to be issued
+        or signed by this CA certificate.
+
+    postal_code
+        Subject postalCode name attribute(s).
+
+    province
+        Subject ST (stateOrProvinceName) name attribute(s).
+
+    signature_bits
+        Number of bits to use in the signature algorithm.
+        Valid: ``256`` (SHA-2-256), ``384`` (SHA-2-384), ``512`` (SHA-2-512).
+
+    street_address
+        Subject street (streetAddress) name attribute(s).
+
+    serial_number
+        Single value for the **subject** SERIALNUMBER (OID: 2.5.4.5) name attribute (NOT the certificate's serial number!).
+
+    urls
+        Dictionary of issuer/mount-default authority URLs, which end up in the AuthorityInformationAccess,
+        CRLDistributionPoints and FreshestCRL extensions.
+    """
+    cert = typing.cast(cx509.Certificate, x509util.load_cert(current, passphrase=None))
+    pubkey = typing.cast(CertificateIssuerPublicKeyTypes, cert.public_key())
+
+    changes = _compare_cert_signing(
+        current=cert,
+        signing_ca=None,
+        public_key=pubkey,
+        signature_bits=signature_bits,
+    )
+
+    builder = _build_root_issuer_cert(
+        common_name=common_name,
+        alt_names=alt_names,
+        days_valid=days_valid,
+        max_path_length=max_path_length,
+        key_usage=key_usage,
+        exclude_cn_from_sans=exclude_cn_from_sans,
+        permitted_alt_names=permitted_alt_names,
+        excluded_alt_names=excluded_alt_names,
+        ou=ou,
+        organization=organization,
+        country=country,
+        locality=locality,
+        province=province,
+        street_address=street_address,
+        postal_code=postal_code,
+        serial_number=serial_number,
+        not_before_duration=not_before_duration,
+        not_after=not_after,
+        urls=urls,
+        public_key=pubkey,
+    )
+    changes.update(
+        _compare_cert_with_builder(
+            cert, builder, ttl_remaining=days_remaining * 86400, not_after=not_after, urls=urls
+        )
+    )
+    return _simulate_key_rotation_changes(
+        cert, changes, rotate_key=rotate_key, replace_key=replace_key
+    )
+
+
+def _build_root_issuer_cert(
+    *,
+    common_name: str,
+    alt_names: dict[str, str | list[str]] | list[str] | None = None,
+    days_valid: int,
+    max_path_length: int,
+    key_usage: list[str] | str | None,
+    exclude_cn_from_sans: bool,
+    permitted_alt_names: dict[str, list[str]] | dict[str, str | list[str]] | list[str] | None,
+    excluded_alt_names: dict[str, list[str]] | dict[str, str | list[str]] | list[str] | None,
+    ou: list[str] | str | None,
+    organization: list[str] | str | None,
+    country: list[str] | str | None,
+    locality: list[str] | str | None,
+    province: list[str] | str | None,
+    street_address: list[str] | str | None,
+    postal_code: list[str] | str | None,
+    serial_number: str | None,
+    not_before_duration: str | int,
+    not_after: str | None,
+    urls: URLConfigs,
+    public_key: CertificateIssuerPublicKeyTypes,
+) -> cx509.CertificateBuilder:
+    builder = cx509.CertificateBuilder(public_key=public_key)
+
+    # Subject/Issuer DN
+    subject_dn = _build_subject(
+        country=country,
+        province=province,
+        locality=locality,
+        street_address=street_address,
+        postal_code=postal_code,
+        organization=organization,
+        ou=ou,
+        common_name=common_name,
+        serial_number=serial_number,
+    )
+    builder = builder.subject_name(subject_dn).issuer_name(subject_dn)
+
+    # Validity
+    not_before = datetime.now(tz=timezone.utc) - timedelta(
+        seconds=timestring_map(not_before_duration)
+    )
+    not_after_dt = _strptime(not_after, "not_after") or (
+        datetime.now(tz=timezone.utc) + timedelta(days=days_valid)
+    )
+    builder = builder.not_valid_before(not_before).not_valid_after(not_after_dt)
+
+    # basicConstraints
+    builder = builder.add_extension(
+        cx509.BasicConstraints(
+            True, max_path_length if max_path_length is not None and max_path_length >= 0 else None
+        ),
+        critical=True,
+    )
+    # keyUsage
+    builder = _add_key_usage_ca(builder, deserialize_csl(key_usage) or [])
+    # subjectAlternativeName
+    builder = _add_sans(
+        builder,
+        common_name,
+        alt_names,
+        exclude_cn_from_sans=exclude_cn_from_sans,
+    )
+    # nameConstraints
+    builder = _add_name_constraints(
+        builder, permitted=permitted_alt_names, excluded=excluded_alt_names
+    )
+    # AuthorityInformationAccess/CRLDistributionPoints/FreshestCRL
+    builder = _add_authority_info(builder, urls)
+    # SubjectKeyIdentifier
+    builder = _add_ski(builder, public_key)
+    # AuthorityKeyIdentifier
+    builder = _add_aki(builder, public_key=public_key)
+
+    return builder
+
+
+def check_ca_cert_for_changes(  # pylint: disable=too-many-locals
+    current: str,
+    issuer: str,
+    private_key: str | None,
+    private_key_passphrase: str | None,
+    csr: str | None,
+    sign_verbatim: bool,
+    *,
+    alt_names: dict[str, str | list[str]] | list[str] | None,
+    append_chain: list[cx509.Certificate] | None,
+    common_name: str | None,
+    country: list[str] | str | None,
+    encoding: Encoding,
+    exclude_cn_from_sans: bool,
+    excluded_alt_names: dict[str, str | list[str]] | list[str] | None,
+    key_usage: list[str] | str | None,
+    locality: list[str] | str | None,
+    max_path_length: int | None,
+    not_after: str | None,
+    not_before_duration: str | int,
+    organization: list[str] | str | None,
+    ou: list[str] | str | None,
+    permitted_alt_names: dict[str, str | list[str]] | list[str] | None,
+    postal_code: list[str] | str | None,
+    province: list[str] | str | None,
+    serial_number: str | None,
+    signature_bits: int,
+    street_address: list[str] | str | None,
+    ttl: int,
+    ttl_remaining: str | int,
+    urls: URLConfigs,
+    **kwargs,
+) -> dict[str, typing.Any]:
+    """
+    Check whether an existing on-disk CA certificate matches expected parameters.
+
+    current
+        Path of the existing certificate on disk.
+
+    issuer
+        Issuer certificate.
+
+    private_key
+        Path of the private key on disk/encoded private key.
+
+    private_key_passphrase
+        Passphrase for ``private_key``
+
+    csr
+        Path of the CSR on disk/encoded CSR.
+
+    sign_verbatim
+        Whether the ``sign-verbatim`` endpoint is used. Defaults to false.
+
+    alt_names
+        Requested Subject Alternative Names.
+
+    append_chain
+        List of certificates to append. Fails with ``der`` encoding.
+
+    common_name
+        Subject CN name attribute.
+
+    country
+        Subject C (countryName) name attribute(s).
+
+    encoding
+        Requested certificate encoding. Defaults to ``pem``.
+
+    exclude_cn_from_sans
+        Whether the subject CN should be included in the SANs (either as ``email`` or ``dns`` type).
+        Has no effect when ``sign_verbatim`` is true.
+
+    excluded_alt_names
+        List of alternative names for which certificates are not allowed to be issued
+        or signed by this CA certificate.
+
+    key_usage
+        List of key usages to add to the existing set of key usages (CRLSign,CertSign).
+
+    locality
+        Subject L (localityName) name attribute(s).
+
+    max_path_length
+        Basic Constraints ``pathlen`` parameter.
+
+    not_after
+        Absolute value of the Not After field of the certificate in UTC format ``YYYY-MM-ddTHH:MM:SSZ``.
+        When set, ``ttl`` is ignored.
+
+    not_before_duration
+        Duration by which to backdate the NotBefore property.
+
+    organization
+        Subject O (organizationName) name attribute(s).
+
+    ou
+        Subject OU (organizationalUnitName) name attribute(s).
+
+    permitted_alt_names
+        List of alternative names for which certificates are allowed to be issued
+        or signed by this CA certificate.
+
+    postal_code
+        Subject postalCode name attribute(s).
+
+    province
+        Subject ST (stateOrProvinceName) name attribute(s).
+
+    serial_number
+        Single value for the **subject** SERIALNUMBER (OID: 2.5.4.5) name attribute (NOT the certificate's serial number!).
+
+    signature_bits
+        Number of bits to use in the signature algorithm.
+        Valid: ``256`` (SHA-2-256), ``384`` (SHA-2-384), ``512`` (SHA-2-512).
+
+    street_address
+        Subject street (streetAddress) name attribute(s).
+
+    ttl
+        Requested Time To Live, already normalized to integer-valued seconds.
+
+    ttl_remaining
+        Minimum TTL to allow before requesting a fresh certificate.
+
+    urls
+        Dictionary of issuer/mount-default authority URLs, which end up in the AuthorityInformationAccess,
+        CRLDistributionPoints and FreshestCRL extensions.
+
+    kwargs
+        All other kwargs passed to the cert signing endpoint or as CSR generation params.
+    """
+    cert, changes = _load_and_compare_cert_file(
+        current, encoding=encoding, append_chain=append_chain or []
+    )
+    if cert is None:
+        return changes
+    ca = x509util.load_cert(issuer)
+    csr_loaded: cx509.CertificateSigningRequest | None = None
+    pk_loaded: Privkey | None = None
+
+    if private_key:
+        pk_loaded: Privkey = x509util.load_privkey(private_key, passphrase=private_key_passphrase)
+        pubkey = pk_loaded.public_key()
+    else:
+        csr_loaded: cx509.CertificateSigningRequest = x509util.load_csr(csr)
+        pubkey = csr_loaded.public_key()
+
+    changes.update(
+        _compare_cert_signing(
+            current=cert, signing_ca=ca, public_key=pubkey, signature_bits=signature_bits
+        )
+    )
+
+    max_path_length = _handle_max_path_length(ca, max_path_length)
+    csr_args, _ = split_csr_kwargs(kwargs, ("subject",))
+    csr_args, normalized_sans, norm_permitted_nc, norm_excluded_nc = norm_intermediate_params(
+        csr_args,
+        csr=csr,
+        sign_verbatim=sign_verbatim,
+        country=country,
+        province=province,
+        locality=locality,
+        street_address=street_address,
+        postal_code=postal_code,
+        organization=organization,
+        ou=ou,
+        common_name=common_name,
+        serial_number=serial_number,
+        alt_names=alt_names,
+        key_usage=key_usage,
+        permitted_alt_names=permitted_alt_names,
+        excluded_alt_names=excluded_alt_names,
+    )
+
+    if sign_verbatim:
+        builder = _build_verbatim_ca_cert(
+            ca,
+            csr=csr_loaded,
+            private_key=pk_loaded,
+            key_usage=key_usage,
+            max_path_length=max_path_length,
+            norm_excluded_nc=norm_excluded_nc,
+            norm_permitted_nc=norm_permitted_nc,
+            normalized_sans=normalized_sans,
+            not_after=not_after,
+            not_before_duration=not_before_duration,
+            serial_number=serial_number,
+            ttl=ttl,
+            urls=urls,
+            **csr_args,
+        )
+    else:
+        builder = _build_regular_ca_cert(
+            ca,
+            csr=csr_loaded,
+            private_key=pk_loaded,
+            common_name=common_name,
+            country=country,
+            exclude_cn_from_sans=exclude_cn_from_sans,
+            key_usage=key_usage,
+            locality=locality,
+            max_path_length=max_path_length,
+            norm_excluded_nc=norm_excluded_nc,
+            norm_permitted_nc=norm_permitted_nc,
+            normalized_sans=normalized_sans,
+            not_after=not_after,
+            not_before_duration=not_before_duration,
+            organization=organization,
+            ou=ou,
+            postal_code=postal_code,
+            province=province,
+            serial_number=serial_number,
+            street_address=street_address,
+            ttl=ttl,
+            urls=urls,
+            **csr_args,
+        )
+
+    return changes | _compare_cert_with_builder(
+        cert, builder, ttl_remaining=ttl_remaining, urls=urls
+    )
+
+
+def check_int_issuer_cert_for_changes_vault_ca(
+    current: str,
+    issuer: str,
+    *,
+    days_remaining: str | int,
+    rotate_key: bool,
+    replace_key: bool,
+    days_valid: int,
+    common_name: str | None,
+    country: list[str] | str | None,
+    exclude_cn_from_sans: bool,
+    key_usage: list[str] | str | None,
+    locality: list[str] | str | None,
+    max_path_length: int | None,
+    normalized_sans: dict[str, list[str]] | None,
+    norm_excluded_nc: dict[str, list[str]] | None,
+    norm_permitted_nc: dict[str, list[str]] | None,
+    not_after: str | None,
+    not_before_duration: str | int,
+    organization: list[str] | str | None,
+    ou: list[str] | str | None,
+    postal_code: list[str] | str | None,
+    province: list[str] | str | None,
+    serial_number: str | None,
+    signature_bits: int,
+    street_address: list[str] | str | None,
+    urls: URLConfigs,
+) -> dict[str, typing.Any]:
+    """
+    Check whether an existing on-disk CA certificate matches expected parameters.
+
+    current
+        Path of the existing certificate on disk.
+
+    issuer
+        Issuer certificate.
+
+    days_remaining
+        Minimum TTL in days to allow before requesting a fresh certificate.
+
+    rotate_key
+        Whether issuing a modified certificate should cause the key to be replaced.
+
+    replace_key
+        Whether the key is going to change for sure.
+
+    days_valid
+        Requested Time To Live in integer days.
+
+    common_name
+        Subject CN name attribute.
+
+    country
+        Subject C (countryName) name attribute(s).
+
+    exclude_cn_from_sans
+        Whether the subject CN should be included in the SANs (either as ``email`` or ``dns`` type).
+        Has no effect when ``sign_verbatim`` is true.
+
+    key_usage
+        List of key usages to add to the existing set of key usages (CRLSign,CertSign).
+
+    locality
+        Subject L (localityName) name attribute(s).
+
+    max_path_length
+        Basic Constraints ``pathlen`` parameter.
+
+    normalized_sans
+        Requested Subject Alternative Names, already normalized.
+
+    norm_excluded_nc
+        List of alternative names for which certificates are not allowed to be issued
+        or signed by this CA certificate.
+
+    norm_permitted_nc
+        List of alternative names for which certificates are allowed to be issued
+        or signed by this CA certificate, already normalized..
+
+    not_after
+        Absolute value of the Not After field of the certificate in UTC format ``YYYY-MM-ddTHH:MM:SSZ``.
+        When set, ``ttl`` is ignored.
+
+    not_before_duration
+        Duration by which to backdate the NotBefore property.
+
+    organization
+        Subject O (organizationName) name attribute(s).
+
+    ou
+        Subject OU (organizationalUnitName) name attribute(s).
+
+    postal_code
+        Subject postalCode name attribute(s).
+
+    province
+        Subject ST (stateOrProvinceName) name attribute(s).
+
+    serial_number
+        Single value for the **subject** SERIALNUMBER (OID: 2.5.4.5) name attribute (NOT the certificate's serial number!).
+
+    signature_bits
+        Number of bits to use in the signature algorithm.
+        Valid: ``256`` (SHA-2-256), ``384`` (SHA-2-384), ``512`` (SHA-2-512).
+
+    street_address
+        Subject street (streetAddress) name attribute(s).
+
+    urls
+        Dictionary of issuer/mount-default authority URLs, which end up in the AuthorityInformationAccess,
+        CRLDistributionPoints and FreshestCRL extensions.
+    """
+    cert = typing.cast(cx509.Certificate, x509util.load_cert(current, passphrase=None))
+    pubkey = typing.cast(Pubkey, cert.public_key())
+    ca = x509util.load_cert(issuer)
+
+    changes = _compare_cert_signing(
+        current=cert, signing_ca=ca, public_key=pubkey, signature_bits=signature_bits
+    )
+
+    max_path_length = _handle_max_path_length(ca, max_path_length)
+    builder = _build_regular_ca_cert(
+        ca,
+        csr=None,
+        private_key=None,
+        public_key=pubkey,
+        common_name=common_name,
+        country=country,
+        exclude_cn_from_sans=exclude_cn_from_sans,
+        key_usage=key_usage,
+        locality=locality,
+        max_path_length=max_path_length,
+        norm_excluded_nc=norm_excluded_nc or {},
+        norm_permitted_nc=norm_permitted_nc or {},
+        normalized_sans=normalized_sans or {},
+        not_after=not_after,
+        not_before_duration=not_before_duration,
+        organization=organization,
+        ou=ou,
+        postal_code=postal_code,
+        province=province,
+        serial_number=serial_number,
+        street_address=street_address,
+        ttl=days_valid * 86400,
+        urls=urls,
+    )
+
+    changes.update(
+        _compare_cert_with_builder(
+            cert, builder, ttl_remaining=days_remaining * 86400, urls=urls, not_after=not_after
+        )
+    )
+
+    return _simulate_key_rotation_changes(
+        cert, changes, rotate_key=rotate_key, replace_key=replace_key
+    )
+
+
+def _handle_max_path_length(ca: cx509.Certificate, max_path_length: int | None) -> int:
+    # Validate max_path_length if it was passed, otherwise derive its default.
+    try:
+        ca_bc = ca.extensions.get_extension_for_class(cx509.BasicConstraints)
+        issuer_pathlen = ca_bc.value.path_length
+    except cx509.ExtensionNotFound:  # pragma: no cover
+        # All issuers should have a basicConstraints extension. If they somehow don't, treat as unconstrained.
+        issuer_pathlen = None
+    if issuer_pathlen is None:
+        if max_path_length is None:
+            max_path_length = -1
+    elif issuer_pathlen < 1:  # pragma: no cover
+        raise CommandExecutionError(
+            "Issuer is not allowed to sign other CA certificates, its `max_path_length` is 0."
+        )
+    elif max_path_length is None:
+        max_path_length = issuer_pathlen - 1
+    elif max_path_length < 0:
+        raise CommandExecutionError(
+            "An unconstrained `max_path_length` is not allowed with current issuer: "
+            f"Issuer is limited to chains of length `{issuer_pathlen}` or less "
+            f"(i.e. only `{issuer_pathlen - 1}` or less can be requested)"
+        )
+    elif max_path_length >= issuer_pathlen:
+        raise CommandExecutionError(
+            f"Requested `max_path_length` of `{max_path_length}` exceeds the maximum allowed value for current issuer: "
+            f"Issuer is limited to chains of length `{issuer_pathlen}` or less "
+            f"(i.e. only `{issuer_pathlen - 1}` or less can be requested)"
+        )
+    return max_path_length
+
+
+def _build_regular_ca_cert(
+    issuer: cx509.Certificate,
+    csr: cx509.CertificateSigningRequest | None,
+    private_key: Privkey | None,
+    public_key: Pubkey | None = None,
+    *,
+    common_name: str | None,
+    country: list[str] | str | None,
+    exclude_cn_from_sans: bool,
+    key_usage: list[str] | str | None,
+    locality: list[str] | str | None,
+    max_path_length: int,
+    norm_excluded_nc: dict[str, list[str]],
+    norm_permitted_nc: dict[str, list[str]],
+    normalized_sans: dict[str, list[str]],
+    not_after: str | None,
+    not_before_duration: str | int,
+    organization: list[str] | str | None,
+    ou: list[str] | str | None,
+    postal_code: list[str] | str | None,
+    province: list[str] | str | None,
+    serial_number: str | None,
+    street_address: list[str] | str | None,
+    ttl: int,
+    urls: URLConfigs,
+) -> cx509.CertificateBuilder:
+    if public_key is not None:
+        # This means we don't have access to the private key (intermediate issuer certificate only)
+        csr_eff = cx509.CertificateSigningRequestBuilder()
+    elif private_key is not None:
+        csr_eff = cx509.CertificateSigningRequestBuilder()
+        public_key = private_key.public_key()
+    elif csr is not None:
+        csr_eff = csr
+        public_key = typing.cast(Pubkey, csr.public_key())
+    else:  # pragma: no cover
+        raise TypeError("Either public_key, csr or private_key must be set")
+    builder = cx509.CertificateBuilder(public_key=public_key)
+
+    # CSR common name is only used when it's not provided otherwise here
+    if not common_name:
+        try:
+            csr_subject = csr_eff.subject  # ty: ignore[unresolved-attribute]
+        except AttributeError:
+            # CSRBuilder (created by x509util.build_csr())
+            csr_subject = _getattr_safe(csr_eff, "_subject_name") or cx509.Name([])
+        try:
+            common_name = csr_subject.get_attributes_for_oid(cx509.NameOID.COMMON_NAME)[
+                0
+            ].value  # ty: ignore[invalid-assignment]
+        except IndexError:
+            pass
+    subject_dn = _build_subject(
+        country=country,
+        province=province,
+        locality=locality,
+        street_address=street_address,
+        postal_code=postal_code,
+        organization=organization,
+        ou=ou,
+        common_name=common_name,
+        serial_number=serial_number,
+    )
+    builder = builder.subject_name(subject_dn).issuer_name(issuer.subject)
+
+    # Validity
+    not_before = datetime.now(tz=timezone.utc) - timedelta(
+        seconds=timestring_map(not_before_duration)
+    )
+    not_after_dt = _strptime(not_after, "not_after") or (
+        datetime.now(tz=timezone.utc) + timedelta(seconds=ttl)
+    )
+    builder = builder.not_valid_before(not_before).not_valid_after(not_after_dt)
+
+    # basicConstraints
+    builder = builder.add_extension(
+        cx509.BasicConstraints(True, max_path_length if max_path_length >= 0 else None),
+        critical=True,
+    )
+    # keyUsage
+    builder = _add_key_usage_ca(builder, deserialize_csl(key_usage) or [])
+    # subjectAlternativeName
+    builder = _add_sans(
+        builder,
+        common_name,
+        normalized_sans,
+        exclude_cn_from_sans=exclude_cn_from_sans,
+    )
+    # nameConstraints
+    builder = _add_name_constraints(builder, permitted=norm_permitted_nc, excluded=norm_excluded_nc)
+    # AuthorityInformationAccess/CRLDistributionPoints/FreshestCRL
+    builder = _add_authority_info(builder, urls)
+    # SubjectKeyIdentifier
+    builder = _add_ski(builder, public_key)
+    # AuthorityKeyIdentifier
+    builder = _add_aki(builder, issuer=issuer)
+
+    return builder
+
+
+def _build_verbatim_ca_cert(
+    issuer: cx509.Certificate,
+    csr: cx509.CertificateSigningRequest | None,
+    private_key: Privkey | None,
+    *,
+    max_path_length: int,
+    norm_excluded_nc: dict[str, list[str]],
+    norm_permitted_nc: dict[str, list[str]],
+    normalized_sans: dict[str, list[str]],
+    not_after: str | None,
+    not_before_duration: str | int,
+    ttl: int,
+    urls: URLConfigs,
+    **csr_args,
+) -> cx509.CertificateBuilder:
+    if private_key is not None:
+        public_key = typing.cast(CertificateIssuerPublicKeyTypes, private_key.public_key())
+        if norm_permitted_nc or norm_excluded_nc:
+            # There's a minor bug in x509.create_csr, we need to filter non-empty values
+            csr_args["nameConstraints"] = filter_unset(
+                {
+                    "critical": True,
+                    "permitted": [f"{k}:{vv}" for k, v in norm_permitted_nc.items() for vv in v]
+                    or None,
+                    "excluded": [f"{k}:{vv}" for k, v in norm_excluded_nc.items() for vv in v]
+                    or None,
+                }
+            )
+        # Leaving alt_names out here to not break otherName workaround.
+        # SANs are added as an extension explicitly below.
+        # KeyUsage is already added to csr_args and subject already rendered.
+        csr_eff, _ = typing.cast(
+            tuple[cx509.CertificateSigningRequestBuilder, typing.Any],
+            x509util.build_csr(private_key, **csr_args),
+        )
+    elif csr is not None:
+        csr_eff = csr
+        public_key = typing.cast(CertificateIssuerPublicKeyTypes, csr.public_key())
+    else:  # pragma: no cover
+        raise TypeError("Either csr or private_key must be set")
+
+    # Subject Name
+    try:
+        csr_subject = csr_eff.subject  # ty: ignore[unresolved-attribute]
+    except AttributeError:
+        # CSRBuilder (created by x509util.build_csr())
+        csr_subject = _getattr_safe(csr_eff, "_subject_name") or cx509.Name([])
+
+    builder = (
+        cx509.CertificateBuilder(public_key=public_key)
+        .subject_name(csr_subject)
+        .issuer_name(issuer.subject)
+    )
+
+    # Validity
+    not_before = datetime.now(tz=timezone.utc) - timedelta(
+        seconds=timestring_map(not_before_duration)
+    )
+    not_after_dt = _strptime(not_after, "not_after") or (
+        datetime.now(tz=timezone.utc) + timedelta(seconds=ttl)
+    )
+    builder = builder.not_valid_before(not_before).not_valid_after(not_after_dt)
+
+    # Verbatim copy extensions from CSR
+    try:
+        csr_exts: cx509.Extensions = csr_eff.extensions  # ty: ignore[unresolved-attribute]
+    except AttributeError:
+        csr_exts = cx509.Extensions(_getattr_safe(csr_eff, "_extensions"))
+    for ext in csr_exts:
+        if not isinstance(ext.value, cx509.BasicConstraints):
+            builder = builder.add_extension(ext.value, ext.critical)
+
+    # basicConstraints
+    builder = builder.add_extension(
+        cx509.BasicConstraints(True, max_path_length if max_path_length >= 0 else None),
+        critical=True,
+    )
+
+    # Default KeyUsage
+    try:
+        csr_exts.get_extension_for_class(cx509.KeyUsage)
+    except cx509.ExtensionNotFound:
+        builder = _add_key_usage_ca(builder, [])
+
+    # SubjectAlternativeName simulation (for otherName workaround, this would actually be in the generated CSR)
+    try:
+        csr_exts.get_extension_for_class(cx509.SubjectAlternativeName)
+    except cx509.ExtensionNotFound:
+        builder = _add_sans(
+            builder,
+            None,
+            normalized_sans,
+            exclude_cn_from_sans=True,
+            verbatim=True,
+        )
+
+    # AuthorityInformationAccess/CRLDistributionPoints/FreshestCRL
+    builder = _add_authority_info(builder, urls)
+
+    # Default SubjectKeyIdentifier
+    try:
+        csr_exts.get_extension_for_class(cx509.SubjectKeyIdentifier)
+    except cx509.ExtensionNotFound:
+        builder = _add_ski(builder, public_key)
+
+    # AuthorityKeyIdentifier
+    builder = _add_aki(builder, issuer=issuer)
+
+    return builder
+
+
+def check_int_issuer_cert_for_changes_salt_ca(
+    current: str,
+    *,
+    rotate_key: bool,
+    replace_key: bool,
+    signing_policy_contents: dict[str, typing.Any],
+    days_remaining: int,
+    not_after: str | None,
+    **kwargs,
+) -> dict[str, typing.Any]:
+    """
+    Check whether an existing Vault intermediate issuer certificate
+    that should be issued via x509_v2 matches expected parameters.
+
+    Note that this function expects that :func:`norm_generate_intermediate_params`
+    has already parsed the inputs.
+
+    current
+        Path of the existing certificate on disk.
+
+    rotate_key
+        Whether issuing a modified certificate should cause the key to be replaced.
+
+    replace_key
+        Whether the key is going to change for sure.
+
+    signing_policy_contents
+        Pass the result of calling :py:func:`x509.get_signing_policy <salt.modules.x509_v2.get_signing_policy>`
+        with the received values for ``ca_server`` and ``signing_policy``, if any.
+
+    days_remaining
+        Minimum TTL in days to allow before requesting a fresh certificate.
+
+    kwargs
+        All passed/rendered arguments for :py:func:`x509.create_certificate <salt.modules.x509_v2.create_certificate>`.
+    """
+    cert = typing.cast(cx509.Certificate, x509util.load_cert(current, passphrase=None))
+    pubkey = cert.public_key()
+    builder, ca = _build_x509v2_cert_with_policy(
+        signing_policy_contents,
+        **kwargs,
+        public_key=pubkey,
+        not_after=not_after,
+    )
+
+    changes = _compare_cert_signing(
+        current=cert, signing_ca=ca, public_key=pubkey
+    ) | _compare_cert_with_builder(
+        cert, builder, ttl_remaining=days_remaining * 86400, urls=None, not_after=not_after
+    )
+    return _simulate_key_rotation_changes(
+        cert, changes, rotate_key=rotate_key, replace_key=replace_key
+    )
+
+
+def _build_x509v2_cert_with_policy(
+    signing_policy_contents: dict[str, typing.Any],
+    ca_server: str | None = None,
+    signing_private_key: str | None = None,
+    **kwargs,
+) -> tuple[cx509.CertificateBuilder, cx509.Certificate]:
+    """
+    We want to avoid running a complete x509.certificate_managed for x509_v2 issuance of intermediate issuer certs.
+    We also want to compare the certificate ourselves since we have a different output format.
+    This function was lifted from 3006.x salt.states.x509_v2, it would be exposed in salt.utils.x509 from 3008.x onwards.
+    TODO: Once we drop 3006.x support, consider using salt.utils.x509._build_cert_with_policy instead.
+    """
+    final_kwargs = copy.deepcopy(kwargs)
+    final_kwargs["signing_private_key"] = signing_private_key
+    x509util.merge_signing_policy(
+        signing_policy_contents,
+        final_kwargs,
+    )
+    final_kwargs.pop("signing_private_key")
+
+    if not final_kwargs.get("signing_cert"):
+        raise CommandExecutionError("x509_v2 would create a self-signed certificate")
+
+    builder, _, _, signing_cert = x509util.build_crt(
+        signing_private_key,
+        skip_load_signing_private_key=ca_server is not None,
+        **final_kwargs,
+    )
+
+    try:
+        bc = cx509.Extensions(_getattr_safe(builder, "_extensions")).get_extension_for_class(
+            cx509.BasicConstraints
+        )
+    except cx509.ExtensionNotFound:  # pragma: no cover
+        bc = None
+    if not bc or not bc.value.ca:
+        raise CommandExecutionError(
+            "x509_v2 would create a non-CA certificate, please check your signing policy"
+        )
+
+    return builder, signing_cert
+
+
+def _build_subject(
+    *,
+    country: list[str] | str | None,
+    province: list[str] | str | None,
+    locality: list[str] | str | None,
+    street_address: list[str] | str | None,
+    postal_code: list[str] | str | None,
+    organization: list[str] | str | None,
+    ou: list[str] | str | None,
+    common_name: str | None,
+    serial_number: str | None,
+    user_ids: list[str] | str | None = None,
+) -> cx509.Name:
+    rdns = []
+    for oid, vals in (
+        (cx509.NameOID.COUNTRY_NAME, country),
+        (cx509.NameOID.STATE_OR_PROVINCE_NAME, province),
+        (cx509.NameOID.LOCALITY_NAME, locality),
+        (cx509.NameOID.STREET_ADDRESS, street_address),
+        (cx509.NameOID.POSTAL_CODE, postal_code),
+        (cx509.NameOID.ORGANIZATION_NAME, organization),
+        (cx509.NameOID.ORGANIZATIONAL_UNIT_NAME, ou),
+        (cx509.NameOID.COMMON_NAME, common_name),
+        (cx509.NameOID.SERIAL_NUMBER, serial_number),
+        (cx509.NameOID.USER_ID, user_ids),
+    ):
+        if vals is None or not vals:
+            continue
+        if not isinstance(vals, list):
+            vals = [vals]
+        if oid == cx509.NameOID.USER_ID:
+            rdns.extend(
+                cx509.RelativeDistinguishedName([cx509.NameAttribute(oid, str(val))])
+                for val in vals
+            )
+        else:
+            rdns.append(
+                cx509.RelativeDistinguishedName(cx509.NameAttribute(oid, str(val)) for val in vals)
+            )
+    return cx509.Name(rdns)
+
+
+def _add_authority_info(
+    builder: cx509.CertificateBuilder, urls: URLConfigs
+) -> cx509.CertificateBuilder:
     # AuthorityInformationAccess
     if urls.get("ocsp_servers") or urls.get("issuing_certificates"):
         descriptions = []
@@ -649,7 +1598,7 @@ def _add_authority_info(builder: cx509.CertificateBuilder, urls):
     return builder
 
 
-def _add_ski(builder, public_key):
+def _add_ski(builder: cx509.CertificateBuilder, public_key: CertificateIssuerPublicKeyTypes):
     return builder.add_extension(
         cx509.SubjectKeyIdentifier.from_public_key(public_key), critical=False
     )
@@ -660,19 +1609,19 @@ def _add_aki(
     builder: cx509.CertificateBuilder,
     *,
     issuer: cx509.Certificate,
-): ...
+) -> cx509.CertificateBuilder: ...
 @typing.overload
 def _add_aki(
     builder: cx509.CertificateBuilder,
     *,
     public_key: CertificateIssuerPublicKeyTypes,
-): ...
+) -> cx509.CertificateBuilder: ...
 def _add_aki(
     builder: cx509.CertificateBuilder,
     *,
     issuer: cx509.Certificate | None = None,
     public_key: CertificateIssuerPublicKeyTypes | None = None,
-):
+) -> cx509.CertificateBuilder:
     if issuer is None:
         aki = cx509.AuthorityKeyIdentifier.from_issuer_public_key(
             typing.cast(CertificateIssuerPublicKeyTypes, public_key)
@@ -700,7 +1649,7 @@ def _add_sans(
     csr_exts: cx509.Extensions | None = None,
     verbatim: bool = False,
 ) -> cx509.CertificateBuilder:
-    def _cn_san_typ(common_name: str):
+    def _cn_san_typ(common_name: str) -> typing.Literal["EMAIL"] | typing.Literal["DNS"] | None:
         if "@" in common_name:
             # Vault checks emails the same way
             try:
@@ -787,7 +1736,7 @@ def _add_name_constraints(
     *,
     permitted: dict[str, list[str]] | dict[str, str | list[str]] | list[str] | None,
     excluded: dict[str, list[str]] | dict[str, str | list[str]] | list[str] | None,
-):
+) -> cx509.CertificateBuilder:
     if permitted or excluded:
         nc_subtrees = {
             "permitted_subtrees": None,
@@ -920,413 +1869,12 @@ def _add_certificate_policies(
     return builder
 
 
-def check_root_issuer_for_changes(
-    current,
-    *,
-    alt_names: dict[str, str | list[str]] | list[str] | None,
-    common_name: str,
-    country: list[str] | str | None,
-    days_remaining: int,
-    days_valid: int,
-    exclude_cn_from_sans: bool,
-    excluded_alt_names: dict[str, str | list[str]] | list[str] | None,
-    key_usage: list[str] | str | None,
-    locality: list[str] | str | None,
-    max_path_length: int,
-    not_after: str | None,
-    not_before_duration: str | int,
-    organization: list[str] | str | None,
-    ou: list[str] | str | None,
-    permitted_alt_names: dict[str, str | list[str]] | list[str] | None,
-    postal_code: list[str] | str | None,
-    province: list[str] | str | None,
-    replace_key: bool,
-    rotate_key: bool,
-    signature_bits: int,
-    street_address: list[str] | str | None,
-    serial_number: str | None,
-    urls: URLConfigs,
-):
-    """
-    Check whether an existing root CA issuer certificate matches expected parameters.
-
-    current
-        Existing certificate text.
-
-    alt_names
-        Requested Subject Alternative Names.
-
-    common_name
-        Subject CN (commonName) name attribute.
-
-    country
-        Subject C (countryName) name attribute(s).
-
-    days_remaining
-        Minimum TTL in days to allow before requesting a fresh certificate.
-
-    days_valid
-        Requested Time To Live in integer days.
-
-    exclude_cn_from_sans
-        Whether the subject CN should be included in the SANs (either as ``email`` or ``dns`` type).
-
-    excluded_alt_names
-        List of alternative names for which certificates are not allowed to be issued
-        or signed by this CA certificate.
-
-    key_usage
-        List of key usages to add to the existing set of key usages (CRLSign,CertSign).
-
-    locality
-        Subject L (localityName) name attribute(s).
-
-    max_path_length
-        Basic Constraints ``pathlen`` parameter.
-
-    not_after
-        Absolute value of the Not After field of the certificate in UTC format ``YYYY-MM-ddTHH:MM:SSZ``.
-        When set, ``days_valid`` is ignored.
-
-    not_before_duration
-        Duration by which to backdate the NotBefore property.
-
-    organization
-        Subject O (organizationName) name attribute(s).
-
-    ou
-        Subject OU (organizationalUnitName) name attribute(s).
-
-    permitted_alt_names
-        List of alternative names for which certificates are allowed to be issued
-        or signed by this CA certificate.
-
-    postal_code
-        Subject postalCode name attribute(s).
-
-    province
-        Subject ST (stateOrProvinceName) name attribute(s).
-
-    signature_bits
-        Number of bits to use in the signature algorithm.
-        Valid: ``256`` (SHA-2-256), ``384`` (SHA-2-384), ``512`` (SHA-2-512).
-
-    street_address
-        Subject street (streetAddress) name attribute(s).
-
-    serial_number
-        Single value for the **subject** SERIALNUMBER (OID: 2.5.4.5) name attribute (NOT the certificate's serial number!).
-
-    urls
-        Dictionary of issuer/mount-default authority URLs, which end up in the AuthorityInformationAccess,
-        CRLDistributionPoints and FreshestCRL extensions.
-    """
-    changes: dict[str, typing.Any] = {}
-    # Since we load a cert from Vault, we must assume loading it works, no error handling necessary
-    cert = typing.cast(cx509.Certificate, x509util.load_cert(current, passphrase=None))
-    pubkey = cert.public_key()
-
-    changes.update(
-        _compare_cert_signing(
-            current=cert,
-            signing_ca=None,
-            public_key=pubkey,
-            signature_bits=signature_bits,
-        )
-    )
-
-    builder = _build_root_issuer_cert(
-        common_name=common_name,
-        alt_names=alt_names,
-        days_valid=days_valid,
-        max_path_length=max_path_length,
-        key_usage=key_usage,
-        exclude_cn_from_sans=exclude_cn_from_sans,
-        permitted_alt_names=permitted_alt_names,
-        excluded_alt_names=excluded_alt_names,
-        ou=ou,
-        organization=organization,
-        country=country,
-        locality=locality,
-        province=province,
-        street_address=street_address,
-        postal_code=postal_code,
-        serial_number=serial_number,
-        not_before_duration=not_before_duration,
-        not_after=not_after,
-        urls=urls,
-        public_key=pubkey,  # type: ignore
-    )
-    try:
-        curr_not_after = cert.not_valid_after_utc
-    except AttributeError:  # pragma: no cover
-        # naive datetime object, release <42 (it's always UTC)
-        curr_not_after = cert.not_valid_after.replace(tzinfo=timezone.utc)
-    new_not_after = _getattr_safe(builder, "_not_valid_after").replace(tzinfo=timezone.utc)
-
-    if (not_after is not None and curr_not_after != new_not_after) or (
-        not_after is None
-        and curr_not_after < datetime.now(tz=timezone.utc) + timedelta(days=days_remaining)
-    ):
-        changes["expiration"] = {
-            "old": curr_not_after.strftime(TIME_FMT),
-            "new": new_not_after.strftime(TIME_FMT),
-        }
-
-    if _getattr_safe(builder, "_subject_name") != cert.subject:
-        changes["subject_name"] = {
-            "old": cert.subject.rfc4514_string(),
-            "new": _getattr_safe(builder, "_subject_name").rfc4514_string(),
-        }
-
-    ext_changes = _compare_exts(cert, builder)
-    if (
-        ext_changes
-        and "freshestCRL" in ext_changes["added"]
-        and not urls.get("crl_distribution_points")
-    ):
-        # OpenBao does not add a freshestCRL extension without a cRLDistributionPoints one.
-        # Vault only warns about it.
-        ext_changes["added"].pop("freshestCRL")
-    if any(ext_changes.values()):
-        changes["extensions"] = ext_changes
-
-    if (changes and rotate_key) or replace_key:
-        changes["private_key"] = True
-        ext_changes = changes.setdefault("extensions", {"added": {}, "changed": {}, "removed": {}})
-        if "subjectKeyIdentifier" not in ext_changes["changed"]:
-            try:
-                ski = cert.extensions.get_extension_for_class(cx509.SubjectKeyIdentifier)
-            except cx509.ExtensionNotFound:  # pragma: no cover
-                ext_changes["added"]["subjectKeyIdentifier"] = {
-                    "critical": False,
-                    "value": "<TBD>",
-                }
-            else:
-                ext_changes["changed"]["subjectKeyIdentifier"] = {
-                    "value": {"old": _render_extension(ski)["value"], "new": "<TBD>"}
-                }
-    return changes
-
-
-def _build_root_issuer_cert(
-    *,
-    common_name: str,
-    alt_names: dict[str, str | list[str]] | list[str] | None = None,
-    days_valid: int,
-    max_path_length: int,
-    key_usage: list[str] | str | None,
-    exclude_cn_from_sans: bool,
-    permitted_alt_names: dict[str, list[str]] | dict[str, str | list[str]] | list[str] | None,
-    excluded_alt_names: dict[str, list[str]] | dict[str, str | list[str]] | list[str] | None,
-    ou: list[str] | str | None,
-    organization: list[str] | str | None,
-    country: list[str] | str | None,
-    locality: list[str] | str | None,
-    province: list[str] | str | None,
-    street_address: list[str] | str | None,
-    postal_code: list[str] | str | None,
-    serial_number: str | None,
-    not_before_duration: str | int,
-    not_after: str | None,
-    urls: URLConfigs,
-    public_key: CertificateIssuerPublicKeyTypes,
-) -> cx509.CertificateBuilder:
-    builder = cx509.CertificateBuilder(public_key=public_key)
-
-    # Subject/Issuer DN
-    subject_dn = _build_subject(
-        country=country,
-        province=province,
-        locality=locality,
-        street_address=street_address,
-        postal_code=postal_code,
-        organization=organization,
-        ou=ou,
-        common_name=common_name,
-        serial_number=serial_number,
-    )
-    builder = builder.subject_name(subject_dn).issuer_name(subject_dn)
-
-    # Validity
-    not_before = datetime.now(tz=timezone.utc) - timedelta(
-        seconds=timestring_map(not_before_duration)
-    )
-    not_after_dt = _strptime(not_after, "not_after") or (
-        datetime.now(tz=timezone.utc) + timedelta(days=days_valid)
-    )
-    builder = builder.not_valid_before(not_before).not_valid_after(not_after_dt)
-
-    # basicConstraints
-    builder = builder.add_extension(
-        cx509.BasicConstraints(
-            True, max_path_length if max_path_length is not None and max_path_length >= 0 else None
-        ),
-        critical=True,
-    )
-
-    # keyUsage
-    builder = _add_key_usage_ca(builder, deserialize_csl(key_usage) or [])
-
-    # subjectAlternativeName
-    builder = _add_sans(
-        builder,
-        common_name,
-        alt_names,
-        exclude_cn_from_sans=exclude_cn_from_sans,
-    )
-
-    # nameConstraints
-    builder = _add_name_constraints(
-        builder, permitted=permitted_alt_names, excluded=excluded_alt_names
-    )
-
-    # AuthorityInformationAccess/CRLDistributionPoints/FreshestCRL
-    builder = _add_authority_info(builder, urls)
-
-    # SubjectKeyIdentifier
-    builder = _add_ski(builder, public_key)
-
-    # AuthorityKeyIdentifier
-    builder = _add_aki(builder, public_key=public_key)
-
-    return builder
-
-
-def check_ca_cert_for_changes(  # pylint: disable=too-many-locals
+def _load_and_compare_cert_file(
     current: str,
-    issuer: str,
-    private_key: str | None,
-    private_key_passphrase: str | None,
-    csr: str | None,
-    sign_verbatim: bool,
-    *,
-    alt_names: dict[str, str | list[str]] | list[str] | None,
-    append_chain: list[cx509.Certificate] | None,
-    common_name: str | None,
-    country: list[str] | str | None,
     encoding: Encoding,
-    exclude_cn_from_sans: bool,
-    excluded_alt_names: dict[str, str | list[str]] | list[str] | None,
-    key_usage: list[str] | str | None,
-    locality: list[str] | str | None,
-    max_path_length: int | None,
-    not_after: str | None,
-    not_before_duration: str | int,
-    organization: list[str] | str | None,
-    ou: list[str] | str | None,
-    permitted_alt_names: dict[str, str | list[str]] | list[str] | None,
-    postal_code: list[str] | str | None,
-    province: list[str] | str | None,
-    serial_number: str | None,
-    signature_bits: int,
-    street_address: list[str] | str | None,
-    ttl: int,
-    ttl_remaining: str | int,
-    urls: URLConfigs,
-    **kwargs,
-):
-    """
-    Check whether an existing on-disk CA certificate matches expected parameters.
-
-    current
-        Path of the existing certificate on disk.
-
-    issuer
-        Issuer certificate.
-
-    private_key
-        Path of the private key on disk/encoded private key.
-
-    private_key_passphrase
-        Passphrase for ``private_key``
-
-    csr
-        Path of the CSR on disk/encoded CSR.
-
-    sign_verbatim
-        Whether the ``sign-verbatim`` endpoint is used. Defaults to false.
-
-    alt_names
-        Requested Subject Alternative Names.
-
-    append_chain
-        List of certificates to append. Fails with ``der`` encoding.
-
-    common_name
-        Subject CN name attribute.
-
-    country
-        Subject C (countryName) name attribute(s).
-
-    encoding
-        Requested certificate encoding. Defaults to ``pem``.
-
-    exclude_cn_from_sans
-        Whether the subject CN should be included in the SANs (either as ``email`` or ``dns`` type).
-        Has no effect when ``sign_verbatim`` is true.
-
-    excluded_alt_names
-        List of alternative names for which certificates are not allowed to be issued
-        or signed by this CA certificate.
-
-    key_usage
-        List of key usages to add to the existing set of key usages (CRLSign,CertSign).
-
-    locality
-        Subject L (localityName) name attribute(s).
-
-    max_path_length
-        Basic Constraints ``pathlen`` parameter.
-
-    not_after
-        Absolute value of the Not After field of the certificate in UTC format ``YYYY-MM-ddTHH:MM:SSZ``.
-        When set, ``ttl`` is ignored.
-
-    not_before_duration
-        Duration by which to backdate the NotBefore property.
-
-    organization
-        Subject O (organizationName) name attribute(s).
-
-    ou
-        Subject OU (organizationalUnitName) name attribute(s).
-
-    permitted_alt_names
-        List of alternative names for which certificates are allowed to be issued
-        or signed by this CA certificate.
-
-    postal_code
-        Subject postalCode name attribute(s).
-
-    province
-        Subject ST (stateOrProvinceName) name attribute(s).
-
-    serial_number
-        Single value for the **subject** SERIALNUMBER (OID: 2.5.4.5) name attribute (NOT the certificate's serial number!).
-
-    signature_bits
-        Number of bits to use in the signature algorithm.
-        Valid: ``256`` (SHA-2-256), ``384`` (SHA-2-384), ``512`` (SHA-2-512).
-
-    street_address
-        Subject street (streetAddress) name attribute(s).
-
-    ttl
-        Requested Time To Live, already normalized to integer-valued seconds.
-
-    ttl_remaining
-        Minimum TTL to allow before requesting a fresh certificate.
-
-    urls
-        Dictionary of issuer/mount-default authority URLs, which end up in the AuthorityInformationAccess,
-        CRLDistributionPoints and FreshestCRL extensions.
-
-    kwargs
-        All other kwargs passed to the cert signing endpoint or as CSR generation params.
-    """
+    append_chain: list[cx509.Certificate] | None,
+) -> tuple[cx509.Certificate | None, dict[str, typing.Any]]:
     changes: dict[str, typing.Any] = {}
-    ttl_remaining = ttl_remaining or 0
 
     try:
         cert, current_encoding, current_chain = _load_cert_and_chain(current)
@@ -1334,7 +1882,7 @@ def check_ca_cert_for_changes(  # pylint: disable=too-many-locals
         if "Invalid cert bundle" not in str(err):
             raise
         changes["replaced"] = True
-        return changes
+        return None, changes
     except SaltInvocationError as err:
         if any(
             (
@@ -1343,7 +1891,7 @@ def check_ca_cert_for_changes(  # pylint: disable=too-many-locals
             )
         ):
             changes["replaced"] = True
-            return changes
+            return None, changes
         raise
 
     if not _compare_ca_chain(
@@ -1356,397 +1904,22 @@ def check_ca_cert_for_changes(  # pylint: disable=too-many-locals
             "old": current_encoding,
             "new": encoding,
         }
+    return cert, changes
 
-    ca = x509util.load_cert(issuer)
-    csr_loaded: cx509.CertificateSigningRequest | None = None
-    pk_loaded: Privkey | None = None
 
-    if private_key:
-        pk_loaded: Privkey = x509util.load_privkey(private_key, passphrase=private_key_passphrase)
-        pubkey = pk_loaded.public_key()
-    else:
-        csr_loaded: cx509.CertificateSigningRequest = x509util.load_csr(csr)
-        pubkey = csr_loaded.public_key()
-
-    changes.update(
-        _compare_cert_signing(
-            current=cert,
-            signing_ca=ca,
-            public_key=pubkey,
-            signature_bits=signature_bits,
-        )
-    )
-
-    # Validate max_path_length, if it was passed, otherwise derive its default.
-    try:
-        ca_bc = ca.extensions.get_extension_for_class(cx509.BasicConstraints)
-        issuer_pathlen = ca_bc.value.path_length
-    except cx509.ExtensionNotFound:  # pragma: no cover
-        # All issuers should have a basicConstraints extension. If they somehow don't, treat as unconstrained.
-        issuer_pathlen = None
-    if issuer_pathlen is None:
-        if max_path_length is None:
-            max_path_length = -1
-    elif issuer_pathlen < 1:  # pragma: no cover
-        raise CommandExecutionError(
-            "Issuer is not allowed to sign other CA certificates, its `max_path_length` is 0."
-        )
-    elif max_path_length is None:
-        max_path_length = issuer_pathlen - 1
-    elif max_path_length < 0:
-        raise CommandExecutionError(
-            "An unconstrained `max_path_length` is not allowed with current issuer: "
-            f"Issuer is limited to chains of length `{issuer_pathlen}` or less "
-            f"(i.e. only `{issuer_pathlen - 1}` or less can be requested)"
-        )
-    elif max_path_length >= issuer_pathlen:
-        raise CommandExecutionError(
-            f"Requested `max_path_length` of `{max_path_length}` exceeds the maximum allowed value for current issuer: "
-            f"Issuer is limited to chains of length `{issuer_pathlen}` or less "
-            f"(i.e. only `{issuer_pathlen - 1}` or less can be requested)"
-        )
-
-    csr_args, _ = split_csr_kwargs(kwargs)
-    csr_args, normalized_sans, norm_permitted_nc, norm_excluded_nc = norm_intermediate_params(
-        csr_args,
-        csr=csr,
-        sign_verbatim=sign_verbatim,
-        country=country,
-        province=province,
-        locality=locality,
-        street_address=street_address,
-        postal_code=postal_code,
-        organization=organization,
-        ou=ou,
-        common_name=common_name,
-        serial_number=serial_number,
-        alt_names=alt_names,
-        key_usage=key_usage,
-        permitted_alt_names=permitted_alt_names,
-        excluded_alt_names=excluded_alt_names,
-    )
-
-    if sign_verbatim:
-        builder = _build_verbatim_ca_cert(
-            ca,
-            csr=csr_loaded,
-            private_key=pk_loaded,
-            key_usage=key_usage,
-            max_path_length=max_path_length,
-            norm_excluded_nc=norm_excluded_nc,
-            norm_permitted_nc=norm_permitted_nc,
-            normalized_sans=normalized_sans,
-            not_after=not_after,
-            not_before_duration=not_before_duration,
-            serial_number=serial_number,
-            ttl=ttl,
-            urls=urls,
-            **csr_args,
-        )
-    else:
-        builder = _build_regular_ca_cert(
-            ca,
-            csr=csr_loaded,
-            private_key=pk_loaded,
-            common_name=common_name,
-            country=country,
-            exclude_cn_from_sans=exclude_cn_from_sans,
-            key_usage=key_usage,
-            locality=locality,
-            max_path_length=max_path_length,
-            norm_excluded_nc=norm_excluded_nc,
-            norm_permitted_nc=norm_permitted_nc,
-            normalized_sans=normalized_sans,
-            not_after=not_after,
-            not_before_duration=not_before_duration,
-            organization=organization,
-            ou=ou,
-            postal_code=postal_code,
-            province=province,
-            serial_number=serial_number,
-            street_address=street_address,
-            ttl=ttl,
-            urls=urls,
-            **csr_args,
-        )
-
-    # Check if certificate should be renewed due to close to expiration
-    try:
-        curr_not_valid_after = cert.not_valid_after_utc
-    except AttributeError:  # pragma: no cover
-        curr_not_valid_after = cert.not_valid_after.replace(tzinfo=timezone.utc)
-
-    if curr_not_valid_after < datetime.now(timezone.utc) + timedelta(
-        seconds=timestring_map(ttl_remaining, cast=int)
-    ):
-        changes["expiration"] = {
-            "expire_in": (curr_not_valid_after - datetime.now(timezone.utc)).total_seconds(),
-            "toleration": timestring_map(ttl_remaining, cast=int),
+def _compare_ca_chain(
+    current: list[cx509.Certificate], new: list[cx509.Certificate], unordered: bool = False
+) -> bool:
+    if len(current) != len(new):
+        return False
+    if unordered:
+        return {cert.fingerprint(hashes.SHA256()) for cert in new} == {
+            cert.fingerprint(hashes.SHA256()) for cert in current
         }
-
-    if _getattr_safe(builder, "_subject_name") != cert.subject:
-        changes["subject_name"] = {
-            "old": cert.subject.rfc4514_string(),
-            "new": _getattr_safe(builder, "_subject_name").rfc4514_string(),
-        }
-
-    ext_changes = _compare_exts(cert, builder)
-    if any(ext_changes.values()):
-        changes["extensions"] = ext_changes
-    return changes
-
-
-def _build_regular_ca_cert(
-    issuer: cx509.Certificate,
-    csr: cx509.CertificateSigningRequest | None,
-    private_key: Privkey | None,
-    *,
-    common_name: str | None,
-    country: list[str] | str | None,
-    exclude_cn_from_sans: bool,
-    key_usage: list[str] | str | None,
-    locality: list[str] | str | None,
-    max_path_length: int,
-    norm_excluded_nc: dict[str, list[str]],
-    norm_permitted_nc: dict[str, list[str]],
-    normalized_sans: dict[str, list[str]],
-    not_after: str | None,
-    not_before_duration: str | int,
-    organization: list[str] | str | None,
-    ou: list[str] | str | None,
-    postal_code: list[str] | str | None,
-    province: list[str] | str | None,
-    serial_number: str | None,
-    street_address: list[str] | str | None,
-    ttl: int,
-    urls: URLConfigs,
-):
-    if private_key is not None:
-        public_key = private_key.public_key()
-        csr_eff, _ = typing.cast(
-            tuple[cx509.CertificateSigningRequestBuilder, typing.Any],
-            x509util.build_csr(private_key),
-        )
-    elif csr is not None:
-        csr_eff = csr
-        public_key = csr.public_key()
-    else:  # pragma: no cover
-        raise TypeError("Either csr or private_key must be set")
-    builder = cx509.CertificateBuilder(public_key=public_key)
-
-    try:
-        csr_subject = csr_eff.subject  # ty: ignore[unresolved-attribute]
-    except AttributeError:
-        # CSRBuilder (created by x509util.build_csr())
-        csr_subject = _getattr_safe(csr_eff, "_subject_name")
-
-    # CSR common name is only used when it's not provided otherwise here
-    if not common_name:
-        try:
-            common_name = csr_subject.get_attributes_for_oid(cx509.NameOID.COMMON_NAME)[
-                0
-            ].value  # ty: ignore[invalid-assignment]
-        except IndexError:
-            pass
-    subject_dn = _build_subject(
-        country=country,
-        province=province,
-        locality=locality,
-        street_address=street_address,
-        postal_code=postal_code,
-        organization=organization,
-        ou=ou,
-        common_name=common_name,
-        serial_number=serial_number,
-    )
-    builder = builder.subject_name(subject_dn).issuer_name(issuer.subject)
-
-    # Validity
-    not_before = datetime.now(tz=timezone.utc) - timedelta(
-        seconds=timestring_map(not_before_duration)
-    )
-    not_after_dt = _strptime(not_after, "not_after") or (
-        datetime.now(tz=timezone.utc) + timedelta(seconds=ttl)
-    )
-    builder = builder.not_valid_before(not_before).not_valid_after(not_after_dt)
-
-    # basicConstraints
-    builder = builder.add_extension(
-        cx509.BasicConstraints(True, max_path_length if max_path_length >= 0 else None),
-        critical=True,
-    )
-    # keyUsage
-    builder = _add_key_usage_ca(builder, deserialize_csl(key_usage) or [])
-    # subjectAlternativeName
-    builder = _add_sans(
-        builder,
-        common_name,
-        normalized_sans,
-        exclude_cn_from_sans=exclude_cn_from_sans,
-    )
-    # nameConstraints
-    builder = _add_name_constraints(builder, permitted=norm_permitted_nc, excluded=norm_excluded_nc)
-    # AuthorityInformationAccess/CRLDistributionPoints/FreshestCRL
-    builder = _add_authority_info(builder, urls)
-    # SubjectKeyIdentifier
-    builder = _add_ski(builder, public_key)
-    # AuthorityKeyIdentifier
-    builder = _add_aki(builder, issuer=issuer)
-
-    return builder
-
-
-def _build_verbatim_ca_cert(
-    issuer: cx509.Certificate,
-    csr: cx509.CertificateSigningRequest | None,
-    private_key: Privkey | None,
-    *,
-    max_path_length: int,
-    norm_excluded_nc: dict[str, list[str]],
-    norm_permitted_nc: dict[str, list[str]],
-    normalized_sans: dict[str, list[str]],
-    not_after: str | None,
-    not_before_duration: str | int,
-    ttl: int,
-    urls: URLConfigs,
-    **csr_args,
-):
-    if private_key is not None:
-        public_key = private_key.public_key()
-        if norm_permitted_nc or norm_excluded_nc:
-            # There's a minor bug in x509.create_csr, we need to filter non-empty values
-            csr_args["nameConstraints"] = filter_unset(
-                {
-                    "critical": True,
-                    "permitted": [f"{k}:{vv}" for k, v in norm_permitted_nc.items() for vv in v]
-                    or None,
-                    "excluded": [f"{k}:{vv}" for k, v in norm_excluded_nc.items() for vv in v]
-                    or None,
-                }
-            )
-        # Leaving alt_names out here to not break otherName workaround.
-        # SANs are added as an extension explicitly below.
-        # KeyUsage is already added to csr_args and subject already rendered.
-        csr_eff, _ = typing.cast(
-            tuple[cx509.CertificateSigningRequestBuilder, typing.Any],
-            x509util.build_csr(private_key, **csr_args),
-        )
-    elif csr is not None:
-        csr_eff = csr
-        public_key = csr.public_key()
-    else:  # pragma: no cover
-        raise TypeError("Either csr or private_key must be set")
-
-    # Subject Name
-    try:
-        csr_subject = csr_eff.subject  # ty: ignore[unresolved-attribute]
-    except AttributeError:
-        # CSRBuilder (created by x509util.build_csr())
-        csr_subject = _getattr_safe(csr_eff, "_subject_name")
-
-    builder = (
-        cx509.CertificateBuilder(public_key=public_key)
-        .subject_name(csr_subject)
-        .issuer_name(issuer.subject)
-    )
-
-    # Validity
-    not_before = datetime.now(tz=timezone.utc) - timedelta(
-        seconds=timestring_map(not_before_duration)
-    )
-    not_after_dt = _strptime(not_after, "not_after") or (
-        datetime.now(tz=timezone.utc) + timedelta(seconds=ttl)
-    )
-    builder = builder.not_valid_before(not_before).not_valid_after(not_after_dt)
-
-    # Verbatim copy extensions from CSR
-    try:
-        csr_exts: cx509.Extensions = csr_eff.extensions  # ty: ignore[unresolved-attribute]
-    except AttributeError:
-        csr_exts = cx509.Extensions(_getattr_safe(csr_eff, "_extensions"))
-    for ext in csr_exts:
-        if not isinstance(ext.value, cx509.BasicConstraints):
-            builder = builder.add_extension(ext.value, ext.critical)
-
-    # basicConstraints
-    builder = builder.add_extension(
-        cx509.BasicConstraints(True, max_path_length if max_path_length >= 0 else None),
-        critical=True,
-    )
-
-    # Default KeyUsage
-    try:
-        csr_exts.get_extension_for_class(cx509.KeyUsage)
-    except cx509.ExtensionNotFound:
-        builder = _add_key_usage_ca(builder, [])
-
-    # SubjectAlternativeName simulation (for otherName workaround, this would actually be in the generated CSR)
-    try:
-        csr_exts.get_extension_for_class(cx509.SubjectAlternativeName)
-    except cx509.ExtensionNotFound:
-        builder = _add_sans(
-            builder,
-            None,
-            normalized_sans,
-            exclude_cn_from_sans=True,
-            verbatim=True,
-        )
-
-    # AuthorityInformationAccess/CRLDistributionPoints/FreshestCRL
-    builder = _add_authority_info(builder, urls)
-
-    # Default SubjectKeyIdentifier
-    try:
-        csr_exts.get_extension_for_class(cx509.SubjectKeyIdentifier)
-    except cx509.ExtensionNotFound:
-        builder = _add_ski(builder, public_key)
-
-    # AuthorityKeyIdentifier
-    builder = _add_aki(builder, issuer=issuer)
-
-    return builder
-
-
-def _build_subject(
-    *,
-    country: list[str] | str | None,
-    province: list[str] | str | None,
-    locality: list[str] | str | None,
-    street_address: list[str] | str | None,
-    postal_code: list[str] | str | None,
-    organization: list[str] | str | None,
-    ou: list[str] | str | None,
-    common_name: str | None,
-    serial_number: str | None,
-    user_ids: list[str] | str | None = None,
-):
-    rdns = []
-    for oid, vals in (
-        (cx509.NameOID.COUNTRY_NAME, country),
-        (cx509.NameOID.STATE_OR_PROVINCE_NAME, province),
-        (cx509.NameOID.LOCALITY_NAME, locality),
-        (cx509.NameOID.STREET_ADDRESS, street_address),
-        (cx509.NameOID.POSTAL_CODE, postal_code),
-        (cx509.NameOID.ORGANIZATION_NAME, organization),
-        (cx509.NameOID.ORGANIZATIONAL_UNIT_NAME, ou),
-        (cx509.NameOID.COMMON_NAME, common_name),
-        (cx509.NameOID.SERIAL_NUMBER, serial_number),
-        (cx509.NameOID.USER_ID, user_ids),
-    ):
-        if vals is None or not vals:
-            continue
-        if not isinstance(vals, list):
-            vals = [vals]
-        if oid == cx509.NameOID.USER_ID:
-            rdns.extend(
-                cx509.RelativeDistinguishedName([cx509.NameAttribute(oid, str(val))])
-                for val in vals
-            )
-        else:
-            rdns.append(
-                cx509.RelativeDistinguishedName(cx509.NameAttribute(oid, str(val)) for val in vals)
-            )
-    return cx509.Name(rdns)
+    for i, new_cert in enumerate(new):
+        if new_cert.fingerprint(hashes.SHA256()) != current[i].fingerprint(hashes.SHA256()):
+            return False
+    return True
 
 
 def _compare_cert_signing(
@@ -1788,19 +1961,70 @@ def _compare_cert_signing(
     return changes
 
 
-def _compare_ca_chain(
-    current: list[cx509.Certificate], new: list[cx509.Certificate], unordered: bool = False
-) -> bool:
-    if len(current) != len(new):
-        return False
-    if unordered:
-        return {cert.fingerprint(hashes.SHA256()) for cert in new} == {
-            cert.fingerprint(hashes.SHA256()) for cert in current
+def _compare_cert_with_builder(
+    cert: cx509.Certificate,
+    builder: cx509.CertificateBuilder,
+    *,
+    ttl_remaining: int | str | None,
+    not_after: str | None = None,
+    urls: URLConfigs | None,
+) -> dict[str, typing.Any]:
+    changes: dict[str, typing.Any] = {}
+    tolerance = timedelta(seconds=timestring_map(ttl_remaining or 0, cast=int))
+
+    # Check if certificate should be renewed due to close to expiration
+    try:
+        curr_not_valid_after = cert.not_valid_after_utc
+    except AttributeError:  # pragma: no cover
+        curr_not_valid_after = cert.not_valid_after.replace(tzinfo=timezone.utc)
+    new_not_valid_after = _getattr_safe(builder, "_not_valid_after").replace(tzinfo=timezone.utc)
+
+    expires = False
+    # A statically specified not_after is managed like a regular attribute.
+    # It must still satisfy the tolerance, otherwise we fail.
+    relevant_not_valid_after = (
+        new_not_valid_after if not_after is not None else curr_not_valid_after
+    )
+    if relevant_not_valid_after < datetime.now(tz=timezone.utc) + tolerance:
+        expires_in = relevant_not_valid_after - datetime.now(timezone.utc)
+        if not_after is not None:
+            raise CommandExecutionError(
+                "Statically specified `not_after` undercuts `ttl_remaining`/`days_remaining`. Update or remove `not_after`. "
+                + f"The certificate {pretty_td(expires_in, now=('expires', 'expired'))}, which is less than the tolerance of {pretty_td(tolerance)}"
+            )
+        expires = True
+        changes["expiration"] = {
+            "expires_in": expires_in.total_seconds(),
+            "expires_in_str": pretty_td(expires_in, now=True),
+            "tolerance": tolerance.total_seconds(),
+            "tolerance_str": pretty_td(tolerance),
         }
-    for i, new_cert in enumerate(new):
-        if new_cert.fingerprint(hashes.SHA256()) != current[i].fingerprint(hashes.SHA256()):
-            return False
-    return True
+
+    if expires or (not_after is not None and curr_not_valid_after != new_not_valid_after):
+        changes["not_after"] = {
+            "old": curr_not_valid_after.strftime(TIME_FMT),
+            "new": new_not_valid_after.strftime(TIME_FMT),
+        }
+
+    if (new_subj := _getattr_safe(builder, "_subject_name") or cx509.Name([])) != cert.subject:
+        changes["subject_name"] = {
+            "old": cert.subject.rfc4514_string(),
+            "new": new_subj.rfc4514_string(),
+        }
+
+    ext_changes = _compare_exts(cert, builder)
+    if (
+        urls is not None
+        and ext_changes
+        and "freshestCRL" in ext_changes["added"]
+        and not urls.get("crl_distribution_points")
+    ):
+        # OpenBao does not add a freshestCRL extension without a cRLDistributionPoints one.
+        # Vault only warns about it.
+        ext_changes["added"].pop("freshestCRL")
+    if any(ext_changes.values()):
+        changes["extensions"] = ext_changes
+    return changes
 
 
 def _compare_exts(
@@ -1832,6 +2056,41 @@ def _compare_exts(
             removed[getextname(ext)] = _render_extension(ext)
 
     return {"added": added, "changed": changed, "removed": removed}
+
+
+def _simulate_key_rotation_changes(
+    cert: cx509.Certificate, changes: dict[str, typing.Any], *, rotate_key: bool, replace_key: bool
+) -> dict[str, typing.Any]:
+    """
+    Sometimes, the private key a certificate is issued for will change, but we might not know until
+    after generating the CertificateBuilder or might not want to request its public key too early.
+    We still want to simulate changes as accurately as possible, so fake it.
+
+    cert
+        Current certificate object
+
+    rotate_key
+        Whether issuing a modified certificate should cause the key to be replaced.
+
+    replace_key
+        Whether the key is going to change for sure.
+    """
+    if (changes and rotate_key) or replace_key:
+        changes["private_key"] = True
+        ext_changes = changes.setdefault("extensions", {"added": {}, "changed": {}, "removed": {}})
+        if "subjectKeyIdentifier" not in ext_changes["changed"]:
+            try:
+                ski = cert.extensions.get_extension_for_class(cx509.SubjectKeyIdentifier)
+            except cx509.ExtensionNotFound:  # pragma: no cover
+                ext_changes["added"]["subjectKeyIdentifier"] = {
+                    "critical": False,
+                    "value": "<TBD>",
+                }
+            else:
+                ext_changes["changed"]["subjectKeyIdentifier"] = {
+                    "value": {"old": _render_extension(ski)["value"], "new": "<TBD>"}
+                }
+    return changes
 
 
 def norm_sans(
@@ -2007,7 +2266,7 @@ def sync_verbatim_csr_subject(
 def norm_intermediate_params(
     csr_args: dict[str, typing.Any],
     *,
-    csr: str | None,
+    csr: str | cx509.CertificateSigningRequest | None,
     sign_verbatim: bool,
     country: list[str] | str | None,
     province: list[str] | str | None,
@@ -2022,6 +2281,7 @@ def norm_intermediate_params(
     key_usage: list[str] | str | None,
     permitted_alt_names: dict[str, list[str]] | dict[str, str | list[str]] | list[str] | None,
     excluded_alt_names: dict[str, list[str]] | dict[str, str | list[str]] | list[str] | None,
+    subject_format: type[str] | type[dict] | type[list] = str,  # ty: ignore[missing-type-argument]
 ) -> tuple[
     dict[str, typing.Any],  # csr_args
     dict[str, list[str]],  # norm_sans
@@ -2029,8 +2289,26 @@ def norm_intermediate_params(
     dict[str, list[str]],  # norm_excluded_nc
 ]:
     """
-    Normalize/synchronize parameters for the sign-intermediate endpoint and warn about ignored ones.
-    Returns CSR generation arguments, normalized alt_names/permitted_alt_names/excluded_alt_names.
+    Synchronize parameters for the sign-intermediate endpoint with those for the x509_v2 modules,
+    normalize them and warn about ignored ones.
+
+    Returns CSR/cert generation arguments, normalized alt_names/permitted_alt_names/excluded_alt_names.
+
+    subject_format
+        By default, we normalize subject parameters into a string that exactly replicates what Vault
+        would have created. This works well for CSR generation, which is used in ``sign_intermediate``.
+
+        This function is also utilized for ``generate_intermediate``, which creates certificates
+        that might be subject to signing policies that define parts of the subject. The internal
+        merging completely overwrites a string-valued subject parameter in that case.
+
+        Set this to ``dict`` to create a subject dictionary that is merged with a dict from the signing policy,
+        but does not support multiple values for a single OID, ``postal_code`` or a custom, Vault-like order.
+
+        Set this to ``list`` to create an ordered list of RDN strings, which is also understood by
+        the x509_v2 modules. If the signing_policy defines a list of RDN strings itself, they are prepended
+        to this list (i.e. appended when visualizing the rfc4514 string representation of the DN).
+        (unused at the moment since it's a bit unintuitive, but could recreate Vault subjects much more faithfully)
     """
     normalized_sans = norm_permitted_nc = norm_excluded_nc = None
 
@@ -2051,6 +2329,7 @@ def norm_intermediate_params(
         subject_present = "subject" in csr_args
 
         subject_rdns = []
+        subject_dict = {}
         for oid, param, csr_param, vals in (
             (cx509.NameOID.COUNTRY_NAME, "country", "C", country),
             (cx509.NameOID.STATE_OR_PROVINCE_NAME, "province", "ST", province),
@@ -2097,11 +2376,32 @@ def norm_intermediate_params(
                 continue
             if not isinstance(vals, list):
                 vals = [vals]
-            subject_rdns.append(
-                cx509.RelativeDistinguishedName(cx509.NameAttribute(oid, str(val)) for val in vals)
-            )
+            if subject_format is dict:
+                # Approximate translation for create_certificate with signing_policy,
+                # only one value per known subject parameter and not the same order as Vault.
+                if csr_param is None or len(vals) != 1:
+                    log.warning(
+                        "Ignoring argument for %s, cannot render it into a `subject` dict for the x509_v2 modules",
+                        param,
+                    )
+                else:
+                    subject_dict[csr_param] = vals[0]
+            else:
+                # CSRs and certificates (in generate_intermediate) without signing_policy
+                subject_rdns.append(
+                    cx509.RelativeDistinguishedName(
+                        cx509.NameAttribute(oid, str(val)) for val in vals
+                    )
+                )
         if not subject_present:
-            csr_args["subject"] = cx509.Name(subject_rdns).rfc4514_string()
+            if subject_format is str:
+                csr_args["subject"] = cx509.Name(subject_rdns).rfc4514_string()
+            elif subject_format is list:
+                csr_args["subject"] = [rdn.rfc4514_string() for rdn in subject_rdns]
+            elif subject_format is dict:
+                csr_args["subject"] = subject_dict
+            else:  # pragma: no cover
+                raise TypeError(f"Invalid value for `subject_format`: {subject_format!r}")
 
     if alt_names is not None:
         if sign_verbatim and csr:
@@ -2147,6 +2447,127 @@ def norm_intermediate_params(
             csr_args["keyUsage"] = usages
 
     return csr_args, normalized_sans or {}, norm_permitted_nc or {}, norm_excluded_nc or {}
+
+
+def norm_generate_intermediate_params(
+    kwargs: dict[str, typing.Any],
+    vault_signed: bool,
+    *,
+    country: list[str] | str | None,
+    province: list[str] | str | None,
+    locality: list[str] | str | None,
+    street_address: list[str] | str | None,
+    postal_code: list[str] | str | None,
+    organization: list[str] | str | None,
+    ou: list[str] | str | None,
+    common_name: str | None,
+    serial_number: str | None,
+    alt_names: dict[str, list[str]] | dict[str, str | list[str]] | list[str] | None,
+    key_usage: list[str] | str | None,
+    permitted_alt_names: dict[str, list[str]] | dict[str, str | list[str]] | list[str] | None,
+    excluded_alt_names: dict[str, list[str]] | dict[str, str | list[str]] | list[str] | None,
+    max_path_length: int | None,
+    not_after: str | None,
+) -> tuple[
+    dict[str, typing.Any],  # cert_args
+    str | None,  # not_after
+    dict[str, list[str]] | None,  # norm_sans
+    dict[str, list[str]] | None,  # norm_permitted_nc
+    dict[str, list[str]] | None,  # norm_excluded_nc
+]:
+    """
+    Normalize/synchronize parameters for our custom generate_intermediate function and warn about ignored ones.
+    Returns certificate generation arguments, normalized not_after/alt_names/permitted_alt_names/excluded_alt_names.
+    """
+    # we split and re-join later, don't leave a half-modified dict with a ref behind
+    kwargs = kwargs.copy()
+
+    def _rm_kwarg(name):
+        if kwargs.pop(name, None) is not None:
+            log.warning(
+                "Ignoring received `%s` parameter for intermediate issuer certificate, it cannot be set here",
+                name,
+            )
+
+    # csr is a valid param for both issuance methods, but accepting it here
+    # would complicate things a lot. Ensure we don't pass it and warn if set.
+    _rm_kwarg("csr")
+
+    if vault_signed:
+        # We disallow passing a pre-generated `csr`, meaning we would need to create one on the fly for the sign-verbatim endpoint.
+        # CSRs need to be signed with the private key, which we might not have access to.
+        # Keep it simple by disallowing verbatim signing completely.
+        _rm_kwarg("sign_verbatim")
+    else:
+        # We're using x509.create_certificate.
+        # Remove arguments that would interfere with our logic.
+        _rm_kwarg("path")
+        _rm_kwarg("private_key")
+        _rm_kwarg("public_key")
+        _rm_kwarg("encoding")
+
+    # Ensure vault-style parameters work as an alternative to x509_v2-style kwargs/we warn about ignored kwargs when vault-signing
+    cert_args, other_args = split_csr_kwargs(
+        kwargs, ("subject",) + (VALID_CERT_ARGS_ADDITIONAL if not vault_signed else ())
+    )
+    cert_args, normalized_sans, norm_permitted_nc, norm_excluded_nc = norm_intermediate_params(
+        cert_args,
+        csr="dummy" if vault_signed else None,
+        sign_verbatim=not vault_signed,
+        country=country,
+        province=province,
+        locality=locality,
+        street_address=street_address,
+        postal_code=postal_code,
+        organization=organization,
+        ou=ou,
+        common_name=common_name,
+        serial_number=serial_number,
+        alt_names=alt_names,
+        key_usage=key_usage,
+        permitted_alt_names=permitted_alt_names,
+        excluded_alt_names=excluded_alt_names,
+        subject_format=dict if not vault_signed and other_args.get("signing_policy") else str,
+    )
+    kwargs = other_args | cert_args
+
+    if not_after is not None:
+        # `not_after` is valid for both issuance methods, but they expect slightly different formats. Auto-translate it.
+        not_after_dt = _strptime_loose(not_after, "not_after")
+        if vault_signed:
+            not_after = not_after_dt.strftime(TIME_FMT)
+        else:
+            not_after = not_after_dt.strftime(x509util.TIME_FMT)
+
+    if vault_signed:
+        return kwargs, not_after, normalized_sans, norm_permitted_nc, norm_excluded_nc
+
+    # Set forced arguments and defaults
+    basic_constraints = {"critical": True, "ca": True}
+    if max_path_length is not None and max_path_length >= 0:
+        basic_constraints["pathlen"] = max_path_length
+    kwargs["basicConstraints"] = basic_constraints
+
+    if normalized_sans:
+        kwargs["subjectAltName"] = [
+            (f"{k}:{vv}" if k.upper() in SUPPORTED_SAN_TYPES else f"otherName:{k};UTF8:{vv}")
+            for k, v in normalized_sans.items()
+            for vv in v
+        ]
+    if norm_permitted_nc or norm_excluded_nc:
+        kwargs["nameConstraints"] = filter_unset(
+            {
+                "critical": True,
+                "permitted": [f"{k}:{vv}" for k, v in norm_permitted_nc.items() for vv in v]
+                or None,
+                "excluded": [f"{k}:{vv}" for k, v in norm_excluded_nc.items() for vv in v] or None,
+            }
+        )
+    kwargs.setdefault("keyUsage", ["critical", "cRLSign", "keyCertSign"])
+    kwargs.setdefault("subjectKeyIdentifier", "hash")
+    kwargs.setdefault("authorityKeyIdentifier", "keyid:always")
+
+    return kwargs, not_after, None, None, None
 
 
 def get_ski(cert: str | bytes | cx509.Certificate) -> str | None:
@@ -2202,6 +2623,10 @@ def _parse_general_names(
     return parse_general_names(val, name_constraints=name_constraints)
 
 
+@typing.overload
+def _strptime(val: str, param: str) -> datetime: ...
+@typing.overload
+def _strptime(val: None, param: str) -> None: ...
 def _strptime(val: str | None, param: str) -> datetime | None:
     if val is None:
         return val
@@ -2209,6 +2634,20 @@ def _strptime(val: str | None, param: str) -> datetime | None:
         return datetime.strptime(val, TIME_FMT).replace(tzinfo=timezone.utc)
     except ValueError as err:
         raise SaltInvocationError(f"Invalid date format in param `{param}`: {err}") from err
+
+
+@typing.overload
+def _strptime_loose(val: str, param: str) -> datetime: ...
+@typing.overload
+def _strptime_loose(val: None, param: str) -> None: ...
+def _strptime_loose(val: str | None, param: str) -> datetime | None:
+    if val is None:
+        return val
+    try:
+        return datetime.strptime(val, x509util.TIME_FMT).replace(tzinfo=timezone.utc)
+    except ValueError:
+        pass
+    return _strptime(val, param)
 
 
 def _get_oid(oid: str) -> cx509.ObjectIdentifier:
