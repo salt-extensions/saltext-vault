@@ -1,1 +1,0 @@
-Made `vault_pki.certificate_managed` use the generic `<mount>/sign*` endpoints instead of the issuer-specific `<mount>/issuer/<issuer_ref>/sign*` ones where `<issuer_ref>` was looked up in the role, which means you can more easily restrict signing requests to the default issuer of the role
