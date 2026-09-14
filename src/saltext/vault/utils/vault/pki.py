@@ -341,7 +341,7 @@ def check_cert_for_changes(
             **csr_args,
         )
     return changes | _compare_cert_with_builder(
-        cert, builder, ttl_remaining=expire_tolerance, urls=urls
+        cert, builder, ttl_remaining=expire_tolerance, urls=urls, not_after=not_after
     )
 
 
@@ -1025,7 +1025,7 @@ def check_ca_cert_for_changes(  # pylint: disable=too-many-locals
         )
 
     return changes | _compare_cert_with_builder(
-        cert, builder, ttl_remaining=ttl_remaining, urls=urls
+        cert, builder, ttl_remaining=ttl_remaining, urls=urls, not_after=not_after
     )
 
 
