@@ -2583,6 +2583,7 @@ def int_ca_args(
     params = {
         "name": "Test Intermediate CA",
         "days_valid": 90,
+        "key_algo": "ec",  # faster than rsa
         "mount": fresh_pki_mount,
     }
     if request.param == "salt_ca":
@@ -2915,7 +2916,7 @@ def test_intermediate_issuer_managed_issuer_changes(vault_pki, int_ca_args, test
         "issuer_name": "my_root_ca",
         "leaf_not_after_behavior": "truncate",
         "usage": ["issuing-certificates"],
-        "revocation_signature_algorithm": "SHA384WithRSA",
+        "revocation_signature_algorithm": "ECDSAWithSHA512",
         "aia_urls": "https://my.root.ca",
         "crl_endpoints": ["https://crl.my.root.ca"],
         "delta_crl_endpoints": ["https://delta.crl.my.root.ca"],
@@ -2936,7 +2937,7 @@ def test_intermediate_issuer_managed_issuer_changes(vault_pki, int_ca_args, test
     assert issuer_changes["issuer_name"] == {"old": "", "new": "my_root_ca"}
     assert issuer_changes["leaf_not_after_behavior"] == {"old": "err", "new": "truncate"}
     assert issuer_changes["usage"] == {"added": [], "removed": ["crl-signing", "ocsp-signing"]}
-    assert issuer_changes["revocation_signature_algorithm"]["new"] == "SHA384WithRSA"
+    assert issuer_changes["revocation_signature_algorithm"]["new"] == "ECDSAWithSHA512"
     assert issuer_changes["aia_urls"] == {"added": [issuer_params["aia_urls"]], "removed": []}
     assert issuer_changes["crl_endpoints"] == {
         "added": issuer_params["crl_endpoints"],
@@ -3147,6 +3148,7 @@ def root_ca_args():
         "street_address": "Test Rd 123",
         "postal_code": "1337",
         "serial_number": "42",
+        "key_algo": "ec",  # faster than rsa
     }
 
 
@@ -3350,6 +3352,7 @@ def test_root_issuer_managed_issuer_ok(vault_pki, root_ca_args, testmode):
     (
         {},
         {
+            "key_algo": "rsa",  # needed for signature_bits to work
             "signature_bits": 384,
             "not_after": "2345-12-31T23:59:59Z",
             "alt_names": [
@@ -3417,6 +3420,7 @@ def test_root_issuer_managed_ok(vault_pki, root_ca_args, testmode, container):
     "existing_root",
     (
         {
+            "key_algo": "rsa",  # needed for signature_bits to work
             "signature_bits": 384,
             "not_after": "2345-12-31T23:59:59Z",
             "alt_names": [
