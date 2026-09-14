@@ -11,6 +11,7 @@ import base64
 import logging
 import os
 import re
+import time
 import typing
 from collections.abc import Mapping
 from datetime import datetime
@@ -1156,7 +1157,7 @@ def role_absent(name, mount="pki"):
     return ret
 
 
-def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-locals
+def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-locals,too-many-statements
     name,
     days_remaining=30,
     rotate_key=False,
@@ -1535,9 +1536,9 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
         "comment": "Intermediate CA issuer is present as specified",
         "changes": {},
     }
-    changes = {}
+    changes: dict[str, typing.Any] = {}
     cert_affected = issuer_affected = False
-    issuer_id = None
+    issuer_id = key_id = None
     msg = []
     issuer_mount = issuer_mount or mount
     vault_signed = issuer_ref is not None
@@ -1545,6 +1546,20 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
     # or x509.create_certificate, depending on issuer_ref being set or not.
     cert_args = hlp.filter_state_internal_kwargs(kwargs)
     replace_key = False
+    issuer_is_managed = any(
+        val is not None
+        for val in (
+            issuer_name,
+            leaf_not_after_behavior,
+            usage,
+            revocation_signature_algorithm,
+            aia_urls,
+            crl_endpoints,
+            delta_crl_endpoints,
+            ocsp_servers,
+            aia_url_templating,
+        )
+    )
 
     try:
         key_type = hlp.in_vals(("internal", "exported", "kms", None), key_type=key_type)
@@ -1552,22 +1567,12 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
             key_type = "existing"
             rotate_key = False
         if not (current := __salt__["vault_pki.read_issuer"](mount=mount)):
-            changes["created"] = name
-            cert_affected = True
-            issuer_affected = any(
-                val is not None
-                for val in (
-                    issuer_name,
-                    leaf_not_after_behavior,
-                    usage,
-                    revocation_signature_algorithm,
-                    aia_urls,
-                    crl_endpoints,
-                    delta_crl_endpoints,
-                    ocsp_servers,
-                    aia_url_templating,
-                )
-            )
+            changes["created"] = {
+                "issuer_id": "<TBD>",
+                "issuer_name": issuer_name,
+                "CN": name,
+                "key_id": "<TBD>",
+            }
         else:
             issuer_id = current["issuer_id"]
             if key_ref is None:
@@ -1575,9 +1580,9 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
                 if key_ref is None:  # pragma: no cover
                     # Unsure if this is allowed to happen, need to check
                     raise CommandExecutionError("Default issuer key_id not set")
-            replace_key = current["key_id"] != __salt__["vault_pki.get_key_id"](
-                key_ref, mount=mount
-            )
+            else:
+                key_id = __salt__["vault_pki.get_key_id"](key_ref, mount=mount)
+                replace_key = current["key_id"] != key_id
             # We need to correctly map/filter args for changes checking before passing to the utils func.
             # Reuse the result later to avoid duplicate warnings.
             cert_args, not_after, alt_names, permitted_alt_names, excluded_alt_names = (
@@ -1675,21 +1680,35 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
 
         if __opts__["test"]:
             ret["result"] = None
-            if cert_affected:
+            ret["changes"] = changes
+
+            if current is None or cert_affected:
                 msg.append(
                     f"Intermediate CA certificate would have been {'rotated' if current else 'created'}"
                 )
-            if issuer_affected:
+                ret["changes"]["imported"] = ["<TBD>"]
+
+            if current is None or issuer_affected:
                 msg.append(
                     f"Intermediate CA issuer would have been {'updated' if current else 'created'}"
                 )
+
+            if current is not None:
+                ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": "<TBD>"}
+                if issuer_name and current["issuer_name"] == issuer_name:
+                    ret["changes"]["old_issuer"] = {
+                        "issuer_id": current["issuer_id"],
+                        "issuer_name": {"old": issuer_name, "new": f"{issuer_name}-<TBD>"},
+                    }
+                if rotate_key or replace_key:
+                    ret["changes"]["key_id"] = {"old": current["key_id"], "new": "<TBD>"}
+
             ret["comment"] = ". ".join(msg) + "."
-            ret["changes"] = changes
             return ret
 
-        if cert_affected:
+        if current is None or cert_affected:
             if key_ref is None or rotate_key:
-                key_ref = __salt__["vault_pki.generate_key"](
+                key_ref = key_id = __salt__["vault_pki.generate_key"](
                     key_type or "internal",
                     key_algo=key_algo,
                     key_bits=key_bits,
@@ -1732,6 +1751,8 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
                     "Generated certificate, but failed importing it"
                 ) from err
 
+            ret["changes"]["imported"] = res["imported_issuers"]
+
             try:
                 __salt__["vault_pki.set_default_issuer"](issuer_id, mount=mount)
             except CommandExecutionError as err:
@@ -1739,37 +1760,60 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
                 ret["comment"] = (
                     f"Generated and imported certificate as issuer `{issuer_id}`, but failed to set it as default issuer: {err}"
                 )
-                ret["changes"]["imported"] = issuer_id
                 return ret
+
             if current is not None:
+                ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": issuer_id}
+                if issuer_name and current["issuer_name"] == issuer_name:
+                    # When we rotate a named issuer, we need to rename the previous one since names must be unique
+                    old_issuer_name = f"{issuer_name}-{int(time.time())}"
+                    __salt__["vault_pki.update_issuer"](
+                        ref=current["issuer_id"], name=old_issuer_name, mount=mount
+                    )
+                    ret["changes"]["old_issuer"] = {
+                        "issuer_id": current["issuer_id"],
+                        "issuer_name": {"old": issuer_name, "new": old_issuer_name},
+                    }
+
                 # Correctly report new subjectKeyIdentifier, it's "<TBD>" right now
                 if rotate_key or replace_key:
                     changes = _report_ski(changes, mount=mount)
+                    key_id = key_id or __salt__["vault_pki.get_key_id"](key_ref, mount=mount)
+                    ret["changes"]["key_id"] = {"old": current["key_id"], "new": key_id}
                 ret["changes"]["cert"] = changes["cert"]
             msg.append(
                 f"Intermediate CA certificate has been {'rotated' if current else 'created'}"
             )
 
-        if issuer_affected:
-            __salt__["vault_pki.update_issuer"](
-                ref=issuer_id,
-                name=issuer_name,
-                leaf_not_after_behavior=leaf_not_after_behavior,
-                usage=usage,
-                revocation_signature_algorithm=revocation_signature_algorithm,
-                aia_urls=aia_urls,
-                crl_endpoints=crl_endpoints,
-                delta_crl_endpoints=delta_crl_endpoints,
-                ocsp_servers=ocsp_servers,
-                aia_url_templating=aia_url_templating,
-                mount=mount,
-            )
-            if current is not None:
-                ret["changes"]["issuer"] = changes["issuer"]
-            msg.append(f"Intermediate CA issuer has been {'updated' if current else 'created'}")
+        if issuer_affected or (issuer_is_managed and (current is None or cert_affected)):
+            # Don't forget to re-apply config after rotating the issuer, changes were checked for previous one.
+            # Edge case: Avoid a request when we reset all issuer configs and rotate the cert at the same time.
+            # We still want to report the changes, so don't exclude that case above.
+            if not (current is not None and cert_affected and not issuer_is_managed):
+                __salt__["vault_pki.update_issuer"](
+                    ref=issuer_id,
+                    name=issuer_name,
+                    leaf_not_after_behavior=leaf_not_after_behavior,
+                    usage=usage,
+                    revocation_signature_algorithm=revocation_signature_algorithm,
+                    aia_urls=aia_urls,
+                    crl_endpoints=crl_endpoints,
+                    delta_crl_endpoints=delta_crl_endpoints,
+                    ocsp_servers=ocsp_servers,
+                    aia_url_templating=aia_url_templating,
+                    mount=mount,
+                )
+            if current is None or issuer_affected:
+                if current is not None:
+                    ret["changes"]["issuer"] = changes["issuer"]
+                msg.append(f"Intermediate CA issuer has been {'updated' if current else 'created'}")
 
         if current is None:
-            ret["changes"]["created"] = name
+            changes["created"]["issuer_id"] = issuer_id
+            changes["created"]["key_id"] = key_id or __salt__["vault_pki.get_key_id"](
+                key_ref, mount=mount
+            )
+            ret["changes"]["created"] = changes["created"]
         ret["comment"] = ". ".join(msg) + "."
     except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
@@ -2047,8 +2091,22 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
     }
     changes = {}
     cert_affected = issuer_affected = replace_key = False
-    issuer_id = None
+    issuer_id = key_id = None
     msg = []
+    issuer_is_managed = any(
+        val is not None
+        for val in (
+            issuer_name,
+            leaf_not_after_behavior,
+            usage,
+            revocation_signature_algorithm,
+            aia_urls,
+            crl_endpoints,
+            delta_crl_endpoints,
+            ocsp_servers,
+            aia_url_templating,
+        )
+    )
 
     try:
         key_type = hlp.in_vals(("internal", "exported", "kms", None), key_type=key_type)
@@ -2056,27 +2114,17 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
             key_type = "existing"
             rotate_key = False
         if not (current := __salt__["vault_pki.read_issuer"](mount=mount)):
-            changes["created"] = name
-            cert_affected = True
-            issuer_affected = any(
-                val is not None
-                for val in (
-                    issuer_name,
-                    leaf_not_after_behavior,
-                    usage,
-                    revocation_signature_algorithm,
-                    aia_urls,
-                    crl_endpoints,
-                    delta_crl_endpoints,
-                    ocsp_servers,
-                    aia_url_templating,
-                )
-            )
+            changes["created"] = {
+                "issuer_id": "<TBD>",
+                "issuer_name": issuer_name,
+                "CN": name,
+                "key_id": "<TBD>",
+            }
         else:
             issuer_id = current["issuer_id"]
-            replace_key = key_ref is not None and current["key_id"] != __salt__[
-                "vault_pki.get_key_id"
-            ](key_ref, mount=mount)
+            if key_ref is not None:
+                key_id = __salt__["vault_pki.get_key_id"](key_ref, mount=mount)
+                replace_key = current["key_id"] != key_id
 
             if cert_changes := pki.check_root_issuer_for_changes(
                 "".join(current["ca_chain"]),
@@ -2125,19 +2173,31 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
 
         if __opts__["test"]:
             ret["result"] = None
-            if cert_affected:
+            ret["changes"] = changes
+
+            if current is None or cert_affected:
                 msg.append(
                     f"Root CA certificate would have been {'rotated' if current else 'created'}"
                 )
-            if issuer_affected:
+            if current is None or issuer_affected:
                 msg.append(f"Root CA issuer would have been {'updated' if current else 'created'}")
+
+            if current is not None:
+                ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": "<TBD>"}
+                if issuer_name and current["issuer_name"] == issuer_name:
+                    ret["changes"]["old_issuer"] = {
+                        "issuer_id": current["issuer_id"],
+                        "issuer_name": {"old": issuer_name, "new": f"{issuer_name}-<TBD>"},
+                    }
+                if rotate_key or replace_key:
+                    ret["changes"]["key_id"] = {"old": current["key_id"], "new": "<TBD>"}
+
             ret["comment"] = ". ".join(msg)
-            ret["changes"] = changes
             return ret
 
-        if cert_affected:
+        if current is None or cert_affected:
             if key_ref is None or rotate_key:
-                key_ref = __salt__["vault_pki.generate_key"](
+                key_ref = key_id = __salt__["vault_pki.generate_key"](
                     key_type or "internal",
                     key_algo=key_algo,
                     key_bits=key_bits,
@@ -2210,34 +2270,58 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
                     f"Generated issuer `{issuer_id}`, but failed to set it as default issuer: {err}"
                 )
                 return ret
+
             if current is not None:
+                ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": issuer_id}
+                if issuer_name and current["issuer_name"] == issuer_name:
+                    # When we rotate a named issuer, we need to rename the previous one since names must be unique
+                    old_issuer_name = f"{issuer_name}-{int(time.time())}"
+                    __salt__["vault_pki.update_issuer"](
+                        ref=current["issuer_id"], name=old_issuer_name, mount=mount
+                    )
+                    ret["changes"]["old_issuer"] = {
+                        "issuer_id": current["issuer_id"],
+                        "issuer_name": {"old": issuer_name, "new": old_issuer_name},
+                    }
+
                 # Correctly report new subjectKeyIdentifier, it's "<TBD>" right now
                 if rotate_key or replace_key:
                     changes = _report_ski(changes, mount=mount)
+                    key_id = key_id or __salt__["vault_pki.get_key_id"](key_ref, mount=mount)
+                    ret["changes"]["key_id"] = {"old": current["key_id"], "new": key_id}
                 ret["changes"]["cert"] = changes["cert"]
             msg.append(f"Root CA certificate has been {'rotated' if current else 'created'}")
 
-        if issuer_affected:
-            __salt__["vault_pki.update_issuer"](
-                ref=issuer_id,
-                name=issuer_name,
-                leaf_not_after_behavior=leaf_not_after_behavior,
-                usage=usage,
-                revocation_signature_algorithm=revocation_signature_algorithm,
-                aia_urls=aia_urls,
-                crl_endpoints=crl_endpoints,
-                delta_crl_endpoints=delta_crl_endpoints,
-                ocsp_servers=ocsp_servers,
-                aia_url_templating=aia_url_templating,
-                mount=mount,
-            )
-            if current is not None:
-                ret["changes"]["issuer"] = changes["issuer"]
-            msg.append(f"Root CA issuer has been {'updated' if current else 'created'}")
+        if issuer_affected or (issuer_is_managed and (current is None or cert_affected)):
+            # Don't forget to re-apply config after rotating the issuer, changes were checked for previous one.
+            # Edge case: Avoid a request when we reset all issuer configs and rotate the cert at the same time.
+            # We still want to report the changes, so don't exclude that case above.
+            if not (current is not None and cert_affected and not issuer_is_managed):
+                __salt__["vault_pki.update_issuer"](
+                    ref=issuer_id,
+                    name=issuer_name,
+                    leaf_not_after_behavior=leaf_not_after_behavior,
+                    usage=usage,
+                    revocation_signature_algorithm=revocation_signature_algorithm,
+                    aia_urls=aia_urls,
+                    crl_endpoints=crl_endpoints,
+                    delta_crl_endpoints=delta_crl_endpoints,
+                    ocsp_servers=ocsp_servers,
+                    aia_url_templating=aia_url_templating,
+                    mount=mount,
+                )
+            if current is None or issuer_affected:
+                if current is not None:
+                    ret["changes"]["issuer"] = changes["issuer"]
+                msg.append(f"Root CA issuer has been {'updated' if current else 'created'}")
 
         ret["comment"] = ". ".join(msg) + "."
         if current is None:
-            ret["changes"]["created"] = name
+            changes["created"]["issuer_id"] = issuer_id
+            changes["created"]["key_id"] = key_id or __salt__["vault_pki.get_key_id"](
+                key_ref, mount=mount
+            )
+            ret["changes"]["created"] = changes["created"]
     except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
         if msg:

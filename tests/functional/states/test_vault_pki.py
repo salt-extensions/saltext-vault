@@ -2655,6 +2655,12 @@ def test_intermediate_issuer_managed_create(vault_pki, int_ca_args, testmode):
     assert ret.result is not False
     assert (ret.result is None) is testmode
     assert "created" in ret.changes
+    assert ret.changes["created"]["CN"] == int_ca_args["name"]
+    assert ret.changes["created"]["issuer_name"] == int_ca_args.get("issuer_name")
+    assert (ret.changes["created"]["issuer_id"] == "<TBD>") is testmode
+    assert (ret.changes["created"]["key_id"] == "<TBD>") is testmode
+    assert (ret.changes["imported"] == ["<TBD>"]) is testmode
+    assert "old_issuer" not in ret.changes
     assert (
         f"Intermediate CA certificate {'would have' if testmode else 'has'} been created"
         in ret.comment
@@ -2663,6 +2669,9 @@ def test_intermediate_issuer_managed_create(vault_pki, int_ca_args, testmode):
         assert not vault_list(f"{int_ca_args['mount']}/issuers")
         return
     issuer_info = _default_issuer(int_ca_args["mount"])
+    assert ret.changes["created"]["issuer_id"] == issuer_info["issuer_id"]
+    assert ret.changes["created"]["key_id"] == issuer_info["key_id"]
+
     cert = load_cert(issuer_info["certificate"])
     assert _subject_cn(cert) == int_ca_args["name"]
     basic_constraints = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
@@ -2930,7 +2939,10 @@ def test_intermediate_issuer_managed_issuer_changes(vault_pki, int_ca_args, test
     assert (
         f"Intermediate CA issuer {'would have' if testmode else 'has'} been updated" in ret.comment
     )
+    assert "created" not in ret.changes
     assert "cert" not in ret.changes
+    assert "imported" not in ret.changes
+    assert "old_issuer" not in ret.changes
 
     issuer_changes = ret.changes.get("issuer")
     assert issuer_changes
@@ -3003,6 +3015,51 @@ def test_intermediate_issuer_managed_issuer_ok(vault_pki, int_ca_args, testmode)
     assert new_info == issuer_info
 
 
+@pytest.mark.parametrize(
+    "existing_intermediate",
+    (
+        {
+            "issuer_name": "my_int_ca",
+        },
+    ),
+    indirect=True,
+)
+@pytest.mark.parametrize("int_ca_args", ("salt_ca",), indirect=True)
+def test_intermediate_issuer_managed_changes_with_issuer_name(
+    vault_pki, int_ca_args, existing_intermediate, testmode
+):
+    """
+    Ensure issuer certificate rotation keeps issuer config the same
+    and accounts for issuer_name needing to be unique.
+    """
+    issuer_info = _default_issuer(int_ca_args["mount"])
+    int_ca_args["max_path_length"] = 2
+    ret = vault_pki.intermediate_issuer_managed(**int_ca_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert (
+        f"Intermediate CA certificate {'would have' if testmode else 'has'} been rotated"
+        in ret.comment
+    )
+    assert ret.changes
+    assert "cert" in ret.changes
+    assert "issuer" not in ret.changes
+    assert "issuer_id" in ret.changes
+    assert "old_issuer" in ret.changes
+    assert ret.changes["old_issuer"]["issuer_id"] == issuer_info["issuer_id"]
+    assert ret.changes["old_issuer"]["issuer_name"]["old"] == issuer_info["issuer_name"]
+    assert ret.changes["old_issuer"]["issuer_name"]["new"].startswith(
+        issuer_info["issuer_name"] + "-" + ("<TBD>" if testmode else "")
+    )
+    new_info = _default_issuer(int_ca_args["mount"])
+    if testmode:
+        assert new_info["issuer_id"] == existing_intermediate["issuer_id"]
+        assert new_info["issuer_name"] == existing_intermediate["issuer_name"]
+        return
+    assert new_info["issuer_id"] != issuer_info["issuer_id"]
+    assert new_info["issuer_name"] == int_ca_args["issuer_name"]
+
+
 def test_intermediate_issuer_managed_changes(
     vault_pki, int_ca_args, existing_intermediate, testmode
 ):
@@ -3013,6 +3070,13 @@ def test_intermediate_issuer_managed_changes(
     ret = vault_pki.intermediate_issuer_managed(**int_ca_args, test=testmode)
     assert ret.result is not False
     assert (ret.result is None) is testmode
+    assert "issuer_id" in ret.changes
+    assert "imported" in ret.changes
+    assert "key_id" not in ret.changes
+    assert ret.changes["issuer_id"]["old"] == existing_intermediate["issuer_id"]
+    assert (ret.changes["issuer_id"]["new"] == "<TBD>") is testmode
+    assert (ret.changes["imported"] == ["<TBD>"]) is testmode
+
     assert ret.changes["cert"]["subject_name"] == {
         "old": "CN=Test Intermediate CA",
         "new": "CN=Rotated Intermediate CA",
@@ -3049,6 +3113,9 @@ def test_intermediate_issuer_managed_changes_rotate_key(
     ret = vault_pki.intermediate_issuer_managed(**int_ca_args, test=testmode)
     assert ret.result is not False
     assert (ret.result is None) is testmode
+    assert "key_id" in ret.changes
+    assert ret.changes["key_id"]["old"] == existing_intermediate["key_id"]
+    assert (ret.changes["key_id"]["new"] == "<TBD>") is testmode
     assert ret.changes["cert"]["private_key"] is True
     assert (
         ret.changes["cert"]["extensions"]["changed"]["subjectKeyIdentifier"]["value"]["new"]
@@ -3060,6 +3127,7 @@ def test_intermediate_issuer_managed_changes_rotate_key(
         assert new_info["issuer_id"] == existing_intermediate["issuer_id"]
         assert new_info["key_id"] == existing_intermediate["key_id"]
         return
+    assert ret.changes["key_id"]["new"] == new_info["key_id"]
     assert new_info["issuer_id"] != existing_intermediate["issuer_id"]
     assert new_info["key_id"] != existing_intermediate["key_id"]
     new_cert = load_cert(new_info["certificate"])
@@ -3072,7 +3140,9 @@ def test_intermediate_issuer_managed_changes_existing_key(vault_pki, int_ca_args
     key_1 = vault_write(f"{int_ca_args['mount']}/keys/generate/internal", key_name="old_key")[
         "data"
     ]
-    key_2 = vault_write(f"{int_ca_args['mount']}/keys/generate/internal")["data"]
+    key_2 = vault_write(f"{int_ca_args['mount']}/keys/generate/internal", key_name="new_key")[
+        "data"
+    ]
     int_ca_args["key_ref"] = key_1["key_name"]
     ret = vault_pki.intermediate_issuer_managed(**int_ca_args)
     assert ret.result is True
@@ -3086,6 +3156,13 @@ def test_intermediate_issuer_managed_changes_existing_key(vault_pki, int_ca_args
     assert not ret.changes
     assert _default_issuer(int_ca_args["mount"]) == issuer_info
 
+    # Ensure key_ref is idempotent when specified via ID
+    int_ca_args["key_ref"] = key_1["key_id"]
+    ret = vault_pki.intermediate_issuer_managed(**int_ca_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    assert _default_issuer(int_ca_args["mount"]) == issuer_info
+
     # Ensure existing issuer key is kept, even if key_ref is removed
     int_ca_args.pop("key_ref")
     ret = vault_pki.intermediate_issuer_managed(**int_ca_args, test=testmode)
@@ -3093,13 +3170,16 @@ def test_intermediate_issuer_managed_changes_existing_key(vault_pki, int_ca_args
     assert not ret.changes
     assert _default_issuer(int_ca_args["mount"]) == issuer_info
 
-    # Now change the explicit key_ref to a key_id
-    int_ca_args["key_ref"] = key_2["key_id"]
+    # Now change the explicit key_ref to a key_name of a different key
+    int_ca_args["key_ref"] = key_2["key_name"]
     ret = vault_pki.intermediate_issuer_managed(**int_ca_args, test=testmode)
     assert ret.result is not False
     assert (ret.result is None) is testmode
     assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
     assert ret.changes
+    assert "key_id" in ret.changes
+    assert ret.changes["key_id"]["old"] == key_1["key_id"]
+    assert (ret.changes["key_id"]["new"] == "<TBD>") is testmode
     cert_changes = ret.changes.get("cert")
     assert cert_changes
     assert "private_key" in cert_changes
@@ -3109,12 +3189,7 @@ def test_intermediate_issuer_managed_changes_existing_key(vault_pki, int_ca_args
     if testmode:
         return
     assert new_info["key_id"] == key_2["key_id"]
-
-    # And ensure key_ref via key_id is idempotent as well
-    ret = vault_pki.intermediate_issuer_managed(**int_ca_args, test=testmode)
-    assert ret.result is True
-    assert not ret.changes
-    assert _default_issuer(int_ca_args["mount"]) == new_info
+    assert ret.changes["key_id"]["new"] == key_2["key_id"]
 
 
 @pytest.mark.parametrize("existing_intermediate", ({"days_valid": 20},), indirect=True)
@@ -3238,11 +3313,19 @@ def test_root_issuer_managed_create(
     assert ret.result is not False
     assert (ret.result is None) is testmode
     assert "created" in ret.changes
+    assert ret.changes["created"]["CN"] == root_ca_args["name"]
+    assert ret.changes["created"]["issuer_name"] == root_ca_args.get("issuer_name")
+    assert (ret.changes["created"]["issuer_id"] == "<TBD>") is testmode
+    assert (ret.changes["created"]["key_id"] == "<TBD>") is testmode
+    assert "old_issuer" not in ret.changes
     assert f"Root CA certificate {'would have' if testmode else 'has'} been created" in ret.comment
     if testmode:
         assert not vault_list("pki/issuers")
         return
     issuer_info = _default_issuer()
+    assert ret.changes["created"]["issuer_id"] == issuer_info["issuer_id"]
+    assert ret.changes["created"]["key_id"] == issuer_info["key_id"]
+
     cert = load_cert(issuer_info["certificate"])
     if aia_urls.get("issuing_certificates") or aia_urls.get("ocsp_servers"):
         cert.extensions.get_extension_for_class(cx509.AuthorityInformationAccess)
@@ -3276,7 +3359,10 @@ def test_root_issuer_managed_issuer_changes(vault_pki, root_ca_args, testmode, c
     assert ret.result is not False
     assert (ret.result is None) is testmode
     assert f"Root CA issuer {'would have' if testmode else 'has'} been updated" in ret.comment
+    assert "created" not in ret.changes
     assert "cert" not in ret.changes
+    assert "imported" not in ret.changes
+    assert "old_issuer" not in ret.changes
 
     issuer_changes = ret.changes.get("issuer")
     assert issuer_changes
@@ -3350,6 +3436,40 @@ def test_root_issuer_managed_issuer_ok(vault_pki, root_ca_args, testmode):
 @pytest.mark.parametrize(
     "existing_root",
     (
+        {
+            "issuer_name": "my_root_ca",
+        },
+    ),
+    indirect=True,
+)
+def test_root_issuer_managed_changes_with_issuer_name(vault_pki, root_ca_args):
+    """
+    Ensure issuer certificate rotation keeps issuer config the same
+    and accounts for issuer_name needing to be unique.
+    """
+    issuer_info = _default_issuer()
+    root_ca_args["max_path_length"] = 2
+    ret = vault_pki.root_issuer_managed(**root_ca_args)
+    assert ret.result is True
+    assert "has been rotated" in ret.comment
+    assert ret.changes
+    assert "cert" in ret.changes
+    assert "issuer" not in ret.changes
+    assert "old_issuer" in ret.changes
+    assert ret.changes["old_issuer"]["issuer_id"] == issuer_info["issuer_id"]
+    assert ret.changes["old_issuer"]["issuer_name"]["old"] == issuer_info["issuer_name"]
+    assert ret.changes["old_issuer"]["issuer_name"]["new"].startswith(
+        issuer_info["issuer_name"] + "-"
+    )
+    new_info = _default_issuer()
+    assert new_info["issuer_id"] != issuer_info["issuer_id"]
+    assert new_info["issuer_name"] == root_ca_args["issuer_name"]
+
+
+@pytest.mark.usefixtures("existing_root")
+@pytest.mark.parametrize(
+    "existing_root",
+    (
         {},
         {
             "key_algo": "rsa",  # needed for signature_bits to work
@@ -3415,7 +3535,6 @@ def test_root_issuer_managed_ok(vault_pki, root_ca_args, testmode, container):
         assert len(nc.value.excluded_subtrees) == 5
 
 
-@pytest.mark.usefixtures("existing_root")
 @pytest.mark.parametrize(
     "existing_root",
     (
@@ -3451,7 +3570,7 @@ def test_root_issuer_managed_ok(vault_pki, root_ca_args, testmode, container):
     ),
     indirect=True,
 )
-def test_root_issuer_managed_changes(vault_pki, root_ca_args, testmode, container):
+def test_root_issuer_managed_changes(vault_pki, root_ca_args, existing_root, testmode, container):
     root_ca_args = root_ca_args.copy()  # we modify the dict, which is shared
     issuer_info = _default_issuer()
     cert = load_cert(issuer_info["certificate"])
@@ -3492,6 +3611,13 @@ def test_root_issuer_managed_changes(vault_pki, root_ca_args, testmode, containe
     assert (ret.result is None) is testmode
     assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
     assert ret.changes
+    assert "issuer_id" in ret.changes
+    assert "key_id" in ret.changes
+    assert ret.changes["key_id"]["old"] == existing_root["key_id"]
+    assert (ret.changes["key_id"]["new"] == "<TBD>") is testmode
+    assert ret.changes["issuer_id"]["old"] == existing_root["issuer_id"]
+    assert (ret.changes["issuer_id"]["new"] == "<TBD>") is testmode
+
     cert_changes = ret.changes.get("cert")
     assert cert_changes
     assert "subject_name" in cert_changes
@@ -3532,6 +3658,7 @@ def test_root_issuer_managed_changes(vault_pki, root_ca_args, testmode, containe
     if testmode:
         assert new_cert == cert
         return
+    assert ret.changes["key_id"]["new"] == new_info["key_id"]
 
     basic_constraints = new_cert.extensions.get_extension_for_class(cx509.BasicConstraints)
     assert basic_constraints.value.ca is True
@@ -3612,7 +3739,7 @@ def test_root_issuer_managed_changes_not_after(vault_pki, root_ca_args, testmode
 @pytest.mark.usefixtures("clean_pki_mount")
 def test_root_issuer_managed_changes_existing_key(vault_pki, root_ca_args, testmode):
     key_1 = vault_write("pki/keys/generate/internal", key_name="old_key")["data"]
-    key_2 = vault_write("pki/keys/generate/internal")["data"]
+    key_2 = vault_write("pki/keys/generate/internal", key_name="new_key")["data"]
     root_ca_args["key_ref"] = key_1["key_name"]
     ret = vault_pki.root_issuer_managed(**root_ca_args)
     assert ret.result is True
@@ -3626,6 +3753,13 @@ def test_root_issuer_managed_changes_existing_key(vault_pki, root_ca_args, testm
     assert not ret.changes
     assert _default_issuer() == issuer_info
 
+    # Ensure key_ref is idempotent when specified via ID
+    root_ca_args["key_ref"] = key_1["key_id"]
+    ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    assert _default_issuer() == issuer_info
+
     # Ensure existing issuer key is kept, even if key_ref is removed
     root_ca_args.pop("key_ref")
     ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
@@ -3633,13 +3767,16 @@ def test_root_issuer_managed_changes_existing_key(vault_pki, root_ca_args, testm
     assert not ret.changes
     assert _default_issuer() == issuer_info
 
-    # Now change the explicit key_ref to a key_id
-    root_ca_args["key_ref"] = key_2["key_id"]
+    # Now change the explicit key_ref to a key_name of a different key
+    root_ca_args["key_ref"] = key_2["key_name"]
     ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
     assert ret.result is not False
     assert (ret.result is None) is testmode
     assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
     assert ret.changes
+    assert "key_id" in ret.changes
+    assert ret.changes["key_id"]["old"] == key_1["key_id"]
+    assert (ret.changes["key_id"]["new"] == "<TBD>") is testmode
     cert_changes = ret.changes.get("cert")
     assert cert_changes
     assert "private_key" in cert_changes
@@ -3652,12 +3789,7 @@ def test_root_issuer_managed_changes_existing_key(vault_pki, root_ca_args, testm
     if testmode:
         return
     assert new_info["key_id"] == key_2["key_id"]
-
-    # And ensure key_ref via key_id is idempotent as well
-    ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
-    assert ret.result is True
-    assert not ret.changes
-    assert _default_issuer() == new_info
+    assert ret.changes["key_id"]["new"] == key_2["key_id"]
 
 
 @pytest.mark.usefixtures("existing_root")
