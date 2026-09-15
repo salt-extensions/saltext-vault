@@ -376,11 +376,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
             )
 
         ttl_seconds = timestring_map(ttl, cast=int)
-
-        if timestring_map(ttl_remaining, cast=int) >= ttl_seconds:
-            raise SaltInvocationError(
-                "The `ttl_remaining` cannot be larger than or equal to `ttl`."
-            )
+        _validate_ttl_params(ttl_seconds, timestring_map(ttl_remaining, cast=int), not_after)
 
         if not sign_verbatim:
             hlp.none_of(
@@ -597,7 +593,7 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
     issuer_ref=None,
     sign_verbatim=False,
     ttl="4320h",  # 180d
-    ttl_remaining="336h",  # 14d
+    ttl_remaining="1440h",  # 60d
     encoding="pem",
     append_ca_chain=False,
     # Vault sign args
@@ -688,14 +684,23 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
 
     ttl
         Specifies the requested Time To Live (after which the certificate will be expired).
-        This cannot be larger than the engine's max (or, if not set, the system max).
         Can be an integer, which is interpreted as seconds, or a time string such as ``1h``.
         Hour is the largest suffix. Defaults to ``4320h`` or 180 days.
+
+        .. hint::
+
+            Translated into ``not_after``, hence not subject to the mount's ``max_lease_ttl``.
 
     ttl_remaining
         If an existing certificate's remaining Time To Live undercuts this period, renew it.
         Can be an integer, which is interpreted as seconds, or a time string such as ``1h``.
-        Hour is the largest suffix. Defaults to ``336h`` or 14 days.
+        Hour is the largest suffix. Defaults to ``1440h`` or 60 days.
+
+        .. hint::
+
+            This value should exceed the maximum validity of certificates issued
+            by this CA, otherwise issuance close to its expiry can fail or yield
+            certificates outliving it.
 
     encoding
         Encoding of the managed certificate file.
@@ -707,6 +712,7 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
         Defaults to ``false``.
 
         .. note::
+
             This appends all CA chain certificates of the selected issuer except self-signed (root) ones.
 
     alt_names
@@ -834,11 +840,7 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
             )
 
         ttl_seconds = timestring_map(ttl, cast=int)
-
-        if timestring_map(ttl_remaining, cast=int) >= ttl_seconds:
-            raise SaltInvocationError(
-                "The `ttl_remaining` cannot be larger than or equal to `ttl`."
-            )
+        _validate_ttl_params(ttl_seconds, timestring_map(ttl_remaining, cast=int), not_after)
 
         # check file.managed changes early to avoid using unnecessary resources
         file_managed_test = _run_state("file.managed", name, test=True, replace=False, **file_args)
@@ -958,12 +960,17 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
                     encoding=encoding,
                 )
             else:
+                if not_after is None:
+                    # Requested TTLs are capped at the mount's max_lease_ttl (768h by default),
+                    # `not_after` is not. CA certificates usually exceed that limit.
+                    not_after = (
+                        datetime.now(tz=timezone.utc) + timedelta(seconds=ttl_seconds)
+                    ).strftime("%Y-%m-%dT%H:%M:%SZ")
                 issued_cert = __salt__["vault_pki.sign_intermediate"](
                     common_name=common_name,
                     private_key=private_key,
                     private_key_passphrase=private_key_passphrase,
                     csr=csr,
-                    ttl=ttl,
                     issuer_ref=issuer_ref,
                     mount=mount,
                     sign_verbatim=sign_verbatim,
@@ -1194,7 +1201,7 @@ def role_absent(name, mount="pki"):
 
 def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-locals
     name,
-    days_remaining=30,
+    days_remaining=60,
     rotate_key=False,
     # Vault issuer config for this issuer's cert - if ref is unspecified, uses x509_v2
     issuer_ref=None,
@@ -1357,7 +1364,13 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
 
     days_remaining
         Attempt to recreate the certificate if its remaining validity
-        falls below this number of days. Defaults to ``30``.
+        falls below this number of days. Defaults to ``60``.
+
+        .. hint::
+
+            This value should exceed the maximum validity of certificates issued
+            by this CA, otherwise issuance close to its expiry can fail or yield
+            certificates outliving it.
 
     rotate_key
         When rotating the default issuer, rotate its key along with it. Defaults to false.
@@ -1415,6 +1428,11 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
         Number of days the certificate should be valid for when (re-)issued.
         Not respected when ``not_after`` is set explicitly.
         Defaults to 180.
+
+        .. hint::
+
+            Translated into ``not_after`` when a Vault issuer signs the certificate,
+            hence not subject to the mount's ``max_lease_ttl``.
 
     not_after
         Absolute value of the Not After field of the certificate in UTC format,
@@ -1615,6 +1633,16 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
+    try:
+        _validate_ttl_params(
+            days_valid * 86400,
+            days_remaining * 86400,
+            not_after,
+            ttl_param="days_valid",
+            ttl_remaining_param="days_remaining",
+        )
+    except SaltInvocationError as err:
+        return {"name": name, "result": False, "comment": str(err), "changes": {}}
     issuer_mount = issuer_mount or mount
     vault_signed = issuer_ref is not None
     # Arguments for either vault_pki.sign_intermediate (but not CSR generation args, so very few/none)
@@ -1769,9 +1797,9 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
     )
 
 
-def root_issuer_managed(  # pylint: disable=too-many-arguments
+def root_issuer_managed(  # pylint: disable=too-many-arguments,too-many-locals
     name,
-    days_remaining=90,
+    days_remaining=365,
     allow_premature_rotation=False,
     # key params
     key_ref=None,
@@ -1899,7 +1927,13 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments
 
     days_remaining
         Attempt to recreate the certificate if its remaining validity
-        falls below this number of days. Defaults to ``90``.
+        falls below this number of days. Defaults to ``365``.
+
+        .. hint::
+
+            This value should exceed the maximum validity of certificates issued
+            by this CA (including intermediate ones), otherwise issuance close to
+            its expiry can fail or yield certificates outliving it.
 
     allow_premature_rotation
         Always rotate the root issuer certificate when it does not meet its specification,
@@ -1966,6 +2000,10 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments
         Number of days the certificate should be valid for when (re-)issued.
         Not respected when ``not_after`` is set explicitly.
         Defaults to 3650 (10 years).
+
+        .. hint::
+
+            Translated into ``not_after``, hence not subject to the mount's ``max_lease_ttl``.
 
     not_before_duration
         Duration by which to backdate the NotBefore property. Defaults to ``30s``.
@@ -2081,6 +2119,17 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
+
+    try:
+        _validate_ttl_params(
+            days_valid * 86400,
+            days_remaining * 86400,
+            not_after,
+            ttl_param="days_valid",
+            ttl_remaining_param="days_remaining",
+        )
+    except SaltInvocationError as err:
+        return {"name": name, "result": False, "comment": str(err), "changes": {}}
 
     def check_cert(current, *, rotate_key, replace_key):
         urls = _get_urls(None, mount=mount)
@@ -2535,6 +2584,36 @@ def _check_issuer_config_changes(
                     "removed": list(sorted(set(current[vault_param]) - set(val))),
                 }
     return changes
+
+
+def _validate_ttl_params(
+    ttl: int,
+    ttl_remaining: int,
+    not_after: str | None,
+    *,
+    ttl_param: str = "ttl",
+    ttl_remaining_param: str = "ttl_remaining",
+) -> None:
+    """
+    Ensure requested certificate validity parameters are consistent before
+    creating anything, avoiding certificates that immediately require
+    renewal or fail validation on subsequent runs.
+    """
+    if not_after is None:
+        if ttl_remaining >= ttl:
+            raise SaltInvocationError(
+                f"The `{ttl_remaining_param}` cannot be larger than or equal to `{ttl_param}`."
+            )
+        return
+    not_after_dt = pki._strptime_loose(not_after, "not_after")
+    tolerance = timedelta(seconds=ttl_remaining)
+    if not_after_dt < datetime.now(tz=timezone.utc) + tolerance:
+        expires_in = not_after_dt - datetime.now(tz=timezone.utc)
+        raise SaltInvocationError(
+            f"The specified `not_after` undercuts `{ttl_remaining_param}`. Update or remove `not_after`. "
+            + f"The certificate {hlp.pretty_td(expires_in, now=('expires', 'expired'))}, "
+            + f"which is less than the tolerance of {hlp.pretty_td(tolerance)}"
+        )
 
 
 def _split_file_kwargs(kwargs):

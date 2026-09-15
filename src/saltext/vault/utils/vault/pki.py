@@ -2048,7 +2048,8 @@ def _compare_cert_with_builder(
     )
     if relevant_not_valid_after < datetime.now(tz=timezone.utc) + tolerance:
         expires_in = relevant_not_valid_after - datetime.now(timezone.utc)
-        if not_after is not None:
+        if not_after is not None:  # pragma: no cover
+            # This should not be reachable by any PKI state right now, just a sanity check.
             raise CommandExecutionError(
                 "Statically specified `not_after` undercuts `ttl_remaining`/`days_remaining`. Update or remove `not_after`. "
                 + f"The certificate {pretty_td(expires_in, now=('expires', 'expired'))}, which is less than the tolerance of {pretty_td(tolerance)}"

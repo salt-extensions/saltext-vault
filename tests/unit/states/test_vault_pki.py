@@ -125,6 +125,37 @@ def test_issuer_errors_are_reported(read_issuer, func, err):
     assert not res["changes"]
 
 
+@pytest.mark.parametrize("func", ("intermediate_issuer_managed", "root_issuer_managed"))
+@pytest.mark.parametrize("days_remaining", (100, 101))
+def test_issuer_managed_invalid_days_remaining(func, days_remaining):
+    res = getattr(vault_pki, func)("CA", days_valid=100, days_remaining=days_remaining)
+    assert res["result"] is False
+    assert "The `days_remaining` cannot be larger than or equal to `days_valid`" in res["comment"]
+    assert not res["changes"]
+
+
+@pytest.mark.parametrize(
+    "func,kwargs",
+    (
+        (
+            "certificate_managed",
+            {"common_name": "example.com", "private_key": "pk", "sign_verbatim": True},
+        ),
+        (
+            "ca_certificate_managed",
+            {"common_name": "example.com", "private_key": "pk", "sign_verbatim": True},
+        ),
+        ("intermediate_issuer_managed", {}),
+        ("root_issuer_managed", {}),
+    ),
+)
+def test_cert_funcs_undercutting_not_after(func, kwargs):
+    res = getattr(vault_pki, func)("test", not_after="2020-01-01T00:00:00Z", **kwargs)
+    assert res["result"] is False
+    assert "`not_after` undercuts" in res["comment"]
+    assert not res["changes"]
+
+
 @pytest.mark.parametrize(
     "fret_result,current,expected_comment",
     (

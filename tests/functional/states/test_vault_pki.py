@@ -79,6 +79,11 @@ def testrole(request):
 
 @pytest.fixture
 def ca2_cert():
+    """
+    This hardcoded certificate expires Jul 24 08:03:39 2054 GMT.
+    I'm not certain whether this project will see the day where
+    it needs to be rotated. oO
+    """
     return """\
 -----BEGIN CERTIFICATE-----
 MIIDozCCAougAwIBAgIUGPU16um4LNbOXqUIEI5UjNOmgiUwDQYJKoZIhvcNAQEL
@@ -141,6 +146,10 @@ tClJiP0NZQ8YBJ+vi2VB1iQ=
 
 @pytest.fixture
 def ca_cert():
+    """
+    This hardcoded certificate expires 2036-08-23 15:46:53 GMT.
+    Please regenerate in time and remember we need leeway. :)
+    """
     return """\
 -----BEGIN CERTIFICATE-----
 MIIDSjCCAjKgAwIBAgIUQJgxgogKKjEPk+XPj9QLMvDSAUAwDQYJKoZIhvcNAQEL
@@ -201,6 +210,10 @@ pUE+01oL9IcXo04uEPvJekc=
 
 @pytest.fixture
 def ca_sub_cert():
+    """
+    This hardcoded certificate expires Aug 23 15:53:27 2036 GMT.
+    Please regenerate in time. :)
+    """
     return """\
 -----BEGIN CERTIFICATE-----
 MIIDTTCCAjWgAwIBAgIUAyLX8kCZwSl74iK/rbMwUeLo+MMwDQYJKoZIhvcNAQEL
@@ -261,6 +274,10 @@ oYMtPj6yNSeTRJgROi2kF4kjgnCeiLe2FhFFQqP6o5oAjrFRCDEgVTDkSzWOQgX/
 
 @pytest.fixture
 def ca_cert_no_pathlen():
+    """
+    This hardcoded certificate expires Aug 24 21:46:46 2036 GMT.
+    Please regenerate in time. :)
+    """
     return """\
 -----BEGIN CERTIFICATE-----
 MIIDHjCCAgagAwIBAgIUKm99KrqdfPb1J4sQe+SorjMC+LYwDQYJKoZIhvcNAQEL
@@ -516,6 +533,20 @@ def test_ca_certificate_managed_signature_bits(vault_pki, ca_cert_args):
     ret = vault_pki.ca_certificate_managed(**ca_cert_args)
     assert ret.result is True
     assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup")
+def test_ca_certificate_managed_ttl_exceeds_mount_max(vault_pki, ca_cert_args):
+    """
+    Ensure the requested validity is translated into ``not_after`` and thus
+    not capped at the mount's ``max_lease_ttl``.
+    """
+    ca_cert_args["ttl"] = "43200h"
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    cert = load_cert(ca_cert_args["name"])
+    expected_not_after = datetime.now(tz=timezone.utc) + timedelta(hours=43200)
+    assert abs((_not_valid_after(cert) - expected_not_after).total_seconds()) < 86400
 
 
 @pytest.mark.usefixtures("issuer_setup", "roles_setup", "testrole")
@@ -2640,8 +2671,17 @@ def _subject_cn(cert):
     return cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["CN"])[0].value
 
 
+def _not_valid_after(cert):
+    try:
+        return cert.not_valid_after_utc
+    except AttributeError:  # pragma: no cover
+        return cert.not_valid_after.replace(tzinfo=timezone.utc)
+
+
 @pytest.mark.usefixtures("clean_pki_mount")
 def test_intermediate_issuer_managed_create(vault_pki, int_ca_args, testmode):
+    # the hard-coded ca_cert is valid until 2036, consider swapping it with ca2_cert
+    int_ca_args["days_valid"] = 1825
     ret = vault_pki.intermediate_issuer_managed(**int_ca_args, test=testmode)
     assert ret.result is not False
     assert (ret.result is None) is testmode
@@ -2668,6 +2708,9 @@ def test_intermediate_issuer_managed_create(vault_pki, int_ca_args, testmode):
     basic_constraints = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
     assert basic_constraints.value.ca is True
     assert basic_constraints.value.path_length == 0
+    # Ensure the requested validity is not capped at the mount's max_lease_ttl
+    expected_not_after = datetime.now(tz=timezone.utc) + timedelta(days=int_ca_args["days_valid"])
+    assert abs((_not_valid_after(cert) - expected_not_after).total_seconds()) < 86400
 
 
 @pytest.mark.usefixtures("existing_intermediate", "aia_urls")
@@ -3218,9 +3261,12 @@ def test_intermediate_issuer_managed_changes_existing_key(vault_pki, int_ca_args
     assert ret.changes["key_id"]["new"] == key_2["key_id"]
 
 
-@pytest.mark.parametrize("existing_intermediate", ({"days_valid": 20},), indirect=True)
+@pytest.mark.parametrize(
+    "existing_intermediate", ({"days_valid": 20, "days_remaining": 10},), indirect=True
+)
 def test_intermediate_issuer_managed_changes_expiry(vault_pki, int_ca_args, existing_intermediate):
     int_ca_args["days_valid"] = 90
+    int_ca_args["days_remaining"] = 30
     ret = vault_pki.intermediate_issuer_managed(**int_ca_args)
     assert ret.result is True
     assert "expiration" in ret.changes.get("cert", {})
@@ -3826,7 +3872,7 @@ def test_root_issuer_managed_changes(
 @pytest.mark.usefixtures("existing_root")
 @pytest.mark.parametrize(
     "existing_root",
-    ({"days_valid": 100},),
+    ({"days_valid": 100, "days_remaining": 30},),
     indirect=True,
 )
 def test_root_issuer_managed_changes_expiry(vault_pki, root_ca_args, testmode):
@@ -3856,7 +3902,7 @@ def test_root_issuer_managed_changes_expiry(vault_pki, root_ca_args, testmode):
 @pytest.mark.usefixtures("existing_root")
 @pytest.mark.parametrize(
     "existing_root",
-    ({"days_valid": 100},),
+    ({"days_valid": 100, "days_remaining": 30},),
     indirect=True,
 )
 @pytest.mark.parametrize("allow_premature_rotation", (False, True))
