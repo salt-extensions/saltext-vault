@@ -1692,6 +1692,33 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
         if not changes:
             return ret
 
+        # Ensure the issuer name is not taken before going any further
+        if (
+            issuer_name is not None
+            and (current is None or current["issuer_name"] != issuer_name)
+            and (name_collision := __salt__["vault_pki.read_issuer"](issuer_name, mount=mount))
+        ):
+            if current is None or cert_affected or current["issuer_name"]:
+                # Unlikely to be an artifact of update_issuer causing an exception after rotation
+                raise CommandExecutionError(
+                    f"Another issuer with name '{issuer_name}' exists on mount '{mount}' "
+                    f"(issuer_id: {name_collision['issuer_id']})"
+                )
+            # Assume this is an artifact from a previous run having failed to name the issuer and try again.
+            log.warning(
+                "Another issuer with name '%s' exists on mount '%s' (issuer_id: %s). "
+                "Renaming it since it's likely an artifact from a previous failed run",
+                issuer_name,
+                mount,
+                name_collision["issuer_id"],
+            )
+            if not (old_changes := _rotate_out(current, issuer_name, mount)):  # pragma: no cover
+                raise CommandExecutionError(
+                    f"Another issuer with name '{issuer_name}' exists on mount '{mount}' "
+                    f"(issuer_id: {name_collision['issuer_id']}). Tried renaming it, but somehow failed."
+                )
+            ret["changes"]["old_issuer"] = old_changes
+
         if __opts__["test"]:
             ret["result"] = None
             ret["changes"] = changes
@@ -1707,17 +1734,10 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
                     f"Intermediate CA issuer would have been {'updated' if current else 'created'}"
                 )
 
-            if current is not None:
+            if current is not None and cert_affected:
                 ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": "<TBD>"}
-                if issuer_name and current["issuer_name"] == issuer_name:
-                    ret["changes"]["old_issuer"] = {
-                        "issuer_id": current["issuer_id"],
-                        "issuer_name": {"old": issuer_name, "new": f"{issuer_name}-<TBD>"},
-                    }
-                if "issuing-certificates" in current["usage"]:
-                    ret["changes"].setdefault("old_issuer", {"issuer_id": current["issuer_id"]})[
-                        "usage"
-                    ] = {"removed": ["issuing-certificates"]}
+                if old_changes := _rotate_out(current, issuer_name, mount):
+                    ret["changes"]["old_issuer"] = old_changes
                 if rotate_key or replace_key:
                     ret["changes"]["key_id"] = {"old": current["key_id"], "new": "<TBD>"}
 
@@ -1782,22 +1802,8 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
 
             if current is not None:
                 ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": issuer_id}
-                upd_old_params, old_changes = {}, {"issuer_id": current["issuer_id"]}
-                if issuer_name and current["issuer_name"] == issuer_name:
-                    # When we rotate a named issuer, we need to rename the previous one since names must be unique
-                    upd_old_params["name"] = f"{issuer_name}-{int(time.time())}"
-                    old_changes["issuer_name"] = {"old": issuer_name, "new": upd_old_params["name"]}
-                if "issuing-certificates" in current["usage"]:
-                    upd_old_params["usage"] = [
-                        usage
-                        for usage in hlp.deserialize_csl(current["usage"])
-                        if usage != "issuing-certificates"
-                    ]
-                    old_changes["usage"] = {"removed": ["issuing-certificates"]}
-                if upd_old_params:
-                    __salt__["vault_pki.update_issuer"](
-                        ref=current["issuer_id"], **upd_old_params, mount=mount
-                    )
+                # When we rotate a named issuer, we need to rename the previous one since names must be unique
+                if old_changes := _rotate_out(current, issuer_name, mount):
                     ret["changes"]["old_issuer"] = old_changes
 
                 # Correctly report new subjectKeyIdentifier, it's "<TBD>" right now
@@ -2250,6 +2256,33 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
         if current is not None and cert_affected and not allow_premature_rotation:
             refused_to_rotate = "expiration" not in changes["cert"]
 
+        # Ensure the issuer name is not taken before going any further
+        if (
+            issuer_name is not None
+            and (current is None or current["issuer_name"] != issuer_name)
+            and (name_collision := __salt__["vault_pki.read_issuer"](issuer_name, mount=mount))
+        ):
+            if current is None or cert_affected or current["issuer_name"]:
+                # Unlikely to be an artifact of update_issuer causing an exception after rotation
+                raise CommandExecutionError(
+                    f"Another issuer with name '{issuer_name}' exists on mount '{mount}' "
+                    f"(issuer_id: {name_collision['issuer_id']})"
+                )
+            # Assume this is an artifact from a previous run having failed to name the issuer and try again.
+            log.warning(
+                "Another issuer with name '%s' exists on mount '%s' (issuer_id: %s). "
+                "Renaming it since it's likely an artifact from a previous failed run",
+                issuer_name,
+                mount,
+                name_collision["issuer_id"],
+            )
+            if not (old_changes := _rotate_out(current, issuer_name, mount)):  # pragma: no cover
+                raise CommandExecutionError(
+                    f"Another issuer with name '{issuer_name}' exists on mount '{mount}' "
+                    f"(issuer_id: {name_collision['issuer_id']}). Tried renaming it, but somehow failed."
+                )
+            ret["changes"]["old_issuer"] = old_changes
+
         if __opts__["test"]:
             ret["result"] = False if refused_to_rotate else None
             ret["changes"] = changes
@@ -2265,17 +2298,10 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
             if current is None or issuer_affected:
                 msg.append(f"Root CA issuer would have been {'updated' if current else 'created'}")
 
-            if current is not None:
+            if current is not None and cert_affected:
                 ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": "<TBD>"}
-                if issuer_name and current["issuer_name"] == issuer_name:
-                    ret["changes"]["old_issuer"] = {
-                        "issuer_id": current["issuer_id"],
-                        "issuer_name": {"old": issuer_name, "new": f"{issuer_name}-<TBD>"},
-                    }
-                if "issuing-certificates" in current["usage"]:
-                    ret["changes"].setdefault("old_issuer", {"issuer_id": current["issuer_id"]})[
-                        "usage"
-                    ] = {"removed": ["issuing-certificates"]}
+                if old_changes := _rotate_out(current, issuer_name, mount):
+                    ret["changes"]["old_issuer"] = old_changes
                 if rotate_key or replace_key:
                     ret["changes"]["key_id"] = {"old": current["key_id"], "new": "<TBD>"}
 
@@ -2290,15 +2316,8 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
             )
             ret["changes"]["cert"] = changes["cert"]
             ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": "<TBD>"}
-            if issuer_name and current["issuer_name"] == issuer_name:
-                ret["changes"]["old_issuer"] = {
-                    "issuer_id": current["issuer_id"],
-                    "issuer_name": {"old": issuer_name, "new": f"{issuer_name}-<TBD>"},
-                }
-            if "issuing-certificates" in current["usage"]:
-                ret["changes"].setdefault("old_issuer", {"issuer_id": current["issuer_id"]})[
-                    "usage"
-                ] = {"removed": ["issuing-certificates"]}
+            if old_changes := _rotate_out(current, issuer_name, mount, test=True):
+                ret["changes"]["old_issuer"] = old_changes
             if rotate_key or replace_key:
                 ret["changes"]["key_id"] = {"old": current["key_id"], "new": "<TBD>"}
 
@@ -2380,22 +2399,7 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
 
             if current is not None:
                 ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": issuer_id}
-                upd_old_params, old_changes = {}, {"issuer_id": current["issuer_id"]}
-                if issuer_name and current["issuer_name"] == issuer_name:
-                    # When we rotate a named issuer, we need to rename the previous one since names must be unique
-                    upd_old_params["name"] = f"{issuer_name}-{int(time.time())}"
-                    old_changes["issuer_name"] = {"old": issuer_name, "new": upd_old_params["name"]}
-                if "issuing-certificates" in current["usage"]:
-                    upd_old_params["usage"] = [
-                        usage
-                        for usage in hlp.deserialize_csl(current["usage"])
-                        if usage != "issuing-certificates"
-                    ]
-                    old_changes["usage"] = {"removed": ["issuing-certificates"]}
-                if upd_old_params:
-                    __salt__["vault_pki.update_issuer"](
-                        ref=current["issuer_id"], **upd_old_params, mount=mount
-                    )
+                if old_changes := _rotate_out(current, issuer_name, mount):
                     ret["changes"]["old_issuer"] = old_changes
 
                 # Correctly report new subjectKeyIdentifier, it's "<TBD>" right now
@@ -2669,3 +2673,25 @@ def _report_ski(changes: dict[str, typing.Any], mount: str) -> dict[str, typing.
     else:
         changes["cert"]["extensions"]["changed"]["subjectKeyIdentifier"]["value"]["new"] = new_ski
     return changes
+
+
+def _rotate_out(issuer_info, issuer_name, mount, *, test=None):
+    test = test or __opts__["test"]
+    upd_params, rename_changes = {}, {"issuer_id": issuer_info["issuer_id"]}
+    if issuer_name and issuer_info["issuer_name"] == issuer_name:
+        upd_params["name"] = f"{issuer_info['issuer_name']}-{'<TBD>' if test else int(time.time())}"
+        rename_changes["issuer_name"] = {
+            "old": issuer_info["issuer_name"],
+            "new": upd_params["name"],
+        }
+    if "issuing-certificates" in issuer_info["usage"]:
+        if not test:
+            upd_params["usage"] = [
+                usage
+                for usage in hlp.deserialize_csl(issuer_info["usage"])
+                if usage != "issuing-certificates"
+            ]
+        rename_changes["usage"] = {"removed": ["issuing-certificates"]}
+    if upd_params and not test:
+        __salt__["vault_pki.update_issuer"](ref=issuer_info["issuer_id"], **upd_params, mount=mount)
+    return rename_changes
