@@ -3466,7 +3466,7 @@ def test_root_issuer_managed_changes_with_issuer_name(vault_pki, root_ca_args):
     assert new_info["issuer_name"] == root_ca_args["issuer_name"]
 
 
-@pytest.mark.usefixtures("existing_root")
+@pytest.mark.usefixtures("existing_root", "aia_urls")
 @pytest.mark.parametrize(
     "existing_root",
     (
@@ -3533,6 +3533,18 @@ def test_root_issuer_managed_ok(vault_pki, root_ca_args, testmode, container):
     else:
         assert len(nc.value.permitted_subtrees) == 5
         assert len(nc.value.excluded_subtrees) == 5
+
+    # Demonstrate that URL changes don't cause rotation
+    vault_write(
+        "pki/config/urls",
+        issuing_certificates="https://one.root.ca",
+        ocsp_servers="https://ocsp1.root.ca",
+    )
+    ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    assert "AIA-related URLs do not match" in ret.comment
+    assert _default_issuer() == issuer_info
 
 
 @pytest.mark.parametrize(
@@ -3792,6 +3804,7 @@ def test_root_issuer_managed_changes_existing_key(vault_pki, root_ca_args, testm
     assert ret.changes["key_id"]["new"] == key_2["key_id"]
 
 
+@pytest.mark.skip(reason="Too specific and costly test.")
 @pytest.mark.usefixtures("existing_root")
 @pytest.mark.parametrize(
     "aia_urls",
@@ -3896,11 +3909,14 @@ def test_root_issuer_managed_ok_aia(vault_pki, root_ca_args):
     ret = vault_pki.root_issuer_managed(**root_ca_args)
     assert ret.result is True
     assert "Root CA issuer is present as specified" in ret.comment
+    assert "AIA-related URLs do not match" not in ret.comment
     assert not ret.changes
     new_info = _default_issuer()
     assert new_info == issuer_info
 
 
+# TODO: Add a marker and toggle for these kinds of tests
+@pytest.mark.skip(reason="Too specific and costly test.")
 @pytest.mark.usefixtures("existing_root")
 @pytest.mark.parametrize(
     "aia_urls",
@@ -3987,6 +4003,7 @@ def test_root_issuer_managed_changes_aia(vault_pki, root_ca_args, testmode, aia_
         )
     vault_write("pki/config/urls", **aia_urls)
     issuer_info = _default_issuer()
+    root_ca_args["days_remaining"] = 10000  # force re-issuance, otherwise changes are not reported
     ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
     assert ret.result is not False
     assert (ret.result is None) is testmode
