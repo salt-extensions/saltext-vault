@@ -1607,7 +1607,7 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
                 serial_number=serial_number,
                 signature_bits=signature_bits,
                 street_address=street_address,
-                urls=_get_urls(issuer_info, mount=mount) or {},
+                urls=_get_urls(issuer_info, mount=issuer_mount) or {},
             )
         else:
             if "signing_policy" in cert_args:

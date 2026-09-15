@@ -2594,7 +2594,7 @@ def int_ca_args(
 
 @pytest.fixture
 def existing_intermediate(
-    vault_pki, int_ca_args, clean_pki_mount, request, container
+    vault_pki, int_ca_args, clean_pki_mount, request, aia_urls, container
 ):  # pylint: disable=unused-argument
     int_ca_args.update(getattr(request, "param", {}))
     if int_ca_args.get("issuer_ref"):
@@ -2670,7 +2670,31 @@ def test_intermediate_issuer_managed_create(vault_pki, int_ca_args, testmode):
     assert basic_constraints.value.path_length == 0
 
 
-@pytest.mark.usefixtures("existing_intermediate")
+@pytest.mark.usefixtures("existing_intermediate", "aia_urls")
+@pytest.mark.parametrize(
+    "aia_urls",
+    (
+        {
+            "enable_templating": True,
+            "issuing_certificates": [
+                "https://one.default.ca/{{issuer_id}}",
+                "{{cluster_aia_path}}issuer/{{issuer_id}}/der",
+            ],
+            "crl_distribution_points": [
+                "https://crl1.default.ca/{{issuer_id}}",
+                "{{cluster_path}}/crl/pem",
+            ],
+            "delta_crl_distribution_points": [
+                "https://deltacrl1.default.ca/{{issuer_id}}",
+                "{{cluster_aia_path}}/issuer/{{issuer_id}}/crl/delta/der",
+            ],
+            "ocsp_servers": [
+                "{{cluster_aia_path}}/ocsp",
+            ],
+        },
+    ),
+    indirect=True,
+)
 @pytest.mark.parametrize(
     "existing_intermediate",
     (
