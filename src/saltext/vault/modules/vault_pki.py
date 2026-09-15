@@ -12,6 +12,7 @@ Manage the Vault (or OpenBao) PKI secret engine, request X.509 certificates.
 import logging
 import typing
 from datetime import datetime
+from datetime import timedelta
 from datetime import timezone
 
 from salt.exceptions import CommandExecutionError
@@ -1289,6 +1290,11 @@ def generate_intermediate(
         Not respected when ``not_after`` is set explicitly.
         Defaults to 180.
 
+        .. hint::
+
+            Translated into ``not_after`` when a Vault issuer signs the certificate,
+            hence not subject to the mount's ``max_lease_ttl``.
+
     not_after
         Absolute value of the Not After field of the certificate in UTC format ``YYYY-MM-ddTHH:MM:SSZ``.
         When set, ``days_valid`` is ignored.
@@ -1468,6 +1474,12 @@ def generate_intermediate(
     )["csr"]
 
     if issuer_ref is not None:
+        if not_after is None:
+            # Requested TTLs are capped at the mount's max_lease_ttl (768h by default),
+            # `not_after` is not. CA certificates usually exceed that limit.
+            not_after = (datetime.now(tz=timezone.utc) + timedelta(days=days_valid)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
         cert = "".join(
             sign_intermediate(
                 common_name=common_name,
@@ -1476,7 +1488,6 @@ def generate_intermediate(
                 sign_verbatim=False,
                 encoding="pem",
                 signature_bits=signature_bits,
-                ttl=None if not_after else days_valid * 86400,
                 not_before_duration=not_before_duration,
                 not_after=not_after,
                 alt_names=alt_names,

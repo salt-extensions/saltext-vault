@@ -22,6 +22,7 @@ pytestmark = [
 ]
 
 
+# This hardcoded cert expires Nov 12 14:04:33 2032 GMT
 CA_CERT = """\
 -----BEGIN CERTIFICATE-----
 MIIDODCCAiCgAwIBAgIIbfpgqP0VGPgwDQYJKoZIhvcNAQELBQAwKzELMAkGA1UE
