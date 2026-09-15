@@ -1704,7 +1704,7 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
                     f"Another issuer with name '{issuer_name}' exists on mount '{mount}' "
                     f"(issuer_id: {name_collision['issuer_id']})"
                 )
-            # Assume this is an artifact from a previous run having failed to name the issuer and try again.
+            # Assume this is an artifact from a previous run having failed to rename the old issuer and try again.
             log.warning(
                 "Another issuer with name '%s' exists on mount '%s' (issuer_id: %s). "
                 "Renaming it since it's likely an artifact from a previous failed run",
@@ -2187,7 +2187,11 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
             }
         else:
             issuer_id = current["issuer_id"]
-            if key_ref is not None:
+            if key_ref is None:
+                key_ref = current.get("key_id")
+                if key_ref is None:  # pragma: no cover
+                    raise CommandExecutionError("Default issuer key_id not set")
+            else:
                 key_id = __salt__["vault_pki.get_key_id"](key_ref, mount=mount)
                 replace_key = current["key_id"] != key_id
 
@@ -2268,7 +2272,7 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
                     f"Another issuer with name '{issuer_name}' exists on mount '{mount}' "
                     f"(issuer_id: {name_collision['issuer_id']})"
                 )
-            # Assume this is an artifact from a previous run having failed to name the issuer and try again.
+            # Assume this is an artifact from a previous run having failed to rename the old issuer and try again.
             log.warning(
                 "Another issuer with name '%s' exists on mount '%s' (issuer_id: %s). "
                 "Renaming it since it's likely an artifact from a previous failed run",
