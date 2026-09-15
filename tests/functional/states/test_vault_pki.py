@@ -3047,6 +3047,7 @@ def test_intermediate_issuer_managed_changes_with_issuer_name(
     assert "issuer_id" in ret.changes
     assert "old_issuer" in ret.changes
     assert ret.changes["old_issuer"]["issuer_id"] == issuer_info["issuer_id"]
+    assert ret.changes["old_issuer"]["usage"] == {"removed": ["issuing-certificates"]}
     assert ret.changes["old_issuer"]["issuer_name"]["old"] == issuer_info["issuer_name"]
     assert ret.changes["old_issuer"]["issuer_name"]["new"].startswith(
         issuer_info["issuer_name"] + "-" + ("<TBD>" if testmode else "")
@@ -3058,6 +3059,10 @@ def test_intermediate_issuer_managed_changes_with_issuer_name(
         return
     assert new_info["issuer_id"] != issuer_info["issuer_id"]
     assert new_info["issuer_name"] == int_ca_args["issuer_name"]
+    upd_old_info = vault_read(f"{int_ca_args['mount']}/issuer/{issuer_info['issuer_id']}")["data"]
+    assert upd_old_info["issuer_name"].startswith(int_ca_args["issuer_name"] + "-")
+    assert "issuing-certificates" in issuer_info["usage"]
+    assert "issuing-certificates" not in upd_old_info["usage"]
 
 
 def test_intermediate_issuer_managed_changes(
@@ -3076,6 +3081,12 @@ def test_intermediate_issuer_managed_changes(
     assert ret.changes["issuer_id"]["old"] == existing_intermediate["issuer_id"]
     assert (ret.changes["issuer_id"]["new"] == "<TBD>") is testmode
     assert (ret.changes["imported"] == ["<TBD>"]) is testmode
+
+    assert "old_issuer" in ret.changes
+    assert ret.changes["old_issuer"] == {
+        "issuer_id": existing_intermediate["issuer_id"],
+        "usage": {"removed": ["issuing-certificates"]},
+    }
 
     assert ret.changes["cert"]["subject_name"] == {
         "old": "CN=Test Intermediate CA",
@@ -3458,6 +3469,7 @@ def test_root_issuer_managed_changes_with_issuer_name(vault_pki, root_ca_args):
     assert "issuer" not in ret.changes
     assert "old_issuer" in ret.changes
     assert ret.changes["old_issuer"]["issuer_id"] == issuer_info["issuer_id"]
+    assert ret.changes["old_issuer"]["usage"] == {"removed": ["issuing-certificates"]}
     assert ret.changes["old_issuer"]["issuer_name"]["old"] == issuer_info["issuer_name"]
     assert ret.changes["old_issuer"]["issuer_name"]["new"].startswith(
         issuer_info["issuer_name"] + "-"
@@ -3644,6 +3656,11 @@ def test_root_issuer_managed_changes(
     assert (ret.changes["issuer_id"]["new"] == "<TBD>") is (
         testmode or not allow_premature_rotation
     )
+    assert "old_issuer" in ret.changes
+    assert ret.changes["old_issuer"] == {
+        "issuer_id": existing_root["issuer_id"],
+        "usage": {"removed": ["issuing-certificates"]},
+    }
 
     cert_changes = ret.changes.get("cert")
     assert cert_changes
