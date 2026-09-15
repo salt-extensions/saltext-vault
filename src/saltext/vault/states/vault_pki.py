@@ -470,7 +470,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
                     role_info=role_info,
                     serial_number=serial_number,
                     ttl=ttl_seconds,
-                    urls=_get_urls(issuer_info, mount=mount),
+                    urls=_get_urls(issuer_info, mount=mount) or {},
                     user_ids=user_ids,
                     **cert_args,
                 )
@@ -890,7 +890,7 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
                 signature_bits=signature_bits,
                 street_address=street_address,
                 ttl=ttl_seconds,
-                urls=_get_urls(issuer_info, mount=mount),
+                urls=_get_urls(issuer_info, mount=mount) or {},
                 **cert_args,
             )
 
@@ -1638,7 +1638,7 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
                     serial_number=serial_number,
                     signature_bits=signature_bits,
                     street_address=street_address,
-                    urls=_get_urls(issuer_info, mount=mount),
+                    urls=_get_urls(issuer_info, mount=mount) or {},
                 )
             else:
                 if "signing_policy" in cert_args:
@@ -1825,7 +1825,7 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
     return ret
 
 
-def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
+def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,too-many-statements
     name,
     days_remaining=90,
     # key params
@@ -1882,17 +1882,6 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
             capabilities = ["read"]
         }
 
-        # Read mount default urls to account for cert extensions
-        path "<mount>/config/urls" {
-            capabilities = ["read"]
-        }
-
-        # When URLs use templating with `{cluster_path}`/`{cluster_aia_path}` variables,
-        # but not `{issuer_id}` (URLs are excluded from the issuer certificate in that case)
-        path "<mount>/config/cluster" {
-            capabilities = ["read"]
-        }
-
         # When key_ref is not set, need to generate a key
         path "<mount>/keys/generate/<key_type>" {
             capabilities = ["create", "update"]
@@ -1911,6 +1900,19 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
         # Update issuer configuration
         path "<mount>/issuer/<name>" {
             capabilities = ["patch"]
+        }
+
+        # Read mount default urls to account for cert extensions.
+        # Note: Failure to read this or URL drift does not cause rotation, only a note.
+        path "<mount>/config/urls" {
+            capabilities = ["read"]
+        }
+
+        # When URLs use templating with `{cluster_path}`/`{cluster_aia_path}` variables,
+        # but not `{issuer_id}` (URLs are always excluded from the issuer certificate in that case)
+        # Note: Failure to read this or URL drift does not cause rotation, only a note.
+        path "<mount>/config/cluster" {
+            capabilities = ["read"]
         }
 
     **Certificate/Key configuration:**
@@ -2064,14 +2066,9 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
         Specifies the URL values for the CRL Distribution Points field as an array.
 
     delta_crl_endpoints
-        (Requires Vault 2.0+ or OpenBao)
+        (Requires Vault 1.20+  or OpenBao)
         Specifies the URL values for the Delta CRL Distribution Points field.
         This can be an array or a comma- separated string list.
-
-        .. note::
-
-            This parameter is supported in Vault 1.20+, but not added as a FreshestCRL extension
-            to the root issuer certificate, leading to non-idempotency of this state.
 
     ocsp_servers
         Specifies the URL values for the OCSP Servers field as an array.
@@ -2091,7 +2088,7 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
     }
     changes = {}
     cert_affected = issuer_affected = replace_key = False
-    issuer_id = key_id = None
+    issuer_id = key_id = aia_note = None
     msg = []
     issuer_is_managed = any(
         val is not None
@@ -2126,7 +2123,8 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
                 key_id = __salt__["vault_pki.get_key_id"](key_ref, mount=mount)
                 replace_key = current["key_id"] != key_id
 
-            if cert_changes := pki.check_root_issuer_for_changes(
+            urls = _get_urls(None, mount=mount)
+            cert_changes, url_ext_drift = pki.check_root_issuer_for_changes(
                 "".join(current["ca_chain"]),
                 alt_names=alt_names,
                 common_name=name,
@@ -2150,9 +2148,23 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
                 serial_number=serial_number,
                 signature_bits=signature_bits,
                 street_address=street_address,
-                urls=_get_urls(None, mount=mount),
-            ):
+                urls=urls,
+            )
+            if cert_changes:
                 changes["cert"], cert_affected = cert_changes, True
+            if url_ext_drift:
+                # URL-derived extensions don't trigger a rotation, but their drift
+                # (or our inability to verify them) should be reported.
+                if urls is None:
+                    aia_note = (
+                        "Note: URL-derived certificate extensions (AIA) were not verified since "
+                        f"the URL configuration of mount `{mount}` could not be read/rendered"
+                    )
+                else:
+                    aia_note = (
+                        "Note: The issuer certificate's embedded AIA-related URLs do not match "
+                        "the mount's URL configuration. They will converge on the next rotation"
+                    )
 
             if issuer_changes := _check_issuer_config_changes(
                 current,
@@ -2169,6 +2181,8 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
                 changes["issuer"], issuer_affected = issuer_changes, True
 
         if not changes:
+            if aia_note:
+                ret["comment"] += f"\n\n{aia_note}."
             return ret
 
         if __opts__["test"]:
@@ -2192,7 +2206,9 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
                 if rotate_key or replace_key:
                     ret["changes"]["key_id"] = {"old": current["key_id"], "new": "<TBD>"}
 
-            ret["comment"] = ". ".join(msg)
+            ret["comment"] = ". ".join(msg) + "."
+            if aia_note:
+                ret["comment"] += f"\n\n{aia_note}."
             return ret
 
         if current is None or cert_affected:
@@ -2316,6 +2332,8 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
                 msg.append(f"Root CA issuer has been {'updated' if current else 'created'}")
 
         ret["comment"] = ". ".join(msg) + "."
+        if aia_note:
+            ret["comment"] += f"\n\n{aia_note}."
         if current is None:
             changes["created"]["issuer_id"] = issuer_id
             changes["created"]["key_id"] = key_id or __salt__["vault_pki.get_key_id"](
@@ -2465,7 +2483,7 @@ class LazyAIAContext:
         raise KeyError(key)
 
 
-def _get_urls(issuer_info: Mapping[str, typing.Any] | None, mount: str) -> "pki.URLConfigs":
+def _get_urls(issuer_info: Mapping[str, typing.Any] | None, mount: str) -> "pki.URLConfigs | None":
     url_config_keys = (
         "issuing_certificates",
         "crl_distribution_points",
@@ -2478,18 +2496,20 @@ def _get_urls(issuer_info: Mapping[str, typing.Any] | None, mount: str) -> "pki.
         try:
             # Mount default AIA URLs
             url_configs = __salt__["vault_pki.read_urls"](mount=mount)
-        except CommandExecutionError:  # pragma: no cover
+        except CommandExecutionError as err:  # pragma: no cover
+            if "PermissionDenied" not in str(err):
+                raise
             log.warning(
                 "Failed reading default AIA url config. Consider allowing read access to "
-                "`%s/config/urls`. This state will not be idempotent otherwise.",
+                "`%s/config/urls`. This state might not behave idempotently otherwise.",
                 mount,
             )
-            return {}
+            return None
     else:
         # Issuer-specific AIA URLs
         url_configs = issuer_info
 
-    urls: pki.URLConfigs = {
+    urls: pki.URLConfigs | None = {
         url: hlp.deserialize_csl(url_configs.get(url, [])) for url in url_config_keys
     }
     if url_configs.get("enable_templating"):
@@ -2503,7 +2523,7 @@ def _get_urls(issuer_info: Mapping[str, typing.Any] | None, mount: str) -> "pki.
 
 def _render_aia_templating(
     urls: "pki.URLConfigs", *, issuer_id: str | None, mount: str
-) -> "pki.URLConfigs":
+) -> "pki.URLConfigs | None":
     ctx = LazyAIAContext(issuer_id=issuer_id, mount=mount)
 
     def _sub_id(match):
@@ -2519,6 +2539,15 @@ def _render_aia_templating(
             except KeyError:
                 # If any template is invalid, all URLs are dropped - usual case: issuer_id referenced in root issuer
                 return {}
+            except CommandExecutionError as err:  # pragma: no cover
+                if "PermissionDenied" not in str(err):
+                    raise
+                log.warning(
+                    "Failed reading performance cluster config. Consider allowing read access to "
+                    "`%s/config/cluster`. This state might not behave idempotently otherwise.",
+                    mount,
+                )
+                return None
             res[conf].append(rendered)
     return res
 
