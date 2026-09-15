@@ -134,12 +134,15 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
 
     .. versionchanged:: 1.9.0
 
-        Now compares all certificate subject attributes and extensions, including those that are derived from PKI role parameters
-        and issuer URL configuration. This requires read access to the role, issuer and mount default URL configuration.
-        If read access to any of these endpoints is denied, this state is most likely not idempotent anymore.
+        Now compares all certificate subject attributes and extensions, including those
+        that are derived from PKI role parameters and issuer URL configuration.
+        This requires read access to the role, issuer and mount default URL configuration.
+        If read access to the URL configuration is denied, URL-derived extensions
+        are not verified and a note is appended to the state's comment instead.
 
-        Also, when ``issuer_ref`` is unspecified, now uses the generic ``{mount}/sign*`` endpoints instead
-        of the issuer-specific ``{mount}/issuer/{issuer_ref}/sign/{role_name}`` with the explicit issuer_ref from the role.
+        Also, when ``issuer_ref`` is unspecified, now uses the generic ``{mount}/sign*``
+        endpoints instead of the issuer-specific ``{mount}/issuer/{issuer_ref}/sign/{role_name}``
+        with the explicit issuer_ref from the role.
 
     Required policy:
 
@@ -153,6 +156,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
 
         # Read mount default urls to account for cert extensions
         # if the issuer has no configured URLs.
+        # Note: Failure to read this does not cause reissuance, only a note.
         path "<mount>/config/urls" {
             capabilities = ["read"]
         }
@@ -162,7 +166,8 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
             capabilities = ["read"]
         }
 
-        # When URLs use templating with `{cluster_path}`/`{cluster_aia_path}` variables
+        # When URLs use templating with `{{cluster_path}}`/`{{cluster_aia_path}}` variables
+        # Note: Failure to read this does not cause reissuance, only a note.
         path "<mount>/config/cluster" {
             capabilities = ["read"]
         }
@@ -352,6 +357,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
     changes = {}
     ca_chain = []
     verb = "create"
+    aia_note = None
     file_args, cert_args = _split_file_kwargs(
         hlp.filter_state_internal_kwargs(kwargs, ("check_cmd",))
     )
@@ -450,7 +456,8 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
                 # No need to make any checks, just replace the cert
                 changes["replaced"] = True
             else:
-                changes = pki.check_cert_for_changes(
+                urls = _get_urls(issuer_info, mount=mount)
+                changes, unverified_url_exts = pki.check_cert_for_changes(
                     current=name,
                     issuer=issuer_info["certificate"],
                     private_key=private_key,
@@ -470,15 +477,22 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
                     role_info=role_info,
                     serial_number=serial_number,
                     ttl=ttl_seconds,
-                    urls=_get_urls(issuer_info, mount=mount) or {},
+                    urls=urls,
                     user_ids=user_ids,
                     **cert_args,
                 )
+                if unverified_url_exts:
+                    aia_note = (
+                        "Note: URL-derived certificate extensions (AIA) were not verified since "
+                        f"the URL configuration of mount `{mount}` could not be read/rendered"
+                    )
 
         else:
             changes["created"] = True
 
         if not changes and file_managed_test["result"] and not file_managed_test["changes"]:
+            if aia_note:
+                ret["comment"] += f"\n\n{aia_note}."
             _add_sub_state_run(ret, file_managed_test)
             return ret
 
@@ -491,6 +505,8 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
             ret["comment"] = (
                 f"The certificate would have been {verb}d" if changes else ret["comment"]
             )
+            if aia_note:
+                ret["comment"] += f"\n\n{aia_note}."
             _add_sub_state_run(ret, file_managed_test)
             return ret
 
@@ -560,6 +576,9 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
             if not _check_file_ret(file_managed_ret, ret, file_exists):
                 return ret
 
+        if aia_note:
+            ret["comment"] += f"\n\n{aia_note}."
+
     except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
         ret["comment"] = str(err)
@@ -614,6 +633,7 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
 
         # Read mount default urls to account for cert extensions
         # if the issuer has no configured URLs.
+        # Note: Failure to read this does not cause reissuance, only a note.
         path "<mount>/config/urls" {
             capabilities = ["read"]
         }
@@ -623,7 +643,8 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
             capabilities = ["read"]
         }
 
-        # When URLs use templating with `{cluster_path}`/`{cluster_aia_path}` variables
+        # When URLs use templating with `{{cluster_path}}`/`{{cluster_aia_path}}` variables
+        # Note: Failure to read this does not cause reissuance, only a note.
         path "<mount>/config/cluster" {
             capabilities = ["read"]
         }
@@ -796,6 +817,7 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
     changes = {}
     ca_chain = []
     verb = "create"
+    aia_note = None
     file_args, cert_args = _split_file_kwargs(
         hlp.filter_state_internal_kwargs(kwargs, ("check_cmd",))
     )
@@ -861,7 +883,8 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
             ]
 
         if file_exists:
-            changes = pki.check_ca_cert_for_changes(
+            urls = _get_urls(issuer_info, mount=mount)
+            changes, unverified_url_exts = pki.check_ca_cert_for_changes(
                 current=name,
                 issuer=issuer_info["certificate"],
                 private_key=private_key,
@@ -890,14 +913,21 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
                 signature_bits=signature_bits,
                 street_address=street_address,
                 ttl=ttl_seconds,
-                urls=_get_urls(issuer_info, mount=mount) or {},
+                urls=urls,
                 **cert_args,
             )
+            if unverified_url_exts:
+                aia_note = (
+                    "Note: URL-derived certificate extensions (AIA) were not verified since "
+                    f"the URL configuration of mount `{mount}` could not be read/rendered"
+                )
 
         else:
             changes["created"] = True
 
         if not changes and file_managed_test["result"] and not file_managed_test["changes"]:
+            if aia_note:
+                ret["comment"] += f"\n\n{aia_note}."
             _add_sub_state_run(ret, file_managed_test)
             return ret
 
@@ -910,6 +940,8 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
             ret["comment"] = (
                 f"The certificate would have been {verb}d" if changes else ret["comment"]
             )
+            if aia_note:
+                ret["comment"] += f"\n\n{aia_note}."
             _add_sub_state_run(ret, file_managed_test)
             return ret
 
@@ -986,6 +1018,9 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
             _add_sub_state_run(ret, file_managed_ret)
             if not _check_file_ret(file_managed_ret, ret, file_exists):
                 return ret
+
+        if aia_note:
+            ret["comment"] += f"\n\n{aia_note}."
 
     except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
@@ -1299,13 +1334,13 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
         # When issuer_ref is specified, read the signing issuer's mount default urls
         # to account for cert extensions, unless the signing issuer overrides them
         # with its own AIA configuration.
-        # Note: This state might not behave idempotently when reading this fails.
+        # Note: Failure to read this does not cause rotation, only a note.
         path "<issuer_mount>/config/urls" {
             capabilities = ["read"]
         }
 
         # When URLs use templating with `{{cluster_path}}`/`{{cluster_aia_path}}` variables
-        # Note: This state might not behave idempotently when reading this fails.
+        # Note: Failure to read this does not cause rotation, only a note.
         path "<issuer_mount>/config/cluster" {
             capabilities = ["read"]
         }
@@ -1612,13 +1647,15 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
             )
         )
 
+        notes = []
         if vault_signed:
             issuer_info = __salt__["vault_pki.read_issuer"](issuer_ref, mount=issuer_mount)
             if issuer_info is None:
                 raise CommandExecutionError(
                     f"Issuer '{issuer_ref}' does not exist on mount {issuer_mount}"
                 )
-            cert_changes = pki.check_int_issuer_cert_for_changes_vault_ca(
+            urls = _get_urls(issuer_info, mount=issuer_mount)
+            cert_changes, unverified_url_exts = pki.check_int_issuer_cert_for_changes_vault_ca(
                 current=current["certificate"],
                 issuer=issuer_info["certificate"],
                 rotate_key=rotate_key,
@@ -1643,8 +1680,13 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
                 serial_number=serial_number,
                 signature_bits=signature_bits,
                 street_address=street_address,
-                urls=_get_urls(issuer_info, mount=issuer_mount) or {},
+                urls=urls,
             )
+            if unverified_url_exts:
+                notes.append(
+                    "Note: URL-derived certificate extensions (AIA) were not verified since "
+                    f"the URL configuration of mount `{issuer_mount}` could not be read/rendered"
+                )
         else:
             if "signing_policy" in cert_args:
                 x509_policy = __salt__["x509.get_signing_policy"](
@@ -1663,7 +1705,7 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
                 not_after=not_after,
                 **cert_args,
             )
-        return cert_changes, []
+        return cert_changes, notes
 
     def generate(key_ref):
         res = __salt__["vault_pki.generate_intermediate"](
@@ -2567,6 +2609,7 @@ def _get_urls(issuer_info: Mapping[str, typing.Any] | None, mount: str) -> "pki.
         "delta_crl_distribution_points",
         "ocsp_servers",
     )
+    enable_templating = (issuer_info or {}).get("enable_aia_url_templating", False)
     if issuer_info is None or not any(
         issuer_info.get(url_config) for url_config in url_config_keys
     ):
@@ -2578,10 +2621,13 @@ def _get_urls(issuer_info: Mapping[str, typing.Any] | None, mount: str) -> "pki.
                 raise
             log.warning(
                 "Failed reading default AIA url config. Consider allowing read access to "
-                "`%s/config/urls`. This state might not behave idempotently otherwise.",
+                "`%s/config/urls`. URL-derived certificate extensions cannot be verified without it.",
                 mount,
             )
             return None
+        # The mount default config reports `enable_templating`,
+        # issuer-specific configuration `enable_aia_url_templating`.
+        enable_templating = url_configs.get("enable_templating", False)
     else:
         # Issuer-specific AIA URLs
         url_configs = issuer_info
@@ -2589,7 +2635,7 @@ def _get_urls(issuer_info: Mapping[str, typing.Any] | None, mount: str) -> "pki.
     urls: pki.URLConfigs | None = {
         url: hlp.deserialize_csl(url_configs.get(url, [])) for url in url_config_keys
     }
-    if url_configs.get("enable_templating"):
+    if enable_templating:
         urls = _render_aia_templating(
             urls,
             issuer_id=issuer_info["issuer_id"] if issuer_info is not None else None,
@@ -2621,7 +2667,7 @@ def _render_aia_templating(
                     raise
                 log.warning(
                     "Failed reading performance cluster config. Consider allowing read access to "
-                    "`%s/config/cluster`. This state might not behave idempotently otherwise.",
+                    "`%s/config/cluster`. URL-derived certificate extensions cannot be verified without it.",
                     mount,
                 )
                 return None

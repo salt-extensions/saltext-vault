@@ -11,6 +11,7 @@ from saltfactories.utils import random_string
 
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_read
+from tests.support.vault import vault_write
 
 pytest.importorskip("docker")
 
@@ -74,6 +75,38 @@ HdI7Pfaf/l0HozAw/Al+LXbpmSBdfmz0U/EGAKRqXMW5+vQ7XHXD
 -----END RSA PRIVATE KEY-----"""
 
 
+PRIVKEY = """\
+-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC9rv+XRGjI4P8I
+CkRQJnR2lLOjg21h7zRGDpAYxxjkW5MIeHWWB4O4V92mMlbYGu4vE5NdXnShZB0o
+Xd1rlP3jIlpWW5xUTjXQFTQA1WMRcXf3dkscW0R/HDnb71imtnWWct+3Hpk1+p+L
++CzTOthVG92Eggxy327wG6k3JIOm51iL4oxrJ/Y6tqZslFGVkjIaAi8yReS7BZCC
+P93qGFMoydjMmGUZrAWHIrFGWLH0dphR5fZPiLdHCwxZ0tl45wJ91yPzqy6ke8UN
+kyi9BgOCcFg/nXI1TL6S0T7QlVrPRFJ45EpMEYkgaqDmVnwKVRTX8jkuBipR8OdL
+YWhj4yFPAgMBAAECggEAHojrUDiM/blqlKrCcHygRu6NNIdVtmxBZ/20KKj0Ut6C
+/twVYb937tcGMVjtLgC30xA9qswnzktFflgN6uGjNUs0a653rgKhGwwuwOuY9Rfl
+DgsW8Euo7SVoEwWmqb+5kiyP4vSkCVJ9GJUs8hwI8zp3IHum8V8ShsiNJvlT0Cwq
+N1nhmRCdT6W1oVlllcWJEk7QfW43bU69gAMMg4R5cUVLFPb2y3aKx4lPLAjjnGkF
+nIG7wjjLSR1Zp5jsoVEesRWKHWDI9vj2H7HNQ2HmRKlcE5+Vzv/IviE0xiqomsyr
+rlKqPrvQ9Y/OZ2wxzbrPIH8FqPN9o8Qn/IJa8cBVEQKBgQD8IgFzq6/xZDWkCpDy
+EcqOqzIxyTpvKsclvbQUT0pJvCG4k2UiOVwPdKeqAXyfdClyESCNsQZ6K7s4Eit8
+llXWRFEXb93Jw0WYi+sikxO6skkQIzu4SZOl0ZGUCpva4GDRy/uFFcQrJB6xDY4z
+h0ucDSYt8xCY9pjsSU47uRBxuwKBgQDAl8l82BGcGiGRFhYI6E74agK71tpTQ4M2
+0lDC5MpTPvitrzneBNLXyXzz0vTU4lF32EBthZlZ76rOSaElNt8EFbPIysfzRmZv
+dotqi5xYR+NSFZh7l9K6K6EkvxjU+OdTLY5X+96glbuCkvsER4X7KavQzMQymBv0
+MpjwSti7fQKBgF8o+oFMuFAUMUajkkc6vceRB5XQzBQvAhDVg4Ty1Cf2MIf4YYBE
+Q+G1dp5shzurXQUnP7EaskYkATpNaUpRdz4ydKSy3POMltTXYjyfZB/fsEG9+ok4
+g9heu2IzitVWQFSOd3SoXWym6kqKwjPiiX/xWoqXJZmF4Pu1Qyi5VWKHAoGAEzsU
+03J/z6aMU4BxEtKfkA6F11vM0SOcpoy5o7xUt5tCGZW1oYW5x/JGl9IowFkY6W6e
+gFEmzuQvmgmgHacs/attGE+nR5NwBxE/OpRWODp1aGzfnPe8Avr4TEMIp7ty3cte
+u0pbII3S+2bRycuahUnT7jWEIckugWPMAbJ3kcECgYASe1rXPbiUTZpGVFALgCj/
+8Y3ExHhMXLHNslf6fp0oDjW4fg+6iGeUxkMdyB8EVRFFJuUktU5wh2Nsx3xMMQ9g
+cH4XpX9nGyPNjPazuKzovnRcW2NGx3CAW7aJE2BQ/MsohU8H+MhKGgu9lqQpDajU
+8dbwN+rCJaQ9xzaih50KIA==
+-----END PRIVATE KEY-----
+"""
+
+
 @pytest.fixture(scope="module")
 def master_config_overrides():
     return {
@@ -88,6 +121,9 @@ def master_config_overrides():
                 "assign": [
                     "salt_minion",
                     "pki_admin",
+                    # Denies read access to `pki/config/urls` and `pki/config/cluster`
+                    # for all tests in this module to verify graceful degradation.
+                    "pki_deny_urls",
                 ],
             },
         },
@@ -140,8 +176,27 @@ def clean_pki_mount():
         vault_delete("pki/root")
 
 
+@pytest.fixture(scope="module", autouse=True)
+def cluster_config(secret_mounts):  # pylint: disable=unused-argument
+    cluster = {
+        "path": "https://vault.example.com/v1/pki",
+        "aia_path": "https://aia.example.com/v1/pki",
+    }
+    vault_write(  # pylint: disable=kwarg-superseded-by-positional-arg
+        "pki/config/cluster", **cluster
+    )
+    return cluster
+
+
 def _subject(cert, typ):
     return cert.subject.get_attributes_for_oid(NAME_ATTRS_OID[typ])[0].value
+
+
+def _apply(salt_call_cli, state_func, **kwargs):
+    ret = salt_call_cli.run("state.single", f"vault_pki.{state_func}", **kwargs)
+    assert ret.returncode == 0, ret.stderr
+    assert isinstance(ret.data, dict)
+    return ret.data[next(iter(ret.data))]
 
 
 @pytest.mark.usefixtures("clean_pki_mount")
@@ -152,12 +207,6 @@ def test_intermediate_issuer_managed_with_remote_signing(salt_call_cli, ca_minio
     without local access to the signing private key/cert.
     """
 
-    def _apply(**kwargs):
-        ret = salt_call_cli.run("state.single", "vault_pki.intermediate_issuer_managed", **kwargs)
-        assert ret.returncode == 0, ret.stderr
-        assert isinstance(ret.data, dict)
-        return ret.data[next(iter(ret.data))]
-
     state_args = {
         "name": "Test Remote Intermediate CA",
         "mount": "pki",
@@ -167,7 +216,7 @@ def test_intermediate_issuer_managed_with_remote_signing(salt_call_cli, ca_minio
         "append_certs": [CA_CERT],
     }
 
-    res = _apply(**state_args)
+    res = _apply(salt_call_cli, "intermediate_issuer_managed", **state_args)
     assert res["result"] is True
     assert "created" in res["changes"]
     issuer_info = vault_read("pki/issuer/default")["data"]
@@ -185,7 +234,7 @@ def test_intermediate_issuer_managed_with_remote_signing(salt_call_cli, ca_minio
     assert _subject(load_cert(chain[1]), "CN") == "Test"
 
     # The state should be idempotent
-    res = _apply(**state_args)
+    res = _apply(salt_call_cli, "intermediate_issuer_managed", **state_args)
     assert res["result"] is True
     assert not res["changes"]
     assert "present as specified" in res["comment"]
@@ -194,7 +243,7 @@ def test_intermediate_issuer_managed_with_remote_signing(salt_call_cli, ca_minio
     state_args["max_path_length"] = 1
     state_args["subjectKeyIdentifier"] = "cafebabe"
     state_args["O"] = "Other org"
-    res = _apply(**state_args)
+    res = _apply(salt_call_cli, "intermediate_issuer_managed", **state_args)
     assert res["result"] is True
     assert not res["changes"]
     assert "present as specified" in res["comment"]
@@ -207,7 +256,7 @@ def test_intermediate_issuer_managed_with_remote_signing(salt_call_cli, ca_minio
 
     # Rotation should replace the default issuer, but reuse its key
     state_args["name"] = "Rotated Remote Intermediate CA"
-    res = _apply(**state_args)
+    res = _apply(salt_call_cli, "intermediate_issuer_managed", **state_args)
     assert res["result"] is True
     assert res["changes"]["cert"]["subject_name"] == {
         "old": "CN=Test Remote Intermediate CA,O=Test Org",
@@ -217,3 +266,245 @@ def test_intermediate_issuer_managed_with_remote_signing(salt_call_cli, ca_minio
     assert new_info["issuer_id"] != issuer_info["issuer_id"]
     assert new_info["key_id"] == issuer_info["key_id"]
     assert _subject(load_cert(new_info["certificate"]), "CN") == "Rotated Remote Intermediate CA"
+
+
+@pytest.fixture
+def pki_url_config(clean_pki_mount):  # pylint: disable=unused-argument
+    """
+    Configure mount default AIA URLs, which are embedded
+    into certificates during issuance.
+    """
+    urls = {
+        "issuing_certificates": ["https://ca.example.com/ca.der"],
+        "crl_distribution_points": ["https://crl.example.com/crl.pem"],
+        "ocsp_servers": ["https://ocsp.example.com"],
+    }
+    vault_write("pki/config/urls", **urls)
+    try:
+        yield urls
+    finally:
+        vault_write(
+            "pki/config/urls",
+            issuing_certificates="",
+            crl_distribution_points="",
+            ocsp_servers="",
+        )
+
+
+@pytest.fixture
+def vault_ca_setup(pki_url_config, request):
+    """
+    Import a root CA issuer named `root` on a mount
+    with configured default AIA URLs.
+    """
+    ret = vault_write("pki/config/ca", pem_bundle="\n".join([CA_CERT, CA_KEY]))["data"]
+    issuer_id = ret["imported_issuers"][0]
+    issuer_config = {"issuer_name": "root"}
+    issuer_config.update(getattr(request, "param", {}))
+    vault_write(f"pki/issuer/{issuer_id}", **issuer_config)
+    if "issuing_certificates" in issuer_config:
+        return issuer_config
+    return pki_url_config
+
+
+@pytest.fixture
+def pki_role(vault_ca_setup):  # pylint: disable=unused-argument
+    role_name = "url-config-denied"
+    vault_write(
+        f"pki/roles/{role_name}",
+        ttl=3600,
+        max_ttl=86400,
+        allow_any_name=True,
+        enforce_hostnames=False,
+    )
+    try:
+        yield role_name
+    finally:
+        vault_delete(f"pki/roles/{role_name}")
+
+
+AIA_UNVERIFIED_NOTE = (
+    "URL-derived certificate extensions (AIA) were not verified since "
+    "the URL configuration of mount `pki` could not be read/rendered"
+)
+
+
+@pytest.fixture
+def private_key(tmp_path):
+    privkey_path = tmp_path / "priv.key"
+    privkey_path.write_text(PRIVKEY)
+    return str(privkey_path)
+
+
+def _assert_embedded_aia(cert, urls):
+    aia = cert.extensions.get_extension_for_class(cx509.AuthorityInformationAccess)
+    assert urls["issuing_certificates"][0] in {
+        str(access.access_location.value) for access in aia.value
+    }
+
+
+def test_intermediate_issuer_managed_url_config_denied(salt_call_cli, vault_ca_setup):
+    """
+    Ensure a denied URL read access does not cause rotation.
+    """
+    state_args = {
+        "name": "Test URL-blind Intermediate CA",
+        "mount": "pki",
+        "issuer_ref": "root",
+        "key_algo": "ec",
+        # Don't reuse the imported root's key for the intermediate.
+        "rotate_key": True,
+    }
+
+    res = _apply(salt_call_cli, "intermediate_issuer_managed", **state_args)
+    assert res["result"] is True
+    assert "has been rotated" in res["comment"]
+    assert AIA_UNVERIFIED_NOTE not in res["comment"]
+    issuer_info = vault_read("pki/issuer/default")["data"]
+    cert = load_cert(issuer_info["certificate"])
+    assert _subject(cert, "CN") == "Test URL-blind Intermediate CA"
+    _assert_embedded_aia(cert, vault_ca_setup)
+
+    res = _apply(salt_call_cli, "intermediate_issuer_managed", **state_args)
+    assert res["result"] is True
+    assert not res["changes"]
+    assert "present as specified" in res["comment"]
+    assert AIA_UNVERIFIED_NOTE in res["comment"]
+    new_info = vault_read("pki/issuer/default")["data"]
+    assert new_info["issuer_id"] == issuer_info["issuer_id"]
+
+
+def test_root_issuer_managed_url_config_denied(salt_call_cli, pki_url_config):
+    """
+    Ensure a denied URL read access does not cause rotation.
+    """
+    state_args = {
+        "name": "Test URL-blind Root CA",
+        "mount": "pki",
+        "key_algo": "ec",
+    }
+
+    res = _apply(salt_call_cli, "root_issuer_managed", **state_args)
+    assert res["result"] is True
+    assert "has been created" in res["comment"]
+    assert AIA_UNVERIFIED_NOTE not in res["comment"]
+    issuer_info = vault_read("pki/issuer/default")["data"]
+    cert = load_cert(issuer_info["certificate"])
+    assert _subject(cert, "CN") == "Test URL-blind Root CA"
+    _assert_embedded_aia(cert, pki_url_config)
+
+    res = _apply(salt_call_cli, "root_issuer_managed", **state_args)
+    assert res["result"] is True
+    assert not res["changes"]
+    assert "present as specified" in res["comment"]
+    assert AIA_UNVERIFIED_NOTE in res["comment"]
+    assert vault_read("pki/issuer/default")["data"]["issuer_id"] == issuer_info["issuer_id"]
+
+
+def test_certificate_managed_url_config_denied(
+    salt_call_cli, vault_ca_setup, pki_role, tmp_path, private_key
+):
+    """
+    Ensure a denied URL read access does not cause rotation.
+    """
+    cert_path = tmp_path / "cert"
+    state_args = {
+        "name": str(cert_path),
+        "common_name": "test.example.com",
+        "role_name": pki_role,
+        "private_key": private_key,
+        "ttl": "30m",
+        "ttl_remaining": 0,
+    }
+
+    res = _apply(salt_call_cli, "certificate_managed", **state_args)
+    assert res["result"] is True
+    assert "The certificate has been created" in res["comment"]
+    assert AIA_UNVERIFIED_NOTE not in res["comment"]
+    cert = load_cert(str(cert_path))
+    assert _subject(cert, "CN") == "test.example.com"
+    _assert_embedded_aia(cert, vault_ca_setup)
+
+    res = _apply(salt_call_cli, "certificate_managed", **state_args)
+    assert res["result"] is True
+    assert not res["changes"]
+    assert "The certificate is in the correct state" in res["comment"]
+    assert AIA_UNVERIFIED_NOTE in res["comment"]
+    assert load_cert(str(cert_path)).serial_number == cert.serial_number
+
+
+def test_ca_certificate_managed_url_config_denied(
+    salt_call_cli, vault_ca_setup, tmp_path, private_key
+):
+    """
+    Ensure a denied URL read access does not cause rotation.
+    """
+    cert_path = tmp_path / "cert"
+    state_args = {
+        "name": str(cert_path),
+        "common_name": "Test URL-blind File CA",
+        "private_key": private_key,
+        "ttl": "30m",
+        "ttl_remaining": 0,
+    }
+
+    res = _apply(salt_call_cli, "ca_certificate_managed", **state_args)
+    assert res["result"] is True
+    assert "The certificate has been created" in res["comment"]
+    assert AIA_UNVERIFIED_NOTE not in res["comment"]
+    cert = load_cert(str(cert_path))
+    assert _subject(cert, "CN") == "Test URL-blind File CA"
+    _assert_embedded_aia(cert, vault_ca_setup)
+
+    res = _apply(salt_call_cli, "ca_certificate_managed", **state_args)
+    assert res["result"] is True
+    assert not res["changes"]
+    assert "The certificate is in the correct state" in res["comment"]
+    assert AIA_UNVERIFIED_NOTE in res["comment"]
+    assert load_cert(str(cert_path)).serial_number == cert.serial_number
+
+
+@pytest.mark.usefixtures("vault_ca_setup")
+@pytest.mark.parametrize(
+    "vault_ca_setup",
+    (
+        {
+            "issuing_certificates": ["{{cluster_aia_path}}/ca.der"],
+            "crl_distribution_points": ["{{cluster_path}}/crl"],
+            "enable_aia_url_templating": True,
+        },
+    ),
+    indirect=True,
+)
+def test_intermediate_issuer_managed_cluster_config_denied(salt_call_cli, cluster_config):
+    """
+    Ensure a denied cluster config read access does not cause rotation when the
+    (issuer-specific) URL configuration is templated.
+    """
+    state_args = {
+        "name": "Test cluster-blind Intermediate CA",
+        "mount": "pki",
+        "issuer_ref": "root",
+        "key_algo": "ec",
+        # Don't reuse the imported root's key for the intermediate.
+        "rotate_key": True,
+    }
+
+    res = _apply(salt_call_cli, "intermediate_issuer_managed", **state_args)
+    assert res["result"] is True
+    assert "has been rotated" in res["comment"]
+    assert AIA_UNVERIFIED_NOTE not in res["comment"]
+    issuer_info = vault_read("pki/issuer/default")["data"]
+    cert = load_cert(issuer_info["certificate"])
+    assert _subject(cert, "CN") == "Test cluster-blind Intermediate CA"
+    _assert_embedded_aia(
+        cert,
+        {"issuing_certificates": [f"{cluster_config['aia_path']}/ca.der"]},
+    )
+
+    res = _apply(salt_call_cli, "intermediate_issuer_managed", **state_args)
+    assert res["result"] is True
+    assert not res["changes"]
+    assert "present as specified" in res["comment"]
+    assert AIA_UNVERIFIED_NOTE in res["comment"]
+    assert vault_read("pki/issuer/default")["data"]["issuer_id"] == issuer_info["issuer_id"]

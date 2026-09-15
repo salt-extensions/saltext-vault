@@ -173,12 +173,16 @@ def check_cert_for_changes(
     role_info: dict[str, typing.Any],
     serial_number: str | None,
     ttl: int,
-    urls: URLConfigs,
+    urls: URLConfigs | None,
     user_ids: list[str] | str | None,
     **kwargs,
-) -> dict[str, typing.Any]:
+) -> tuple[dict[str, typing.Any], dict[str, typing.Any]]:
     """
     Check whether an existing on-disk leaf certificate matches expected parameters.
+
+    Returns a tuple of ``(changes, unverified_url_exts)``. The second item is only
+    populated when ``urls`` is None and contains changes to URL-derived extensions,
+    which cannot be verified without access to the URL configuration.
 
     current
         Path of the existing certificate on disk.
@@ -243,6 +247,9 @@ def check_cert_for_changes(
     urls
         Dictionary of issuer/mount-default authority URLs, which end up in the AuthorityInformationAccess,
         CRLDistributionPoints and FreshestCRL extensions.
+        Pass ``None`` if the URL configuration could not be read, in which case
+        the corresponding extensions are not verified and their drift is reported
+        separately instead of triggering a reissuance.
 
     user_ids
         List of User ID (``UID``) subject attributes.
@@ -255,7 +262,7 @@ def check_cert_for_changes(
         current, encoding=encoding, append_chain=append_chain or []
     )
     if cert is None:
-        return changes
+        return changes, {}
     ca = x509util.load_cert(issuer)
     csr_loaded: cx509.CertificateSigningRequest | None = None
     pk_loaded: Privkey | None = None
@@ -327,7 +334,7 @@ def check_cert_for_changes(
             private_key=pk_loaded,
             serial_number=serial_number,
             ttl=ttl,
-            urls=urls,
+            urls=urls or {},
             user_ids=user_ids,
             **csr_args,
         )
@@ -344,13 +351,19 @@ def check_cert_for_changes(
             role_info=role_info,
             serial_number=serial_number,
             ttl=ttl,
-            urls=urls,
+            urls=urls or {},
             user_ids=user_ids,
             **csr_args,
         )
-    return changes | _compare_cert_with_builder(
-        cert, builder, ttl_remaining=expire_tolerance, urls=urls, not_after=not_after
+    changes.update(
+        _compare_cert_with_builder(
+            cert, builder, ttl_remaining=expire_tolerance, urls=urls, not_after=not_after
+        )
     )
+    unverified_url_exts: dict[str, typing.Any] = {}
+    if urls is None:
+        unverified_url_exts = _split_masked_ext_changes(changes, URL_EXTENSIONS)
+    return changes, unverified_url_exts
 
 
 def _build_regular_cert(
@@ -859,11 +872,15 @@ def check_ca_cert_for_changes(  # pylint: disable=too-many-locals
     street_address: list[str] | str | None,
     ttl: int,
     ttl_remaining: str | int,
-    urls: URLConfigs,
+    urls: URLConfigs | None,
     **kwargs,
-) -> dict[str, typing.Any]:
+) -> tuple[dict[str, typing.Any], dict[str, typing.Any]]:
     """
     Check whether an existing on-disk CA certificate matches expected parameters.
+
+    Returns a tuple of ``(changes, unverified_url_exts)``. The second item is only
+    populated when ``urls`` is None and contains changes to URL-derived extensions,
+    which cannot be verified without access to the URL configuration.
 
     current
         Path of the existing certificate on disk.
@@ -957,6 +974,9 @@ def check_ca_cert_for_changes(  # pylint: disable=too-many-locals
     urls
         Dictionary of issuer/mount-default authority URLs, which end up in the AuthorityInformationAccess,
         CRLDistributionPoints and FreshestCRL extensions.
+        Pass ``None`` if the URL configuration could not be read, in which case
+        the corresponding extensions are not verified and their drift is reported
+        separately instead of triggering a reissuance.
 
     kwargs
         All other kwargs passed to the cert signing endpoint or as CSR generation params.
@@ -965,7 +985,7 @@ def check_ca_cert_for_changes(  # pylint: disable=too-many-locals
         current, encoding=encoding, append_chain=append_chain or []
     )
     if cert is None:
-        return changes
+        return changes, {}
     ca = x509util.load_cert(issuer)
     csr_loaded: cx509.CertificateSigningRequest | None = None
     pk_loaded: Privkey | None = None
@@ -1018,7 +1038,7 @@ def check_ca_cert_for_changes(  # pylint: disable=too-many-locals
             not_before_duration=not_before_duration,
             serial_number=serial_number,
             ttl=ttl,
-            urls=urls,
+            urls=urls or {},
             **csr_args,
         )
     else:
@@ -1044,13 +1064,19 @@ def check_ca_cert_for_changes(  # pylint: disable=too-many-locals
             serial_number=serial_number,
             street_address=street_address,
             ttl=ttl,
-            urls=urls,
+            urls=urls or {},
             **csr_args,
         )
 
-    return changes | _compare_cert_with_builder(
-        cert, builder, ttl_remaining=ttl_remaining, urls=urls, not_after=not_after
+    changes.update(
+        _compare_cert_with_builder(
+            cert, builder, ttl_remaining=ttl_remaining, urls=urls, not_after=not_after
+        )
     )
+    unverified_url_exts: dict[str, typing.Any] = {}
+    if urls is None:
+        unverified_url_exts = _split_masked_ext_changes(changes, URL_EXTENSIONS)
+    return changes, unverified_url_exts
 
 
 def check_int_issuer_cert_for_changes_vault_ca(
@@ -1079,13 +1105,17 @@ def check_int_issuer_cert_for_changes_vault_ca(
     serial_number: str | None,
     signature_bits: int,
     street_address: list[str] | str | None,
-    urls: URLConfigs,
-) -> dict[str, typing.Any]:
+    urls: URLConfigs | None,
+) -> tuple[dict[str, typing.Any], dict[str, typing.Any]]:
     """
-    Check whether an existing on-disk CA certificate matches expected parameters.
+    Check whether an existing intermediate CA issuer certificate matches expected parameters.
+
+    Returns a tuple of ``(changes, unverified_url_exts)``. The second item is only
+    populated when ``urls`` is None and contains changes to URL-derived extensions,
+    which cannot be verified without access to the URL configuration.
 
     current
-        Path of the existing certificate on disk.
+        Existing certificate text.
 
     issuer
         Issuer certificate.
@@ -1164,6 +1194,9 @@ def check_int_issuer_cert_for_changes_vault_ca(
     urls
         Dictionary of issuer/mount-default authority URLs, which end up in the AuthorityInformationAccess,
         CRLDistributionPoints and FreshestCRL extensions.
+        Pass ``None`` if the URL configuration could not be read, in which case
+        the corresponding extensions are not verified and their drift is reported
+        separately instead of triggering a rotation.
     """
     cert = typing.cast(cx509.Certificate, x509util.load_cert(current, passphrase=None))
     pubkey = typing.cast(Pubkey, cert.public_key())
@@ -1197,7 +1230,7 @@ def check_int_issuer_cert_for_changes_vault_ca(
         serial_number=serial_number,
         street_address=street_address,
         ttl=days_valid * 86400,
-        urls=urls,
+        urls=urls or {},
     )
 
     changes.update(
@@ -1206,9 +1239,13 @@ def check_int_issuer_cert_for_changes_vault_ca(
         )
     )
 
-    return _simulate_key_rotation_changes(
+    unverified_url_exts: dict[str, typing.Any] = {}
+    if urls is None:
+        unverified_url_exts = _split_masked_ext_changes(changes, URL_EXTENSIONS)
+    changes = _simulate_key_rotation_changes(
         cert, changes, rotate_key=rotate_key, replace_key=replace_key
     )
+    return changes, unverified_url_exts
 
 
 def _handle_max_path_length(ca: cx509.Certificate, max_path_length: int | None) -> int:
