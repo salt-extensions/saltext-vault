@@ -373,15 +373,21 @@ def _wipe_issuers():
     vault_delete("pki/root")
 
 
+def _import_configured_issuer(certs, key, issuer_config, mount="pki"):
+    if not isinstance(certs, list):
+        certs = [certs]
+    res = vault_write(f"/{mount}/config/ca", pem_bundle="\n".join(certs + [key]))["data"]
+    issuer_id = res["imported_issuers"][0]
+    vault_write(f"/{mount}/issuer/{issuer_id}", **issuer_config)
+    return issuer_id
+
+
 @pytest.fixture
 def issuer_setup(ca_cert, ca_key, request):
     try:
-        ret_data = vault_write("/pki/config/ca", pem_bundle="\n".join([ca_cert, ca_key]))["data"]
-        issuer_id = ret_data["imported_issuers"][0]
         issuer_config = {"issuer_name": "root"}
         issuer_config.update(deepcopy(getattr(request, "param", {})))
-        vault_write(f"/pki/issuer/{issuer_id}", **issuer_config)
-        issuer_config["issuer_id"] = issuer_id
+        issuer_config["issuer_id"] = _import_configured_issuer(ca_cert, ca_key, issuer_config)
         yield issuer_config
     finally:
         _wipe_issuers()
@@ -389,12 +395,9 @@ def issuer_setup(ca_cert, ca_key, request):
 
 @pytest.fixture
 def issuer_setup_additional(ca2_cert, ca2_key, request):
-    ret_data = vault_write("/pki/config/ca", pem_bundle="\n".join([ca2_cert, ca2_key]))["data"]
-    issuer_id = ret_data["imported_issuers"][0]
     issuer_config = {"issuer_name": "additional"}
     issuer_config.update(deepcopy(getattr(request, "param", {})))
-    vault_write(f"/pki/issuer/{issuer_id}", **issuer_config)
-    issuer_config["issuer_id"] = issuer_id
+    issuer_config["issuer_id"] = _import_configured_issuer(ca2_cert, ca2_key, issuer_config)
     # No teardown here: This fixture is only used together with issuer_setup,
     # which wipes all issuers and keys on the mount.
     yield issuer_config
@@ -403,19 +406,11 @@ def issuer_setup_additional(ca2_cert, ca2_key, request):
 @pytest.fixture
 def issuer_setup_sub(ca_cert, ca_sub_cert, ca_sub_key, request):
     try:
-        ret_data = vault_write(
-            "/pki/config/ca", pem_bundle="\n".join([ca_sub_cert, ca_sub_key, ca_cert])
-        )["data"]
-        issuers = ret_data["mapping"]
-        imported_key = ret_data["imported_keys"][0]
-        try:
-            sub_id = next(x for x in issuers if issuers[x] if issuers[x] == imported_key)
-        except StopIteration as err:
-            raise AssertionError("Unable to find issuer IDs") from err
         issuer_config = {"issuer_name": "sub"}
         issuer_config.update(deepcopy(getattr(request, "param", {})))
-        vault_write(f"/pki/issuer/{sub_id}", **issuer_config)
-        issuer_config["issuer_id"] = sub_id
+        issuer_config["issuer_id"] = _import_configured_issuer(
+            [ca_sub_cert, ca_cert], ca_sub_key, issuer_config
+        )
         yield issuer_config
     finally:
         _wipe_issuers()
@@ -424,15 +419,11 @@ def issuer_setup_sub(ca_cert, ca_sub_cert, ca_sub_key, request):
 @pytest.fixture
 def issuer_setup_no_pathlen(ca_cert_no_pathlen, ca_key_no_pathlen, request):
     try:
-        ret_data = vault_write(
-            "/pki/config/ca",
-            pem_bundle="\n".join([ca_cert_no_pathlen, ca_key_no_pathlen]),
-        )["data"]
-        issuer_id = ret_data["imported_issuers"][0]
         issuer_config = {"issuer_name": "root"}
         issuer_config.update(deepcopy(getattr(request, "param", {})))
-        vault_write(f"/pki/issuer/{issuer_id}", **issuer_config)
-        issuer_config["issuer_id"] = issuer_id
+        issuer_config["issuer_id"] = _import_configured_issuer(
+            ca_cert_no_pathlen, ca_key_no_pathlen, issuer_config
+        )
         yield issuer_config
     finally:
         _wipe_issuers()
@@ -3477,6 +3468,99 @@ def test_root_issuer_managed_changes_with_issuer_name(vault_pki, root_ca_args):
     new_info = _default_issuer()
     assert new_info["issuer_id"] != issuer_info["issuer_id"]
     assert new_info["issuer_name"] == root_ca_args["issuer_name"]
+
+
+@pytest.mark.usefixtures("existing_root")
+@pytest.mark.parametrize(
+    "existing_root",
+    ({"issuer_name": "my_root_ca"},),
+    indirect=True,
+)
+def test_root_issuer_managed_issuer_name_taken(
+    vault_pki, root_ca_args, ca2_cert, ca2_key, testmode
+):
+    """
+    When the issuer name should be changed, but the requested one is taken by another
+    issuer and the current default issuer is named (i.e. the conflict cannot be an
+    artifact of a previously interrupted rotation), the state should fail
+    without touching either issuer.
+    """
+    collision_id = _import_configured_issuer(ca2_cert, ca2_key, {"issuer_name": "other_root"})
+    issuer_info = _default_issuer()
+    issuers_before = sorted(vault_list("pki/issuers"))
+    root_ca_args["issuer_name"] = "other_root"
+    ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
+    assert ret.result is False
+    assert "Another issuer with name 'other_root' exists on mount 'pki'" in ret.comment
+    assert collision_id in ret.comment
+    assert not ret.changes
+    assert sorted(vault_list("pki/issuers")) == issuers_before
+    assert _default_issuer() == issuer_info
+    assert vault_read(f"pki/issuer/{collision_id}")["data"]["issuer_name"] == "other_root"
+
+
+@pytest.mark.usefixtures("existing_root")
+def test_root_issuer_managed_issuer_name_taken_before_rotation(
+    vault_pki, root_ca_args, ca2_cert, ca2_key, testmode
+):
+    """
+    When the requested issuer name is taken by another issuer and the certificate
+    needs to be rotated, the state should fail before generating a new issuer,
+    even if the current default issuer is unnamed.
+    """
+    collision_id = _import_configured_issuer(ca2_cert, ca2_key, {"issuer_name": "my_root_ca"})
+    issuer_info = _default_issuer()
+    issuers_before = sorted(vault_list("pki/issuers"))
+    root_ca_args.update(
+        {
+            "issuer_name": "my_root_ca",
+            "max_path_length": 2,
+            "allow_premature_rotation": True,
+        }
+    )
+    ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
+    assert ret.result is False
+    assert "Another issuer with name 'my_root_ca' exists on mount 'pki'" in ret.comment
+    assert not ret.changes
+    assert sorted(vault_list("pki/issuers")) == issuers_before
+    assert _default_issuer() == issuer_info
+    assert vault_read(f"pki/issuer/{collision_id}")["data"]["issuer_name"] == "my_root_ca"
+
+
+@pytest.mark.usefixtures("existing_root")
+def test_root_issuer_managed_issuer_name_taken_artifact(
+    vault_pki, root_ca_args, ca2_cert, ca2_key, testmode
+):
+    """
+    When the requested issuer name is taken by another issuer, but the current default
+    issuer is unnamed and its certificate does not need to be changed, assume the name
+    is held by a leftover of a previously interrupted rotation (which failed between
+    switching the default issuer and renaming the superseded one) and rotate the holder out.
+    This scenario is simulated here by importing a named foreign issuer next to an
+    unnamed, converged default issuer.
+    """
+    collision_id = _import_configured_issuer(ca2_cert, ca2_key, {"issuer_name": "my_root_ca"})
+    issuer_info = _default_issuer()
+    root_ca_args["issuer_name"] = "my_root_ca"
+    ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
+    assert ret.result is not False
+    assert (ret.result is None) is testmode
+    assert f"Root CA issuer {'would have' if testmode else 'has'} been updated" in ret.comment
+    assert "cert" not in ret.changes
+    assert ret.changes["issuer"]["issuer_name"] == {"old": "", "new": "my_root_ca"}
+    old_issuer = ret.changes.get("old_issuer")
+    assert old_issuer
+    assert old_issuer["issuer_id"] == collision_id
+    assert old_issuer["issuer_name"]["old"] == "my_root_ca"
+    assert old_issuer["issuer_name"]["new"].startswith(f"my_root_ca-{'<TBD>' if testmode else ''}")
+    assert old_issuer["usage"] == {"removed": ["issuing-certificates"]}
+
+    new_info = _default_issuer()
+    assert new_info["issuer_id"] == issuer_info["issuer_id"]
+    assert (new_info["issuer_name"] == "my_root_ca") is not testmode
+    collision_info = vault_read(f"pki/issuer/{collision_id}")["data"]
+    assert (collision_info["issuer_name"] == old_issuer["issuer_name"]["new"]) is not testmode
+    assert ("issuing-certificates" not in collision_info["usage"]) is not testmode
 
 
 @pytest.mark.usefixtures("existing_root", "aia_urls")
