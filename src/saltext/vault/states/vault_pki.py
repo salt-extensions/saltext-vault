@@ -1209,7 +1209,21 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
     .. versionadded:: 1.9.0
 
     Ensure an issuer representing an intermediate CA is present **as the default issuer** on the mount.
-    Rotates the issuer when necessary by generating a new certificate.
+    Rotates the issuer when necessary by generating a new certificate. Unlike :func:`root_issuer_managed`,
+    the rotation always happens when the certificate does not match the configuration, not only when
+    ``days_remaining`` indicates expiry.
+
+    .. hint::
+
+        When an issuer is rotated, the old one is kept with slightly adjusted configuration:
+
+        1. If ``issuer_name`` is specified and matches the old one, it receives the current
+           timestamp as a suffix, separated by a dash (``<issuer_name>-<timestamp>``).
+        2. ``issuing-certificates`` is removed from its usages.
+
+    .. important::
+
+        You need to prune keys and issuers manually, they are never deleted by this state.
 
     Signs the issuer certificate either via another Vault issuer or a Salt-internal CA.
 
@@ -1700,6 +1714,10 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
                         "issuer_id": current["issuer_id"],
                         "issuer_name": {"old": issuer_name, "new": f"{issuer_name}-<TBD>"},
                     }
+                if "issuing-certificates" in current["usage"]:
+                    ret["changes"].setdefault("old_issuer", {"issuer_id": current["issuer_id"]})[
+                        "usage"
+                    ] = {"removed": ["issuing-certificates"]}
                 if rotate_key or replace_key:
                     ret["changes"]["key_id"] = {"old": current["key_id"], "new": "<TBD>"}
 
@@ -1764,16 +1782,23 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
 
             if current is not None:
                 ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": issuer_id}
+                upd_old_params, old_changes = {}, {"issuer_id": current["issuer_id"]}
                 if issuer_name and current["issuer_name"] == issuer_name:
                     # When we rotate a named issuer, we need to rename the previous one since names must be unique
-                    old_issuer_name = f"{issuer_name}-{int(time.time())}"
+                    upd_old_params["name"] = f"{issuer_name}-{int(time.time())}"
+                    old_changes["issuer_name"] = {"old": issuer_name, "new": upd_old_params["name"]}
+                if "issuing-certificates" in current["usage"]:
+                    upd_old_params["usage"] = [
+                        usage
+                        for usage in hlp.deserialize_csl(current["usage"])
+                        if usage != "issuing-certificates"
+                    ]
+                    old_changes["usage"] = {"removed": ["issuing-certificates"]}
+                if upd_old_params:
                     __salt__["vault_pki.update_issuer"](
-                        ref=current["issuer_id"], name=old_issuer_name, mount=mount
+                        ref=current["issuer_id"], **upd_old_params, mount=mount
                     )
-                    ret["changes"]["old_issuer"] = {
-                        "issuer_id": current["issuer_id"],
-                        "issuer_name": {"old": issuer_name, "new": old_issuer_name},
-                    }
+                    ret["changes"]["old_issuer"] = old_changes
 
                 # Correctly report new subjectKeyIdentifier, it's "<TBD>" right now
                 if rotate_key or replace_key:
@@ -1874,17 +1899,27 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
     Ensure an issuer representing a root CA is present **as the default issuer** on the mount.
     Rotates the issuer certificate when necessary.
 
-    By default, rotates the issuer certificate **only when ``days_remaining`` is not satisfied**.
+    By default, rotates the issuer certificate **only when days_remaining indicates expiry**.
     If the certificate would need to change before that, the state fails instead of rotating it.
     Set ``allow_premature_rotation: true`` to opt-in for stateful management of all parameters.
 
-    When an issuer is rotated, the old one is kept with slightly adjusted configuration:
+    .. important::
 
-    1. If ``issuer_name`` is specified and matches the old one, it receives the current timestamp as a suffix.
+        **Issuer configuration** changes are always applied, even if the state
+        refuses to rotate and fails. Reported **certificate changes** are only
+        materialized when the state does not fail.
 
-    .. note::
+    .. hint::
 
-        Issuer **configuration** changes are always applied.
+        When an issuer is rotated, the old one is kept with slightly adjusted configuration:
+
+        1. If ``issuer_name`` is specified and matches the old one, it receives the current
+           timestamp as a suffix, separated by a dash (``<issuer_name>-<timestamp>``).
+        2. ``issuing-certificates`` is removed from its usages.
+
+    .. important::
+
+        You need to prune keys and issuers manually, they are never deleted by this state.
 
     Required policy:
 
@@ -1950,6 +1985,14 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
     rotate_key
         When rotating the default issuer, rotate its key along with it. Defaults to false.
         Not respected when ``key_ref`` is specified.
+
+        .. important::
+
+            Rotating the key is a hard cutover. A new root issuer key means nothing issued under
+            the new root validates for clients that only trust the old one.
+
+            The new root must be distributed to trust stores **before** dependent reissuance cascades.
+            Consider creating a new mount with a new root issuer instead that you can introduce gradually.
 
         .. note::
 
@@ -2229,6 +2272,10 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
                         "issuer_id": current["issuer_id"],
                         "issuer_name": {"old": issuer_name, "new": f"{issuer_name}-<TBD>"},
                     }
+                if "issuing-certificates" in current["usage"]:
+                    ret["changes"].setdefault("old_issuer", {"issuer_id": current["issuer_id"]})[
+                        "usage"
+                    ] = {"removed": ["issuing-certificates"]}
                 if rotate_key or replace_key:
                     ret["changes"]["key_id"] = {"old": current["key_id"], "new": "<TBD>"}
 
@@ -2248,6 +2295,10 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
                     "issuer_id": current["issuer_id"],
                     "issuer_name": {"old": issuer_name, "new": f"{issuer_name}-<TBD>"},
                 }
+            if "issuing-certificates" in current["usage"]:
+                ret["changes"].setdefault("old_issuer", {"issuer_id": current["issuer_id"]})[
+                    "usage"
+                ] = {"removed": ["issuing-certificates"]}
             if rotate_key or replace_key:
                 ret["changes"]["key_id"] = {"old": current["key_id"], "new": "<TBD>"}
 
@@ -2329,16 +2380,23 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
 
             if current is not None:
                 ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": issuer_id}
+                upd_old_params, old_changes = {}, {"issuer_id": current["issuer_id"]}
                 if issuer_name and current["issuer_name"] == issuer_name:
                     # When we rotate a named issuer, we need to rename the previous one since names must be unique
-                    old_issuer_name = f"{issuer_name}-{int(time.time())}"
+                    upd_old_params["name"] = f"{issuer_name}-{int(time.time())}"
+                    old_changes["issuer_name"] = {"old": issuer_name, "new": upd_old_params["name"]}
+                if "issuing-certificates" in current["usage"]:
+                    upd_old_params["usage"] = [
+                        usage
+                        for usage in hlp.deserialize_csl(current["usage"])
+                        if usage != "issuing-certificates"
+                    ]
+                    old_changes["usage"] = {"removed": ["issuing-certificates"]}
+                if upd_old_params:
                     __salt__["vault_pki.update_issuer"](
-                        ref=current["issuer_id"], name=old_issuer_name, mount=mount
+                        ref=current["issuer_id"], **upd_old_params, mount=mount
                     )
-                    ret["changes"]["old_issuer"] = {
-                        "issuer_id": current["issuer_id"],
-                        "issuer_name": {"old": issuer_name, "new": old_issuer_name},
-                    }
+                    ret["changes"]["old_issuer"] = old_changes
 
                 # Correctly report new subjectKeyIdentifier, it's "<TBD>" right now
                 if rotate_key or replace_key:
