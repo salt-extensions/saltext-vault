@@ -2251,7 +2251,7 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements
 
         if __opts__["test"]:
             ret["result"] = False if refused_to_rotate else None
-            ret["changes"] = changes
+            ret["changes"].update(changes)
 
             if refused_to_rotate:
                 msg.append(
