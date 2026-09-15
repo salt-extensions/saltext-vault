@@ -710,7 +710,7 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
     key_usage
         (Requires Vault 1.20+ or OpenBao)
         List of key usages to add to the existing set of key usages (CRLSign,CertSign).
-        Per the CA/B Forum, Vault ignores additional values other than DigitalSignature.
+        Per the CAB Forum requirements, Vault ignores values other than DigitalSignature.
         Ignored when a ``csr`` is passed and ``sign_verbatim`` is true.
 
     exclude_cn_from_sans
@@ -1213,6 +1213,10 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
     the rotation always happens when the certificate does not match the configuration, not only when
     ``days_remaining`` indicates expiry.
 
+    .. important::
+
+        You need to prune keys and issuers manually, they are never deleted by this state.
+
     .. hint::
 
         When an issuer is rotated, the old one is kept with slightly adjusted configuration:
@@ -1221,9 +1225,9 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
            timestamp as a suffix, separated by a dash (``<issuer_name>-<timestamp>``).
         2. ``issuing-certificates`` is removed from its usages.
 
-    .. important::
-
-        You need to prune keys and issuers manually, they are never deleted by this state.
+        Other issuers on the mount, e.g. manually cross-signed variants of the managed
+        one, are ignored by this state and can coexist safely, as long as they are not
+        assigned its ``issuer_name``.
 
     Signs the issuer certificate either via another Vault issuer or a Salt-internal CA.
 
@@ -1266,8 +1270,14 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
             capabilities = ["create", "update"]
         }
 
+        # When issuer_ref is specified, read the signing issuer to check for
+        # necessary changes. issuer_mount defaults to the value of mount.
+        path "<issuer_mount>/issuer/<issuer_ref>" {
+            capabilities = ["read"]
+        }
+
         # When issuer_ref is specified, we use that issuer to sign the certificate
-        path "<mount>/issuer/<issuer_ref>/sign-intermediate" {
+        path "<issuer_mount>/issuer/<issuer_ref>/sign-intermediate" {
             capabilities = ["update"]
         }
 
@@ -1286,6 +1296,20 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
             capabilities = ["patch"]
         }
 
+        # When issuer_ref is specified, read the signing issuer's mount default urls
+        # to account for cert extensions, unless the signing issuer overrides them
+        # with its own AIA configuration.
+        # Note: This state might not behave idempotently when reading this fails.
+        path "<issuer_mount>/config/urls" {
+            capabilities = ["read"]
+        }
+
+        # When URLs use templating with `{{cluster_path}}`/`{{cluster_aia_path}}` variables
+        # Note: This state might not behave idempotently when reading this fails.
+        path "<issuer_mount>/config/cluster" {
+            capabilities = ["read"]
+        }
+
     **Certificate/Key configuration:**
 
     name
@@ -1297,12 +1321,18 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
             because of signing policy merging.
 
     days_remaining
-        Attempt to recreate the certificate if the number of days the certificate
-        is valid for is less than the number specified. Defaults to ``30``.
+        Attempt to recreate the certificate if its remaining validity
+        falls below this number of days. Defaults to ``30``.
 
     rotate_key
         When rotating the default issuer, rotate its key along with it. Defaults to false.
         Not respected when ``key_ref`` is specified.
+
+        .. important::
+
+            Cross-signed variants of this issuer certify the old key, so they stop bridging
+            anything issued under the new one. They are not re-established by this state,
+            you need to cross-sign the new key manually.
 
         .. note::
 
@@ -1396,7 +1426,7 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
     key_usage
         (Requires Vault 1.20+ or OpenBao when ``issuer_ref`` is specified)
         List of key usages to add to the existing set of key usages (CRLSign,CertSign).
-        Per the CA/B Forum, Vault ignores additional values other than DigitalSignature.
+        Per the CAB Forum requirements, Vault ignores values other than DigitalSignature.
 
         Translated into ``keyUsage`` when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
 
@@ -1499,6 +1529,12 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
     issuer_name
         Custom name for the issuer. Must be unique and not equal to ``default``.
 
+        .. important::
+
+            Never assign this name to issuers managed outside of this state
+            (e.g. cross-signed variants). A conflicting issuer might be renamed
+            under specific circumstances; in all other cases, this state fails.
+
     leaf_not_after_behavior
         Behavior of a leaf's ``NotAfter`` field during issuance when it exceeds the issuer's validity.
         Valid options:
@@ -1511,7 +1547,7 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
     usage
         Allowed usages for this issuer. Valid options are:
 
-        * ``read-only`` - to allow this issuer to be read; implict; always allowed;
+        * ``read-only`` - to allow this issuer to be read; implicit; always allowed;
         * ``issuing-certificates`` - to allow this issuer to be used for issuing other certificates;
         * ``crl-signing`` -  to allow this issuer to be used for signing CRLs.
           This is separate from the CRLSign KeyUsage on the x509 certificate, but this usage cannot be set
@@ -1532,7 +1568,7 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
     delta_crl_endpoints
         (Requires Vault 1.20+ or OpenBao)
         Specifies the URL values for the Delta CRL Distribution Points field.
-        This can be an array or a comma- separated string list.
+        This can be an array or a comma-separated string list.
 
     ocsp_servers
         Specifies the URL values for the OCSP Servers field as an array.
@@ -1743,12 +1779,16 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments
     By default, rotates the issuer certificate **only when days_remaining indicates expiry**.
     If the certificate would need to change before that, the state fails instead of rotating it.
     Set ``allow_premature_rotation: true`` to opt-in for stateful management of all parameters.
+    When a rotation is triggered by expiry, any pending parameter changes are applied
+    to the new certificate as well.
 
     .. important::
 
         **Issuer configuration** changes are always applied, even if the state
         refuses to rotate and fails. Reported **certificate changes** are only
         materialized when the state does not fail.
+
+        You need to prune keys and issuers manually, they are never deleted by this state.
 
     .. hint::
 
@@ -1758,9 +1798,9 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments
            timestamp as a suffix, separated by a dash (``<issuer_name>-<timestamp>``).
         2. ``issuing-certificates`` is removed from its usages.
 
-    .. important::
-
-        You need to prune keys and issuers manually, they are never deleted by this state.
+        Other issuers on the mount, e.g. manually cross-signed variants of the managed
+        one, are ignored by this state and can coexist safely, as long as they are not
+        assigned its ``issuer_name``.
 
     Required policy:
 
@@ -1781,6 +1821,12 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments
             capabilities = ["list"]
         }
 
+        # Generate the root issuer certificate using a separately managed key,
+        # hence the key type is always `existing` here
+        path "<mount>/root/generate/existing" {
+            capabilities = ["create", "update"]
+        }
+
         # Set default issuer
         path "<mount>/config/issuers" {
             capabilities = ["create", "update"]
@@ -1797,8 +1843,8 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments
             capabilities = ["read"]
         }
 
-        # When URLs use templating with `{cluster_path}`/`{cluster_aia_path}` variables,
-        # but not `{issuer_id}` (URLs are always excluded from the issuer certificate in that case)
+        # When URLs use templating with `{{cluster_path}}`/`{{cluster_aia_path}}` variables,
+        # but not `{{issuer_id}}` (URLs are always excluded from the issuer certificate in that case)
         # Note: Failure to read this or URL drift does not cause rotation, only a note.
         path "<mount>/config/cluster" {
             capabilities = ["read"]
@@ -1810,12 +1856,12 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments
         Common name (CN) of the certificate subject.
 
     days_remaining
-        Attempt to recreate the certificate if the number of days the certificate
-        is valid for is less than the number specified. Defaults to ``30``.
+        Attempt to recreate the certificate if its remaining validity
+        falls below this number of days. Defaults to ``90``.
 
     allow_premature_rotation
         Always rotate the root issuer certificate when it does not meet its specification,
-        even when it is not nearing its exiration date as defined by ``days_remaining``.
+        even when it is not nearing its expiration date as defined by ``days_remaining``.
         Defaults to false, meaning this state fails instead of rotating the issuer
         and indicates necessary changes in the ``changes`` dict.
 
@@ -1834,6 +1880,10 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments
 
             The new root must be distributed to trust stores **before** dependent reissuance cascades.
             Consider creating a new mount with a new root issuer instead that you can introduce gradually.
+
+            Cross-signed variants of this issuer certify the old key, so they stop bridging
+            anything issued under the new one. They are not re-established by this state,
+            you need to cross-sign the new key manually.
 
         .. note::
 
@@ -1900,7 +1950,7 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments
     key_usage
         (Requires Vault 1.20+ or OpenBao)
         List of key usages to add to the existing set of key usages (CRLSign,CertSign).
-        Per the CA/B Forum, Vault ignores additional values other than DigitalSignature.
+        Per the CAB Forum requirements, Vault ignores values other than DigitalSignature.
 
     exclude_cn_from_sans
         If set to true, the Common Name is not added to the SANs.
@@ -1938,6 +1988,12 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments
     issuer_name
         Custom name for the issuer. Must be unique and not equal to ``default``.
 
+        .. important::
+
+            Never assign this name to issuers managed outside of this state
+            (e.g. cross-signed variants). A conflicting issuer might be renamed
+            under specific circumstances; in all other cases, this state fails.
+
     leaf_not_after_behavior
         Behavior of a leaf's ``NotAfter`` field during issuance when it exceeds the issuer's validity.
         Valid options:
@@ -1950,7 +2006,7 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments
     usage
         Allowed usages for this issuer. Valid options are:
 
-        * ``read-only`` - to allow this issuer to be read; implict; always allowed;
+        * ``read-only`` - to allow this issuer to be read; implicit; always allowed;
         * ``issuing-certificates`` - to allow this issuer to be used for issuing other certificates;
         * ``crl-signing`` -  to allow this issuer to be used for signing CRLs.
           This is separate from the CRLSign KeyUsage on the x509 certificate, but this usage cannot be set
@@ -1971,7 +2027,7 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments
     delta_crl_endpoints
         (Requires Vault 1.20+ or OpenBao)
         Specifies the URL values for the Delta CRL Distribution Points field.
-        This can be an array or a comma- separated string list.
+        This can be an array or a comma-separated string list.
 
     ocsp_servers
         Specifies the URL values for the OCSP Servers field as an array.

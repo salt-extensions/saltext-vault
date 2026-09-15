@@ -456,7 +456,7 @@ def update_issuer(
     usage
         Allowed usages for this issuer. Valid options are:
 
-        * ``read-only`` - to allow this issuer to be read; implict; always allowed;
+        * ``read-only`` - to allow this issuer to be read; implicit; always allowed;
         * ``issuing-certificates`` - to allow this issuer to be used for issuing other certificates;
         * ``crl-signing`` -  to allow this issuer to be used for signing CRLs.
           This is separate from the CRLSign KeyUsage on the x509 certificate, but this usage cannot be set
@@ -482,14 +482,14 @@ def update_issuer(
         .. versionadded:: 1.9.0
 
         Render ``aia_urls``/``crl_endpoints``/``ocsp_servers``/``delta_crl_endpoints`` as templates.
-        Supported variables: `{{issuer_id}}`, ``{{cluster_path}}``, ``{{cluster_aia_path}}``
+        Supported variables: ``{{issuer_id}}``, ``{{cluster_path}}``, ``{{cluster_aia_path}}``
 
     delta_crl_endpoints
         .. versionadded:: 1.9.0
 
         (Requires Vault 1.20+ or OpenBao)
         Specifies the URL values for the Delta CRL Distribution Points field.
-        This can be an array or a comma- separated string list.
+        This can be an array or a comma-separated string list.
 
     leaf_not_after_behavior
         .. versionadded:: 1.9.0
@@ -1327,7 +1327,7 @@ def generate_intermediate(
     key_usage
         (Requires Vault 1.20+ or OpenBao when ``issuer_ref`` is specified)
         List of key usages to add to the existing set of key usages (CRLSign,CertSign).
-        Per the CA/B Forum, Vault ignores additional values other than DigitalSignature.
+        Per the CAB Forum requirements, Vault ignores values other than DigitalSignature.
 
         Translated into ``keyUsage`` when a Salt-internal CA issues the certificate (``issuer_ref`` is unspecified).
 
@@ -2585,7 +2585,7 @@ def sign_intermediate(  # pylint: disable=too-many-locals
     key_usage
         (Requires Vault 1.20+ or OpenBao)
         List of key usages to add to the existing set of key usages (CRLSign,CertSign).
-        Per the CA/B Forum, Vault ignores additional values other than DigitalSignature.
+        Per the CAB Forum requirements, Vault ignores values other than DigitalSignature.
         Ignored when a ``csr`` is passed and ``sign_verbatim`` is true.
 
     permitted_alt_names
@@ -2950,7 +2950,7 @@ def write_urls(
 
     aia_url_templating
         Render ``issuing_certificates``/``crl_endpoints``/``ocsp_servers``/``delta_crl_endpoints`` as templates.
-        Supported variables: `{{issuer_id}}`, ``{{cluster_path}}``, ``{{cluster_aia_path}}``
+        Supported variables: ``{{issuer_id}}``, ``{{cluster_path}}``, ``{{cluster_aia_path}}``
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
