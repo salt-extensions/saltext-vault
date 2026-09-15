@@ -3438,6 +3438,7 @@ def test_root_issuer_managed_issuer_ok(vault_pki, root_ca_args, testmode):
     (
         {
             "issuer_name": "my_root_ca",
+            "allow_premature_rotation": True,
         },
     ),
     indirect=True,
@@ -3582,7 +3583,10 @@ def test_root_issuer_managed_ok(vault_pki, root_ca_args, testmode, container):
     ),
     indirect=True,
 )
-def test_root_issuer_managed_changes(vault_pki, root_ca_args, existing_root, testmode, container):
+@pytest.mark.parametrize("allow_premature_rotation", (False, True))
+def test_root_issuer_managed_changes(
+    vault_pki, root_ca_args, allow_premature_rotation, existing_root, testmode, container
+):
     root_ca_args = root_ca_args.copy()  # we modify the dict, which is shared
     issuer_info = _default_issuer()
     cert = load_cert(issuer_info["certificate"])
@@ -3618,17 +3622,28 @@ def test_root_issuer_managed_changes(vault_pki, root_ca_args, existing_root, tes
     root_ca_args["locality"] = "Salt Lake City"
     root_ca_args.pop("serial_number")
 
+    if allow_premature_rotation:
+        root_ca_args["allow_premature_rotation"] = True
+
     ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
-    assert ret.result is not False
-    assert (ret.result is None) is testmode
-    assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
+    assert (ret.result is False) is not allow_premature_rotation
+    assert (ret.result is None) is (testmode and allow_premature_rotation)
+    if allow_premature_rotation:
+        assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
+    else:
+        assert (
+            f"{'Would have r' if testmode else 'R'}efused to rotate root CA certificate"
+            in ret.comment
+        )
     assert ret.changes
     assert "issuer_id" in ret.changes
     assert "key_id" in ret.changes
     assert ret.changes["key_id"]["old"] == existing_root["key_id"]
-    assert (ret.changes["key_id"]["new"] == "<TBD>") is testmode
+    assert (ret.changes["key_id"]["new"] == "<TBD>") is (testmode or not allow_premature_rotation)
     assert ret.changes["issuer_id"]["old"] == existing_root["issuer_id"]
-    assert (ret.changes["issuer_id"]["new"] == "<TBD>") is testmode
+    assert (ret.changes["issuer_id"]["new"] == "<TBD>") is (
+        testmode or not allow_premature_rotation
+    )
 
     cert_changes = ret.changes.get("cert")
     assert cert_changes
@@ -3656,7 +3671,9 @@ def test_root_issuer_managed_changes(vault_pki, root_ca_args, existing_root, tes
         ]
     else:
         assert "excluded_subtrees" not in changed_exts["nameConstraints"]["value"]
-    assert (changed_exts["subjectKeyIdentifier"]["value"]["new"] == "<TBD>") is testmode
+    assert (changed_exts["subjectKeyIdentifier"]["value"]["new"] == "<TBD>") is (
+        testmode or not allow_premature_rotation
+    )
     if "key_usage" in root_ca_args:
         assert changed_exts["keyUsage"]["value"]["digitalSignature"] == {
             "new": False,
@@ -3664,10 +3681,12 @@ def test_root_issuer_managed_changes(vault_pki, root_ca_args, existing_root, tes
         }
 
     new_info = _default_issuer()
-    assert (new_info == issuer_info) is testmode
-    assert (new_info["key_id"] == issuer_info["key_id"]) is testmode
+    assert (new_info == issuer_info) is (testmode or not allow_premature_rotation)
+    assert (new_info["key_id"] == issuer_info["key_id"]) is (
+        testmode or not allow_premature_rotation
+    )
     new_cert = load_cert(new_info["certificate"])
-    if testmode:
+    if testmode or not allow_premature_rotation:
         assert new_cert == cert
         return
     assert ret.changes["key_id"]["new"] == new_info["key_id"]
@@ -3696,6 +3715,10 @@ def test_root_issuer_managed_changes(vault_pki, root_ca_args, existing_root, tes
     indirect=True,
 )
 def test_root_issuer_managed_changes_expiry(vault_pki, root_ca_args, testmode):
+    """
+    Ensure we don't need allow_premature_rotation when the certificate expires
+    and that expiry alone is enough to trigger rotation.
+    """
     issuer_info = _default_issuer()
     root_ca_args["days_remaining"], root_ca_args["days_valid"] = (
         root_ca_args["days_valid"] + 1,
@@ -3721,9 +3744,10 @@ def test_root_issuer_managed_changes_expiry(vault_pki, root_ca_args, testmode):
     ({"days_valid": 100},),
     indirect=True,
 )
-def test_root_issuer_managed_changes_not_after(vault_pki, root_ca_args, testmode):
+@pytest.mark.parametrize("allow_premature_rotation", (False, True))
+def test_root_issuer_managed_changes_not_after(vault_pki, root_ca_args, allow_premature_rotation):
     """
-    Ensure an explicit not_after is always respected.
+    Ensure an explicit not_after is always recognized, but does not count as expiry.
     """
     issuer_info = _default_issuer()
     root_ca_args["days_remaining"] = 1
@@ -3732,10 +3756,14 @@ def test_root_issuer_managed_changes_not_after(vault_pki, root_ca_args, testmode
     )
 
     root_ca_args["not_after"] = not_after
-    ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
-    assert ret.result is not False
-    assert (ret.result is None) is testmode
-    assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
+    if allow_premature_rotation:
+        root_ca_args["allow_premature_rotation"] = True
+    ret = vault_pki.root_issuer_managed(**root_ca_args)
+    assert (ret.result is False) is not allow_premature_rotation
+    if allow_premature_rotation:
+        assert "CA certificate has been rotated" in ret.comment
+    else:
+        assert "Set `allow_premature_rotation=true`" in ret.comment
     assert ret.changes
     cert_changes = ret.changes.get("cert")
     assert cert_changes
@@ -3745,14 +3773,20 @@ def test_root_issuer_managed_changes_not_after(vault_pki, root_ca_args, testmode
     new_year = int(cert_changes["not_after"]["new"].split("-", maxsplit=1)[0])
     assert new_year > old_year
     assert cert_changes["not_after"]["new"] == not_after
-    assert (_default_issuer() == issuer_info) is testmode
+    assert (_default_issuer() == issuer_info) is not allow_premature_rotation
 
 
 @pytest.mark.usefixtures("clean_pki_mount")
-def test_root_issuer_managed_changes_existing_key(vault_pki, root_ca_args, testmode):
+@pytest.mark.parametrize("allow_premature_rotation", (False, True))
+def test_root_issuer_managed_changes_existing_key(
+    vault_pki, root_ca_args, testmode, allow_premature_rotation
+):
     key_1 = vault_write("pki/keys/generate/internal", key_name="old_key")["data"]
     key_2 = vault_write("pki/keys/generate/internal", key_name="new_key")["data"]
     root_ca_args["key_ref"] = key_1["key_name"]
+    if allow_premature_rotation:
+        root_ca_args["allow_premature_rotation"] = True
+
     ret = vault_pki.root_issuer_managed(**root_ca_args)
     assert ret.result is True
     assert "created" in ret.changes
@@ -3782,23 +3816,26 @@ def test_root_issuer_managed_changes_existing_key(vault_pki, root_ca_args, testm
     # Now change the explicit key_ref to a key_name of a different key
     root_ca_args["key_ref"] = key_2["key_name"]
     ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
-    assert ret.result is not False
-    assert (ret.result is None) is testmode
-    assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
+    assert (ret.result is False) is not allow_premature_rotation
+    assert (ret.result is None) is (testmode and allow_premature_rotation)
+    if allow_premature_rotation:
+        assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
+    else:
+        assert f"{'Would have r' if testmode else 'R'}efused to rotate" in ret.comment
     assert ret.changes
     assert "key_id" in ret.changes
     assert ret.changes["key_id"]["old"] == key_1["key_id"]
-    assert (ret.changes["key_id"]["new"] == "<TBD>") is testmode
+    assert (ret.changes["key_id"]["new"] == "<TBD>") is (testmode or not allow_premature_rotation)
     cert_changes = ret.changes.get("cert")
     assert cert_changes
     assert "private_key" in cert_changes
     assert "subjectKeyIdentifier" in cert_changes["extensions"]["changed"]
     assert (
         cert_changes["extensions"]["changed"]["subjectKeyIdentifier"]["value"]["new"] == "<TBD>"
-    ) is testmode
+    ) is (testmode or not allow_premature_rotation)
     new_info = _default_issuer()
-    assert (new_info == issuer_info) is testmode
-    if testmode:
+    assert (new_info == issuer_info) is (testmode or not allow_premature_rotation)
+    if testmode or not allow_premature_rotation:
         return
     assert new_info["key_id"] == key_2["key_id"]
     assert ret.changes["key_id"]["new"] == key_2["key_id"]
@@ -4026,6 +4063,7 @@ def test_root_issuer_managed_alt_names(vault_pki, root_ca_args, existing_root, t
         "uri:https://root.ca",
         "email:test@root.ca",
     ]
+    root_ca_args["allow_premature_rotation"] = True
     ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
     assert ret.result is not False
     assert (ret.result is None) is testmode
