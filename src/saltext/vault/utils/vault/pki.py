@@ -105,6 +105,14 @@ VALID_CERT_ARGS_ADDITIONAL = (
     "freshestCRL",
 )
 
+# Extension names (as rendered in change reports) that are derived
+# from the URL configuration (<mount>/config/urls) during issuance.
+URL_EXTENSIONS = (
+    "authorityInfoAccess",
+    "cRLDistributionPoints",
+    "freshestCRL",
+)
+
 # https://github.com/golang/go/blob/72aa6db7943024b48c4d41c1fbc32b57b9fa036e/src/crypto/x509/x509.go
 EXTENDED_KEY_USAGE_OID = immutabletypes.freeze(
     {
@@ -341,7 +349,7 @@ def check_cert_for_changes(
             **csr_args,
         )
     return changes | _compare_cert_with_builder(
-        cert, builder, ttl_remaining=expire_tolerance, urls=urls
+        cert, builder, ttl_remaining=expire_tolerance, urls=urls, not_after=not_after
     )
 
 
@@ -609,10 +617,17 @@ def check_root_issuer_for_changes(
     signature_bits: int,
     street_address: list[str] | str | None,
     serial_number: str | None,
-    urls: URLConfigs,
-) -> dict[str, typing.Any]:
+    urls: URLConfigs | None,
+) -> tuple[dict[str, typing.Any], dict[str, typing.Any]]:
     """
     Check whether an existing root CA issuer certificate matches expected parameters.
+
+    Returns a tuple of ``(changes, url_ext_drift)``. Only changes in the first item
+    warrant a rotation by themselves since URL-derived extensions are functionally
+    irrelevant on a self-signed certificate.
+
+    When a rotation is triggered otherwise, the drift is included in ``changes``
+    since the reissued certificate picks up the current URL configuration.
 
     current
         Existing certificate text.
@@ -684,6 +699,8 @@ def check_root_issuer_for_changes(
     urls
         Dictionary of issuer/mount-default authority URLs, which end up in the AuthorityInformationAccess,
         CRLDistributionPoints and FreshestCRL extensions.
+        Pass ``None`` if the mount's URL configuration could not be read, in which case
+        the corresponding extensions are not verified.
     """
     cert = typing.cast(cx509.Certificate, x509util.load_cert(current, passphrase=None))
     pubkey = typing.cast(CertificateIssuerPublicKeyTypes, cert.public_key())
@@ -714,7 +731,7 @@ def check_root_issuer_for_changes(
         serial_number=serial_number,
         not_before_duration=not_before_duration,
         not_after=not_after,
-        urls=urls,
+        urls=urls or {},
         public_key=pubkey,
     )
     changes.update(
@@ -722,9 +739,16 @@ def check_root_issuer_for_changes(
             cert, builder, ttl_remaining=days_remaining * 86400, not_after=not_after, urls=urls
         )
     )
-    return _simulate_key_rotation_changes(
+    # URL-derived extensions are functionally irrelevant on a self-signed certificate,
+    # hence their drift should not cause a rotation by itself. It resolves with the next one.
+    url_ext_drift = _split_masked_ext_changes(changes, URL_EXTENSIONS)
+    changes = _simulate_key_rotation_changes(
         cert, changes, rotate_key=rotate_key, replace_key=replace_key
     )
+    if changes and url_ext_drift and urls is not None:
+        # Rotation will be triggered anyways. Add back in masked changes for reporting.
+        changes = _join_masked_ext_changes(changes, url_ext_drift)
+    return changes, url_ext_drift
 
 
 def _build_root_issuer_cert(
@@ -1025,7 +1049,7 @@ def check_ca_cert_for_changes(  # pylint: disable=too-many-locals
         )
 
     return changes | _compare_cert_with_builder(
-        cert, builder, ttl_remaining=ttl_remaining, urls=urls
+        cert, builder, ttl_remaining=ttl_remaining, urls=urls, not_after=not_after
     )
 
 
@@ -2056,6 +2080,40 @@ def _compare_exts(
             removed[getextname(ext)] = _render_extension(ext)
 
     return {"added": added, "changed": changed, "removed": removed}
+
+
+def _split_masked_ext_changes(
+    changes: dict[str, typing.Any], masked_exts: Sequence[str]
+) -> dict[str, dict[str, typing.Any]]:
+    """
+    Remove select extensions from the ``extensions`` diff of a certificate change
+    report in-place and return their changes separately. This allows to exclude
+    specific extensions from triggering a certificate rotation while keeping
+    the ability to report drift.
+    """
+    split: dict[str, dict[str, typing.Any]] = {}
+    if not (ext_changes := changes.get("extensions")):
+        return split
+    for action, entries in ext_changes.items():
+        for ext_name in masked_exts:
+            if ext_name in entries:
+                split.setdefault(action, {})[ext_name] = entries.pop(ext_name)
+    if not any(ext_changes.values()):
+        del changes["extensions"]
+    return split
+
+
+def _join_masked_ext_changes(
+    changes: dict[str, typing.Any], masked_changes: dict[str, dict[str, typing.Any]]
+) -> dict[str, dict[str, typing.Any]]:
+    """
+    Add extension changes masked by :func:`_split_masked_ext_changes` back into changes dict.
+    """
+    ext_changes = changes.setdefault("extensions", {"added": {}, "changed": {}, "removed": {}})
+    for action, entries in masked_changes.items():
+        ext_changes[action].update(entries)
+    masked_changes.clear()
+    return changes
 
 
 def _simulate_key_rotation_changes(

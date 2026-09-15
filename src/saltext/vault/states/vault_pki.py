@@ -11,6 +11,7 @@ import base64
 import logging
 import os
 import re
+import time
 import typing
 from collections.abc import Mapping
 from datetime import datetime
@@ -469,7 +470,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
                     role_info=role_info,
                     serial_number=serial_number,
                     ttl=ttl_seconds,
-                    urls=_get_urls(issuer_info, mount=mount),
+                    urls=_get_urls(issuer_info, mount=mount) or {},
                     user_ids=user_ids,
                     **cert_args,
                 )
@@ -889,7 +890,7 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
                 signature_bits=signature_bits,
                 street_address=street_address,
                 ttl=ttl_seconds,
-                urls=_get_urls(issuer_info, mount=mount),
+                urls=_get_urls(issuer_info, mount=mount) or {},
                 **cert_args,
             )
 
@@ -1208,7 +1209,21 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
     .. versionadded:: 1.9.0
 
     Ensure an issuer representing an intermediate CA is present **as the default issuer** on the mount.
-    Rotates the issuer when necessary by generating a new certificate.
+    Rotates the issuer when necessary by generating a new certificate. Unlike :func:`root_issuer_managed`,
+    the rotation always happens when the certificate does not match the configuration, not only when
+    ``days_remaining`` indicates expiry.
+
+    .. hint::
+
+        When an issuer is rotated, the old one is kept with slightly adjusted configuration:
+
+        1. If ``issuer_name`` is specified and matches the old one, it receives the current
+           timestamp as a suffix, separated by a dash (``<issuer_name>-<timestamp>``).
+        2. ``issuing-certificates`` is removed from its usages.
+
+    .. important::
+
+        You need to prune keys and issuers manually, they are never deleted by this state.
 
     Signs the issuer certificate either via another Vault issuer or a Salt-internal CA.
 
@@ -1529,261 +1544,157 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
-    ret = {
-        "name": name,
-        "result": True,
-        "comment": "Intermediate CA issuer is present as specified",
-        "changes": {},
-    }
-    changes = {}
-    cert_affected = issuer_affected = False
-    issuer_id = None
-    msg = []
     issuer_mount = issuer_mount or mount
     vault_signed = issuer_ref is not None
     # Arguments for either vault_pki.sign_intermediate (but not CSR generation args, so very few/none)
     # or x509.create_certificate, depending on issuer_ref being set or not.
     cert_args = hlp.filter_state_internal_kwargs(kwargs)
-    replace_key = False
 
-    try:
-        key_type = hlp.in_vals(("internal", "exported", "kms", None), key_type=key_type)
-        if key_ref is not None:
-            key_type = "existing"
-            rotate_key = False
-        if not (current := __salt__["vault_pki.read_issuer"](mount=mount)):
-            changes["created"] = name
-            cert_affected = True
-            issuer_affected = any(
-                val is not None
-                for val in (
-                    issuer_name,
-                    leaf_not_after_behavior,
-                    usage,
-                    revocation_signature_algorithm,
-                    aia_urls,
-                    crl_endpoints,
-                    delta_crl_endpoints,
-                    ocsp_servers,
-                    aia_url_templating,
-                )
-            )
-        else:
-            issuer_id = current["issuer_id"]
-            if key_ref is None:
-                key_ref = current.get("key_id")
-                if key_ref is None:  # pragma: no cover
-                    # Unsure if this is allowed to happen, need to check
-                    raise CommandExecutionError("Default issuer key_id not set")
-            replace_key = current["key_id"] != __salt__["vault_pki.get_key_id"](
-                key_ref, mount=mount
-            )
-            # We need to correctly map/filter args for changes checking before passing to the utils func.
-            # Reuse the result later to avoid duplicate warnings.
-            cert_args, not_after, alt_names, permitted_alt_names, excluded_alt_names = (
-                pki.norm_generate_intermediate_params(
-                    cert_args,
-                    vault_signed,
-                    country=country,
-                    province=province,
-                    locality=locality,
-                    street_address=street_address,
-                    postal_code=postal_code,
-                    organization=organization,
-                    ou=ou,
-                    common_name=name,
-                    serial_number=serial_number,
-                    alt_names=alt_names,
-                    key_usage=key_usage,
-                    permitted_alt_names=permitted_alt_names,
-                    excluded_alt_names=excluded_alt_names,
-                    max_path_length=max_path_length,
-                    not_after=not_after,
-                )
-            )
-
-            if vault_signed:
-                issuer_info = __salt__["vault_pki.read_issuer"](issuer_ref, mount=issuer_mount)
-                if issuer_info is None:
-                    raise CommandExecutionError(
-                        f"Issuer '{issuer_ref}' does not exist on mount {issuer_mount}"
-                    )
-                cert_changes = pki.check_int_issuer_cert_for_changes_vault_ca(
-                    current=current["certificate"],
-                    issuer=issuer_info["certificate"],
-                    rotate_key=rotate_key,
-                    replace_key=replace_key,
-                    days_remaining=days_remaining,
-                    days_valid=days_valid,
-                    common_name=name,
-                    country=country,
-                    exclude_cn_from_sans=exclude_cn_from_sans,
-                    key_usage=key_usage,
-                    locality=locality,
-                    max_path_length=max_path_length,
-                    normalized_sans=alt_names,
-                    norm_excluded_nc=excluded_alt_names,
-                    norm_permitted_nc=permitted_alt_names,
-                    not_after=not_after,
-                    not_before_duration=not_before_duration,
-                    organization=organization,
-                    ou=ou,
-                    postal_code=postal_code,
-                    province=province,
-                    serial_number=serial_number,
-                    signature_bits=signature_bits,
-                    street_address=street_address,
-                    urls=_get_urls(issuer_info, mount=mount),
-                )
-            else:
-                if "signing_policy" in cert_args:
-                    x509_policy = __salt__["x509.get_signing_policy"](
-                        cert_args["signing_policy"], ca_server=cert_args.get("ca_server")
-                    )
-                else:
-                    x509_policy = {}
-                cert_changes = pki.check_int_issuer_cert_for_changes_salt_ca(
-                    current=current["certificate"],
-                    rotate_key=rotate_key,
-                    replace_key=replace_key,
-                    signing_policy_contents=x509_policy,
-                    days_remaining=days_remaining,
-                    # these are common to both Vault and x509_v2
-                    days_valid=days_valid,
-                    not_after=not_after,
-                    **cert_args,
-                )
-            if cert_changes:
-                changes["cert"], cert_affected = cert_changes, True
-
-            if issuer_changes := _check_issuer_config_changes(
-                current,
-                issuer_name=issuer_name,
-                leaf_not_after_behavior=leaf_not_after_behavior,
-                usage=usage,
-                revocation_signature_algorithm=revocation_signature_algorithm,
-                aia_urls=aia_urls,
-                crl_endpoints=crl_endpoints,
-                delta_crl_endpoints=delta_crl_endpoints,
-                ocsp_servers=ocsp_servers,
-                aia_url_templating=aia_url_templating,
-            ):
-                changes["issuer"], issuer_affected = issuer_changes, True
-
-        if not changes:
-            return ret
-
-        if __opts__["test"]:
-            ret["result"] = None
-            if cert_affected:
-                msg.append(
-                    f"Intermediate CA certificate would have been {'rotated' if current else 'created'}"
-                )
-            if issuer_affected:
-                msg.append(
-                    f"Intermediate CA issuer would have been {'updated' if current else 'created'}"
-                )
-            ret["comment"] = ". ".join(msg) + "."
-            ret["changes"] = changes
-            return ret
-
-        if cert_affected:
-            if key_ref is None or rotate_key:
-                key_ref = __salt__["vault_pki.generate_key"](
-                    key_type or "internal",
-                    key_algo=key_algo,
-                    key_bits=key_bits,
-                    managed_key_name=managed_key_name,
-                    managed_key_id=managed_key_id,
-                    mount=mount,
-                )["key_id"]
-
-            res = __salt__["vault_pki.generate_intermediate"](
+    def check_cert(current, *, rotate_key, replace_key):
+        nonlocal cert_args, not_after, alt_names, permitted_alt_names, excluded_alt_names
+        # We need to correctly map/filter args for changes checking before passing to the utils func.
+        # Reuse the result during generation to avoid duplicate warnings.
+        cert_args, not_after, alt_names, permitted_alt_names, excluded_alt_names = (
+            pki.norm_generate_intermediate_params(
+                cert_args,
+                vault_signed,
+                country=country,
+                province=province,
+                locality=locality,
+                street_address=street_address,
+                postal_code=postal_code,
+                organization=organization,
+                ou=ou,
                 common_name=name,
-                issuer_ref=issuer_ref,
-                issuer_mount=issuer_mount,
-                key_type="existing",
-                key_ref=key_ref,
-                days_valid=days_valid,
-                not_after=not_after,
-                not_before_duration=not_before_duration,
-                max_path_length=max_path_length,
+                serial_number=serial_number,
                 alt_names=alt_names,
-                exclude_cn_from_sans=exclude_cn_from_sans,
                 key_usage=key_usage,
                 permitted_alt_names=permitted_alt_names,
                 excluded_alt_names=excluded_alt_names,
-                ou=ou,
-                organization=organization,
+                max_path_length=max_path_length,
+                not_after=not_after,
+            )
+        )
+
+        if vault_signed:
+            issuer_info = __salt__["vault_pki.read_issuer"](issuer_ref, mount=issuer_mount)
+            if issuer_info is None:
+                raise CommandExecutionError(
+                    f"Issuer '{issuer_ref}' does not exist on mount {issuer_mount}"
+                )
+            cert_changes = pki.check_int_issuer_cert_for_changes_vault_ca(
+                current=current["certificate"],
+                issuer=issuer_info["certificate"],
+                rotate_key=rotate_key,
+                replace_key=replace_key,
+                days_remaining=days_remaining,
+                days_valid=days_valid,
+                common_name=name,
                 country=country,
+                exclude_cn_from_sans=exclude_cn_from_sans,
+                key_usage=key_usage,
                 locality=locality,
-                province=province,
-                street_address=street_address,
+                max_path_length=max_path_length,
+                normalized_sans=alt_names,
+                norm_excluded_nc=excluded_alt_names,
+                norm_permitted_nc=permitted_alt_names,
+                not_after=not_after,
+                not_before_duration=not_before_duration,
+                organization=organization,
+                ou=ou,
                 postal_code=postal_code,
+                province=province,
                 serial_number=serial_number,
                 signature_bits=signature_bits,
-                mount=mount,
+                street_address=street_address,
+                urls=_get_urls(issuer_info, mount=mount) or {},
+            )
+        else:
+            if "signing_policy" in cert_args:
+                x509_policy = __salt__["x509.get_signing_policy"](
+                    cert_args["signing_policy"], ca_server=cert_args.get("ca_server")
+                )
+            else:
+                x509_policy = {}
+            cert_changes = pki.check_int_issuer_cert_for_changes_salt_ca(
+                current=current["certificate"],
+                rotate_key=rotate_key,
+                replace_key=replace_key,
+                signing_policy_contents=x509_policy,
+                days_remaining=days_remaining,
+                # these are common to both Vault and x509_v2
+                days_valid=days_valid,
+                not_after=not_after,
                 **cert_args,
             )
-            try:
-                issuer_id = res["imported_issuers"][0]
-            except (IndexError, KeyError) as err:  # pragma: no cover
-                raise CommandExecutionError(
-                    "Generated certificate, but failed importing it"
-                ) from err
+        return cert_changes, []
 
-            try:
-                __salt__["vault_pki.set_default_issuer"](issuer_id, mount=mount)
-            except CommandExecutionError as err:
-                ret["result"] = False
-                ret["comment"] = (
-                    f"Generated and imported certificate as issuer `{issuer_id}`, but failed to set it as default issuer: {err}"
-                )
-                ret["changes"]["imported"] = issuer_id
-                return ret
-            if current is not None:
-                # Correctly report new subjectKeyIdentifier, it's "<TBD>" right now
-                if rotate_key or replace_key:
-                    changes = _report_ski(changes, mount=mount)
-                ret["changes"]["cert"] = changes["cert"]
-            msg.append(
-                f"Intermediate CA certificate has been {'rotated' if current else 'created'}"
-            )
+    def generate(key_ref):
+        res = __salt__["vault_pki.generate_intermediate"](
+            common_name=name,
+            issuer_ref=issuer_ref,
+            issuer_mount=issuer_mount,
+            key_type="existing",
+            key_ref=key_ref,
+            days_valid=days_valid,
+            not_after=not_after,
+            not_before_duration=not_before_duration,
+            max_path_length=max_path_length,
+            alt_names=alt_names,
+            exclude_cn_from_sans=exclude_cn_from_sans,
+            key_usage=key_usage,
+            permitted_alt_names=permitted_alt_names,
+            excluded_alt_names=excluded_alt_names,
+            ou=ou,
+            organization=organization,
+            country=country,
+            locality=locality,
+            province=province,
+            street_address=street_address,
+            postal_code=postal_code,
+            serial_number=serial_number,
+            signature_bits=signature_bits,
+            mount=mount,
+            **cert_args,
+        )
+        try:
+            issuer_id = res["imported_issuers"][0]
+        except (IndexError, KeyError) as err:  # pragma: no cover
+            raise CommandExecutionError("Generated certificate, but failed importing it") from err
+        return issuer_id, {"imported": res["imported_issuers"]}
 
-        if issuer_affected:
-            __salt__["vault_pki.update_issuer"](
-                ref=issuer_id,
-                name=issuer_name,
-                leaf_not_after_behavior=leaf_not_after_behavior,
-                usage=usage,
-                revocation_signature_algorithm=revocation_signature_algorithm,
-                aia_urls=aia_urls,
-                crl_endpoints=crl_endpoints,
-                delta_crl_endpoints=delta_crl_endpoints,
-                ocsp_servers=ocsp_servers,
-                aia_url_templating=aia_url_templating,
-                mount=mount,
-            )
-            if current is not None:
-                ret["changes"]["issuer"] = changes["issuer"]
-            msg.append(f"Intermediate CA issuer has been {'updated' if current else 'created'}")
-
-        if current is None:
-            ret["changes"]["created"] = name
-        ret["comment"] = ". ".join(msg) + "."
-    except (CommandExecutionError, SaltInvocationError) as err:
-        ret["result"] = False
-        if msg:
-            ret["comment"] = ". ".join(msg) + f", but received an exception later: {err}"
-        else:
-            ret["comment"] = str(err)
-
-    return ret
+    return _default_issuer_managed(
+        name,
+        kind="Intermediate CA",
+        mount=mount,
+        issuer_config={
+            "issuer_name": issuer_name,
+            "leaf_not_after_behavior": leaf_not_after_behavior,
+            "usage": usage,
+            "revocation_signature_algorithm": revocation_signature_algorithm,
+            "aia_urls": aia_urls,
+            "crl_endpoints": crl_endpoints,
+            "delta_crl_endpoints": delta_crl_endpoints,
+            "ocsp_servers": ocsp_servers,
+            "aia_url_templating": aia_url_templating,
+        },
+        check_cert=check_cert,
+        generate=generate,
+        key_ref=key_ref,
+        rotate_key=rotate_key,
+        key_type=key_type,
+        key_algo=key_algo,
+        key_bits=key_bits,
+        managed_key_name=managed_key_name,
+        managed_key_id=managed_key_id,
+        imports_cert=True,
+    )
 
 
-def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
+def root_issuer_managed(  # pylint: disable=too-many-arguments
     name,
     days_remaining=90,
+    allow_premature_rotation=False,
     # key params
     key_ref=None,
     rotate_key=False,
@@ -1827,7 +1738,29 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
     .. versionadded:: 1.9.0
 
     Ensure an issuer representing a root CA is present **as the default issuer** on the mount.
-    Rotates the issuer when necessary.
+    Rotates the issuer certificate when necessary.
+
+    By default, rotates the issuer certificate **only when days_remaining indicates expiry**.
+    If the certificate would need to change before that, the state fails instead of rotating it.
+    Set ``allow_premature_rotation: true`` to opt-in for stateful management of all parameters.
+
+    .. important::
+
+        **Issuer configuration** changes are always applied, even if the state
+        refuses to rotate and fails. Reported **certificate changes** are only
+        materialized when the state does not fail.
+
+    .. hint::
+
+        When an issuer is rotated, the old one is kept with slightly adjusted configuration:
+
+        1. If ``issuer_name`` is specified and matches the old one, it receives the current
+           timestamp as a suffix, separated by a dash (``<issuer_name>-<timestamp>``).
+        2. ``issuing-certificates`` is removed from its usages.
+
+    .. important::
+
+        You need to prune keys and issuers manually, they are never deleted by this state.
 
     Required policy:
 
@@ -1835,17 +1768,6 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
 
         # Read default issuer to check for necessary changes
         path "<mount>/issuer/default" {
-            capabilities = ["read"]
-        }
-
-        # Read mount default urls to account for cert extensions
-        path "<mount>/config/urls" {
-            capabilities = ["read"]
-        }
-
-        # When URLs use templating with `{cluster_path}`/`{cluster_aia_path}` variables,
-        # but not `{issuer_id}` (URLs are excluded from the issuer certificate in that case)
-        path "<mount>/config/cluster" {
             capabilities = ["read"]
         }
 
@@ -1869,6 +1791,19 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
             capabilities = ["patch"]
         }
 
+        # Read mount default urls to account for cert extensions.
+        # Note: Failure to read this or URL drift does not cause rotation, only a note.
+        path "<mount>/config/urls" {
+            capabilities = ["read"]
+        }
+
+        # When URLs use templating with `{cluster_path}`/`{cluster_aia_path}` variables,
+        # but not `{issuer_id}` (URLs are always excluded from the issuer certificate in that case)
+        # Note: Failure to read this or URL drift does not cause rotation, only a note.
+        path "<mount>/config/cluster" {
+            capabilities = ["read"]
+        }
+
     **Certificate/Key configuration:**
 
     name
@@ -1878,6 +1813,12 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
         Attempt to recreate the certificate if the number of days the certificate
         is valid for is less than the number specified. Defaults to ``30``.
 
+    allow_premature_rotation
+        Always rotate the root issuer certificate when it does not meet its specification,
+        even when it is not nearing its exiration date as defined by ``days_remaining``.
+        Defaults to false, meaning this state fails instead of rotating the issuer
+        and indicates necessary changes in the ``changes`` dict.
+
     key_ref
         Instead of managing the key, use the one associated with this key ID/name.
         When specified, disables key generation/rotation.
@@ -1885,6 +1826,14 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
     rotate_key
         When rotating the default issuer, rotate its key along with it. Defaults to false.
         Not respected when ``key_ref`` is specified.
+
+        .. important::
+
+            Rotating the key is a hard cutover. A new root issuer key means nothing issued under
+            the new root validates for clients that only trust the old one.
+
+            The new root must be distributed to trust stores **before** dependent reissuance cascades.
+            Consider creating a new mount with a new root issuer instead that you can introduce gradually.
 
         .. note::
 
@@ -2020,14 +1969,9 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
         Specifies the URL values for the CRL Distribution Points field as an array.
 
     delta_crl_endpoints
-        (Requires Vault 2.0+ or OpenBao)
+        (Requires Vault 1.20+ or OpenBao)
         Specifies the URL values for the Delta CRL Distribution Points field.
         This can be an array or a comma- separated string list.
-
-        .. note::
-
-            This parameter is supported in Vault 1.20+, but not added as a FreshestCRL extension
-            to the root issuer certificate, leading to non-idempotency of this state.
 
     ocsp_servers
         Specifies the URL values for the OCSP Servers field as an array.
@@ -2039,16 +1983,197 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
+
+    def check_cert(current, *, rotate_key, replace_key):
+        urls = _get_urls(None, mount=mount)
+        cert_changes, url_ext_drift = pki.check_root_issuer_for_changes(
+            "".join(current["ca_chain"]),
+            alt_names=alt_names,
+            common_name=name,
+            country=country,
+            days_remaining=days_remaining,
+            days_valid=days_valid,
+            exclude_cn_from_sans=exclude_cn_from_sans,
+            excluded_alt_names=excluded_alt_names,
+            key_usage=key_usage,
+            locality=locality,
+            max_path_length=max_path_length,
+            not_after=not_after,
+            not_before_duration=not_before_duration,
+            organization=organization,
+            ou=ou,
+            permitted_alt_names=permitted_alt_names,
+            postal_code=postal_code,
+            province=province,
+            replace_key=replace_key,
+            rotate_key=rotate_key,
+            serial_number=serial_number,
+            signature_bits=signature_bits,
+            street_address=street_address,
+            urls=urls,
+        )
+        notes = []
+        if url_ext_drift:
+            # URL-derived extensions don't trigger a rotation, but their drift
+            # (or our inability to verify them) should be reported.
+            if urls is None:
+                notes.append(
+                    "Note: URL-derived certificate extensions (AIA) were not verified since "
+                    f"the URL configuration of mount `{mount}` could not be read/rendered"
+                )
+            else:
+                notes.append(
+                    "Note: The issuer certificate's embedded AIA-related URLs do not match "
+                    "the mount's URL configuration. They will converge on the next rotation"
+                )
+        return cert_changes, notes
+
+    def generate(key_ref):
+        expiry = not_after
+        if expiry is None:
+            not_after_dt = datetime.now(tz=timezone.utc) + timedelta(days=days_valid)
+            expiry = not_after_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        dns_sans, ip_sans, uri_sans, other_sans = pki.split_sans(pki.norm_sans(alt_names or []))
+
+        dns_nc_allowed = email_nc_allowed = ip_nc_allowed = uri_nc_allowed = None
+        if permitted_alt_names is not None:
+            dns_nc_allowed, email_nc_allowed, ip_nc_allowed, uri_nc_allowed = (
+                pki.split_name_constraints(
+                    pki.norm_sans(permitted_alt_names or [], allow_other_name=False)
+                )
+            )
+        dns_nc_denied = email_nc_denied = ip_nc_denied = uri_nc_denied = None
+        if excluded_alt_names is not None:
+            dns_nc_denied, email_nc_denied, ip_nc_denied, uri_nc_denied = (
+                pki.split_name_constraints(
+                    pki.norm_sans(excluded_alt_names or [], allow_other_name=False)
+                )
+            )
+
+        res = __salt__["vault_pki.generate_root"](
+            common_name=name,
+            mount=mount,
+            key_type="existing",
+            key_ref=key_ref,
+            alt_names=dns_sans and ",".join(dns_sans) or None,
+            ip_sans=ip_sans and ",".join(ip_sans) or None,
+            uri_sans=uri_sans and ",".join(uri_sans) or None,
+            other_sans=other_sans and ",".join(other_sans) or None,
+            exclude_cn_from_sans=exclude_cn_from_sans,
+            max_path_length=max_path_length,
+            key_usage=key_usage,
+            permitted_dns_domains=dns_nc_allowed,
+            excluded_dns_domains=dns_nc_denied,
+            permitted_ip_ranges=ip_nc_allowed,
+            excluded_ip_ranges=ip_nc_denied,
+            permitted_email_addresses=email_nc_allowed,
+            excluded_email_addresses=email_nc_denied,
+            permitted_uri_domains=uri_nc_allowed,
+            excluded_uri_domains=uri_nc_denied,
+            ou=ou,
+            organization=organization,
+            country=country,
+            locality=locality,
+            province=province,
+            street_address=street_address,
+            postal_code=postal_code,
+            serial_number=serial_number,
+            signature_bits=signature_bits,
+            not_before_duration=not_before_duration,
+            not_after=expiry,
+        )
+        return res["issuer_id"], {}
+
+    return _default_issuer_managed(
+        name,
+        kind="Root CA",
+        mount=mount,
+        issuer_config={
+            "issuer_name": issuer_name,
+            "leaf_not_after_behavior": leaf_not_after_behavior,
+            "usage": usage,
+            "revocation_signature_algorithm": revocation_signature_algorithm,
+            "aia_urls": aia_urls,
+            "crl_endpoints": crl_endpoints,
+            "delta_crl_endpoints": delta_crl_endpoints,
+            "ocsp_servers": ocsp_servers,
+            "aia_url_templating": aia_url_templating,
+        },
+        check_cert=check_cert,
+        generate=generate,
+        key_ref=key_ref,
+        rotate_key=rotate_key,
+        key_type=key_type,
+        key_algo=key_algo,
+        key_bits=key_bits,
+        managed_key_name=managed_key_name,
+        managed_key_id=managed_key_id,
+        allow_premature_rotation=bool(allow_premature_rotation),
+    )
+
+
+def _default_issuer_managed(  # pylint: disable=too-many-statements
+    name,
+    *,
+    kind,
+    mount,
+    issuer_config,
+    check_cert,
+    generate,
+    key_ref,
+    rotate_key,
+    key_type,
+    key_algo,
+    key_bits,
+    managed_key_name,
+    managed_key_id,
+    allow_premature_rotation=None,
+    imports_cert=False,
+):
+    """
+    Shared implementation for managing the default issuer of a mount,
+    backing ``intermediate_issuer_managed`` and ``root_issuer_managed``.
+    Parameters that are specific to this function:
+
+    kind
+        Human-readable issuer kind for change reports, e.g. ``Root CA``.
+
+    issuer_config
+        Mapping of all issuer configuration parameters (``issuer_name``, ``usage``, ...),
+        as accepted by ``_check_issuer_config_changes``.
+
+    check_cert
+        Callback checking the current default issuer's certificate against the desired state.
+        Receives the current issuer info and the effective ``rotate_key``/``replace_key``
+        values, returns a tuple of (certificate changes, notes to append to the comment).
+
+    generate
+        Callback generating the new issuer certificate. Receives the reference of the
+        key to (re)use, returns a tuple of (new issuer_id, changes to merge into the report).
+
+    allow_premature_rotation
+        When a boolean, refuse to rotate an existing issuer certificate unless true
+        or the rotation is caused by expiry. When None, always rotate when necessary.
+
+    imports_cert
+        Whether ``generate`` imports certificates, i.e. reports an ``imported`` list.
+        Only used for test mode reports.
+    """
     ret = {
         "name": name,
         "result": True,
-        "comment": "Root CA issuer is present as specified",
+        "comment": f"{kind} issuer is present as specified",
         "changes": {},
     }
-    changes = {}
-    cert_affected = issuer_affected = replace_key = False
-    issuer_id = None
+    changes: dict[str, typing.Any] = {}
+    cert_affected = issuer_affected = replace_key = refused_to_rotate = False
+    issuer_id = key_id = None
+    notes: list[str] = []
     msg = []
+    issuer_is_managed = any(val is not None for val in issuer_config.values())
+    issuer_name = issuer_config.pop("issuer_name")
+    kind_lc = kind[0].lower() + kind[1:]  # lowercase for refusals
 
     try:
         key_type = hlp.in_vals(("internal", "exported", "kms", None), key_type=key_type)
@@ -2056,88 +2181,119 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
             key_type = "existing"
             rotate_key = False
         if not (current := __salt__["vault_pki.read_issuer"](mount=mount)):
-            changes["created"] = name
-            cert_affected = True
-            issuer_affected = any(
-                val is not None
-                for val in (
-                    issuer_name,
-                    leaf_not_after_behavior,
-                    usage,
-                    revocation_signature_algorithm,
-                    aia_urls,
-                    crl_endpoints,
-                    delta_crl_endpoints,
-                    ocsp_servers,
-                    aia_url_templating,
-                )
-            )
+            changes["created"] = {
+                "issuer_id": "<TBD>",
+                "issuer_name": issuer_name,
+                "CN": name,
+                "key_id": "<TBD>",
+            }
         else:
             issuer_id = current["issuer_id"]
-            replace_key = key_ref is not None and current["key_id"] != __salt__[
-                "vault_pki.get_key_id"
-            ](key_ref, mount=mount)
+            if key_ref is None:
+                key_ref = current.get("key_id")
+                if key_ref is None:  # pragma: no cover
+                    raise CommandExecutionError("Default issuer key_id not set")
+            else:
+                key_id = __salt__["vault_pki.get_key_id"](key_ref, mount=mount)
+                replace_key = current["key_id"] != key_id
 
-            if cert_changes := pki.check_root_issuer_for_changes(
-                "".join(current["ca_chain"]),
-                alt_names=alt_names,
-                common_name=name,
-                country=country,
-                days_remaining=days_remaining,
-                days_valid=days_valid,
-                exclude_cn_from_sans=exclude_cn_from_sans,
-                excluded_alt_names=excluded_alt_names,
-                key_usage=key_usage,
-                locality=locality,
-                max_path_length=max_path_length,
-                not_after=not_after,
-                not_before_duration=not_before_duration,
-                organization=organization,
-                ou=ou,
-                permitted_alt_names=permitted_alt_names,
-                postal_code=postal_code,
-                province=province,
-                replace_key=replace_key,
-                rotate_key=rotate_key,
-                serial_number=serial_number,
-                signature_bits=signature_bits,
-                street_address=street_address,
-                urls=_get_urls(None, mount=mount),
-            ):
+            cert_changes, notes = check_cert(
+                current, rotate_key=rotate_key, replace_key=replace_key
+            )
+            if cert_changes:
                 changes["cert"], cert_affected = cert_changes, True
 
             if issuer_changes := _check_issuer_config_changes(
-                current,
-                issuer_name=issuer_name,
-                leaf_not_after_behavior=leaf_not_after_behavior,
-                usage=usage,
-                revocation_signature_algorithm=revocation_signature_algorithm,
-                aia_urls=aia_urls,
-                crl_endpoints=crl_endpoints,
-                delta_crl_endpoints=delta_crl_endpoints,
-                ocsp_servers=ocsp_servers,
-                aia_url_templating=aia_url_templating,
+                current, **issuer_config, issuer_name=issuer_name
             ):
                 changes["issuer"], issuer_affected = issuer_changes, True
 
         if not changes:
+            ret["comment"] += "".join(f"\n\n{note}." for note in notes)
             return ret
+
+        if (
+            allow_premature_rotation is not None
+            and not allow_premature_rotation
+            and current is not None
+            and cert_affected
+        ):
+            refused_to_rotate = "expiration" not in changes["cert"]
+
+        # Ensure the issuer name is not taken before going any further
+        if (
+            issuer_name is not None
+            and (current is None or current["issuer_name"] != issuer_name)
+            and (name_collision := __salt__["vault_pki.read_issuer"](issuer_name, mount=mount))
+        ):
+            if current is None or cert_affected or current["issuer_name"]:
+                # Unlikely to be an artifact of update_issuer causing an exception after rotation
+                raise CommandExecutionError(
+                    f"Another issuer with name '{issuer_name}' exists on mount '{mount}' "
+                    f"(issuer_id: {name_collision['issuer_id']})"
+                )
+            # Assume this is an artifact from a previous run having failed to rename the old issuer and try again.
+            log.warning(
+                "Another issuer with name '%s' exists on mount '%s' (issuer_id: %s). "
+                "Renaming it since it's likely an artifact from a previous failed run",
+                issuer_name,
+                mount,
+                name_collision["issuer_id"],
+            )
+            if not (
+                old_changes := _rotate_out(name_collision, issuer_name, mount)
+            ):  # pragma: no cover
+                raise CommandExecutionError(
+                    f"Another issuer with name '{issuer_name}' exists on mount '{mount}' "
+                    f"(issuer_id: {name_collision['issuer_id']}). Tried renaming it, but somehow failed."
+                )
+            ret["changes"]["old_issuer"] = old_changes
 
         if __opts__["test"]:
-            ret["result"] = None
-            if cert_affected:
+            ret["result"] = False if refused_to_rotate else None
+            ret["changes"].update(changes)
+
+            if refused_to_rotate:
                 msg.append(
-                    f"Root CA certificate would have been {'rotated' if current else 'created'}"
+                    f"Would have refused to rotate {kind_lc} certificate. "
+                    "Set `allow_premature_rotation=true` to proceed with the rotation"
                 )
-            if issuer_affected:
-                msg.append(f"Root CA issuer would have been {'updated' if current else 'created'}")
-            ret["comment"] = ". ".join(msg)
-            ret["changes"] = changes
+            elif current is None or cert_affected:
+                msg.append(
+                    f"{kind} certificate would have been {'rotated' if current else 'created'}"
+                )
+                if imports_cert:
+                    ret["changes"]["imported"] = ["<TBD>"]
+
+            if current is None or issuer_affected:
+                msg.append(f"{kind} issuer would have been {'updated' if current else 'created'}")
+
+            if current is not None and cert_affected:
+                ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": "<TBD>"}
+                if old_changes := _rotate_out(current, issuer_name, mount):
+                    ret["changes"]["old_issuer"] = old_changes
+                if rotate_key or replace_key:
+                    ret["changes"]["key_id"] = {"old": current["key_id"], "new": "<TBD>"}
+
+            ret["comment"] = ". ".join(msg) + "."
+            ret["comment"] += "".join(f"\n\n{note}." for note in notes)
             return ret
 
-        if cert_affected:
+        if refused_to_rotate:
+            msg.append(
+                f"Refused to rotate {kind_lc} certificate. "
+                "Set `allow_premature_rotation=true` to proceed with the rotation"
+            )
+            ret["changes"]["cert"] = changes["cert"]
+            ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": "<TBD>"}
+            if old_changes := _rotate_out(current, issuer_name, mount, test=True):
+                ret["changes"]["old_issuer"] = old_changes
+            if rotate_key or replace_key:
+                ret["changes"]["key_id"] = {"old": current["key_id"], "new": "<TBD>"}
+
+        elif current is None or cert_affected:
             if key_ref is None or rotate_key:
-                key_ref = __salt__["vault_pki.generate_key"](
+                key_ref = key_id = __salt__["vault_pki.generate_key"](
                     key_type or "internal",
                     key_algo=key_algo,
                     key_bits=key_bits,
@@ -2146,98 +2302,65 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments
                     mount=mount,
                 )["key_id"]
 
-            if not_after is None:
-                not_after_dt = datetime.now(tz=timezone.utc) + timedelta(days=days_valid)
-                not_after = not_after_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-            dns_sans, ip_sans, uri_sans, other_sans = pki.split_sans(pki.norm_sans(alt_names or []))
-
-            dns_nc_allowed = email_nc_allowed = ip_nc_allowed = uri_nc_allowed = None
-            if permitted_alt_names is not None:
-                dns_nc_allowed, email_nc_allowed, ip_nc_allowed, uri_nc_allowed = (
-                    pki.split_name_constraints(
-                        pki.norm_sans(permitted_alt_names or [], allow_other_name=False)
-                    )
-                )
-            dns_nc_denied = email_nc_denied = ip_nc_denied = uri_nc_denied = None
-            if excluded_alt_names is not None:
-                dns_nc_denied, email_nc_denied, ip_nc_denied, uri_nc_denied = (
-                    pki.split_name_constraints(
-                        pki.norm_sans(excluded_alt_names or [], allow_other_name=False)
-                    )
-                )
-
-            res = __salt__["vault_pki.generate_root"](
-                common_name=name,
-                mount=mount,
-                key_type="existing",
-                key_ref=key_ref,
-                alt_names=dns_sans and ",".join(dns_sans) or None,
-                ip_sans=ip_sans and ",".join(ip_sans) or None,
-                uri_sans=uri_sans and ",".join(uri_sans) or None,
-                other_sans=other_sans and ",".join(other_sans) or None,
-                exclude_cn_from_sans=exclude_cn_from_sans,
-                max_path_length=max_path_length,
-                key_usage=key_usage,
-                permitted_dns_domains=dns_nc_allowed,
-                excluded_dns_domains=dns_nc_denied,
-                permitted_ip_ranges=ip_nc_allowed,
-                excluded_ip_ranges=ip_nc_denied,
-                permitted_email_addresses=email_nc_allowed,
-                excluded_email_addresses=email_nc_denied,
-                permitted_uri_domains=uri_nc_allowed,
-                excluded_uri_domains=uri_nc_denied,
-                ou=ou,
-                organization=organization,
-                country=country,
-                locality=locality,
-                province=province,
-                street_address=street_address,
-                postal_code=postal_code,
-                serial_number=serial_number,
-                signature_bits=signature_bits,
-                not_before_duration=not_before_duration,
-                not_after=not_after,
-            )
-            issuer_id = res["issuer_id"]
+            issuer_id, gen_changes = generate(key_ref)
+            ret["changes"].update(gen_changes)
 
             try:
                 __salt__["vault_pki.set_default_issuer"](issuer_id, mount=mount)
             except CommandExecutionError as err:
                 ret["result"] = False
-                ret["changes"]["generated"] = issuer_id
+                if not gen_changes:
+                    ret["changes"]["generated"] = issuer_id
                 ret["comment"] = (
                     f"Generated issuer `{issuer_id}`, but failed to set it as default issuer: {err}"
                 )
                 return ret
+
             if current is not None:
+                ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": issuer_id}
+                # When we rotate a named issuer, we need to rename the previous one since names must be unique
+                if old_changes := _rotate_out(current, issuer_name, mount):
+                    ret["changes"]["old_issuer"] = old_changes
+
                 # Correctly report new subjectKeyIdentifier, it's "<TBD>" right now
                 if rotate_key or replace_key:
                     changes = _report_ski(changes, mount=mount)
+                    key_id = key_id or __salt__["vault_pki.get_key_id"](key_ref, mount=mount)
+                    ret["changes"]["key_id"] = {"old": current["key_id"], "new": key_id}
                 ret["changes"]["cert"] = changes["cert"]
-            msg.append(f"Root CA certificate has been {'rotated' if current else 'created'}")
+            msg.append(f"{kind} certificate has been {'rotated' if current else 'created'}")
 
-        if issuer_affected:
-            __salt__["vault_pki.update_issuer"](
-                ref=issuer_id,
-                name=issuer_name,
-                leaf_not_after_behavior=leaf_not_after_behavior,
-                usage=usage,
-                revocation_signature_algorithm=revocation_signature_algorithm,
-                aia_urls=aia_urls,
-                crl_endpoints=crl_endpoints,
-                delta_crl_endpoints=delta_crl_endpoints,
-                ocsp_servers=ocsp_servers,
-                aia_url_templating=aia_url_templating,
-                mount=mount,
-            )
-            if current is not None:
-                ret["changes"]["issuer"] = changes["issuer"]
-            msg.append(f"Root CA issuer has been {'updated' if current else 'created'}")
+        if issuer_affected or (
+            issuer_is_managed and (current is None or cert_affected and not refused_to_rotate)
+        ):
+            # Don't forget to re-apply config after rotating the issuer, changes were checked for previous one.
+            # Edge case: Avoid a request when we reset all issuer configs and rotate the cert at the same time.
+            # We still want to report the changes, so don't exclude that case above.
+            if not (
+                current is not None
+                and cert_affected
+                and not refused_to_rotate
+                and not issuer_is_managed
+            ):
+                __salt__["vault_pki.update_issuer"](
+                    ref=issuer_id, name=issuer_name, mount=mount, **issuer_config
+                )
+            if current is None or issuer_affected:
+                if current is not None:
+                    ret["changes"]["issuer"] = changes["issuer"]
+                msg.append(f"{kind} issuer has been {'updated' if current else 'created'}")
 
         ret["comment"] = ". ".join(msg) + "."
+        ret["comment"] += "".join(f"\n\n{note}." for note in notes)
+
         if current is None:
-            ret["changes"]["created"] = name
+            changes["created"]["issuer_id"] = issuer_id
+            changes["created"]["key_id"] = key_id or __salt__["vault_pki.get_key_id"](
+                key_ref, mount=mount
+            )
+            ret["changes"]["created"] = changes["created"]
+        elif refused_to_rotate:
+            ret["result"] = False
     except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
         if msg:
@@ -2381,7 +2504,7 @@ class LazyAIAContext:
         raise KeyError(key)
 
 
-def _get_urls(issuer_info: Mapping[str, typing.Any] | None, mount: str) -> "pki.URLConfigs":
+def _get_urls(issuer_info: Mapping[str, typing.Any] | None, mount: str) -> "pki.URLConfigs | None":
     url_config_keys = (
         "issuing_certificates",
         "crl_distribution_points",
@@ -2394,18 +2517,20 @@ def _get_urls(issuer_info: Mapping[str, typing.Any] | None, mount: str) -> "pki.
         try:
             # Mount default AIA URLs
             url_configs = __salt__["vault_pki.read_urls"](mount=mount)
-        except CommandExecutionError:  # pragma: no cover
+        except CommandExecutionError as err:  # pragma: no cover
+            if "PermissionDenied" not in str(err):
+                raise
             log.warning(
                 "Failed reading default AIA url config. Consider allowing read access to "
-                "`%s/config/urls`. This state will not be idempotent otherwise.",
+                "`%s/config/urls`. This state might not behave idempotently otherwise.",
                 mount,
             )
-            return {}
+            return None
     else:
         # Issuer-specific AIA URLs
         url_configs = issuer_info
 
-    urls: pki.URLConfigs = {
+    urls: pki.URLConfigs | None = {
         url: hlp.deserialize_csl(url_configs.get(url, [])) for url in url_config_keys
     }
     if url_configs.get("enable_templating"):
@@ -2419,7 +2544,7 @@ def _get_urls(issuer_info: Mapping[str, typing.Any] | None, mount: str) -> "pki.
 
 def _render_aia_templating(
     urls: "pki.URLConfigs", *, issuer_id: str | None, mount: str
-) -> "pki.URLConfigs":
+) -> "pki.URLConfigs | None":
     ctx = LazyAIAContext(issuer_id=issuer_id, mount=mount)
 
     def _sub_id(match):
@@ -2435,6 +2560,15 @@ def _render_aia_templating(
             except KeyError:
                 # If any template is invalid, all URLs are dropped - usual case: issuer_id referenced in root issuer
                 return {}
+            except CommandExecutionError as err:  # pragma: no cover
+                if "PermissionDenied" not in str(err):
+                    raise
+                log.warning(
+                    "Failed reading performance cluster config. Consider allowing read access to "
+                    "`%s/config/cluster`. This state might not behave idempotently otherwise.",
+                    mount,
+                )
+                return None
             res[conf].append(rendered)
     return res
 
@@ -2448,3 +2582,25 @@ def _report_ski(changes: dict[str, typing.Any], mount: str) -> dict[str, typing.
     else:
         changes["cert"]["extensions"]["changed"]["subjectKeyIdentifier"]["value"]["new"] = new_ski
     return changes
+
+
+def _rotate_out(issuer_info, issuer_name, mount, *, test=None):
+    test = test or __opts__["test"]
+    upd_params, rename_changes = {}, {"issuer_id": issuer_info["issuer_id"]}
+    if issuer_name and issuer_info["issuer_name"] == issuer_name:
+        upd_params["name"] = f"{issuer_info['issuer_name']}-{'<TBD>' if test else int(time.time())}"
+        rename_changes["issuer_name"] = {
+            "old": issuer_info["issuer_name"],
+            "new": upd_params["name"],
+        }
+    if "issuing-certificates" in issuer_info["usage"]:
+        if not test:
+            upd_params["usage"] = [
+                usage
+                for usage in hlp.deserialize_csl(issuer_info["usage"])
+                if usage != "issuing-certificates"
+            ]
+        rename_changes["usage"] = {"removed": ["issuing-certificates"]}
+    if upd_params and not test:
+        __salt__["vault_pki.update_issuer"](ref=issuer_info["issuer_id"], **upd_params, mount=mount)
+    return rename_changes
