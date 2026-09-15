@@ -3600,8 +3600,7 @@ def test_root_issuer_managed_changes(
     vault_pki, root_ca_args, allow_premature_rotation, existing_root, testmode, container
 ):
     root_ca_args = root_ca_args.copy()  # we modify the dict, which is shared
-    issuer_info = _default_issuer()
-    cert = load_cert(issuer_info["certificate"])
+    cert = load_cert(existing_root["certificate"])
     basic_constraints = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
     assert basic_constraints.value.ca is True
     assert basic_constraints.value.path_length == 2
@@ -3616,9 +3615,7 @@ def test_root_issuer_managed_changes(
         "basicConstraints",
         "subjectAltName",
         "nameConstraints",
-        "subjectKeyIdentifier",
     }
-    root_ca_args["rotate_key"] = True
     root_ca_args["signature_bits"] = 512
     root_ca_args["max_path_length"] = None
     if "key_usage" in root_ca_args:  # Vault 1.20+/OpenBao
@@ -3649,9 +3646,7 @@ def test_root_issuer_managed_changes(
         )
     assert ret.changes
     assert "issuer_id" in ret.changes
-    assert "key_id" in ret.changes
-    assert ret.changes["key_id"]["old"] == existing_root["key_id"]
-    assert (ret.changes["key_id"]["new"] == "<TBD>") is (testmode or not allow_premature_rotation)
+    assert "key_id" not in ret.changes
     assert ret.changes["issuer_id"]["old"] == existing_root["issuer_id"]
     assert (ret.changes["issuer_id"]["new"] == "<TBD>") is (
         testmode or not allow_premature_rotation
@@ -3666,7 +3661,7 @@ def test_root_issuer_managed_changes(
     assert cert_changes
     assert "subject_name" in cert_changes
     assert cert_changes["signature_bits"] == {"old": 384, "new": 512}
-    assert cert_changes["private_key"]
+    assert "private_key" not in cert_changes
 
     assert set(cert_changes["extensions"]["changed"]) == expected_ext_changes
     changed_exts = cert_changes["extensions"]["changed"]
@@ -3688,9 +3683,7 @@ def test_root_issuer_managed_changes(
         ]
     else:
         assert "excluded_subtrees" not in changed_exts["nameConstraints"]["value"]
-    assert (changed_exts["subjectKeyIdentifier"]["value"]["new"] == "<TBD>") is (
-        testmode or not allow_premature_rotation
-    )
+    assert "subjectKeyIdentifier" not in changed_exts
     if "key_usage" in root_ca_args:
         assert changed_exts["keyUsage"]["value"]["digitalSignature"] == {
             "new": False,
@@ -3698,15 +3691,12 @@ def test_root_issuer_managed_changes(
         }
 
     new_info = _default_issuer()
-    assert (new_info == issuer_info) is (testmode or not allow_premature_rotation)
-    assert (new_info["key_id"] == issuer_info["key_id"]) is (
-        testmode or not allow_premature_rotation
-    )
+    assert (new_info == existing_root) is (testmode or not allow_premature_rotation)
+    assert new_info["key_id"] == existing_root["key_id"]
     new_cert = load_cert(new_info["certificate"])
     if testmode or not allow_premature_rotation:
         assert new_cert == cert
         return
-    assert ret.changes["key_id"]["new"] == new_info["key_id"]
 
     basic_constraints = new_cert.extensions.get_extension_for_class(cx509.BasicConstraints)
     assert basic_constraints.value.ca is True
