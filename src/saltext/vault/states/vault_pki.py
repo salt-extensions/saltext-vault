@@ -1828,6 +1828,7 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
 def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,too-many-statements
     name,
     days_remaining=90,
+    allow_premature_rotation=False,
     # key params
     key_ref=None,
     rotate_key=False,
@@ -1871,7 +1872,19 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
     .. versionadded:: 1.9.0
 
     Ensure an issuer representing a root CA is present **as the default issuer** on the mount.
-    Rotates the issuer when necessary.
+    Rotates the issuer certificate when necessary.
+
+    By default, rotates the issuer certificate **only when ``days_remaining`` is not satisfied**.
+    If the certificate would need to change before that, the state fails instead of rotating it.
+    Set ``allow_premature_rotation: true`` to opt-in for stateful management of all parameters.
+
+    When an issuer is rotated, the old one is kept with slightly adjusted configuration:
+
+    1. If ``issuer_name`` is specified and matches the old one, it receives the current timestamp as a suffix.
+
+    .. note::
+
+        Issuer **configuration** changes are always applied.
 
     Required policy:
 
@@ -1923,6 +1936,12 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
     days_remaining
         Attempt to recreate the certificate if the number of days the certificate
         is valid for is less than the number specified. Defaults to ``30``.
+
+    allow_premature_rotation
+        Always rotate the root issuer certificate when it does not meet its specification,
+        even when it is not nearing its exiration date as defined by ``days_remaining``.
+        Defaults to false, meaning this state fails instead of rotating the issuer
+        and indicates necessary changes in the ``changes`` dict.
 
     key_ref
         Instead of managing the key, use the one associated with this key ID/name.
@@ -2087,7 +2106,7 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
         "changes": {},
     }
     changes = {}
-    cert_affected = issuer_affected = replace_key = False
+    cert_affected = issuer_affected = replace_key = refused_to_rotate = False
     issuer_id = key_id = aia_note = None
     msg = []
     issuer_is_managed = any(
@@ -2185,11 +2204,18 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
                 ret["comment"] += f"\n\n{aia_note}."
             return ret
 
+        if current is not None and cert_affected and not allow_premature_rotation:
+            refused_to_rotate = "expiration" not in changes["cert"]
+
         if __opts__["test"]:
-            ret["result"] = None
+            ret["result"] = False if refused_to_rotate else None
             ret["changes"] = changes
 
-            if current is None or cert_affected:
+            if refused_to_rotate:
+                msg.append(
+                    "Would have refused to rotate root CA certificate. Set `allow_premature_rotation=true` to proceed with root rotation"
+                )
+            elif current is None or cert_affected:
                 msg.append(
                     f"Root CA certificate would have been {'rotated' if current else 'created'}"
                 )
@@ -2211,7 +2237,21 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
                 ret["comment"] += f"\n\n{aia_note}."
             return ret
 
-        if current is None or cert_affected:
+        if refused_to_rotate:
+            msg.append(
+                "Refused to rotate root CA certificate. Set `allow_premature_rotation=true` to proceed with root rotation"
+            )
+            ret["changes"]["cert"] = changes["cert"]
+            ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": "<TBD>"}
+            if issuer_name and current["issuer_name"] == issuer_name:
+                ret["changes"]["old_issuer"] = {
+                    "issuer_id": current["issuer_id"],
+                    "issuer_name": {"old": issuer_name, "new": f"{issuer_name}-<TBD>"},
+                }
+            if rotate_key or replace_key:
+                ret["changes"]["key_id"] = {"old": current["key_id"], "new": "<TBD>"}
+
+        elif current is None or cert_affected:
             if key_ref is None or rotate_key:
                 key_ref = key_id = __salt__["vault_pki.generate_key"](
                     key_type or "internal",
@@ -2308,11 +2348,18 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
                 ret["changes"]["cert"] = changes["cert"]
             msg.append(f"Root CA certificate has been {'rotated' if current else 'created'}")
 
-        if issuer_affected or (issuer_is_managed and (current is None or cert_affected)):
+        if issuer_affected or (
+            issuer_is_managed and (current is None or cert_affected and not refused_to_rotate)
+        ):
             # Don't forget to re-apply config after rotating the issuer, changes were checked for previous one.
             # Edge case: Avoid a request when we reset all issuer configs and rotate the cert at the same time.
             # We still want to report the changes, so don't exclude that case above.
-            if not (current is not None and cert_affected and not issuer_is_managed):
+            if not (
+                current is not None
+                and cert_affected
+                and not refused_to_rotate
+                and not issuer_is_managed
+            ):
                 __salt__["vault_pki.update_issuer"](
                     ref=issuer_id,
                     name=issuer_name,
@@ -2334,12 +2381,15 @@ def root_issuer_managed(  # pylint: disable=too-many-locals,too-many-arguments,t
         ret["comment"] = ". ".join(msg) + "."
         if aia_note:
             ret["comment"] += f"\n\n{aia_note}."
+
         if current is None:
             changes["created"]["issuer_id"] = issuer_id
             changes["created"]["key_id"] = key_id or __salt__["vault_pki.get_key_id"](
                 key_ref, mount=mount
             )
             ret["changes"]["created"] = changes["created"]
+        elif refused_to_rotate:
+            ret["result"] = False
     except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
         if msg:
