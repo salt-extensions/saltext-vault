@@ -728,7 +728,9 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
 
             It must also be less than the signing issuer's remaining validity
             when a Vault issuer signs this certificate, otherwise the certificate
-            would be reissued during each run.
+            would be reissued during each run. This does not apply when the
+            issuer's ``leaf_not_after_behavior`` is set to ``permit`` and
+            ``enforce_leaf_not_after_behavior`` is passed.
 
     encoding
         Encoding of the managed certificate file.
@@ -819,7 +821,9 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
 
         .. important::
 
-            Must not exceed the signing issuer's own expiry, which enforces a hard cutoff during issuance.
+            Must not exceed the signing issuer's own expiry, which enforces a hard cutoff
+            during issuance, unless the issuer's ``leaf_not_after_behavior`` is set to
+            ``permit`` and ``enforce_leaf_not_after_behavior`` is passed.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
@@ -907,14 +911,21 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
                 f"Issuer '{issuer_ref or 'default'}' does not exist on mount {mount}"
             )
 
-        # The signing issuer's own expiry enforces a hard cutoff during issuance
-        issuer_expiry = pki.not_valid_after(x509util.load_cert(issuer_info["certificate"]))
-        _validate_issuance_cutoff(
-            issuer_expiry,
-            "the signing issuer's expiry",
-            not_after,
-            timestring_map(ttl_remaining, cast=int),
-        )
+        issuer_expiry = None
+        if not (
+            issuer_info.get("leaf_not_after_behavior") == "permit"
+            and cert_args.get("enforce_leaf_not_after_behavior")
+        ):
+            # The signing issuer's own expiry enforces a hard cutoff during issuance.
+            # Vault truncates CA certificates regardless of the issuer's configured
+            # `leaf_not_after_behavior`, unless enforcement is requested explicitly.
+            issuer_expiry = pki.not_valid_after(x509util.load_cert(issuer_info["certificate"]))
+            _validate_issuance_cutoff(
+                issuer_expiry,
+                "the signing issuer's expiry",
+                not_after,
+                timestring_map(ttl_remaining, cast=int),
+            )
 
         if append_ca_chain:
             ca_chain = [x509util.load_cert(x) for x in issuer_info["ca_chain"]]
@@ -927,6 +938,13 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
 
         if file_exists:
             urls = _get_urls(issuer_info, mount=mount)
+            effective_ttl = ttl_seconds
+            if issuer_expiry is not None:
+                # The effective validity is capped by the signing issuer's expiry
+                effective_ttl = min(
+                    ttl_seconds,
+                    int((issuer_expiry - datetime.now(tz=timezone.utc)).total_seconds()),
+                )
             changes, unverified_url_exts = pki.check_ca_cert_for_changes(
                 current=name,
                 issuer=issuer_info["certificate"],
@@ -955,11 +973,7 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
                 serial_number=serial_number,
                 signature_bits=signature_bits,
                 street_address=street_address,
-                # The effective validity is capped by the signing issuer's expiry
-                ttl=min(
-                    ttl_seconds,
-                    int((issuer_expiry - datetime.now(tz=timezone.utc)).total_seconds()),
-                ),
+                ttl=effective_ttl,
                 urls=urls,
                 **cert_args,
             )
@@ -1419,7 +1433,9 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
 
             It must also be less than the signing issuer's remaining validity
             when a Vault issuer signs this certificate, otherwise the certificate
-            would be reissued during each run.
+            would be reissued during each run. This does not apply when the
+            issuer's ``leaf_not_after_behavior`` is set to ``permit`` and
+            ``enforce_leaf_not_after_behavior`` is passed.
 
     rotate_key
         When rotating the default issuer, rotate its key along with it. Defaults to false.
@@ -1495,7 +1511,9 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
             format automatically.
 
             Must not exceed the signing issuer's own expiry when a Vault issuer
-            signs the certificate, which enforces a hard cutoff during issuance.
+            signs the certificate, which enforces a hard cutoff during issuance,
+            unless the issuer's ``leaf_not_after_behavior`` is set to ``permit``
+            and ``enforce_leaf_not_after_behavior`` is passed.
 
     not_before_duration
         Duration by which to backdate the NotBefore property. Defaults to ``30s``.
@@ -1702,7 +1720,7 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
     cert_args = hlp.filter_state_internal_kwargs(kwargs)
 
     signing_issuer: dict[str, typing.Any]
-    signing_issuer_expiry: datetime
+    signing_issuer_expiry: datetime | None = None
     if vault_signed:
         try:
             signing_issuer = __salt__["vault_pki.read_issuer"](issuer_ref, mount=issuer_mount)
@@ -1710,17 +1728,23 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
                 raise CommandExecutionError(
                     f"Issuer '{issuer_ref}' does not exist on mount {issuer_mount}"
                 )
-            # The signing issuer's own expiry enforces a hard cutoff during issuance
-            signing_issuer_expiry = pki.not_valid_after(
-                x509util.load_cert(signing_issuer["certificate"])
-            )
-            _validate_issuance_cutoff(
-                signing_issuer_expiry,
-                "the signing issuer's expiry",
-                not_after,
-                days_remaining * 86400,
-                remaining_param="days_remaining",
-            )
+            if not (
+                signing_issuer.get("leaf_not_after_behavior") == "permit"
+                and cert_args.get("enforce_leaf_not_after_behavior")
+            ):
+                # The signing issuer's own expiry enforces a hard cutoff during issuance.
+                # Vault truncates CA certificates regardless of the issuer's configured
+                # `leaf_not_after_behavior`, unless enforcement is requested explicitly.
+                signing_issuer_expiry = pki.not_valid_after(
+                    x509util.load_cert(signing_issuer["certificate"])
+                )
+                _validate_issuance_cutoff(
+                    signing_issuer_expiry,
+                    "the signing issuer's expiry",
+                    not_after,
+                    days_remaining * 86400,
+                    remaining_param="days_remaining",
+                )
         except (CommandExecutionError, SaltInvocationError) as err:
             return {"name": name, "result": False, "comment": str(err), "changes": {}}
 
@@ -1753,20 +1777,23 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
         notes = []
         if vault_signed:
             urls = _get_urls(signing_issuer, mount=issuer_mount)
+            effective_days_valid = days_valid
+            if signing_issuer_expiry is not None:
+                # The effective validity is capped by the signing issuer's expiry
+                effective_days_valid = min(
+                    days_valid,
+                    int(
+                        (signing_issuer_expiry - datetime.now(tz=timezone.utc)).total_seconds()
+                        // 86400
+                    ),
+                )
             cert_changes, unverified_url_exts = pki.check_int_issuer_cert_for_changes_vault_ca(
                 current=current["certificate"],
                 issuer=signing_issuer["certificate"],
                 rotate_key=rotate_key,
                 replace_key=replace_key,
                 days_remaining=days_remaining,
-                # The effective validity is capped by the signing issuer's expiry
-                days_valid=min(
-                    days_valid,
-                    int(
-                        (signing_issuer_expiry - datetime.now(tz=timezone.utc)).total_seconds()
-                        // 86400
-                    ),
-                ),
+                days_valid=effective_days_valid,
                 common_name=name,
                 country=country,
                 exclude_cn_from_sans=exclude_cn_from_sans,
