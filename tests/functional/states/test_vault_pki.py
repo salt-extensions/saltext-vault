@@ -562,6 +562,18 @@ def test_ca_certificate_managed_not_after_exceeding_issuer(vault_pki, ca_cert_ar
     assert not ret.changes
     assert not Path(ca_cert_args["name"]).exists()
 
+    # Unless the issuer explicitly permits exceeding its own validity
+    # and its behavior enforcement is requested
+    vault_write("pki/issuer/root", issuer_name="root", leaf_not_after_behavior="permit")
+    ca_cert_args["enforce_leaf_not_after_behavior"] = True
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    cert = load_cert(ca_cert_args["name"])
+    assert _not_valid_after(cert) == datetime(2040, 1, 1, tzinfo=timezone.utc)
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
 
 @pytest.mark.usefixtures("issuer_setup")
 def test_ca_certificate_managed_issuer_expiry_undercuts_ttl_remaining(vault_pki, ca_cert_args):
@@ -2976,6 +2988,19 @@ def test_intermediate_issuer_managed_not_after_exceeding_issuer(vault_pki, int_c
     assert "exceeds the signing issuer's expiry" in ret.comment
     assert not ret.changes
     assert not vault_list(f"{int_ca_args['mount']}/issuers")
+
+    # Unless the issuer explicitly permits exceeding its own validity
+    # and its behavior enforcement is requested
+    vault_write("pki/issuer/root", issuer_name="root", leaf_not_after_behavior="permit")
+    int_ca_args["enforce_leaf_not_after_behavior"] = True
+    ret = vault_pki.intermediate_issuer_managed(**int_ca_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+    cert = load_cert(_default_issuer(int_ca_args["mount"])["certificate"])
+    assert _not_valid_after(cert) == datetime(2040, 1, 1, tzinfo=timezone.utc)
+    ret = vault_pki.intermediate_issuer_managed(**int_ca_args)
+    assert ret.result is True
+    assert not ret.changes
 
 
 @pytest.mark.usefixtures("clean_pki_mount")
