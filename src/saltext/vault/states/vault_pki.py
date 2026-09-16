@@ -232,14 +232,23 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
 
     ttl
         Specifies the requested Time To Live (after which the certificate will be expired).
-        This cannot be larger than the engine's max (or, if not set, the system max).
         Can be an integer, which is interpreted as seconds, or a time string such as ``1h``.
         Hour is the largest suffix. Defaults to ``720h`` or 30 days.
+
+        .. note::
+
+            The effective validity is capped by the role's ``max_ttl``, if a role is used.
+            This is accounted for in change reports.
 
     ttl_remaining
         If an existing certificate's remaining Time To Live undercuts this period, renew it.
         Can be an integer, which is interpreted as seconds, or a time string such as ``1h``.
         Hour is the largest suffix. Defaults to ``168h`` or 7 days.
+
+        .. note::
+
+            Must be less than the role's ``max_ttl``, if a role is used, otherwise issued
+            certificates would be immediately due for renewal.
 
     issuer_ref
         Override the specified role's issuer for the certificate.
@@ -716,6 +725,10 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
             This value should exceed the maximum validity of certificates issued
             by this CA, otherwise issuance close to its expiry can fail or yield
             certificates outliving it.
+
+            It must also be less than the signing issuer's remaining validity
+            when a Vault issuer signs this certificate, otherwise the certificate
+            would be reissued during each run.
 
     encoding
         Encoding of the managed certificate file.
@@ -1403,6 +1416,10 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
             This value should exceed the maximum validity of certificates issued
             by this CA, otherwise issuance close to its expiry can fail or yield
             certificates outliving it.
+
+            It must also be less than the signing issuer's remaining validity
+            when a Vault issuer signs this certificate, otherwise the certificate
+            would be reissued during each run.
 
     rotate_key
         When rotating the default issuer, rotate its key along with it. Defaults to false.
