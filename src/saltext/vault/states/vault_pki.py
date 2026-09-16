@@ -293,6 +293,10 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
         When set, ``ttl`` is ignored. ``ttl_remaining`` is still validated, but falling below it causes
         state failure instead of a reissuance.
 
+        .. note::
+
+            Must not exceed the role's ``max_ttl``, if a role is specified, which enforces a hard cutoff during issuance.
+
     serial_number
         Single value for the **subject** SERIALNUMBER (OID: 2.5.4.5) name attribute (NOT the certificate's serial number!).
 
@@ -421,6 +425,15 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
             # allowed when signing verbatim
             role_info = {}
 
+        if max_ttl := timestring_map(role_info.get("max_ttl") or 0, cast=int):
+            # A max_ttl > 0 enforces a hard cutoff on the certificate lifetime.
+            _validate_issuance_cutoff(
+                datetime.now(tz=timezone.utc) + timedelta(seconds=max_ttl),
+                "the role's `max_ttl`",
+                not_after,
+                timestring_map(ttl_remaining, cast=int),
+            )
+
         if csr and alt_names and role_info.get("use_csr_sans", True):
             # SANs don't fall back to alt_names (we simulate that when generating a CSR on the fly).
             # This is in contrast to common_name.
@@ -472,7 +485,8 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
                     private_key_passphrase=private_key_passphrase,
                     role_info=role_info,
                     serial_number=serial_number,
-                    ttl=ttl_seconds,
+                    # The effective validity is capped by the role's max_ttl, if a role is used (not required for sign_verbatim)
+                    ttl=min(ttl_seconds, max_ttl) if max_ttl else ttl_seconds,
                     urls=urls,
                     user_ids=user_ids,
                     **cert_args,
@@ -525,7 +539,8 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
                     private_key=private_key,
                     private_key_passphrase=private_key_passphrase,
                     csr=csr,
-                    ttl=ttl,
+                    # Vault rejects requests specifying both ttl and not_after
+                    ttl=None if not_after else ttl,
                     issuer_ref=issuer_ref,
                     mount=mount,
                     sign_verbatim=sign_verbatim,
@@ -789,6 +804,10 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
         When set, ``ttl`` is ignored. ``ttl_remaining`` is still validated, but falling below it causes
         state failure instead of a reissuance.
 
+        .. important::
+
+            Must not exceed the signing issuer's own expiry, which enforces a hard cutoff during issuance.
+
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
 
@@ -875,6 +894,15 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
                 f"Issuer '{issuer_ref or 'default'}' does not exist on mount {mount}"
             )
 
+        # The signing issuer's own expiry enforces a hard cutoff during issuance
+        issuer_expiry = pki.not_valid_after(x509util.load_cert(issuer_info["certificate"]))
+        _validate_issuance_cutoff(
+            issuer_expiry,
+            "the signing issuer's expiry",
+            not_after,
+            timestring_map(ttl_remaining, cast=int),
+        )
+
         if append_ca_chain:
             ca_chain = [x509util.load_cert(x) for x in issuer_info["ca_chain"]]
             # Filter self-signed CA, which shouldn't be in the chain.
@@ -914,7 +942,11 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
                 serial_number=serial_number,
                 signature_bits=signature_bits,
                 street_address=street_address,
-                ttl=ttl_seconds,
+                # The effective validity is capped by the signing issuer's expiry
+                ttl=min(
+                    ttl_seconds,
+                    int((issuer_expiry - datetime.now(tz=timezone.utc)).total_seconds()),
+                ),
                 urls=urls,
                 **cert_args,
             )
@@ -1445,6 +1477,9 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
             This parameter is valid for both issuance methods and translated into the correct
             format automatically.
 
+            Must not exceed the signing issuer's own expiry when a Vault issuer
+            signs the certificate, which enforces a hard cutoff during issuance.
+
     not_before_duration
         Duration by which to backdate the NotBefore property. Defaults to ``30s``.
 
@@ -1649,6 +1684,29 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
     # or x509.create_certificate, depending on issuer_ref being set or not.
     cert_args = hlp.filter_state_internal_kwargs(kwargs)
 
+    signing_issuer: dict[str, typing.Any]
+    signing_issuer_expiry: datetime
+    if vault_signed:
+        try:
+            signing_issuer = __salt__["vault_pki.read_issuer"](issuer_ref, mount=issuer_mount)
+            if signing_issuer is None:
+                raise CommandExecutionError(
+                    f"Issuer '{issuer_ref}' does not exist on mount {issuer_mount}"
+                )
+            # The signing issuer's own expiry enforces a hard cutoff during issuance
+            signing_issuer_expiry = pki.not_valid_after(
+                x509util.load_cert(signing_issuer["certificate"])
+            )
+            _validate_issuance_cutoff(
+                signing_issuer_expiry,
+                "the signing issuer's expiry",
+                not_after,
+                days_remaining * 86400,
+                remaining_param="days_remaining",
+            )
+        except (CommandExecutionError, SaltInvocationError) as err:
+            return {"name": name, "result": False, "comment": str(err), "changes": {}}
+
     def check_cert(current, *, rotate_key, replace_key):
         nonlocal cert_args, not_after, alt_names, permitted_alt_names, excluded_alt_names
         # We need to correctly map/filter args for changes checking before passing to the utils func.
@@ -1677,19 +1735,21 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
 
         notes = []
         if vault_signed:
-            issuer_info = __salt__["vault_pki.read_issuer"](issuer_ref, mount=issuer_mount)
-            if issuer_info is None:
-                raise CommandExecutionError(
-                    f"Issuer '{issuer_ref}' does not exist on mount {issuer_mount}"
-                )
-            urls = _get_urls(issuer_info, mount=issuer_mount)
+            urls = _get_urls(signing_issuer, mount=issuer_mount)
             cert_changes, unverified_url_exts = pki.check_int_issuer_cert_for_changes_vault_ca(
                 current=current["certificate"],
-                issuer=issuer_info["certificate"],
+                issuer=signing_issuer["certificate"],
                 rotate_key=rotate_key,
                 replace_key=replace_key,
                 days_remaining=days_remaining,
-                days_valid=days_valid,
+                # The effective validity is capped by the signing issuer's expiry
+                days_valid=min(
+                    days_valid,
+                    int(
+                        (signing_issuer_expiry - datetime.now(tz=timezone.utc)).total_seconds()
+                        // 86400
+                    ),
+                ),
                 common_name=name,
                 country=country,
                 exclude_cn_from_sans=exclude_cn_from_sans,
@@ -2613,6 +2673,36 @@ def _validate_ttl_params(
             f"The specified `not_after` undercuts `{ttl_remaining_param}`. Update or remove `not_after`. "
             + f"The certificate {hlp.pretty_td(expires_in, now=('expires', 'expired'))}, "
             + f"which is less than the tolerance of {hlp.pretty_td(tolerance)}"
+        )
+
+
+def _validate_issuance_cutoff(
+    cutoff: datetime,
+    cutoff_desc: str,
+    not_after: str | None,
+    remaining: int,
+    remaining_param: str = "ttl_remaining",
+) -> None:
+    """
+    Ensure a hard cutoff enforced during issuance does not conflict with the
+    requested certificate lifecycle parameters. A statically requested expiry
+    beyond the cutoff would be truncated silently, a renewal tolerance undercut
+    by it would make issued certificates immediately due for renewal - both
+    resulting in repeated changes that cannot converge.
+    """
+    if not_after is not None:
+        if pki._strptime_loose(not_after, "not_after") > cutoff:
+            raise SaltInvocationError(
+                f"The specified `not_after` exceeds {cutoff_desc}, which enforces a hard cutoff "
+                f"of {cutoff.strftime(pki.TIME_FMT)} during issuance. Reduce or remove `not_after`."
+            )
+        # The remaining tolerance is validated against `not_after` separately
+        return
+    if cutoff <= datetime.now(tz=timezone.utc) + timedelta(seconds=remaining):
+        raise CommandExecutionError(
+            f"The specified `{remaining_param}` is undercut by {cutoff_desc}, which enforces "
+            f"a hard cutoff of {cutoff.strftime(pki.TIME_FMT)} during issuance. "
+            "Certificates would be reissued during each run."
         )
 
 
