@@ -1,0 +1,1 @@
+Made `vault_pki.certificate_managed` validate requested certificate lifecycle parameters (`ttl`/`ttl_remaining`/`not_after`) against each other and the role's `max_ttl` before issuing anything. Previously, inconsistent values could result in the certificate being reissued during each run or created in a state that fails all subsequent runs.
