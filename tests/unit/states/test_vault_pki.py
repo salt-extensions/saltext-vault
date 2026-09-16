@@ -156,6 +156,17 @@ def test_cert_funcs_undercutting_not_after(func, kwargs):
     assert not res["changes"]
 
 
+@pytest.mark.usefixtures("file_mocks")
+def test_certificate_managed_max_ttl_undercuts_ttl_remaining(read_role):
+    read_role.return_value = {"max_ttl": 3600}
+    res = vault_pki.certificate_managed(
+        "/etc/pki/cert.pem", "example.com", "role", "pk", ttl="4h", ttl_remaining="2h"
+    )
+    assert res["result"] is False
+    assert "`ttl_remaining` is undercut by the role's `max_ttl`" in res["comment"]
+    assert not res["changes"]
+
+
 @pytest.mark.parametrize(
     "fret_result,current,expected_comment",
     (

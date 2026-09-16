@@ -4,6 +4,8 @@ Vault PKI helpers
 .. versionadded:: 1.1.0
 """
 
+# pylint: disable=too-many-lines
+
 import copy
 import json
 import logging
@@ -2022,6 +2024,17 @@ def _compare_cert_signing(
     return changes
 
 
+def not_valid_after(cert: cx509.Certificate) -> datetime:
+    """
+    Return a certificate's ``not_valid_after`` property as a timezone-aware
+    datetime, accounting for older versions of ``cryptography``.
+    """
+    try:
+        return cert.not_valid_after_utc
+    except AttributeError:  # pragma: no cover
+        return cert.not_valid_after.replace(tzinfo=timezone.utc)
+
+
 def _compare_cert_with_builder(
     cert: cx509.Certificate,
     builder: cx509.CertificateBuilder,
@@ -2034,10 +2047,7 @@ def _compare_cert_with_builder(
     tolerance = timedelta(seconds=timestring_map(ttl_remaining or 0, cast=int))
 
     # Check if certificate should be renewed due to close to expiration
-    try:
-        curr_not_valid_after = cert.not_valid_after_utc
-    except AttributeError:  # pragma: no cover
-        curr_not_valid_after = cert.not_valid_after.replace(tzinfo=timezone.utc)
+    curr_not_valid_after = not_valid_after(cert)
     new_not_valid_after = _getattr_safe(builder, "_not_valid_after").replace(tzinfo=timezone.utc)
 
     expires = False
