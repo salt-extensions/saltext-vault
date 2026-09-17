@@ -250,7 +250,9 @@ def certificate_managed(
         .. note::
 
             Must be less than the role's ``max_ttl``, if a role is used, otherwise issued
-            certificates would be immediately due for renewal.
+            certificates would be immediately due for renewal. The same applies to the
+            signing issuer's remaining validity, unless its ``leaf_not_after_behavior``
+            is set to ``permit``.
 
     issuer_ref
         Override the specified role's issuer for the certificate.
@@ -307,6 +309,8 @@ def certificate_managed(
         .. note::
 
             Must not exceed the role's ``max_ttl``, if a role is specified, which enforces a hard cutoff during issuance.
+            The same applies to the signing issuer's expiry, unless its ``leaf_not_after_behavior``
+            is set to ``permit``.
 
     serial_number
         Single value for the **subject** SERIALNUMBER (OID: 2.5.4.5) name attribute (NOT the certificate's serial number!).
@@ -381,6 +385,7 @@ def certificate_managed(
     # An empty role_name and thus role_info is allowed when signing verbatim
     role_info: dict[str, typing.Any] = {}
     max_ttl = 0
+    truncates_at = None
 
     def setup():
         nonlocal alt_names, issuer_ref, role_info
@@ -401,8 +406,8 @@ def certificate_managed(
             issuer_ref = role_info.get("issuer_ref", "default")
         return issuer_ref
 
-    def validate_cutoffs(_issuer_info):
-        nonlocal max_ttl
+    def validate_cutoffs(issuer_info):
+        nonlocal max_ttl, truncates_at
         if max_ttl := timestring_map(role_info.get("max_ttl") or 0, cast=int):
             # A max_ttl > 0 enforces a hard cutoff on the certificate lifetime.
             # Ensure that does not make this state always non-idempotent/fail.
@@ -412,9 +417,32 @@ def certificate_managed(
                 not_after,
                 timestring_map(ttl_remaining, cast=int),
             )
+        if (behavior := issuer_info.get("leaf_not_after_behavior")) != "permit":
+            # The signing issuer's own expiry enforces a hard cutoff during
+            # issuance as well, by erroring out (default) or truncating.
+            issuer_expiry = pki.not_valid_after(x509util.load_cert(issuer_info["certificate"]))
+            _validate_issuance_cutoff(
+                issuer_expiry,
+                "the signing issuer's expiry",
+                not_after,
+                timestring_map(ttl_remaining, cast=int),
+            )
+            if behavior == "truncate":
+                # Only a truncating issuer's expiry caps the effective validity,
+                # otherwise exceeding requests error out during issuance instead.
+                truncates_at = issuer_expiry
 
     def check_cert(current, issuer_info, urls, ca_chain):
         ttl_seconds = timestring_map(ttl, cast=int)
+        # The effective validity is capped by the role's max_ttl, if a role is used
+        # (not required for sign_verbatim). Ensure we report that correctly.
+        effective_ttl = min(ttl_seconds, max_ttl) if max_ttl else ttl_seconds
+        if truncates_at is not None:
+            # The same applies to the expiry of a signing issuer that truncates.
+            effective_ttl = min(
+                effective_ttl,
+                int((truncates_at - datetime.now(tz=timezone.utc)).total_seconds()),
+            )
         return pki.check_cert_for_changes(
             current=current,
             issuer=issuer_info["certificate"],
@@ -434,8 +462,7 @@ def certificate_managed(
             private_key_passphrase=private_key_passphrase,
             role_info=role_info,
             serial_number=serial_number,
-            # The effective validity is capped by the role's max_ttl, if a role is used (not required for sign_verbatim)
-            ttl=min(ttl_seconds, max_ttl) if max_ttl else ttl_seconds,
+            ttl=effective_ttl,
             urls=urls,
             user_ids=user_ids,
             **cert_args,
