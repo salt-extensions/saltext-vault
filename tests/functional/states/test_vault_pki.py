@@ -3699,6 +3699,229 @@ def test_root_issuer_managed_changes_with_issuer_name(vault_pki, root_ca_args):
     assert new_info["issuer_name"] == root_ca_args["issuer_name"]
 
 
+ISSUER_CONFIGS = (
+    ("crl_distribution_points", "crl_endpoints"),
+    ("delta_crl_distribution_points", "delta_crl_endpoints"),
+    ("enable_aia_url_templating", "aia_url_templating"),
+    ("issuer_name", "issuer_name"),
+    ("issuing_certificates", "aia_urls"),
+    ("leaf_not_after_behavior", "leaf_not_after_behavior"),
+    ("ocsp_servers", "ocsp_servers"),
+    ("revocation_signature_algorithm", "revocation_signature_algorithm"),
+    ("usage", "usage"),
+)
+
+
+@pytest.mark.usefixtures("existing_root")
+@pytest.mark.parametrize(
+    "existing_root",
+    (
+        {
+            "allow_premature_rotation": True,
+            "crl_endpoints": ["https://crl.example.com/crl.pem"],
+            "delta_crl_endpoints": ["https://delta.example.com/delta.pem"],
+            "aia_url_templating": True,
+            "aia_urls": ["https://ca.example.com/ca.der"],
+            "leaf_not_after_behavior": "permit",
+            "ocsp_servers": ["https://ocsp.example.com"],
+            "revocation_signature_algorithm": "ECDSAWithSHA384",
+            "usage": "read-only,issuing-certificates,crl-signing",
+        },
+    ),
+    indirect=True,
+)
+@pytest.mark.parametrize(
+    "condition",
+    ("all_default", "rotate_key", "with_issuer_name", "denied", "denied_issuer_changes"),
+)
+def test_root_issuer_managed_rotation_preserves_all_issuer_config_and_reports_implicit_changes(
+    vault_pki, root_ca_args, existing_root, testmode, condition
+):
+    """
+    1) Even when no issuer parameter is specified, a certificate rotation should preserve
+       the most of the current non-default issuer config on the new issuer
+       (which starts out with default configuration otherwise) and not report any issuer changes.
+       This means we run update_issuer, even though nothing is reported as changed on the issuer.
+    2) When we rotate/replace keys, we don't preserve revocation_signature_algorithm and report it.
+    3) When issuer_name is unspecified, but the current one has one, it's not preserved and we report it.
+    4) When we deny early rotation, 2/3 should not be reported
+    5) When we deny early rotation, changes should still be applied and reported
+    """
+    remove = ("usage", "leaf_not_after_behavior")
+    any_issuer_changes = False
+    current_config = {
+        conf[0]: root_ca_args[conf[1]] for conf in ISSUER_CONFIGS if conf[1] in root_ca_args
+    }
+    # sanity check. only delta_crl_distribution_points is conditional
+    assert len(current_config) >= len(ISSUER_CONFIGS) - 2
+
+    if condition == "all_default":
+        # Ensure we're not passing any issuer config params
+        remove = [conf[1] for conf in ISSUER_CONFIGS]
+
+    if condition in ("rotate_key", "denied"):
+        root_ca_args["rotate_key"] = True
+        remove = ("revocation_signature_algorithm",)
+        any_issuer_changes = condition == "rotate_key"
+
+    if condition in ("with_issuer_name", "denied"):
+        vault_write(
+            f"pki/issuer/{existing_root['issuer_id']}", **current_config, issuer_name="foobar"
+        )
+        any_issuer_changes = condition == "with_issuer_name"
+
+    if condition == "denied_issuer_changes":
+        remove = ()
+        root_ca_args["leaf_not_after_behavior"] = "truncate"  # ensure this change is applied still
+        any_issuer_changes = True
+
+    for rm in remove:
+        root_ca_args.pop(rm, None)
+
+    denied = condition.startswith("denied")
+    root_ca_args["allow_premature_rotation"] = not denied
+
+    # We might have changed the issuer config, so re-check from existing_root
+    pre_info = _default_issuer()
+    # and verify the issuer is configured as expected
+    if condition in ("denied", "with_issuer_name"):
+        assert pre_info["issuer_name"] == "foobar"
+    for conf, _ in ISSUER_CONFIGS:
+        if conf not in current_config:
+            continue
+        if conf == "usage":
+            assert set(hlp.deserialize_csl(pre_info[conf])) == set(
+                hlp.deserialize_csl(current_config[conf])
+            )
+        else:
+            assert pre_info[conf] == current_config[conf]
+
+    if condition != "denied_issuer_changes":
+        # Ensure we're idempotent without forcing a rotation
+        ret = vault_pki.root_issuer_managed(**root_ca_args)
+        assert ret.result is True
+        assert not ret.changes
+        assert "Root CA issuer is present as specified" in ret.comment
+
+    # Now force rotation
+    root_ca_args["max_path_length"] = 2
+    ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
+    if denied:
+        assert ret.result is False
+    else:
+        assert ret.result is not False
+        assert (ret.result is None) is testmode
+        assert (
+            f"Root CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
+        )
+    assert ("Root CA issuer" in ret.comment) is any_issuer_changes
+    assert "Failed to recover" not in ret.comment
+
+    assert ("issuer" in ret.changes) is any_issuer_changes
+    assert ret.changes["old_issuer"]["issuer_id"] == pre_info["issuer_id"]
+    assert ret.changes["old_issuer"]["usage"] == {"removed": ["issuing-certificates"]}
+
+    if condition == "rotate_key":
+        assert ret.changes["issuer"] == {
+            "revocation_signature_algorithm": {"old": "ECDSAWithSHA384", "new": "<key default>"}
+        }
+    elif condition == "with_issuer_name":
+        assert ret.changes["issuer"] == {"issuer_name": {"old": "foobar", "new": ""}}
+
+    new_info = _default_issuer()
+    if testmode:
+        assert new_info == pre_info
+        return
+    assert (new_info["issuer_id"] == pre_info["issuer_id"]) is denied
+    assert (new_info["key_id"] != pre_info["key_id"]) is (condition == "rotate_key")
+    assert bool(new_info["issuer_name"]) is (condition == "denied")
+    if condition == "denied_issuer_changes":
+        assert new_info["leaf_not_after_behavior"] == "truncate"
+    else:
+        assert new_info["leaf_not_after_behavior"] == "permit"
+    if condition == "rotate_key":
+        # Unspecified revsigalgo is not recovered here because it could cause failure when the key algo changes
+        assert new_info["revocation_signature_algorithm"] == "ECDSAWithSHA256"
+    else:
+        # preserved because we did not rotate the key
+        assert new_info["revocation_signature_algorithm"] == "ECDSAWithSHA384"
+    assert set(hlp.deserialize_csl(new_info["usage"])) == {
+        "read-only",
+        "issuing-certificates",
+        "crl-signing",
+    }
+    assert new_info["enable_aia_url_templating"] is True
+    assert new_info["issuing_certificates"] == ["https://ca.example.com/ca.der"]
+    assert new_info["crl_distribution_points"] == ["https://crl.example.com/crl.pem"]
+    assert new_info["ocsp_servers"] == ["https://ocsp.example.com"]
+
+    old_info = vault_read(f"pki/issuer/{pre_info['issuer_id']}")["data"]
+    assert ("issuing-certificates" in old_info["usage"]) is denied
+    if condition in ("with_issuer_name", "denied"):
+        assert old_info["issuer_name"] == "foobar"
+
+    if root_ca_args["allow_premature_rotation"]:
+        # The state should still report convergence afterwards
+        ret = vault_pki.root_issuer_managed(**root_ca_args)
+        assert ret.result is True
+        assert not ret.changes
+        assert "Root CA issuer is present as specified" in ret.comment
+
+
+@pytest.mark.usefixtures("existing_root")
+@pytest.mark.parametrize(
+    "existing_root",
+    (
+        {
+            "allow_premature_rotation": True,
+            "crl_endpoints": ["https://crl.example.com/crl.pem"],
+            "delta_crl_endpoints": ["https://delta.example.com/delta.pem"],
+            "aia_url_templating": True,
+            "aia_urls": ["https://ca.example.com/ca.der"],
+            "leaf_not_after_behavior": "permit",
+            "ocsp_servers": ["https://ocsp.example.com"],
+            "revocation_signature_algorithm": "ECDSAWithSHA384",
+            "usage": "read-only,issuing-certificates,crl-signing",
+        },
+    ),
+    indirect=True,
+)
+def test_root_issuer_managed_rotation_reports_recovery_failure_changes(
+    vault_pki, root_ca_args, existing_root
+):
+    """
+    When we try to recover unspecified, but customized issuer config and fail, we report
+    changes that we normally wouldn't need to.
+    """
+    for _, conf in ISSUER_CONFIGS:
+        root_ca_args.pop(conf, None)
+    root_ca_args["max_path_length"] = 2
+    root_ca_args["allow_premature_rotation"] = True
+    root_ca_args["revocation_signature_algorithm"] = "invalid"
+    ret = vault_pki.root_issuer_managed(**root_ca_args)
+    assert ret.result is False
+    assert "Failed to recover" in ret.comment
+    assert "Failed because of an exception later" in ret.comment
+    assert "Unknown signature algorithm" in ret.comment
+
+    assert "issuer" in ret.changes
+    assert "issuer_id" in ret.changes
+    assert ret.changes["old_issuer"]["issuer_id"] == existing_root["issuer_id"]
+    assert ret.changes["old_issuer"]["usage"] == {"removed": ["issuing-certificates"]}
+    exp_changes = {
+        "crl_endpoints": {"removed": ["https://crl.example.com/crl.pem"], "added": []},
+        "delta_crl_endpoints": {"removed": ["https://delta.example.com/delta.pem"], "added": []},
+        "aia_url_templating": {"old": True, "new": False},
+        "aia_urls": {"removed": ["https://ca.example.com/ca.der"], "added": []},
+        "leaf_not_after_behavior": {"old": "permit", "new": "err"},
+        "ocsp_servers": {"removed": ["https://ocsp.example.com"], "added": []},
+        "usage": {"added": ["ocsp-signing"], "removed": []},
+    }
+    if "delta_crl_endpoints" not in root_ca_args:
+        exp_changes.pop("delta_crl_endpoints")
+    assert ret.changes["issuer"] == exp_changes
+
+
 @pytest.mark.usefixtures("existing_root")
 @pytest.mark.parametrize(
     "existing_root",
