@@ -1051,6 +1051,93 @@ def test_certificate_managed_max_ttl_undercuts_ttl_remaining(vault_pki, cert_arg
     assert not Path(cert_args["name"]).exists()
 
 
+@pytest.mark.usefixtures("issuer_setup")
+def test_certificate_managed_not_after_exceeding_issuer(vault_pki, cert_args):
+    """
+    An explicit not_after beyond the signing issuer's expiry would error out
+    (or be truncated, depending on the issuer's ``leaf_not_after_behavior``)
+    during issuance. Ensure the state refuses it early.
+    """
+    cert_args.pop("role_name")
+    cert_args["sign_verbatim"] = True
+    cert_args["not_after"] = "2040-01-01T00:00:00Z"
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is False
+    assert "exceeds the signing issuer's expiry" in ret.comment
+    assert not ret.changes
+    assert not Path(cert_args["name"]).exists()
+
+    # Unless the issuer explicitly permits exceeding its own validity
+    vault_write("pki/issuer/root", issuer_name="root", leaf_not_after_behavior="permit")
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    cert = load_cert(cert_args["name"])
+    assert _not_valid_after(cert) == datetime(2040, 1, 1, tzinfo=timezone.utc)
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup")
+def test_certificate_managed_issuer_expiry_undercuts_ttl_remaining(vault_pki, cert_args):
+    """
+    A ttl_remaining beyond the signing issuer's remaining validity would mean
+    each renewal attempt fails (or each issued certificate is immediately due
+    for renewal, depending on the issuer's ``leaf_not_after_behavior``).
+    Ensure the state refuses this configuration.
+    """
+    cert_args.pop("role_name")
+    cert_args["sign_verbatim"] = True
+    cert_args["ttl"] = "100000h"
+    cert_args["ttl_remaining"] = "87600h"
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is False
+    assert "`ttl_remaining` is undercut by the signing issuer's expiry" in ret.comment
+    assert not ret.changes
+    assert not Path(cert_args["name"]).exists()
+
+
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
+def test_certificate_managed_expiry_reports_issuer_capped_not_after(vault_pki, cert_args):
+    """
+    A signing issuer with ``leaf_not_after_behavior=truncate`` caps the
+    effective certificate validity at its own expiry. Ensure change reports
+    account for this instead of reflecting the requested validity.
+    """
+    res = vault_write(
+        "pki/root/generate/internal", common_name="Short Root", ttl="20h", issuer_name="shortroot"
+    )["data"]
+    vault_write(
+        f"pki/issuer/{res['issuer_id']}",
+        issuer_name="shortroot",
+        leaf_not_after_behavior="truncate",
+    )
+    issuer_expiry = _not_valid_after(load_cert(res["certificate"]))
+    cert_args["issuer_ref"] = "shortroot"
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+
+    # The current certificate expires in 30m, which undercuts the new tolerance.
+    # The requested 48h exceed both the role's max_ttl (one day) and the
+    # truncating issuer's remaining validity (~20h), the latter binding.
+    cert_args["ttl"] = "48h"
+    cert_args["ttl_remaining"] = "45m"
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert "expiration" in ret.changes
+    reported = datetime.strptime(ret.changes["not_after"]["new"], "%Y-%m-%dT%H:%M:%SZ").replace(
+        tzinfo=timezone.utc
+    )
+    assert abs((reported - issuer_expiry).total_seconds()) < 300
+    cert = load_cert(cert_args["name"])
+    assert _not_valid_after(cert) == issuer_expiry
+
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
+
+
 @pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_certificate_managed_existing_file_not_a_cert(cert_typ):
     """
