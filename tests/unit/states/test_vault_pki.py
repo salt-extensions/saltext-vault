@@ -157,8 +157,9 @@ def test_cert_funcs_undercutting_not_after(func, kwargs):
 
 
 @pytest.mark.usefixtures("file_mocks")
-def test_certificate_managed_max_ttl_undercuts_ttl_remaining(read_role):
+def test_certificate_managed_max_ttl_undercuts_ttl_remaining(read_role, read_issuer):
     read_role.return_value = {"max_ttl": 3600}
+    read_issuer.return_value = {}
     res = vault_pki.certificate_managed(
         "/etc/pki/cert.pem", "example.com", "role", "pk", ttl="4h", ttl_remaining="2h"
     )
