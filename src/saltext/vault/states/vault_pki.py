@@ -7,6 +7,8 @@ Manage the Vault (or OpenBao) PKI secret engine and Vault-issued X.509 certifica
     This module requires the general :ref:`Vault setup <vault-setup>`.
 """
 
+# pylint: disable=too-many-lines
+
 import base64
 import logging
 import os
@@ -1392,8 +1394,9 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
             capabilities = ["create", "update"]
         }
 
-        # Update issuer configuration
-        path "<mount>/issuer/<name>" {
+        # Update issuer configuration. Might also be exercised when
+        # no issuer params are specified for config recovery after rotation.
+        path "<mount>/issuer/<issuer_id>" {
             capabilities = ["patch"]
         }
 
@@ -1648,6 +1651,18 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
               when it is (re-)issued, but not handled statefully themselves.
 
     **Issuer configuration:**
+
+    .. note::
+
+        Unspecified parameters are ignored during management and retain their current values in most cases.
+
+        This state tries to recover them after rotating an issuer certificate, which
+        would otherwise reset them to their defaults if they were configured manually.
+        This does not apply to ``issuer_name``, which requires special handling,
+        and ``manual_chain``, which is not handled in this state.
+        When the key changes (different ``key_ref`` or ``rotate_key``), this also does
+        not apply to ``revocation_signature_algorithm`` because a key algorithm change
+        can make the previous value invalid.
 
     issuer_name
         Custom name for the issuer. Must be unique and not equal to ``default``.
@@ -2006,8 +2021,9 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments,too-many-locals
             capabilities = ["create", "update"]
         }
 
-        # Update issuer configuration
-        path "<mount>/issuer/<name>" {
+        # Update issuer configuration. Might also be exercised when
+        # no issuer params are specified for config recovery after rotation.
+        path "<mount>/issuer/<issuer_id>" {
             capabilities = ["patch"]
         }
 
@@ -2168,6 +2184,18 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments,too-many-locals
         * serial_number (only a single value; NOT the certificate's serial number, just the SERIALNUMBER name attribute)
 
     **Issuer configuration:**
+
+    .. note::
+
+        Unspecified parameters are ignored during management and retain their current values in most cases.
+
+        This state tries to recover them after rotating an issuer certificate, which
+        would otherwise reset them to their defaults if they were configured manually.
+        This does not apply to ``issuer_name``, which requires special handling,
+        and ``manual_chain``, which is not handled in this state.
+        When the key changes (different ``key_ref`` or ``rotate_key``), this also does
+        not apply to ``revocation_signature_algorithm`` because a key algorithm change
+        can make the previous value invalid.
 
     issuer_name
         Custom name for the issuer. Must be unique and not equal to ``default``.
@@ -2364,7 +2392,7 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments,too-many-locals
     )
 
 
-def _default_issuer_managed(  # pylint: disable=too-many-statements
+def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-locals
     name,
     *,
     kind,
@@ -2418,13 +2446,19 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements
         "changes": {},
     }
     changes: dict[str, typing.Any] = {}
-    cert_affected = issuer_affected = replace_key = refused_to_rotate = False
+    cert_affected = issuer_needs_update = replace_key = refused_to_rotate = cert_rotated = False
     issuer_id = key_id = None
     notes: list[str] = []
     msg = []
+    kind_lc = kind[0].lower() + kind[1:]  # lowercase for refusals
+    # We can skip issuer updates during creation if none of the params are specified
     issuer_is_managed = any(val is not None for val in issuer_config.values())
     issuer_name = issuer_config.pop("issuer_name")
-    kind_lc = kind[0].lower() + kind[1:]  # lowercase for refusals
+
+    # Handle issuer changes separately from applying them because cert rotation causes implicit changes.
+    issuer_changes, issuer_rotation_effects, recover_fail_changes = {}, {}, {}
+    # Unmanaged, non-default configs of current issuer that we try to apply to a rotated issuer
+    recover_from_cur = {}
 
     try:
         key_type = hlp.in_vals(("internal", "exported", "kms", None), key_type=key_type)
@@ -2453,13 +2487,24 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements
             )
             if cert_changes:
                 changes["cert"], cert_affected = cert_changes, True
+                cert_rotated = cert_affected
 
-            if issuer_changes := _check_issuer_config_changes(
-                current, **issuer_config, issuer_name=issuer_name
-            ):
-                changes["issuer"], issuer_affected = issuer_changes, True
+            issuer_triggers, issuer_rotation_effects, recover_from_cur, recover_fail_changes = (
+                _check_issuer_config_changes(
+                    current,
+                    cert_affected,
+                    **issuer_config,
+                    issuer_name=issuer_name,
+                    rotate_key=rotate_key,
+                    replace_key=replace_key,
+                )
+            )
+            issuer_needs_update, issuer_changes = (
+                bool(issuer_triggers),
+                issuer_triggers | issuer_rotation_effects,
+            )
 
-        if not changes:
+        if not (changes or issuer_changes):
             ret["comment"] += "".join(f"\n\n{note}." for note in notes)
             return ret
 
@@ -2469,7 +2514,12 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements
             and current is not None
             and cert_affected
         ):
-            refused_to_rotate = "expiration" not in changes["cert"]
+            if refused_to_rotate := "expiration" not in changes["cert"]:
+                cert_rotated = False
+                # We report these changes because we don't preserve them during rotation, which is not happening.
+                issuer_changes = {
+                    k: v for k, v in issuer_changes.items() if k not in issuer_rotation_effects
+                }
 
         # Ensure the issuer name is not taken before going any further
         if (
@@ -2494,7 +2544,7 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements
             if not (
                 old_changes := _rotate_out(name_collision, issuer_name, mount)
             ):  # pragma: no cover
-                raise CommandExecutionError(
+                raise CommandExecutionError(  # defensive coding: names must match and the update call raises
                     f"Another issuer with name '{issuer_name}' exists on mount '{mount}' "
                     f"(issuer_id: {name_collision['issuer_id']}). Tried renaming it, but somehow failed."
                 )
@@ -2503,6 +2553,8 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements
         if __opts__["test"]:
             ret["result"] = False if refused_to_rotate else None
             ret["changes"].update(changes)
+            if issuer_changes:
+                ret["changes"]["issuer"] = issuer_changes
 
             if refused_to_rotate:
                 msg.append(
@@ -2516,7 +2568,7 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements
                 if imports_cert:
                     ret["changes"]["imported"] = ["<TBD>"]
 
-            if current is None or issuer_affected:
+            if current is None or issuer_changes:
                 msg.append(f"{kind} issuer would have been {'updated' if current else 'created'}")
 
             if current is not None and cert_affected:
@@ -2581,25 +2633,46 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements
                 ret["changes"]["cert"] = changes["cert"]
             msg.append(f"{kind} certificate has been {'rotated' if current else 'created'}")
 
-        if issuer_affected or (
-            issuer_is_managed and (current is None or cert_affected and not refused_to_rotate)
+        if (
+            # Run when we have a fresh issuer and need to apply config.
+            # Would be unnecessary when all equal the defaults, but that's too specific to save one request.
+            (current is None and issuer_is_managed)
+            # Of course run when we need to apply config changes.
+            or issuer_needs_update
+            # Also run when we DID rotate (not denied) and need to re-apply and/or recover config.
+            # Would be unnecessary when all managed params equal the defaults, but that's too specific to save one request.
+            or (cert_rotated and (issuer_is_managed or recover_from_cur))
         ):
-            # Don't forget to re-apply config after rotating the issuer, changes were checked for previous one.
-            # Edge case: Avoid a request when we reset all issuer configs and rotate the cert at the same time.
-            # We still want to report the changes, so don't exclude that case above.
-            if not (
-                current is not None
-                and cert_affected
-                and not refused_to_rotate
-                and not issuer_is_managed
-            ):
+            try:
                 __salt__["vault_pki.update_issuer"](
-                    ref=issuer_id, name=issuer_name, mount=mount, **issuer_config
+                    ref=issuer_id,
+                    name=issuer_name,
+                    mount=mount,
+                    **(issuer_config | recover_from_cur),
                 )
-            if current is None or issuer_affected:
-                if current is not None:
-                    ret["changes"]["issuer"] = changes["issuer"]
-                msg.append(f"{kind} issuer has been {'updated' if current else 'created'}")
+            except CommandExecutionError as err:
+                if not recover_from_cur:
+                    # We did not cause this for sure by trying to preserve unmanaged config.
+                    raise
+                fail_msg = (
+                    "Failed to recover unspecified non-default issuer config from the previous default issuer:\n"
+                    + "\n".join(f"  {k} (= `{v!r}`)" for k, v in recover_from_cur.items())
+                    + f"\nReason: {err}"
+                )
+                log.warning(fail_msg)
+                notes.append(fail_msg)
+                ret["changes"]["issuer"] = recover_fail_changes
+                # Retry setting managed config only, otherwise don't fail for trying to manage unmanaged config
+                if issuer_is_managed:
+                    __salt__["vault_pki.update_issuer"](
+                        ref=issuer_id, name=issuer_name, mount=mount, **issuer_config
+                    )
+
+        # Reporting changes needs to be independent from applying issuer config (implicit changes)
+        if current is None or issuer_changes:
+            msg.append(f"{kind} issuer has been {'updated' if current else 'created'}")
+        if current is not None and issuer_changes:
+            ret["changes"].setdefault("issuer", {}).update(issuer_changes)
 
         ret["comment"] = ". ".join(msg) + "."
         ret["comment"] += "".join(f"\n\n{note}." for note in notes)
@@ -2615,7 +2688,15 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements
     except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
         if msg:
-            ret["comment"] = ". ".join(msg) + f", but received an exception later: {err}"
+            ret["comment"] = (
+                ". ".join(msg)
+                + "".join(f".\n\n{note}." for note in notes)
+                + (
+                    f"\n\nFailed because of an exception later: {err}"
+                    if notes
+                    else f", but received an exception later: {err}"
+                )
+            )
         else:
             ret["comment"] = str(err)
 
@@ -2624,6 +2705,7 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements
 
 def _check_issuer_config_changes(
     current,
+    cert_affected: bool,
     *,
     issuer_name: str | None = None,
     leaf_not_after_behavior: str | None = None,
@@ -2634,40 +2716,98 @@ def _check_issuer_config_changes(
     delta_crl_endpoints: list[str] | str | None = None,
     ocsp_servers: list[str] | str | None = None,
     aia_url_templating: bool | None = None,
-):
-    changes = {}
-    for vault_param, saltext_param, val in (
-        ("issuer_name", "issuer_name", issuer_name),
-        ("leaf_not_after_behavior", "leaf_not_after_behavior", leaf_not_after_behavior),
+    rotate_key: bool,
+    replace_key: bool,
+) -> tuple[
+    dict[str, typing.Any], dict[str, typing.Any], dict[str, typing.Any], dict[str, typing.Any]
+]:
+    """
+    Check for issuer changes. Returns a tuple of (changes, report_only, rotation_recovery, rotation_changes).
+
+    report_only contains changes like the changes dict, but they are a side effect of rotation.
+    Affects an unspecified ``issuer_name`` and ``revocation_signature_algorithm`` when the key changes.
+
+    rotation_recovery is a dict of unspecified parameters with their current values
+    that differ from their defaults on the current issuer that should be recovered.
+    We try not to touch issuer configuration that was unspecified, but they would be
+    reset when we rotate the certificate, exactly the opposite of the usual contract.
+
+    rotation_changes is a dict of changes to report when applying rotation_recovery is unsuccessful.
+    """
+    changes, report_only, rotation_recovery, rotation_changes = {}, {}, {}, {}
+
+    # Unlike most other params, do not retain issuer_name when rotating.
+    # We only rename non-default issuers when the default issuer is unnamed and has the correct cert.
+    # That heuristic is for recovery when the update_issuer call crashes after successful rotation.
+    # Otherwise, we fail because taking a name by force is highly unexpected.
+    if issuer_name is not None and current["issuer_name"] != issuer_name:
+        changes["issuer_name"] = {"old": current["issuer_name"], "new": issuer_name}
+    elif issuer_name is None and cert_affected and current["issuer_name"]:
+        report_only["issuer_name"] = {"old": current["issuer_name"], "new": ""}
+
+    if "enable_aia_url_templating" not in current:
+        # At least on OpenBao and older Vault releases, this is not reported if no URLs are set
+        current["enable_aia_url_templating"] = False
+
+    for vault_param, saltext_param, val, default in (
+        ("leaf_not_after_behavior", "leaf_not_after_behavior", leaf_not_after_behavior, "err"),
         (
             "revocation_signature_algorithm",
             "revocation_signature_algorithm",
             revocation_signature_algorithm,
+            None,
         ),
-        ("enable_aia_url_templating", "aia_url_templating", aia_url_templating),
+        ("enable_aia_url_templating", "aia_url_templating", aia_url_templating, False),
     ):
-        if val is not None:
-            # At least on OpenBao and older Vault releases, this is not reported if no URLs are set
-            if vault_param == "enable_aia_url_templating" and vault_param not in current:
-                current["enable_aia_url_templating"] = False
-            if vault_param not in current:
-                log.warning(
-                    "Ignoring specified param %s during changes check, the server likely does not support it",
-                    saltext_param,
-                )
-                continue
-            if current[vault_param] != val:
-                changes[saltext_param] = {"old": current[vault_param], "new": val}
+        if val is None:
+            if cert_affected:
+                # Try to preserve manual config during rotation
+                if vault_param == "revocation_signature_algorithm":
+                    # Here, the default and valid values depend on the key algo.
+                    if replace_key or rotate_key:
+                        # Don't recover when the key changes, or we risk breaking stuff.
+                        report_only[saltext_param] = {
+                            "old": current[vault_param],
+                            "new": "<key default>",
+                        }
+                    else:
+                        # Always recover when the key stays though, we don't know the default.
+                        rotation_recovery[saltext_param] = current[vault_param]
+                        rotation_changes[saltext_param] = {
+                            "old": current[vault_param],
+                            "new": "<key default>",
+                        }
+                elif current[vault_param] != default:
+                    rotation_recovery[saltext_param] = current[vault_param]
+                    rotation_changes[saltext_param] = {"old": current[vault_param], "new": default}
+            continue
+        if current[vault_param] != val:
+            changes[saltext_param] = {"old": current[vault_param], "new": val}
+
+    current_usage = set(hlp.deserialize_csl(current["usage"]))
+    current_usage.add("read-only")  # always allowed, in case it's dropped from response
+    default_usage = {
+        "read-only",
+        "issuing-certificates",
+        "crl-signing",
+        "ocsp-signing",
+    }
     if usage is not None:
-        wanted = set(hlp.deserialize_csl(usage))
-        cur = set(hlp.deserialize_csl(current["usage"]))
-        cur.discard("read-only")  # always allowed
-        wanted.discard("read-only")
-        if cur != wanted:
-            changes["usage"] = {
-                "added": list(sorted(wanted - cur)),
-                "removed": list(sorted(cur - wanted)),
+        wanted_usage = set(hlp.deserialize_csl(usage))
+        wanted_usage.add("read-only")
+        if current_usage != wanted_usage:
+            change = {
+                "added": list(sorted(wanted_usage - current_usage)),
+                "removed": list(sorted(current_usage - wanted_usage)),
             }
+            changes["usage"] = change
+    elif cert_affected and current_usage != default_usage:
+        rotation_recovery["usage"] = current["usage"]
+        rotation_changes["usage"] = {
+            "added": list(sorted(default_usage - current_usage)),
+            "removed": list(sorted(current_usage - default_usage)),
+        }
+
     for vault_param, saltext_param, val in (
         ("issuing_certificates", "aia_urls", hlp.deserialize_csl(aia_urls)),
         ("crl_distribution_points", "crl_endpoints", hlp.deserialize_csl(crl_endpoints)),
@@ -2678,16 +2818,23 @@ def _check_issuer_config_changes(
         ),
         ("ocsp_servers", "ocsp_servers", hlp.deserialize_csl(ocsp_servers)),
     ):
-        if val is not None:
-            # At least on OpenBao and older Vault releases, none of these are reported if all are unset
-            if vault_param not in current:
-                current[vault_param] = []
-            if current[vault_param] != val:
-                changes[saltext_param] = {
-                    "added": list(sorted(set(val) - set(current[vault_param]))),
-                    "removed": list(sorted(set(current[vault_param]) - set(val))),
+        # At least on OpenBao and older Vault releases, none of these are reported if all are unset
+        if vault_param not in current:
+            current[vault_param] = []
+        if val is None:
+            if cert_affected and current[vault_param]:
+                rotation_recovery[saltext_param] = current[vault_param]
+                rotation_changes[saltext_param] = {
+                    "added": [],
+                    "removed": hlp.deserialize_csl(current[vault_param]),
                 }
-    return changes
+            continue
+        if current[vault_param] != val:
+            changes[saltext_param] = {
+                "added": list(sorted(set(val) - set(current[vault_param]))),
+                "removed": list(sorted(set(current[vault_param]) - set(val))),
+            }
+    return changes, report_only, rotation_recovery, rotation_changes
 
 
 def _validate_ttl_params(
@@ -2901,7 +3048,7 @@ def _report_ski(changes: dict[str, typing.Any], mount: str) -> dict[str, typing.
 
 def _rotate_out(issuer_info, issuer_name, mount, *, test=None):
     test = test or __opts__["test"]
-    upd_params, rename_changes = {}, {"issuer_id": issuer_info["issuer_id"]}
+    upd_params, rename_changes = {}, {}
     if issuer_name and issuer_info["issuer_name"] == issuer_name:
         upd_params["name"] = f"{issuer_info['issuer_name']}-{'<TBD>' if test else int(time.time())}"
         rename_changes["issuer_name"] = {
@@ -2918,4 +3065,6 @@ def _rotate_out(issuer_info, issuer_name, mount, *, test=None):
         rename_changes["usage"] = {"removed": ["issuing-certificates"]}
     if upd_params and not test:
         __salt__["vault_pki.update_issuer"](ref=issuer_info["issuer_id"], **upd_params, mount=mount)
+    if rename_changes:
+        rename_changes["issuer_id"] = issuer_info["issuer_id"]
     return rename_changes
