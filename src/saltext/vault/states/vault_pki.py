@@ -95,7 +95,7 @@ VALID_FILE_ARGS = (
 )
 
 
-def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
+def certificate_managed(
     name,
     common_name=None,
     role_name=None,
@@ -142,8 +142,8 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
         If read access to the URL configuration is denied, URL-derived extensions
         are not verified and a note is appended to the state's comment instead.
 
-        Also, when ``issuer_ref`` is unspecified, now uses the generic ``{mount}/sign*``
-        endpoints instead of the issuer-specific ``{mount}/issuer/{issuer_ref}/sign/{role_name}``
+        Also, when ``issuer_ref`` is unspecified, now uses the generic ``<mount>/sign*``
+        endpoints instead of the issuer-specific ``<mount>/issuer/<issuer_ref>/sign/<role_name>``
         with the explicit issuer_ref from the role.
 
     Required policy:
@@ -152,7 +152,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
 
         # Need to read the role configuration in case of missing issuer_ref
         # and to more accurately predict changes.
-        path "{mount}/roles/{role_name}" {
+        path "<mount>/roles/<role_name>" {
             capabilities = ["read"]
         }
 
@@ -164,7 +164,7 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
         }
 
         # Read issuer for URL configuration and CA chain. issuer_ref becomes `default` if unspecified
-        path "{mount}/issuer/{issuer_ref}" {
+        path "<mount>/issuer/<issuer_ref>" {
             capabilities = ["read"]
         }
 
@@ -362,88 +362,32 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
               it to the latter, specify it as ``file_encoding`` instead.
     """
 
-    ret = {
-        "name": name,
-        "changes": {},
-        "result": True,
-        "comment": "The certificate is in the correct state",
-    }
-
-    changes = {}
-    ca_chain = []
-    verb = "create"
-    aia_note = None
-    file_args, cert_args = _split_file_kwargs(
-        hlp.filter_state_internal_kwargs(kwargs, ("check_cmd",))
-    )
-
-    try:
-        hlp.one_of(private_key=private_key, csr=csr)
-        if not sign_verbatim and not role_name:
-            raise SaltInvocationError("`role_name` is required when `sign_verbatim` is false")
-
-        encoding = hlp.in_vals(("der", "pem", "pkcs7_der", "pkcs7_pem"), encoding=encoding)
-
-        if encoding == "der" and append_ca_chain:
-            raise SaltInvocationError(
-                "Cannot append the CA chain to DER-encoded certificates. "
-                "Use pkcs7_der if you need a binary encoding including the chain."
-            )
-
-        ttl_seconds = timestring_map(ttl, cast=int)
-        _validate_ttl_params(ttl_seconds, timestring_map(ttl_remaining, cast=int), not_after)
-
-        if not sign_verbatim:
+    if not sign_verbatim:
+        try:
+            if not role_name:
+                raise SaltInvocationError("`role_name` is required when `sign_verbatim` is false")
             hlp.none_of(
                 key_usage=key_usage,
                 ext_key_usage=ext_key_usage,
                 ext_key_usage_oids=ext_key_usage_oids,
                 _reason="sign_verbatim is false",
             )
+        except SaltInvocationError as err:
+            return {"name": name, "result": False, "comment": str(err), "changes": {}}
 
-        # check file.managed changes early to avoid using unnecessary resources
-        file_managed_test = _run_state("file.managed", name, test=True, replace=False, **file_args)
-        if file_managed_test["result"] is False:
-            ret["result"] = False
-            ret["comment"] = "Problem while testing file.managed changes, see its output"
-            _add_sub_state_run(ret, file_managed_test)
-            return ret
+    file_args, cert_args = _split_file_kwargs(
+        hlp.filter_state_internal_kwargs(kwargs, ("check_cmd",))
+    )
+    # An empty role_name and thus role_info is allowed when signing verbatim
+    role_info: dict[str, typing.Any] = {}
+    max_ttl = 0
 
-        if "is not present and is not set for creation" in file_managed_test["comment"]:
-            _add_sub_state_run(ret, file_managed_test)
-            return ret
-
-        file_exists = None
-        # handle follow_symlinks
-        if __salt__["file.is_link"](name):
-            if file_args.get("follow_symlinks", True):
-                name = os.path.realpath(name)
-            else:
-                if not __opts__["test"]:
-                    # workaround https://github.com/saltstack/salt/issues/31802
-                    __salt__["file.remove"](name)
-                changes["replaced"] = True
-                file_exists = False
-
-        if file_exists is None:
-            file_exists = __salt__["file.file_exists"](name)
-
+    def setup():
+        nonlocal alt_names, issuer_ref, role_info
         if role_name is not None:
             role_info = __salt__["vault_pki.read_role"](role_name, mount=mount)
             if role_info is None:
                 raise CommandExecutionError(f"Role {role_name} does not exist")
-        else:
-            # allowed when signing verbatim
-            role_info = {}
-
-        if max_ttl := timestring_map(role_info.get("max_ttl") or 0, cast=int):
-            # A max_ttl > 0 enforces a hard cutoff on the certificate lifetime.
-            _validate_issuance_cutoff(
-                datetime.now(tz=timezone.utc) + timedelta(seconds=max_ttl),
-                "the role's `max_ttl`",
-                not_after,
-                timestring_map(ttl_remaining, cast=int),
-            )
 
         if csr and alt_names and role_info.get("use_csr_sans", True):
             # SANs don't fall back to alt_names (we simulate that when generating a CSR on the fly).
@@ -455,161 +399,93 @@ def certificate_managed(  # pylint: disable=too-many-locals,too-many-statements
 
         if issuer_ref is None:
             issuer_ref = role_info.get("issuer_ref", "default")
+        return issuer_ref
 
-        issuer_info = __salt__["vault_pki.read_issuer"](issuer_ref or "default", mount=mount)
-        if issuer_info is None:
-            raise CommandExecutionError(
-                f"Issuer '{issuer_ref or 'default'}' does not exist on mount {mount}"
+    def validate_cutoffs(_issuer_info):
+        nonlocal max_ttl
+        if max_ttl := timestring_map(role_info.get("max_ttl") or 0, cast=int):
+            # A max_ttl > 0 enforces a hard cutoff on the certificate lifetime.
+            # Ensure that does not make this state always non-idempotent/fail.
+            _validate_issuance_cutoff(
+                datetime.now(tz=timezone.utc) + timedelta(seconds=max_ttl),
+                "the role's `max_ttl`",
+                not_after,
+                timestring_map(ttl_remaining, cast=int),
             )
 
-        if append_ca_chain:
-            ca_chain = [x509util.load_cert(x) for x in issuer_info["ca_chain"]]
-            # Filter self-signed CA, which shouldn't be in the chain.
-            ca_chain = [
-                cert
-                for cert in ca_chain
-                if cert.subject.rfc4514_string() != cert.issuer.rfc4514_string()
-            ]
+    def check_cert(current, issuer_info, urls, ca_chain):
+        ttl_seconds = timestring_map(ttl, cast=int)
+        return pki.check_cert_for_changes(
+            current=current,
+            issuer=issuer_info["certificate"],
+            private_key=private_key,
+            csr=csr,
+            encoding=encoding,
+            sign_verbatim=sign_verbatim,
+            alt_names=alt_names,
+            append_chain=ca_chain,
+            common_name=common_name,
+            exclude_cn_from_sans=exclude_cn_from_sans,
+            expire_tolerance=ttl_remaining,
+            ext_key_usage=ext_key_usage,
+            ext_key_usage_oids=ext_key_usage_oids,
+            key_usage=key_usage,
+            not_after=not_after,
+            private_key_passphrase=private_key_passphrase,
+            role_info=role_info,
+            serial_number=serial_number,
+            # The effective validity is capped by the role's max_ttl, if a role is used (not required for sign_verbatim)
+            ttl=min(ttl_seconds, max_ttl) if max_ttl else ttl_seconds,
+            urls=urls,
+            user_ids=user_ids,
+            **cert_args,
+        )
 
-        if file_exists:
-            if reissue:
-                # No need to make any checks, just replace the cert
-                changes["replaced"] = True
-            else:
-                urls = _get_urls(issuer_info, mount=mount)
-                changes, unverified_url_exts = pki.check_cert_for_changes(
-                    current=name,
-                    issuer=issuer_info["certificate"],
-                    private_key=private_key,
-                    csr=csr,
-                    encoding=encoding,
-                    sign_verbatim=sign_verbatim,
-                    alt_names=alt_names,
-                    append_chain=ca_chain,
-                    common_name=common_name,
-                    exclude_cn_from_sans=exclude_cn_from_sans,
-                    expire_tolerance=ttl_remaining,
-                    ext_key_usage=ext_key_usage,
-                    ext_key_usage_oids=ext_key_usage_oids,
-                    key_usage=key_usage,
-                    not_after=not_after,
-                    private_key_passphrase=private_key_passphrase,
-                    role_info=role_info,
-                    serial_number=serial_number,
-                    # The effective validity is capped by the role's max_ttl, if a role is used (not required for sign_verbatim)
-                    ttl=min(ttl_seconds, max_ttl) if max_ttl else ttl_seconds,
-                    urls=urls,
-                    user_ids=user_ids,
-                    **cert_args,
-                )
-                if unverified_url_exts:
-                    aia_note = (
-                        "Note: URL-derived certificate extensions (AIA) were not verified since "
-                        f"the URL configuration of mount `{mount}` could not be read/rendered"
-                    )
+    def sign():
+        issued_cert = __salt__["vault_pki.sign_certificate"](
+            common_name=common_name,
+            role_name=role_name,
+            private_key=private_key,
+            private_key_passphrase=private_key_passphrase,
+            csr=csr,
+            # Vault rejects requests specifying both ttl and not_after
+            ttl=None if not_after else ttl,
+            issuer_ref=issuer_ref,
+            mount=mount,
+            sign_verbatim=sign_verbatim,
+            remove_roots_from_chain=False,
+            alt_names=alt_names,
+            exclude_cn_from_sans=exclude_cn_from_sans,
+            not_after=not_after,
+            serial_number=serial_number,
+            user_ids=user_ids,
+            key_usage=key_usage,
+            ext_key_usage=ext_key_usage,
+            ext_key_usage_oids=ext_key_usage_oids,
+            **cert_args,
+        )
+        return issued_cert["certificate"]
 
-        else:
-            changes["created"] = True
-
-        if not changes and file_managed_test["result"] and not file_managed_test["changes"]:
-            if aia_note:
-                ret["comment"] += f"\n\n{aia_note}."
-            _add_sub_state_run(ret, file_managed_test)
-            return ret
-
-        ret["changes"] = changes
-        if changes and file_exists:
-            verb = "reissue"
-
-        if __opts__["test"]:
-            ret["result"] = None if changes else True
-            ret["comment"] = (
-                f"The certificate would have been {verb}d" if changes else ret["comment"]
-            )
-            if aia_note:
-                ret["comment"] += f"\n\n{aia_note}."
-            _add_sub_state_run(ret, file_managed_test)
-            return ret
-
-        cert = None
-        if changes:
-            if not set(changes) - {
-                "ca_chain",
-                "encoding",
-            }:
-                verb = "recreate"
-                cert = __salt__["x509.encode_certificate"](
-                    name,
-                    append_certs=ca_chain,
-                    encoding=encoding,
-                )
-            else:
-                issued_cert = __salt__["vault_pki.sign_certificate"](
-                    common_name=common_name,
-                    role_name=role_name,
-                    private_key=private_key,
-                    private_key_passphrase=private_key_passphrase,
-                    csr=csr,
-                    # Vault rejects requests specifying both ttl and not_after
-                    ttl=None if not_after else ttl,
-                    issuer_ref=issuer_ref,
-                    mount=mount,
-                    sign_verbatim=sign_verbatim,
-                    remove_roots_from_chain=False,
-                    alt_names=alt_names,
-                    exclude_cn_from_sans=exclude_cn_from_sans,
-                    not_after=not_after,
-                    serial_number=serial_number,
-                    user_ids=user_ids,
-                    key_usage=key_usage,
-                    ext_key_usage=ext_key_usage,
-                    ext_key_usage_oids=ext_key_usage_oids,
-                    **cert_args,
-                )
-                cert = __salt__["x509.encode_certificate"](
-                    issued_cert["certificate"],
-                    append_certs=ca_chain,
-                    encoding=encoding,
-                )
-
-            ret["comment"] = f"The certificate has been {verb}d"
-
-            if encoding not in ["pem", "pkcs7_pem"]:
-                # file.managed does not support binary contents, so create
-                # an empty file first (makedirs). This does not work with check_cmd!
-                file_managed_ret = _run_state("file.managed", name, replace=False, **file_args)
-                _add_sub_state_run(ret, file_managed_ret)
-                if not _check_file_ret(file_managed_ret, ret, file_exists):
-                    return ret
-                hlp.safe_atomic_write(
-                    name,
-                    base64.b64decode(cert),
-                    __salt__["config.backup_mode"](file_args.get("backup", "")),
-                    __opts__["cachedir"],
-                )
-
-        if not changes or encoding in ["pem", "pkcs7_pem"]:
-            replace = bool(encoding in ["pem", "pkcs7_pem"] and changes)
-            contents = cert if replace else None
-            file_managed_ret = _run_state(
-                "file.managed", name, contents=contents, replace=replace, **file_args
-            )
-            _add_sub_state_run(ret, file_managed_ret)
-            if not _check_file_ret(file_managed_ret, ret, file_exists):
-                return ret
-
-        if aia_note:
-            ret["comment"] += f"\n\n{aia_note}."
-
-    except (CommandExecutionError, SaltInvocationError) as err:
-        ret["result"] = False
-        ret["comment"] = str(err)
-        ret["changes"] = {}
-
-    return ret
+    return _certificate_file_managed(
+        name,
+        private_key=private_key,
+        csr=csr,
+        mount=mount,
+        ttl=ttl,
+        ttl_remaining=ttl_remaining,
+        not_after=not_after,
+        encoding=encoding,
+        append_ca_chain=append_ca_chain,
+        file_args=file_args,
+        setup=setup,
+        validate_cutoffs=validate_cutoffs,
+        check_cert=check_cert,
+        sign=sign,
+        reissue=reissue,
+    )
 
 
-def ca_certificate_managed(  # pylint: disable=too-many-locals
+def ca_certificate_managed(
     name,
     common_name=None,
     *,
@@ -661,7 +537,7 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
         }
 
         # Read issuer for URL configuration and CA chain. issuer_ref becomes `default` if unspecified
-        path "{mount}/issuer/{issuer_ref}" {
+        path "<mount>/issuer/<issuer_ref>" {
             capabilities = ["read"]
         }
 
@@ -851,69 +727,13 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
               it to the latter, specify it as ``file_encoding`` instead.
     """
 
-    ret = {
-        "name": name,
-        "changes": {},
-        "result": True,
-        "comment": "The certificate is in the correct state",
-    }
-
-    changes = {}
-    ca_chain = []
-    verb = "create"
-    aia_note = None
     file_args, cert_args = _split_file_kwargs(
         hlp.filter_state_internal_kwargs(kwargs, ("check_cmd",))
     )
+    issuer_expiry = None
 
-    try:
-        hlp.one_of(private_key=private_key, csr=csr)
-
-        encoding = hlp.in_vals(("der", "pem", "pkcs7_der", "pkcs7_pem"), encoding=encoding)
-
-        if encoding == "der" and append_ca_chain:
-            raise SaltInvocationError(
-                "Cannot append the CA chain to DER-encoded certificates. "
-                "Use pkcs7_der if you need a binary encoding including the chain."
-            )
-
-        ttl_seconds = timestring_map(ttl, cast=int)
-        _validate_ttl_params(ttl_seconds, timestring_map(ttl_remaining, cast=int), not_after)
-
-        # check file.managed changes early to avoid using unnecessary resources
-        file_managed_test = _run_state("file.managed", name, test=True, replace=False, **file_args)
-        if file_managed_test["result"] is False:
-            ret["result"] = False
-            ret["comment"] = "Problem while testing file.managed changes, see its output"
-            _add_sub_state_run(ret, file_managed_test)
-            return ret
-
-        if "is not present and is not set for creation" in file_managed_test["comment"]:
-            _add_sub_state_run(ret, file_managed_test)
-            return ret
-
-        file_exists = None
-        # handle follow_symlinks
-        if __salt__["file.is_link"](name):
-            if file_args.get("follow_symlinks", True):
-                name = os.path.realpath(name)
-            else:
-                if not __opts__["test"]:
-                    # workaround https://github.com/saltstack/salt/issues/31802
-                    __salt__["file.remove"](name)
-                changes["replaced"] = True
-                file_exists = False
-
-        if file_exists is None:
-            file_exists = __salt__["file.file_exists"](name)
-
-        issuer_info = __salt__["vault_pki.read_issuer"](issuer_ref or "default", mount=mount)
-        if issuer_info is None:
-            raise CommandExecutionError(
-                f"Issuer '{issuer_ref or 'default'}' does not exist on mount {mount}"
-            )
-
-        issuer_expiry = None
+    def validate_cutoffs(issuer_info):
+        nonlocal issuer_expiry
         if not (
             issuer_info.get("leaf_not_after_behavior") == "permit"
             and cert_args.get("enforce_leaf_not_after_behavior")
@@ -929,6 +749,216 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
                 timestring_map(ttl_remaining, cast=int),
             )
 
+    def check_cert(current, issuer_info, urls, ca_chain):
+        effective_ttl = ttl_seconds = timestring_map(ttl, cast=int)
+        if issuer_expiry is not None:
+            # The effective validity is capped by the signing issuer's expiry. Ensure we report that correctly.
+            effective_ttl = min(
+                ttl_seconds,
+                int((issuer_expiry - datetime.now(tz=timezone.utc)).total_seconds()),
+            )
+        return pki.check_ca_cert_for_changes(
+            current=current,
+            issuer=issuer_info["certificate"],
+            private_key=private_key,
+            private_key_passphrase=private_key_passphrase,
+            csr=csr,
+            encoding=encoding,
+            append_chain=ca_chain,
+            sign_verbatim=sign_verbatim,
+            alt_names=alt_names,
+            common_name=common_name,
+            country=country,
+            exclude_cn_from_sans=exclude_cn_from_sans,
+            excluded_alt_names=excluded_alt_names,
+            ttl_remaining=ttl_remaining,
+            key_usage=key_usage,
+            locality=locality,
+            max_path_length=max_path_length,
+            not_after=not_after,
+            not_before_duration=not_before_duration,
+            organization=organization,
+            ou=ou,
+            permitted_alt_names=permitted_alt_names,
+            postal_code=postal_code,
+            province=province,
+            serial_number=serial_number,
+            signature_bits=signature_bits,
+            street_address=street_address,
+            ttl=effective_ttl,
+            urls=urls,
+            **cert_args,
+        )
+
+    def sign():
+        nonlocal not_after
+        if not_after is None:
+            # Requested TTLs are capped at the mount's max_lease_ttl (768h by default),
+            # `not_after` is not. CA certificates usually exceed that limit, so translate.
+            not_after = (
+                datetime.now(tz=timezone.utc) + timedelta(seconds=timestring_map(ttl, cast=int))
+            ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        issued_cert = __salt__["vault_pki.sign_intermediate"](
+            common_name=common_name,
+            private_key=private_key,
+            private_key_passphrase=private_key_passphrase,
+            csr=csr,
+            issuer_ref=issuer_ref,
+            mount=mount,
+            sign_verbatim=sign_verbatim,
+            alt_names=alt_names,
+            country=country,
+            exclude_cn_from_sans=exclude_cn_from_sans,
+            excluded_alt_names=excluded_alt_names,
+            expire_tolerance=ttl_remaining,
+            key_usage=key_usage,
+            locality=locality,
+            max_path_length=max_path_length,
+            not_after=not_after,
+            not_before_duration=not_before_duration,
+            organization=organization,
+            ou=ou,
+            permitted_alt_names=permitted_alt_names,
+            postal_code=postal_code,
+            province=province,
+            serial_number=serial_number,
+            signature_bits=signature_bits,
+            street_address=street_address,
+            **cert_args,
+        )
+        return issued_cert["certificate"]
+
+    return _certificate_file_managed(
+        name,
+        private_key=private_key,
+        csr=csr,
+        mount=mount,
+        ttl=ttl,
+        ttl_remaining=ttl_remaining,
+        not_after=not_after,
+        encoding=encoding,
+        append_ca_chain=append_ca_chain,
+        file_args=file_args,
+        setup=lambda: issuer_ref,
+        validate_cutoffs=validate_cutoffs,
+        check_cert=check_cert,
+        sign=sign,
+    )
+
+
+def _certificate_file_managed(
+    name,
+    *,
+    private_key,
+    csr,
+    mount,
+    ttl,
+    ttl_remaining,
+    not_after,
+    encoding,
+    append_ca_chain,
+    file_args,
+    setup,
+    validate_cutoffs,
+    check_cert,
+    sign,
+    reissue=False,
+):
+    """
+    Shared implementation for managing a local certificate file whose certificate
+    is signed by a Vault issuer, backing ``certificate_managed`` and
+    ``ca_certificate_managed``. Parameters that are specific to this function:
+
+    file_args
+        Keyword arguments for the ``file.managed`` calls, split off the state's ``kwargs``.
+
+    setup
+        Callback gathering further requirements, run after the preliminary
+        file checks. Returns the reference of the signing issuer, where None
+        means the mount's default issuer.
+
+    validate_cutoffs
+        Callback ensuring hard cutoffs enforced remotely during issuance
+        (such as a role's ``max_ttl`` or the signing issuer's expiry) do not
+        interfere with the requested certificate lifecycle parameters.
+        Receives the issuer info. Called before changes are checked.
+
+    check_cert
+        Callback checking the current certificate against the desired state.
+        Receives the (symlink-resolved) path of the current certificate file,
+        the signing issuer's info, the mount's effective URL configuration and
+        the CA chain to append, returns a tuple of (certificate changes,
+        whether URL-derived extensions could not be verified).
+
+    sign
+        Callback requesting the new certificate from Vault. Returns the certificate.
+
+    reissue
+        Unconditionally request a new certificate. Defaults to false.
+    """
+
+    ret = {
+        "name": name,
+        "changes": {},
+        "result": True,
+        "comment": "The certificate is in the correct state",
+    }
+
+    changes = {}
+    ca_chain = []
+    verb = "create"
+    aia_note = None
+
+    try:
+        hlp.one_of(private_key=private_key, csr=csr)
+        encoding = hlp.in_vals(("der", "pem", "pkcs7_der", "pkcs7_pem"), encoding=encoding)
+        if encoding == "der" and append_ca_chain:
+            raise SaltInvocationError(
+                "Cannot append the CA chain to DER-encoded certificates. "
+                "Use pkcs7_der if you need a binary encoding including the chain."
+            )
+
+        _validate_ttl_params(
+            timestring_map(ttl, cast=int), timestring_map(ttl_remaining, cast=int), not_after
+        )
+
+        # check file.managed changes early to avoid using unnecessary resources
+        file_managed_test = _run_state("file.managed", name, test=True, replace=False, **file_args)
+        if file_managed_test["result"] is False:
+            ret["result"] = False
+            ret["comment"] = "Problem while testing file.managed changes, see its output"
+            _add_sub_state_run(ret, file_managed_test)
+            return ret
+        if "is not present and is not set for creation" in file_managed_test["comment"]:
+            _add_sub_state_run(ret, file_managed_test)
+            return ret
+
+        file_exists = None
+        # handle follow_symlinks
+        if __salt__["file.is_link"](name):
+            if file_args.get("follow_symlinks", True):
+                name = os.path.realpath(name)
+            else:
+                if not __opts__["test"]:
+                    # workaround https://github.com/saltstack/salt/issues/31802
+                    __salt__["file.remove"](name)
+                changes["replaced"] = True
+                file_exists = False
+        if file_exists is None:
+            file_exists = __salt__["file.file_exists"](name)
+
+        issuer_ref = setup()
+        issuer_info = __salt__["vault_pki.read_issuer"](issuer_ref or "default", mount=mount)
+        if issuer_info is None:
+            raise CommandExecutionError(
+                f"Issuer '{issuer_ref or 'default'}' does not exist on mount {mount}"
+            )
+
+        # Always ensure remote factors (issuer validity or role max_ttl) don't cause non-idempotency.
+        # Without this, we would always report success and reissue a certificate on the next run
+        # or always fail because Vault would deny issuance anyways, depending on the issuer's leaf_not_after_behavior.
+        validate_cutoffs(issuer_info)
+
         if append_ca_chain:
             ca_chain = [x509util.load_cert(x) for x in issuer_info["ca_chain"]]
             # Filter self-signed CA, which shouldn't be in the chain.
@@ -939,51 +969,17 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
             ]
 
         if file_exists:
-            urls = _get_urls(issuer_info, mount=mount)
-            effective_ttl = ttl_seconds
-            if issuer_expiry is not None:
-                # The effective validity is capped by the signing issuer's expiry
-                effective_ttl = min(
-                    ttl_seconds,
-                    int((issuer_expiry - datetime.now(tz=timezone.utc)).total_seconds()),
-                )
-            changes, unverified_url_exts = pki.check_ca_cert_for_changes(
-                current=name,
-                issuer=issuer_info["certificate"],
-                private_key=private_key,
-                private_key_passphrase=private_key_passphrase,
-                csr=csr,
-                encoding=encoding,
-                append_chain=ca_chain,
-                sign_verbatim=sign_verbatim,
-                alt_names=alt_names,
-                common_name=common_name,
-                country=country,
-                exclude_cn_from_sans=exclude_cn_from_sans,
-                excluded_alt_names=excluded_alt_names,
-                ttl_remaining=ttl_remaining,
-                key_usage=key_usage,
-                locality=locality,
-                max_path_length=max_path_length,
-                not_after=not_after,
-                not_before_duration=not_before_duration,
-                organization=organization,
-                ou=ou,
-                permitted_alt_names=permitted_alt_names,
-                postal_code=postal_code,
-                province=province,
-                serial_number=serial_number,
-                signature_bits=signature_bits,
-                street_address=street_address,
-                ttl=effective_ttl,
-                urls=urls,
-                **cert_args,
-            )
-            if unverified_url_exts:
-                aia_note = (
-                    "Note: URL-derived certificate extensions (AIA) were not verified since "
-                    f"the URL configuration of mount `{mount}` could not be read/rendered"
-                )
+            if reissue:
+                # No need to make any checks, just replace the cert
+                changes["replaced"] = True
+            else:
+                urls = _get_urls(issuer_info, mount=mount)
+                changes, unverified_url_exts = check_cert(name, issuer_info, urls, ca_chain)
+                if unverified_url_exts:
+                    aia_note = (
+                        "Note: URL-derived certificate extensions (AIA) were not verified since "
+                        f"the URL configuration of mount `{mount}` could not be read/rendered"
+                    )
 
         else:
             changes["created"] = True
@@ -1008,84 +1004,45 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
             _add_sub_state_run(ret, file_managed_test)
             return ret
 
-        cert = None
+        reissued_cert = None
         if changes:
             if not set(changes) - {
                 "ca_chain",
                 "encoding",
             }:
                 verb = "recreate"
-                cert = __salt__["x509.encode_certificate"](
-                    name,
-                    append_certs=ca_chain,
-                    encoding=encoding,
-                )
+                cert_to_encode = name
             else:
-                if not_after is None:
-                    # Requested TTLs are capped at the mount's max_lease_ttl (768h by default),
-                    # `not_after` is not. CA certificates usually exceed that limit.
-                    not_after = (
-                        datetime.now(tz=timezone.utc) + timedelta(seconds=ttl_seconds)
-                    ).strftime("%Y-%m-%dT%H:%M:%SZ")
-                issued_cert = __salt__["vault_pki.sign_intermediate"](
-                    common_name=common_name,
-                    private_key=private_key,
-                    private_key_passphrase=private_key_passphrase,
-                    csr=csr,
-                    issuer_ref=issuer_ref,
-                    mount=mount,
-                    sign_verbatim=sign_verbatim,
-                    alt_names=alt_names,
-                    country=country,
-                    exclude_cn_from_sans=exclude_cn_from_sans,
-                    excluded_alt_names=excluded_alt_names,
-                    expire_tolerance=ttl_remaining,
-                    key_usage=key_usage,
-                    locality=locality,
-                    max_path_length=max_path_length,
-                    not_after=not_after,
-                    not_before_duration=not_before_duration,
-                    organization=organization,
-                    ou=ou,
-                    permitted_alt_names=permitted_alt_names,
-                    postal_code=postal_code,
-                    province=province,
-                    serial_number=serial_number,
-                    signature_bits=signature_bits,
-                    street_address=street_address,
-                    **cert_args,
-                )
-                cert = __salt__["x509.encode_certificate"](
-                    issued_cert["certificate"],
-                    append_certs=ca_chain,
-                    encoding=encoding,
-                )
+                cert_to_encode = sign()
+            reissued_cert = __salt__["x509.encode_certificate"](
+                cert_to_encode,
+                append_certs=ca_chain,
+                encoding=encoding,
+            )
 
             ret["comment"] = f"The certificate has been {verb}d"
 
-            if encoding not in ["pem", "pkcs7_pem"]:
-                # file.managed does not support binary contents, so create
-                # an empty file first (makedirs). This does not work with check_cmd!
-                file_managed_ret = _run_state("file.managed", name, replace=False, **file_args)
-                _add_sub_state_run(ret, file_managed_ret)
-                if not _check_file_ret(file_managed_ret, ret, file_exists):
-                    return ret
-                hlp.safe_atomic_write(
-                    name,
-                    base64.b64decode(cert),
-                    __salt__["config.backup_mode"](file_args.get("backup", "")),
-                    __opts__["cachedir"],
-                )
-
-        if not changes or encoding in ["pem", "pkcs7_pem"]:
-            replace = bool(encoding in ["pem", "pkcs7_pem"] and changes)
-            contents = cert if replace else None
-            file_managed_ret = _run_state(
-                "file.managed", name, contents=contents, replace=replace, **file_args
+        # If we're here, we detected file.managed changes in the initial test above and/or reissued the certificate.
+        # If we do not need the contents to change or if we have binary contents (not supported by file.managed),
+        # just ensure the file exists in the correct state. PEM-encoded contents can be applied directly.
+        # Note: `check_cmd` could fail with binary contents since we only write them after file.managed runs. Fix if someone asks. :)
+        replace = bool(encoding in ("pem", "pkcs7_pem") and reissued_cert)
+        contents = reissued_cert if replace else None
+        file_managed_ret = _run_state(
+            "file.managed", name, contents=contents, replace=replace, **file_args
+        )
+        _add_sub_state_run(ret, file_managed_ret)
+        if not _check_file_ret(file_managed_ret, ret, file_exists):
+            return ret
+        if reissued_cert and not replace:
+            # We reissued in some binary format. The file (and thus parent directories) exist for sure,
+            # just add the contents that could not be written with file.managed earlier.
+            hlp.safe_atomic_write(
+                name,
+                base64.b64decode(reissued_cert),
+                __salt__["config.backup_mode"](file_args.get("backup", "")),
+                __opts__["cachedir"],
             )
-            _add_sub_state_run(ret, file_managed_ret)
-            if not _check_file_ret(file_managed_ret, ret, file_exists):
-                return ret
 
         if aia_note:
             ret["comment"] += f"\n\n{aia_note}."
@@ -1100,7 +1057,7 @@ def ca_certificate_managed(  # pylint: disable=too-many-locals
 
 def role_managed(name, mount="pki", issuer_ref=None, ttl=None, max_ttl=None, **kwargs):
     """
-    Ensures PKI role is present and configured as required.
+    Ensure a PKI role is present and configured as specified.
 
     name
         Name of the role.
@@ -1186,26 +1143,24 @@ def role_managed(name, mount="pki", issuer_ref=None, ttl=None, max_ttl=None, **k
     changes = {}
 
     try:
-        current = __salt__["vault_pki.read_role"](name, mount=mount)
-
-        if current:
-            changes = _diff_params(current)
-            if not changes:
+        if current := __salt__["vault_pki.read_role"](name, mount=mount):
+            if not (changes := _diff_params(current)):
                 return ret
+        else:
+            changes["created"] = name
 
-        ret["changes"].update(changes)
-        if not current:
-            ret["changes"]["created"] = name
+        ret["changes"] = changes
+
         if __opts__["test"]:
             ret["result"] = None
             ret["comment"] = (
                 f"PKI role `{name}` would have been {'updated' if current else 'created'}"
             )
             return ret
+
         __salt__["vault_pki.write_role"](
             name=name, mount=mount, issuer_ref=issuer_ref, ttl=ttl, max_ttl=max_ttl, **kwargs
         )
-
         ret["comment"] = f"PKI role `{name}` has been {'updated' if current else 'created'}"
     except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
@@ -1217,14 +1172,13 @@ def role_managed(name, mount="pki", issuer_ref=None, ttl=None, max_ttl=None, **k
 
 def role_absent(name, mount="pki"):
     """
-    Ensure PKI role is absent.
+    Ensure a PKI role is absent.
 
     name
         Name of the role.
 
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
-
     """
 
     ret = {
@@ -1236,7 +1190,6 @@ def role_absent(name, mount="pki"):
 
     try:
         current = __salt__["vault_pki.read_role"](name, mount=mount)
-
         if current is None:
             ret["comment"] = f"PKI role `{name}` is already absent."
             return ret
@@ -1249,7 +1202,6 @@ def role_absent(name, mount="pki"):
             return ret
 
         __salt__["vault_pki.delete_role"](name, mount=mount)
-
         ret["comment"] = f"PKI role `{name}` has been deleted."
 
     except (CommandExecutionError, SaltInvocationError) as err:
@@ -1718,6 +1670,7 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
     mount
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
+
     try:
         _validate_ttl_params(
             days_valid * 86400,
