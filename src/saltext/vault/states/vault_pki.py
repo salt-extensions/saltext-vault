@@ -992,12 +992,14 @@ def _certificate_file_managed(
         file_managed_test = _run_state("file.managed", name, test=True, replace=False, **file_args)
         if file_managed_test["result"] is False:
             ret["result"] = False
-            ret["comment"] = "Problem while testing file.managed changes, see its output"
-            _add_sub_state_run(ret, file_managed_test)
-            return ret
+            return _ret(
+                ret,
+                "Problem while testing file.managed changes, see its output",
+                notes,
+                sub=file_managed_test,
+            )
         if "is not present and is not set for creation" in file_managed_test["comment"]:
-            _add_sub_state_run(ret, file_managed_test)
-            return ret
+            return _ret(ret, sub=file_managed_test)
 
         file_exists = None
         # handle follow_symlinks
@@ -1043,7 +1045,7 @@ def _certificate_file_managed(
                 changes, unverified_url_exts = check_cert(name, issuer_info, urls, ca_chain)
                 if unverified_url_exts:
                     notes.append(
-                        "Note: URL-derived certificate extensions (AIA) were not verified since "
+                        "URL-derived certificate extensions (AIA) were not verified since "
                         f"the URL configuration of mount `{mount}` could not be read/rendered"
                     )
 
@@ -1055,15 +1057,12 @@ def _certificate_file_managed(
                 # A new certificate is required, but requesting it is predetermined
                 # to fail remotely. Report this even in test mode.
                 ret["result"] = False
-                ret["comment"] = f"{issuance_blocker}."
-                ret["changes"] = changes
-                return ret
+                return _ret(ret, issuance_blocker, notes, changes=changes)
             # No new certificate is currently required, so only warn.
-            notes.append(f"Note: {issuance_blocker}")
+            notes.append(issuance_blocker)
 
         if not changes and file_managed_test["result"] and not file_managed_test["changes"]:
-            _add_sub_state_run(ret, file_managed_test)
-            return _render_comment(ret, notes=notes)
+            return _ret(ret, notes=notes, sub=file_managed_test)
 
         ret["changes"] = changes
         if changes and file_exists:
@@ -1071,10 +1070,12 @@ def _certificate_file_managed(
 
         if __opts__["test"]:
             ret["result"] = None if changes else True
-            if changes:
-                msg.append(f"The certificate would have been {verb}d")
-            _add_sub_state_run(ret, file_managed_test)
-            return _render_comment(ret, msg, notes)
+            return _ret(
+                ret,
+                f"The certificate would have been {verb}d" if changes else None,
+                notes,
+                sub=file_managed_test,
+            )
 
         reissued_cert = None
         if changes:
@@ -1116,14 +1117,11 @@ def _certificate_file_managed(
                 __opts__["cachedir"],
             )
 
-        _render_comment(ret, msg, notes)
-
     except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
-        ret["comment"] = str(err)
-        ret["changes"] = {}
+        return _ret(ret, str(err), changes={})
 
-    return ret
+    return _ret(ret, msg, notes)
 
 
 def role_managed(name, mount="pki", issuer_ref=None, ttl=None, max_ttl=None, **kwargs):
@@ -1870,7 +1868,7 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
             )
             if unverified_url_exts:
                 notes.append(
-                    "Note: URL-derived certificate extensions (AIA) were not verified since "
+                    "URL-derived certificate extensions (AIA) were not verified since "
                     f"the URL configuration of mount `{issuer_mount}` could not be read/rendered"
                 )
         else:
@@ -2337,12 +2335,12 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments,too-many-locals
             # (or our inability to verify them) should be reported.
             if urls is None:
                 notes.append(
-                    "Note: URL-derived certificate extensions (AIA) were not verified since "
+                    "URL-derived certificate extensions (AIA) were not verified since "
                     f"the URL configuration of mount `{mount}` could not be read/rendered"
                 )
             else:
                 notes.append(
-                    "Note: The issuer certificate's embedded AIA-related URLs do not match "
+                    "The issuer certificate's embedded AIA-related URLs do not match "
                     "the mount's URL configuration. They will converge on the next rotation"
                 )
         return cert_changes, notes
@@ -2495,8 +2493,7 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-loc
     changes: dict[str, typing.Any] = {}
     cert_affected = issuer_needs_update = replace_key = refused_to_rotate = cert_rotated = False
     issuer_id = key_id = None
-    notes: list[str] = []
-    msg = []
+    msg, notes = [], []
     kind_lc = kind[0].lower() + kind[1:]  # lowercase for refusals
     # We can skip issuer updates during creation if none of the params are specified
     issuer_is_managed = any(val is not None for val in issuer_config.values())
@@ -2553,10 +2550,10 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-loc
 
         if issuance_blocker and current is not None and not cert_affected:
             # No new certificate is currently required, so only warn.
-            notes.append(f"Note: {issuance_blocker}")
+            notes.append(issuance_blocker)
 
         if not (changes or issuer_changes):
-            return _render_comment(ret, notes=notes)
+            return _ret(ret, notes=notes)
 
         if (
             allow_premature_rotation is not None
@@ -2575,9 +2572,8 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-loc
             # A new certificate is required, but generating it is predetermined
             # to fail remotely. Report this even in test mode.
             ret["result"] = False
-            ret["comment"] = f"{issuance_blocker}."
             ret["changes"].update(changes)
-            return ret
+            return _ret(ret, issuance_blocker, notes)
 
         # Ensure the issuer name is not taken before going any further
         if (
@@ -2610,9 +2606,8 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-loc
 
         if __opts__["test"]:
             ret["result"] = False if refused_to_rotate else None
-            ret["changes"].update(changes)
             if issuer_changes:
-                ret["changes"]["issuer"] = issuer_changes
+                changes["issuer"] = issuer_changes
 
             if refused_to_rotate:
                 msg.append(
@@ -2624,19 +2619,19 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-loc
                     f"{kind} certificate would have been {'rotated' if current else 'created'}"
                 )
                 if imports_cert:
-                    ret["changes"]["imported"] = ["<TBD>"]
+                    changes["imported"] = ["<TBD>"]
 
             if current is None or issuer_changes:
                 msg.append(f"{kind} issuer would have been {'updated' if current else 'created'}")
 
             if current is not None and cert_affected:
-                ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": "<TBD>"}
+                changes["issuer_id"] = {"old": current["issuer_id"], "new": "<TBD>"}
                 if old_changes := _rotate_out(current, issuer_name, mount):
-                    ret["changes"]["old_issuer"] = old_changes
+                    changes["old_issuer"] = old_changes
                 if rotate_key or replace_key:
-                    ret["changes"]["key_id"] = {"old": current["key_id"], "new": "<TBD>"}
+                    changes["key_id"] = {"old": current["key_id"], "new": "<TBD>"}
 
-            return _render_comment(ret, msg, notes)
+            return _ret(ret, msg, notes, changes=changes)
 
         if refused_to_rotate:
             msg.append(
@@ -2662,6 +2657,7 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-loc
                 )["key_id"]
 
             issuer_id, gen_changes = generate(key_ref)
+            msg.append(f"Generated issuer `{issuer_id}`")
             ret["changes"].update(gen_changes)
 
             try:
@@ -2670,10 +2666,8 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-loc
                 ret["result"] = False
                 if not gen_changes:
                     ret["changes"]["generated"] = issuer_id
-                ret["comment"] = (
-                    f"Generated issuer `{issuer_id}`, but failed to set it as default issuer: {err}"
-                )
-                return ret
+                msg.append(f"Failed to set `{issuer_id}` as default issuer: {err}")
+                return _ret(ret, msg, notes)
 
             if current is not None:
                 ret["changes"]["issuer_id"] = {"old": current["issuer_id"], "new": issuer_id}
@@ -2730,8 +2724,6 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-loc
         if current is not None and issuer_changes:
             ret["changes"].setdefault("issuer", {}).update(issuer_changes)
 
-        _render_comment(ret, msg, notes)
-
         if current is None:
             changes["created"]["issuer_id"] = issuer_id
             changes["created"]["key_id"] = key_id or __salt__["vault_pki.get_key_id"](
@@ -2740,17 +2732,12 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-loc
             ret["changes"]["created"] = changes["created"]
         elif refused_to_rotate:
             ret["result"] = False
+
     except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
-        if msg and notes:
-            _render_comment(ret, msg, notes)
-            ret["comment"] += f"\n\nFailed because of an exception later: {err}"
-        elif msg:
-            ret["comment"] = ". ".join(msg) + f", but received an exception later: {err}"
-        else:
-            ret["comment"] = str(err)
+        msg.append(f"Received an exception later: {err}" if msg else str(err))
 
-    return ret
+    return _ret(ret, msg, notes)
 
 
 def _check_issuer_config_changes(
@@ -2968,9 +2955,7 @@ def _add_sub_state_run(ret, sub):
         "__id__": __low__["__id__"],
         "fun": "managed",
     }
-    if "sub_state_run" not in ret:
-        ret["sub_state_run"] = []
-    ret["sub_state_run"].append(sub)
+    ret.setdefault("sub_state_run", []).append(sub)
 
 
 def _run_state(func, name, test=None, **kwargs):
@@ -2983,15 +2968,21 @@ def _run_state(func, name, test=None, **kwargs):
     return res[next(iter(res))]
 
 
-def _render_comment(ret, msg=None, notes=None):
+def _ret(ret, msg=None, notes=None, *, changes=None, sub=None):
     """
     Render the state comment from a list of messages and append supplementary
     notes, separated by blank lines. Without messages, keeps the current
-    comment as the base. Returns the state return dict for convenience.
+    comment as the base.
+    Also allows to overwrite changes and add a sub-staterun.
+    Returns the state return dict for convenience.
     """
+    if sub:
+        _add_sub_state_run(ret, sub)
+    if changes:
+        ret["changes"].update(changes)
     if msg:
-        ret["comment"] = ". ".join(msg) + "."
-    ret["comment"] += "".join(f"\n\n{note}." for note in notes or ())
+        ret["comment"] = ".\n".join(msg if isinstance(msg, list) else [msg]) + "."
+    ret["comment"] += "".join(f"\n\nNote: {note}." for note in notes or ())
     return ret
 
 

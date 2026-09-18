@@ -90,7 +90,7 @@ def test_certificate_managed_file_test_failure_is_reported(file_mocks, func):
         sign_verbatim=True,
     )
     assert res["result"] is False
-    assert res["comment"] == "Problem while testing file.managed changes, see its output"
+    assert res["comment"] == "Problem while testing file.managed changes, see its output."
     assert not res["changes"]
     assert res["sub_state_run"][0]["comment"] == "booh"
 
@@ -101,7 +101,7 @@ def test_certificate_managed_errors_are_reported(read_role, err):
     read_role.side_effect = err("booh")
     res = vault_pki.certificate_managed("/etc/pki/cert.pem", "example.com", "role", "pk")
     assert res["result"] is False
-    assert res["comment"] == "booh"
+    assert res["comment"] == "booh."
     assert not res["changes"]
 
 
@@ -121,7 +121,7 @@ def test_issuer_errors_are_reported(read_issuer, func, err):
     read_issuer.side_effect = err("booh")
     res = getattr(vault_pki, func)("CA")
     assert res["result"] is False
-    assert res["comment"] == "booh"
+    assert res["comment"] == "booh."
     assert not res["changes"]
 
 
