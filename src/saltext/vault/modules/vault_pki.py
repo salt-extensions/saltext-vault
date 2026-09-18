@@ -499,7 +499,7 @@ def update_issuer(
         Valid options:
 
         * ``err``: Error, unless during CA/ACME issuance. (default)
-        * ``always_enforce_err``: Error, including during CA/ACME issuance.
+        * ``always_enforce_err``: Error, including during CA/ACME issuance. (Vault 1.18.2+ only)
         * ``truncate``: Silently truncate the requested NotAfter to that of the issuer.
         * ``permit``: Allow signed certificate validities to exceed that of the issuer.
 

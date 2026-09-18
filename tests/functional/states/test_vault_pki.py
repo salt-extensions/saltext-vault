@@ -591,6 +591,35 @@ def test_ca_certificate_managed_issuer_expiry_undercuts_ttl_remaining(vault_pki,
     assert not Path(ca_cert_args["name"]).exists()
 
 
+@pytest.mark.usefixtures("issuer_setup")
+def test_ca_certificate_managed_issuance_error_reported_early(
+    vault_pki, ca_cert_args, container, testmode
+):
+    """
+    When the signing issuer errors out instead of truncating during CA issuance
+    (``leaf_not_after_behavior=always_enforce_err`` or enforcement of the default
+    ``err`` requested), ensure the state fails early if the requested validity
+    exceeds the issuer's expiry, even in test mode.
+    """
+    if "vault" in container and "latest" in container:
+        vault_write(
+            "pki/issuer/root", issuer_name="root", leaf_not_after_behavior="always_enforce_err"
+        )
+    else:
+        # `always_enforce_err` requires Vault 1.18.2+ and is unsupported on OpenBao
+        # (as of Sep 2026), so test the enforcement condition on the others.
+        # The flag itself is Vault 1.17+ only, but this still works on 1.14.8
+        # since the request is never sent.
+        ca_cert_args["enforce_leaf_not_after_behavior"] = True
+    ca_cert_args["ttl"] = "100000h"
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args, test=testmode)
+    assert ret.result is False
+    assert "Issuance would fail" in ret.comment
+    assert "exceeds the signing issuer's expiry" in ret.comment
+    assert "created" in ret.changes
+    assert not Path(ca_cert_args["name"]).exists()
+
+
 @pytest.mark.usefixtures("issuer_setup", "roles_setup", "testrole")
 @pytest.mark.parametrize(
     "csr,testrole,cn_in_csr,cn_in_args,exp",
@@ -1136,6 +1165,41 @@ def test_certificate_managed_expiry_reports_issuer_capped_not_after(vault_pki, c
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result is True
     assert not ret.changes
+
+
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
+def test_certificate_managed_issuance_error_reported_early(vault_pki, cert_args, testmode):
+    """
+    When a certificate needs to be reissued, but the request is predetermined
+    to fail because the requested validity exceeds the signing issuer's expiry
+    and the issuer errors out instead of truncating (the default behavior),
+    ensure the state fails early, even in test mode.
+    """
+    vault_write(
+        "pki/root/generate/internal", common_name="Short Root", ttl="20h", issuer_name="shortroot"
+    )
+    cert_args["issuer_ref"] = "shortroot"
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+
+    # The excessive validity alone should not fail the state while the
+    # certificate does not need to be reissued, but a note should be included.
+    # The effective validity is min(ttl, testrole's max_ttl) = 24h > ~20h.
+    cert_args["ttl"] = "48h"
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    assert "Note: Issuance would fail" in ret.comment
+    assert "exceeds the signing issuer's expiry" in ret.comment
+
+    # Once a reissuance is required, the state should fail early.
+    cert_args["ttl_remaining"] = "45m"
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is False
+    assert "Issuance would fail" in ret.comment
+    assert "exceeds the signing issuer's expiry" in ret.comment
+    assert "expiration" in ret.changes
 
 
 @pytest.mark.usefixtures("issuer_setup", "roles_setup")
@@ -3106,6 +3170,50 @@ def test_intermediate_issuer_managed_issuer_expiry_undercuts_days_remaining(vaul
     assert "`days_remaining` is undercut by the signing issuer's expiry" in ret.comment
     assert not ret.changes
     assert not vault_list(f"{int_ca_args['mount']}/issuers")
+
+
+@pytest.mark.usefixtures("clean_pki_mount")
+@pytest.mark.parametrize("int_ca_args", ("vault_ca",), indirect=True)
+def test_intermediate_issuer_managed_issuance_error_reported_early(
+    vault_pki, int_ca_args, container, testmode
+):
+    """
+    When the signing issuer errors out instead of truncating during CA issuance
+    (``leaf_not_after_behavior=always_enforce_err`` or enforcement of the default
+    ``err`` requested), ensure the state fails early if the requested validity
+    exceeds the issuer's expiry, even in test mode.
+    """
+    if "vault" in container and "latest" in container:
+        vault_write(
+            "pki/issuer/root", issuer_name="root", leaf_not_after_behavior="always_enforce_err"
+        )
+    else:
+        # `always_enforce_err` requires Vault 1.18.2+ and is unsupported on OpenBao
+        # (as of Sep 2026), so test the enforcement condition on the others.
+        # The flag itself is Vault 1.17+ only, but this still works on 1.14.8
+        # since the request is never sent.
+        int_ca_args["enforce_leaf_not_after_behavior"] = True
+    int_ca_args["days_valid"] = 4000
+    ret = vault_pki.intermediate_issuer_managed(**int_ca_args, test=testmode)
+    assert ret.result is False
+    assert "Issuance would fail" in ret.comment
+    assert "exceeds the signing issuer's expiry" in ret.comment
+    assert "created" in ret.changes
+    assert not vault_list(f"{int_ca_args['mount']}/issuers")
+
+    # While no new certificate is required, the state should
+    # succeed and only include a note.
+    int_ca_args["days_valid"] = 90
+    ret = vault_pki.intermediate_issuer_managed(**int_ca_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+
+    int_ca_args["days_valid"] = 4000
+    ret = vault_pki.intermediate_issuer_managed(**int_ca_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    assert "Note: Issuance would fail" in ret.comment
+    assert "exceeds the signing issuer's expiry" in ret.comment
 
 
 @pytest.mark.usefixtures("existing_intermediate")
