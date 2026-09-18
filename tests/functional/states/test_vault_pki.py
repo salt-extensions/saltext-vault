@@ -4096,7 +4096,7 @@ def test_root_issuer_managed_rotation_reports_recovery_failure_changes(
     ret = vault_pki.root_issuer_managed(**root_ca_args)
     assert ret.result is False
     assert "Failed to recover" in ret.comment
-    assert "Failed because of an exception later" in ret.comment
+    assert "Received an exception later:" in ret.comment
     assert "Unknown signature algorithm" in ret.comment
 
     assert "issuer" in ret.changes
