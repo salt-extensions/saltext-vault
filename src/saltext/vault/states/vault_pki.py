@@ -431,6 +431,24 @@ def certificate_managed(
                 # Only a truncating issuer's expiry caps the effective validity,
                 # otherwise exceeding requests error out during issuance instead.
                 truncates_at = issuer_expiry
+            elif not_after is None:
+                # An explicit not_after beyond the expiry was refused above already.
+                ttl_seconds = timestring_map(ttl, cast=int)
+                effective_ttl = min(ttl_seconds, max_ttl) if max_ttl else ttl_seconds
+                if datetime.now(tz=timezone.utc) + timedelta(seconds=effective_ttl) > issuer_expiry:
+                    # Note: Without a role max_ttl, the mount's max_lease_ttl could
+                    # still save the request by capping the effective validity below
+                    # the issuer's expiry, but we don't have (guaranteed) access to
+                    # that value. It's also smelly config, better surface it.
+                    # A role's max_ttl overrides the mount's cap though,
+                    # making this prediction exact when it is set.
+                    return (
+                        "Issuance would fail because the requested validity exceeds the "
+                        f"signing issuer's expiry ({issuer_expiry.strftime(pki.TIME_FMT)}) "
+                        f"and its `leaf_not_after_behavior` is set to `{behavior}`. "
+                        "Reduce `ttl` or rotate the issuer"
+                    )
+        return None
 
     def check_cert(current, issuer_info, urls, ca_chain):
         ttl_seconds = timestring_map(ttl, cast=int)
@@ -761,20 +779,36 @@ def ca_certificate_managed(
 
     def validate_cutoffs(issuer_info):
         nonlocal issuer_expiry
-        if not (
-            issuer_info.get("leaf_not_after_behavior") == "permit"
-            and cert_args.get("enforce_leaf_not_after_behavior")
+        behavior = issuer_info.get("leaf_not_after_behavior")
+        enforced = cert_args.get("enforce_leaf_not_after_behavior")
+        if behavior == "permit" and enforced:
+            return None
+        # The signing issuer's own expiry enforces a hard cutoff during issuance.
+        # Vault truncates CA certificates regardless of the issuer's configured
+        # `leaf_not_after_behavior`, unless enforcement is requested explicitly
+        # or the behavior is `always_enforce_err`.
+        issuer_expiry = pki.not_valid_after(x509util.load_cert(issuer_info["certificate"]))
+        _validate_issuance_cutoff(
+            issuer_expiry,
+            "the signing issuer's expiry",
+            not_after,
+            timestring_map(ttl_remaining, cast=int),
+        )
+        if (behavior == "always_enforce_err" or (enforced and behavior == "err")) and (
+            not_after is None
+            # An explicit not_after beyond the expiry was refused above already.
+            and datetime.now(tz=timezone.utc) + timedelta(seconds=timestring_map(ttl, cast=int))
+            > issuer_expiry
         ):
-            # The signing issuer's own expiry enforces a hard cutoff during issuance.
-            # Vault truncates CA certificates regardless of the issuer's configured
-            # `leaf_not_after_behavior`, unless enforcement is requested explicitly.
-            issuer_expiry = pki.not_valid_after(x509util.load_cert(issuer_info["certificate"]))
-            _validate_issuance_cutoff(
-                issuer_expiry,
-                "the signing issuer's expiry",
-                not_after,
-                timestring_map(ttl_remaining, cast=int),
+            # In these cases, Vault errors out instead of truncating.
+            # Since ttl is translated into not_after, this prediction is exact.
+            return (
+                "Issuance would fail because the requested validity exceeds the "
+                f"signing issuer's expiry ({issuer_expiry.strftime(pki.TIME_FMT)}) "
+                f"and its `leaf_not_after_behavior` is set to `{behavior}`. "
+                "Reduce `ttl` or rotate the issuer"
             )
+        return None
 
     def check_cert(current, issuer_info, urls, ca_chain):
         effective_ttl = ttl_seconds = timestring_map(ttl, cast=int)
@@ -909,6 +943,10 @@ def _certificate_file_managed(
         (such as a role's ``max_ttl`` or the signing issuer's expiry) do not
         interfere with the requested certificate lifecycle parameters.
         Receives the issuer info. Called before changes are checked.
+        Can return a message describing why a new issuance is predetermined
+        to fail remotely, which fails the state - even in test mode - if
+        one turns out to be required. Otherwise, the message is appended
+        to the comment as a note.
 
     check_cert
         Callback checking the current certificate against the desired state.
@@ -934,7 +972,8 @@ def _certificate_file_managed(
     changes = {}
     ca_chain = []
     verb = "create"
-    aia_note = None
+    msg = []
+    notes = []
 
     try:
         hlp.one_of(private_key=private_key, csr=csr)
@@ -984,7 +1023,7 @@ def _certificate_file_managed(
         # Always ensure remote factors (issuer validity or role max_ttl) don't cause non-idempotency.
         # Without this, we would always report success and reissue a certificate on the next run
         # or always fail because Vault would deny issuance anyways, depending on the issuer's leaf_not_after_behavior.
-        validate_cutoffs(issuer_info)
+        issuance_blocker = validate_cutoffs(issuer_info)
 
         if append_ca_chain:
             ca_chain = [x509util.load_cert(x) for x in issuer_info["ca_chain"]]
@@ -1003,7 +1042,7 @@ def _certificate_file_managed(
                 urls = _get_urls(issuer_info, mount=mount)
                 changes, unverified_url_exts = check_cert(name, issuer_info, urls, ca_chain)
                 if unverified_url_exts:
-                    aia_note = (
+                    notes.append(
                         "Note: URL-derived certificate extensions (AIA) were not verified since "
                         f"the URL configuration of mount `{mount}` could not be read/rendered"
                     )
@@ -1011,11 +1050,20 @@ def _certificate_file_managed(
         else:
             changes["created"] = True
 
+        if issuance_blocker:
+            if set(changes) - {"ca_chain", "encoding"}:
+                # A new certificate is required, but requesting it is predetermined
+                # to fail remotely. Report this even in test mode.
+                ret["result"] = False
+                ret["comment"] = f"{issuance_blocker}."
+                ret["changes"] = changes
+                return ret
+            # No new certificate is currently required, so only warn.
+            notes.append(f"Note: {issuance_blocker}")
+
         if not changes and file_managed_test["result"] and not file_managed_test["changes"]:
-            if aia_note:
-                ret["comment"] += f"\n\n{aia_note}."
             _add_sub_state_run(ret, file_managed_test)
-            return ret
+            return _render_comment(ret, notes=notes)
 
         ret["changes"] = changes
         if changes and file_exists:
@@ -1023,13 +1071,10 @@ def _certificate_file_managed(
 
         if __opts__["test"]:
             ret["result"] = None if changes else True
-            ret["comment"] = (
-                f"The certificate would have been {verb}d" if changes else ret["comment"]
-            )
-            if aia_note:
-                ret["comment"] += f"\n\n{aia_note}."
+            if changes:
+                msg.append(f"The certificate would have been {verb}d")
             _add_sub_state_run(ret, file_managed_test)
-            return ret
+            return _render_comment(ret, msg, notes)
 
         reissued_cert = None
         if changes:
@@ -1047,7 +1092,7 @@ def _certificate_file_managed(
                 encoding=encoding,
             )
 
-            ret["comment"] = f"The certificate has been {verb}d"
+            msg.append(f"The certificate has been {verb}d")
 
         # If we're here, we detected file.managed changes in the initial test above and/or reissued the certificate.
         # If we do not need the contents to change or if we have binary contents (not supported by file.managed),
@@ -1071,8 +1116,7 @@ def _certificate_file_managed(
                 __opts__["cachedir"],
             )
 
-        if aia_note:
-            ret["comment"] += f"\n\n{aia_note}."
+        _render_comment(ret, msg, notes)
 
     except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
@@ -1657,7 +1701,7 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
         Valid options:
 
         * ``err``: Error, unless during CA/ACME issuance. (default)
-        * ``always_enforce_err``: Error, including during CA/ACME issuance.
+        * ``always_enforce_err``: Error, including during CA/ACME issuance. (Vault 1.18.2+ only)
         * ``truncate``: Silently truncate the requested NotAfter to that of the issuer.
         * ``permit``: Allow signed certificate validities to exceed that of the issuer.
 
@@ -1716,6 +1760,7 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
 
     signing_issuer: dict[str, typing.Any]
     signing_issuer_expiry: datetime | None = None
+    issuance_blocker = None
     if vault_signed:
         try:
             signing_issuer = __salt__["vault_pki.read_issuer"](issuer_ref, mount=issuer_mount)
@@ -1723,13 +1768,13 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
                 raise CommandExecutionError(
                     f"Issuer '{issuer_ref}' does not exist on mount {issuer_mount}"
                 )
-            if not (
-                signing_issuer.get("leaf_not_after_behavior") == "permit"
-                and cert_args.get("enforce_leaf_not_after_behavior")
-            ):
+            behavior = signing_issuer.get("leaf_not_after_behavior")
+            enforced = cert_args.get("enforce_leaf_not_after_behavior")
+            if not (behavior == "permit" and enforced):
                 # The signing issuer's own expiry enforces a hard cutoff during issuance.
                 # Vault truncates CA certificates regardless of the issuer's configured
-                # `leaf_not_after_behavior`, unless enforcement is requested explicitly.
+                # `leaf_not_after_behavior`, unless enforcement is requested explicitly
+                # or the behavior is `always_enforce_err`.
                 signing_issuer_expiry = pki.not_valid_after(
                     x509util.load_cert(signing_issuer["certificate"])
                 )
@@ -1740,6 +1785,20 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
                     days_remaining * 86400,
                     remaining_param="days_remaining",
                 )
+                if (behavior == "always_enforce_err" or (enforced and behavior == "err")) and (
+                    not_after is None
+                    # An explicit not_after beyond the expiry was refused above already.
+                    and datetime.now(tz=timezone.utc) + timedelta(days=days_valid)
+                    > signing_issuer_expiry
+                ):
+                    # In these cases, Vault errors out instead of truncating.
+                    # Since days_valid is translated into not_after, this prediction is exact.
+                    issuance_blocker = (
+                        "Issuance would fail because the requested validity exceeds the "
+                        f"signing issuer's expiry ({signing_issuer_expiry.strftime(pki.TIME_FMT)}) "
+                        f"and its `leaf_not_after_behavior` is set to `{behavior}`. "
+                        "Reduce `days_valid` or rotate the issuer"
+                    )
         except (CommandExecutionError, SaltInvocationError) as err:
             return {"name": name, "result": False, "comment": str(err), "changes": {}}
 
@@ -1893,6 +1952,7 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
         managed_key_name=managed_key_name,
         managed_key_id=managed_key_id,
         imports_cert=True,
+        issuance_blocker=issuance_blocker,
     )
 
 
@@ -2191,7 +2251,7 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments,too-many-locals
         Valid options:
 
         * ``err``: Error, unless during CA/ACME issuance. (default)
-        * ``always_enforce_err``: Error, including during CA/ACME issuance.
+        * ``always_enforce_err``: Error, including during CA/ACME issuance. (Vault 1.18.2+ only)
         * ``truncate``: Silently truncate the requested NotAfter to that of the issuer.
         * ``permit``: Allow signed certificate validities to exceed that of the issuer.
 
@@ -2389,6 +2449,7 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-loc
     managed_key_id,
     allow_premature_rotation=None,
     imports_cert=False,
+    issuance_blocker=None,
 ):
     """
     Shared implementation for managing the default issuer of a mount,
@@ -2418,6 +2479,12 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-loc
     imports_cert
         Whether ``generate`` imports certificates, i.e. reports an ``imported`` list.
         Only used for test mode reports.
+
+    issuance_blocker
+        Optional message describing why generating a new certificate is
+        predetermined to fail remotely. Fails the state - even in test mode -
+        if a rotation (or creation) turns out to be required. Otherwise,
+        the message is appended to the comment as a note.
     """
     ret = {
         "name": name,
@@ -2484,9 +2551,12 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-loc
                 issuer_triggers | issuer_rotation_effects,
             )
 
+        if issuance_blocker and current is not None and not cert_affected:
+            # No new certificate is currently required, so only warn.
+            notes.append(f"Note: {issuance_blocker}")
+
         if not (changes or issuer_changes):
-            ret["comment"] += "".join(f"\n\n{note}." for note in notes)
-            return ret
+            return _render_comment(ret, notes=notes)
 
         if (
             allow_premature_rotation is not None
@@ -2500,6 +2570,14 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-loc
                 issuer_changes = {
                     k: v for k, v in issuer_changes.items() if k not in issuer_rotation_effects
                 }
+
+        if issuance_blocker and not refused_to_rotate and (current is None or cert_affected):
+            # A new certificate is required, but generating it is predetermined
+            # to fail remotely. Report this even in test mode.
+            ret["result"] = False
+            ret["comment"] = f"{issuance_blocker}."
+            ret["changes"].update(changes)
+            return ret
 
         # Ensure the issuer name is not taken before going any further
         if (
@@ -2558,9 +2636,7 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-loc
                 if rotate_key or replace_key:
                     ret["changes"]["key_id"] = {"old": current["key_id"], "new": "<TBD>"}
 
-            ret["comment"] = ". ".join(msg) + "."
-            ret["comment"] += "".join(f"\n\n{note}." for note in notes)
-            return ret
+            return _render_comment(ret, msg, notes)
 
         if refused_to_rotate:
             msg.append(
@@ -2654,8 +2730,7 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-loc
         if current is not None and issuer_changes:
             ret["changes"].setdefault("issuer", {}).update(issuer_changes)
 
-        ret["comment"] = ". ".join(msg) + "."
-        ret["comment"] += "".join(f"\n\n{note}." for note in notes)
+        _render_comment(ret, msg, notes)
 
         if current is None:
             changes["created"]["issuer_id"] = issuer_id
@@ -2667,16 +2742,11 @@ def _default_issuer_managed(  # pylint: disable=too-many-statements,too-many-loc
             ret["result"] = False
     except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
-        if msg:
-            ret["comment"] = (
-                ". ".join(msg)
-                + "".join(f".\n\n{note}." for note in notes)
-                + (
-                    f"\n\nFailed because of an exception later: {err}"
-                    if notes
-                    else f", but received an exception later: {err}"
-                )
-            )
+        if msg and notes:
+            _render_comment(ret, msg, notes)
+            ret["comment"] += f"\n\nFailed because of an exception later: {err}"
+        elif msg:
+            ret["comment"] = ". ".join(msg) + f", but received an exception later: {err}"
         else:
             ret["comment"] = str(err)
 
@@ -2911,6 +2981,18 @@ def _run_state(func, name, test=None, **kwargs):
     if not isinstance(res, dict):
         raise CommandExecutionError(f"Failed running {func}: {res}")
     return res[next(iter(res))]
+
+
+def _render_comment(ret, msg=None, notes=None):
+    """
+    Render the state comment from a list of messages and append supplementary
+    notes, separated by blank lines. Without messages, keeps the current
+    comment as the base. Returns the state return dict for convenience.
+    """
+    if msg:
+        ret["comment"] = ". ".join(msg) + "."
+    ret["comment"] += "".join(f"\n\n{note}." for note in notes or ())
+    return ret
 
 
 def _check_file_ret(fret, ret, current):
