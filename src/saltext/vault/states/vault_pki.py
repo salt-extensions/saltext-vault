@@ -256,7 +256,7 @@ def certificate_managed(
         .. note::
 
             The effective validity is capped by the role's ``max_ttl``, if a role is used.
-            This is accounted for in change reports.
+            This is accounted for in change reports when the role is readable.
 
     ttl_remaining
         If an existing certificate's remaining Time To Live undercuts this period, renew it.

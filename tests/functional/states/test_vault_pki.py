@@ -2,6 +2,7 @@
 
 import ipaddress
 import logging
+from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime
 from datetime import timedelta
@@ -21,6 +22,7 @@ from salt.utils.x509 import load_cert
 from saltfactories.utils import random_string
 
 from saltext.vault.states.vault_pki import ROLE_ATTRS_UNVERIFIED_NOTE
+from saltext.vault.states.vault_pki import URL_EXTS_UNVERIFIED_NOTE
 from saltext.vault.utils import vault as vaultutil
 from saltext.vault.utils.vault import helpers as hlp
 from saltext.vault.utils.vault import pki
@@ -816,15 +818,16 @@ def test_certificate_managed_missing_role(vault_pki, cert_args, testmode):
     assert "Role missing-role does not exist" in ret.comment
 
 
-@pytest.fixture
-def role_read_denied():
+@contextmanager
+def _read_denied(*endpoints):
     """
-    Simulate a policy denying read access to the role configuration.
+    Simulate a policy denying read access to specific endpoint prefixes
+    by patching the shared query helper.
     """
     real_query = vaultutil.query
 
     def query(method, endpoint, *args, **kwargs):
-        if method == "GET" and endpoint.startswith("pki/roles/"):
+        if method == "GET" and endpoint.startswith(endpoints):
             raise vaultutil.VaultPermissionDeniedError("permission denied")
         return real_query(method, endpoint, *args, **kwargs)
 
@@ -832,23 +835,59 @@ def role_read_denied():
         yield
 
 
+@pytest.fixture
+def role_read_denied():
+    with _read_denied("pki/roles/"):
+        yield
+
+
+@pytest.fixture
+def url_config_read_denied():
+    with _read_denied("pki/config/urls", "pki/config/cluster"):
+        yield
+
+
+MOUNT_URL_CONFIG = {
+    "issuing_certificates": ["https://ca.example.com/ca.der"],
+    "crl_distribution_points": ["https://crl.example.com/crl.pem"],
+    # Only supported by OpenBao/recent Vault, ignored by older versions during writes.
+    "delta_crl_distribution_points": ["https://deltacrl.example.com/delta.pem"],
+    "ocsp_servers": ["https://ocsp.example.com"],
+}
+
+AIA_UNVERIFIED_NOTE = URL_EXTS_UNVERIFIED_NOTE.format(mount="pki")
+
+
+def _assert_embedded_aia(cert, urls):
+    aia = cert.extensions.get_extension_for_class(cx509.AuthorityInformationAccess)
+    assert urls["issuing_certificates"][0] in {
+        str(access.access_location.value) for access in aia.value
+    }
+
+
 @pytest.mark.parametrize(
     "testrole", ({"organization": "Test Org", "ou": "Test Unit"},), indirect=True
 )
-@pytest.mark.usefixtures("testrole", "existing_cert", "role_read_denied")
-def test_certificate_managed_role_read_denied(vault_pki, cert_args, testmode):
+@pytest.mark.usefixtures("testrole", "issuer_setup", "roles_setup", "role_read_denied")
+def test_certificate_managed_role_read_denied(vault_pki, cert_args):
     """
     When role read access is denied and issuer_ref is specified explicitly,
-    drift in role-derived subject attributes/extensions must not cause a
-    reissuance, only a note.
+    issuance still works and drift in role-derived subject attributes/extensions
+    must not cause a reissuance, only a note.
     """
-    serial = load_cert(cert_args["name"]).serial_number
     cert_args["issuer_ref"] = "root"
-    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+    assert ROLE_ATTRS_UNVERIFIED_NOTE.format(role_name="testrole", mount="pki") not in ret.comment
+    cert = load_cert(cert_args["name"])
+    assert cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["O"])[0].value == "Test Org"
+
+    ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result is True
     assert not ret.changes
     assert ROLE_ATTRS_UNVERIFIED_NOTE.format(role_name="testrole", mount="pki") in ret.comment
-    assert load_cert(cert_args["name"]).serial_number == serial
+    assert load_cert(cert_args["name"]).serial_number == cert.serial_number
 
 
 @pytest.mark.parametrize(
@@ -885,6 +924,48 @@ def test_certificate_managed_role_read_denied_without_issuer_ref(vault_pki, cert
     assert ret.result is False
     assert not ret.changes
     assert "PermissionDenied" in ret.comment
+
+
+@pytest.mark.parametrize("aia_urls", (MOUNT_URL_CONFIG,), indirect=True)
+@pytest.mark.usefixtures("issuer_setup", "roles_setup", "url_config_read_denied")
+def test_certificate_managed_url_config_denied(vault_pki, cert_args, aia_urls):
+    """
+    Ensure a denied URL read access does not cause reissuance, only a note.
+    """
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+    assert AIA_UNVERIFIED_NOTE not in ret.comment
+    cert = load_cert(cert_args["name"])
+    _assert_embedded_aia(cert, aia_urls)
+
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert not ret.changes
+    assert "The certificate is in the correct state" in ret.comment
+    assert AIA_UNVERIFIED_NOTE in ret.comment
+    assert load_cert(cert_args["name"]).serial_number == cert.serial_number
+
+
+@pytest.mark.parametrize("aia_urls", (MOUNT_URL_CONFIG,), indirect=True)
+@pytest.mark.usefixtures("issuer_setup", "url_config_read_denied")
+def test_ca_certificate_managed_url_config_denied(vault_pki, ca_cert_args, aia_urls):
+    """
+    Ensure a denied URL read access does not cause reissuance, only a note.
+    """
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert "created" in ret.changes
+    assert AIA_UNVERIFIED_NOTE not in ret.comment
+    cert = load_cert(ca_cert_args["name"])
+    _assert_embedded_aia(cert, aia_urls)
+
+    ret = vault_pki.ca_certificate_managed(**ca_cert_args)
+    assert ret.result is True
+    assert not ret.changes
+    assert "The certificate is in the correct state" in ret.comment
+    assert AIA_UNVERIFIED_NOTE in ret.comment
+    assert load_cert(ca_cert_args["name"]).serial_number == cert.serial_number
 
 
 @pytest.mark.usefixtures("issuer_setup")
@@ -3501,6 +3582,64 @@ def test_intermediate_issuer_managed_issuer_ok(vault_pki, int_ca_args, testmode)
     assert new_info == issuer_info
 
 
+@pytest.mark.parametrize("int_ca_args", ("vault_ca",), indirect=True)
+@pytest.mark.parametrize("aia_urls", (MOUNT_URL_CONFIG,), indirect=True)
+@pytest.mark.usefixtures("clean_pki_mount", "aia_urls", "url_config_read_denied")
+def test_intermediate_issuer_managed_url_config_denied(vault_pki, int_ca_args):
+    """
+    Ensure a denied URL read access does not cause rotation, only a note.
+    """
+    ret = vault_pki.intermediate_issuer_managed(**int_ca_args)
+    assert ret.result is True
+    assert "has been created" in ret.comment
+    assert AIA_UNVERIFIED_NOTE not in ret.comment
+    issuer_info = _default_issuer(int_ca_args["mount"])
+    _assert_embedded_aia(load_cert(issuer_info["certificate"]), MOUNT_URL_CONFIG)
+
+    ret = vault_pki.intermediate_issuer_managed(**int_ca_args)
+    assert ret.result is True
+    assert not ret.changes
+    assert "present as specified" in ret.comment
+    assert AIA_UNVERIFIED_NOTE in ret.comment
+    assert _default_issuer(int_ca_args["mount"])["issuer_id"] == issuer_info["issuer_id"]
+
+
+@pytest.mark.parametrize("int_ca_args", ("vault_ca",), indirect=True)
+@pytest.mark.parametrize(
+    "issuer_setup",
+    (
+        {
+            "issuing_certificates": ["{{cluster_aia_path}}ca.der"],
+            "crl_distribution_points": ["{{cluster_path}}/crl"],
+            "enable_aia_url_templating": True,
+        },
+    ),
+    indirect=True,
+)
+@pytest.mark.usefixtures("clean_pki_mount", "url_config_read_denied")
+def test_intermediate_issuer_managed_cluster_config_denied(vault_pki, int_ca_args):
+    """
+    Ensure a denied cluster config read access does not cause rotation when the
+    (issuer-specific) URL configuration of the signing issuer is templated.
+    """
+    ret = vault_pki.intermediate_issuer_managed(**int_ca_args)
+    assert ret.result is True
+    assert "has been created" in ret.comment
+    assert AIA_UNVERIFIED_NOTE not in ret.comment
+    issuer_info = _default_issuer(int_ca_args["mount"])
+    _assert_embedded_aia(
+        load_cert(issuer_info["certificate"]),
+        {"issuing_certificates": [f"{DEFAULT_CLUSTER_AIA_PATH}ca.der"]},
+    )
+
+    ret = vault_pki.intermediate_issuer_managed(**int_ca_args)
+    assert ret.result is True
+    assert not ret.changes
+    assert "present as specified" in ret.comment
+    assert AIA_UNVERIFIED_NOTE in ret.comment
+    assert _default_issuer(int_ca_args["mount"])["issuer_id"] == issuer_info["issuer_id"]
+
+
 @pytest.mark.parametrize(
     "existing_intermediate",
     (
@@ -4762,6 +4901,27 @@ def test_root_issuer_managed_ok_aia(vault_pki, root_ca_args):
     assert not ret.changes
     new_info = _default_issuer()
     assert new_info == issuer_info
+
+
+@pytest.mark.parametrize("aia_urls", (MOUNT_URL_CONFIG,), indirect=True)
+@pytest.mark.usefixtures("clean_pki_mount", "aia_urls", "url_config_read_denied")
+def test_root_issuer_managed_url_config_denied(vault_pki, root_ca_args):
+    """
+    Ensure a denied URL read access does not cause rotation, only a note.
+    """
+    ret = vault_pki.root_issuer_managed(**root_ca_args)
+    assert ret.result is True
+    assert "has been created" in ret.comment
+    assert AIA_UNVERIFIED_NOTE not in ret.comment
+    issuer_info = _default_issuer()
+    _assert_embedded_aia(load_cert(issuer_info["certificate"]), MOUNT_URL_CONFIG)
+
+    ret = vault_pki.root_issuer_managed(**root_ca_args)
+    assert ret.result is True
+    assert not ret.changes
+    assert "present as specified" in ret.comment
+    assert AIA_UNVERIFIED_NOTE in ret.comment
+    assert _default_issuer()["issuer_id"] == issuer_info["issuer_id"]
 
 
 # TODO: Add a marker and toggle for these kinds of tests
