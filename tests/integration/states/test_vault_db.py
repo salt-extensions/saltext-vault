@@ -2,12 +2,20 @@ from textwrap import dedent
 
 import pytest
 import salt.utils.beacons
-from saltfactories.utils import random_string
 
-from tests.support.mysql import MySQLImage
-from tests.support.mysql import create_mysql_combo  # pylint: disable=unused-import
-from tests.support.mysql import mysql_combo  # pylint: disable=unused-import
-from tests.support.mysql import mysql_container  # pylint: disable=unused-import
+# pylint: disable=unused-import
+from tests.fixtures.mysql import create_mysql_combo
+from tests.fixtures.mysql import mysql_combo
+from tests.fixtures.mysql import mysql_container
+from tests.fixtures.vault_db import connection_setup
+from tests.fixtures.vault_db import mysql_image
+from tests.fixtures.vault_db import role_args_common
+from tests.fixtures.vault_db import testdb
+from tests.fixtures.vault_db import testreissuerole
+from tests.fixtures.vault_db import testrole
+from tests.fixtures.vault_db import teststaticrole
+
+# pylint: enable=unused-import
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
 from tests.support.vault import vault_revoke
@@ -31,74 +39,6 @@ def master_config_overrides():
             },
         },
     }
-
-
-@pytest.fixture(scope="module")
-def mysql_image():
-    version = "10.3"
-    return MySQLImage(
-        name="mariadb",
-        tag=version,
-        container_id=random_string(f"mariadb-{version}-"),
-    )
-
-
-@pytest.fixture
-def role_args_common():
-    return {
-        "db_name": "testdb",
-        "creation_statements": r"CREATE USER '{{name}}'@'%' IDENTIFIED BY '{{password}}';GRANT SELECT ON *.* TO '{{name}}'@'%';",
-    }
-
-
-@pytest.fixture
-def testrole():
-    return {
-        "default_ttl": 3600,
-        "max_ttl": 86400,
-    }
-
-
-@pytest.fixture
-def testreissuerole():
-    return {
-        "default_ttl": 180,
-        "max_ttl": 180,
-    }
-
-
-@pytest.fixture
-def teststaticrole(mysql_container):
-    return {
-        "db_name": "testdb",
-        "rotation_period": 86400,
-        "username": mysql_container.mysql_user,
-    }
-
-
-@pytest.fixture
-def testdb(mysql_container, container_host_ref):
-    return {
-        "plugin_name": "mysql-database-plugin",
-        "connection_url": f"{{{{username}}}}:{{{{password}}}}@tcp({container_host_ref}:{mysql_container.mysql_port})/",
-        "allowed_roles": "testrole,teststaticrole,testreissuerole",
-        "username": "root",
-        "password": mysql_container.mysql_passwd,
-    }
-
-
-@pytest.fixture
-def connection_setup(testdb):
-    try:
-        vault_write("database/config/testdb", **testdb)
-        assert "testdb" in vault_list("database/config")
-        yield
-    finally:
-        # prevent dangling leases, which prevent disabling the secret engine
-        assert vault_revoke("database/creds", prefix=True)
-        if "testdb" in vault_list("database/config"):
-            vault_delete("database/config/testdb")
-            assert "testdb" not in vault_list("database/config")
 
 
 @pytest.fixture(params=[["testrole"]], autouse=True)

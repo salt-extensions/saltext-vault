@@ -1,5 +1,5 @@
 """
-Shared helpers and constants for the vault_pki state tests.
+Shared helpers and constants for the vault_pki test suites.
 """
 
 from contextlib import contextmanager
@@ -16,6 +16,10 @@ from saltext.vault.utils.vault import pki
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write
+
+# Can't reset these to empty, so define reliable defaults instead
+DEFAULT_CLUSTER_PATH = "https://cluster1.vault.local/v1/pki"
+DEFAULT_CLUSTER_AIA_PATH = "http://foo.bar.baz/aia/"
 
 
 def _wipe_issuers():

@@ -8,13 +8,13 @@ from salt.utils.x509 import load_cert
 from tests.conftest import CONTAINER_TARGETS
 
 # pylint: disable=unused-import
+from tests.fixtures.vault_pki import roles_setup
 from tests.functional.modules.test_vault_pki import clean_pki
 from tests.functional.modules.test_vault_pki import cluster_config
 from tests.functional.modules.test_vault_pki import empty_pki_mount
 from tests.functional.modules.test_vault_pki import generated_root
 from tests.functional.modules.test_vault_pki import issuers_setup
 from tests.functional.modules.test_vault_pki import local_ca
-from tests.functional.modules.test_vault_pki import roles_setup
 from tests.functional.modules.test_vault_pki import root_issuer_setup
 from tests.functional.modules.test_vault_pki import test_delete_issuer
 from tests.functional.modules.test_vault_pki import test_delete_role

@@ -3,9 +3,9 @@ import pytest
 from tests.conftest import CONTAINER_TARGETS
 
 # pylint: disable=unused-import
+from tests.fixtures.vault_approle import approle_auth
+from tests.fixtures.vault_approle import roles_setup
 from tests.functional.modules.test_vault_approle import _cached_approle
-from tests.functional.modules.test_vault_approle import approle_auth
-from tests.functional.modules.test_vault_approle import roles_setup
 from tests.functional.modules.test_vault_approle import test_clear_cached
 from tests.functional.modules.test_vault_approle import test_delete
 from tests.functional.modules.test_vault_approle import test_destroy_secret_id

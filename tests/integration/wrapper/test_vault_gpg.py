@@ -8,16 +8,16 @@ import pytest
 from tests.conftest import CONTAINER_TARGETS
 
 # pylint: disable=unused-import
+from tests.fixtures.vault_gpg import key_a_fp
+from tests.fixtures.vault_gpg import key_a_priv
+from tests.fixtures.vault_gpg import key_a_priv_file
+from tests.fixtures.vault_gpg import key_a_pub
+from tests.fixtures.vault_gpg import key_a_pub_file
+from tests.fixtures.vault_gpg import key_b_pub
 from tests.functional.modules.test_vault_gpg import TestDecrypt as _TestDecrypt
 from tests.functional.modules.test_vault_gpg import existing_key
 from tests.functional.modules.test_vault_gpg import gpg_mount
 from tests.functional.modules.test_vault_gpg import gpghome
-from tests.functional.modules.test_vault_gpg import key_a_fp
-from tests.functional.modules.test_vault_gpg import key_a_priv
-from tests.functional.modules.test_vault_gpg import key_a_priv_file
-from tests.functional.modules.test_vault_gpg import key_a_pub
-from tests.functional.modules.test_vault_gpg import key_a_pub_file
-from tests.functional.modules.test_vault_gpg import key_b_pub
 from tests.functional.modules.test_vault_gpg import secret_message_b64
 from tests.functional.modules.test_vault_gpg import test_create_key
 from tests.functional.modules.test_vault_gpg import test_delete_key

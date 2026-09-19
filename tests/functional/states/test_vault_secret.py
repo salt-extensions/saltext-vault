@@ -16,11 +16,6 @@ def vault_secret(states):
     yield states.vault_secret
 
 
-@pytest.fixture(params=(False, True))
-def testmode(request):
-    return request.param
-
-
 @pytest.fixture
 def temp_secret(modules):
     key = "secret/my/secret"

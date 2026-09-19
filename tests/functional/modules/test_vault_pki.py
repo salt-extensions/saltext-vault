@@ -13,10 +13,17 @@ from cryptography.x509.oid import NameOID
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 from salt.modules.x509_v2 import create_csr
-from salt.utils.x509 import generate_rsa_privkey
 from salt.utils.x509 import load_cert
 
 from saltext.vault.utils.vault.helpers import dec2hex
+
+# pylint: disable=unused-import
+from tests.fixtures.vault_pki import private_key
+from tests.fixtures.vault_pki import roles_setup
+
+# pylint: enable=unused-import
+from tests.helpers.vault_pki import DEFAULT_CLUSTER_AIA_PATH
+from tests.helpers.vault_pki import DEFAULT_CLUSTER_PATH
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_disable_secret_engine
 from tests.support.vault import vault_enable_secret_engine
@@ -32,10 +39,6 @@ pytestmark = [
     pytest.mark.usefixtures("container", "secret_mounts"),
     pytest.mark.parametrize("secret_mounts", ("pki",), indirect=True),
 ]
-
-# Can't reset these to empty, so define reliable defaults instead
-DEFAULT_CLUSTER_PATH = "https://cluster1.vault.local/v1/pki"
-DEFAULT_CLUSTER_AIA_PATH = "http://foo.bar.baz/aia/"
 
 
 @pytest.fixture(scope="module")
@@ -68,32 +71,6 @@ def testissuer():
 @pytest.fixture
 def testissuer2():
     return {"issuer_name": "testissuer2", "common_name": "Test Issuer CA 2"}
-
-
-@pytest.fixture(scope="module")
-def private_key():
-    pk = generate_rsa_privkey(2048)
-    pk_bytes = pk.private_bytes(
-        serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
-    return pk_bytes.decode()
-
-
-@pytest.fixture(params=[["testrole"]])
-def roles_setup(request):  # pylint: disable=unused-argument
-    try:
-        for role_name in request.param:
-            role_args = request.getfixturevalue(role_name)
-            vault_write(f"pki/roles/{role_name}", **role_args)
-            assert role_name in vault_list("pki/roles")
-        yield
-    finally:
-        for role_name in request.param:
-            if role_name in vault_list("pki/roles"):
-                vault_delete(f"pki/roles/{role_name}")
-                assert role_name not in vault_list("pki/roles")
 
 
 @pytest.fixture

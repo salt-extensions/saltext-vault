@@ -9,7 +9,10 @@ from salt.utils.x509 import NAME_ATTRS_OID
 from salt.utils.x509 import load_cert
 from saltfactories.utils import random_string
 
-from tests.support.vault import vault_delete
+# pylint: disable=unused-import
+from tests.fixtures.vault_pki import clean_pki_mount
+
+# pylint: enable=unused-import
 from tests.support.vault import vault_read
 
 pytest.importorskip("docker")
@@ -131,14 +134,6 @@ def ca_minion(master, salt_version):
     )
     with factory.started():
         yield factory
-
-
-@pytest.fixture
-def clean_pki_mount():
-    try:
-        yield
-    finally:
-        vault_delete("pki/root")
 
 
 def _subject(cert, typ):
