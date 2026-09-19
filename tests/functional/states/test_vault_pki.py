@@ -7,6 +7,7 @@ from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from cryptography import x509 as cx509
@@ -19,6 +20,8 @@ from salt.utils.x509 import generate_rsa_privkey
 from salt.utils.x509 import load_cert
 from saltfactories.utils import random_string
 
+from saltext.vault.states.vault_pki import ROLE_ATTRS_UNVERIFIED_NOTE
+from saltext.vault.utils import vault as vaultutil
 from saltext.vault.utils.vault import helpers as hlp
 from saltext.vault.utils.vault import pki
 from tests.conftest import CONTAINER_TARGETS
@@ -811,6 +814,77 @@ def test_certificate_managed_missing_role(vault_pki, cert_args, testmode):
     assert ret.result is False
     assert not ret.changes
     assert "Role missing-role does not exist" in ret.comment
+
+
+@pytest.fixture
+def role_read_denied():
+    """
+    Simulate a policy denying read access to the role configuration.
+    """
+    real_query = vaultutil.query
+
+    def query(method, endpoint, *args, **kwargs):
+        if method == "GET" and endpoint.startswith("pki/roles/"):
+            raise vaultutil.VaultPermissionDeniedError("permission denied")
+        return real_query(method, endpoint, *args, **kwargs)
+
+    with patch("saltext.vault.utils.vault.query", query):
+        yield
+
+
+@pytest.mark.parametrize(
+    "testrole", ({"organization": "Test Org", "ou": "Test Unit"},), indirect=True
+)
+@pytest.mark.usefixtures("testrole", "existing_cert", "role_read_denied")
+def test_certificate_managed_role_read_denied(vault_pki, cert_args, testmode):
+    """
+    When role read access is denied and issuer_ref is specified explicitly,
+    drift in role-derived subject attributes/extensions must not cause a
+    reissuance, only a note.
+    """
+    serial = load_cert(cert_args["name"]).serial_number
+    cert_args["issuer_ref"] = "root"
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is True
+    assert not ret.changes
+    assert ROLE_ATTRS_UNVERIFIED_NOTE.format(role_name="testrole", mount="pki") in ret.comment
+    assert load_cert(cert_args["name"]).serial_number == serial
+
+
+@pytest.mark.parametrize(
+    "testrole", ({"organization": "Test Org", "ou": "Test Unit"},), indirect=True
+)
+@pytest.mark.usefixtures("testrole", "existing_cert", "role_read_denied")
+def test_certificate_managed_role_read_denied_controlled_attrs_verified(vault_pki, cert_args):
+    """
+    Subject attributes under the state's direct control (like CN) must still
+    be verified when role-derived attributes cannot be.
+    """
+    serial = load_cert(cert_args["name"]).serial_number
+    cert_args["issuer_ref"] = "root"
+    cert_args["common_name"] = "changed.example.com"
+    ret = vault_pki.certificate_managed(**cert_args)
+    assert ret.result is True
+    assert "subject_name" in ret.changes
+    cert = load_cert(cert_args["name"])
+    assert cert.serial_number != serial
+    assert (
+        cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["CN"])[0].value == "changed.example.com"
+    )
+    # Vault still applies the role-derived attributes during issuance
+    assert cert.subject.get_attributes_for_oid(NAME_ATTRS_OID["O"])[0].value == "Test Org"
+
+
+@pytest.mark.usefixtures("issuer_setup", "roles_setup", "role_read_denied")
+def test_certificate_managed_role_read_denied_without_issuer_ref(vault_pki, cert_args, testmode):
+    """
+    Without an explicit issuer_ref, the role provides the issuer reference,
+    so a denied role read cannot be masked and must fail the state.
+    """
+    ret = vault_pki.certificate_managed(**cert_args, test=testmode)
+    assert ret.result is False
+    assert not ret.changes
+    assert "PermissionDenied" in ret.comment
 
 
 @pytest.mark.usefixtures("issuer_setup")

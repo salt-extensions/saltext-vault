@@ -105,6 +105,35 @@ def test_certificate_managed_errors_are_reported(read_role, err):
     assert not res["changes"]
 
 
+@pytest.mark.usefixtures("file_mocks")
+def test_certificate_managed_role_read_denied_without_issuer_ref(read_role):
+    """
+    Without an explicit issuer_ref, the role provides the issuer reference,
+    so a denied role read cannot be masked and must fail the state.
+    """
+    read_role.side_effect = CommandExecutionError("VaultPermissionDeniedError: permission denied")
+    res = vault_pki.certificate_managed("/etc/pki/cert.pem", "example.com", "role", "pk")
+    assert res["result"] is False
+    assert "PermissionDenied" in res["comment"]
+    assert not res["changes"]
+
+
+@pytest.mark.usefixtures("file_mocks")
+def test_certificate_managed_role_read_denied_with_issuer_ref_is_masked(read_role, read_issuer):
+    """
+    With an explicit issuer_ref, a denied role read should not fail the state.
+    The issuer lookup happening afterwards proves the error was masked.
+    """
+    read_role.side_effect = CommandExecutionError("VaultPermissionDeniedError: permission denied")
+    read_issuer.return_value = None
+    res = vault_pki.certificate_managed(
+        "/etc/pki/cert.pem", "example.com", "role", "pk", issuer_ref="myissuer"
+    )
+    assert res["result"] is False
+    assert "Issuer 'myissuer' does not exist" in res["comment"]
+    assert not res["changes"]
+
+
 @pytest.mark.parametrize("func", ("role_managed", "role_absent"))
 @pytest.mark.parametrize("err", (CommandExecutionError, SaltInvocationError))
 def test_role_errors_are_reported(read_role, func, err):

@@ -125,6 +125,9 @@ def master_config_overrides():
                     # Denies read access to `pki/config/urls` and `pki/config/cluster`
                     # for all tests in this module to verify graceful degradation.
                     "pki_deny_urls",
+                    # Denies read access to `pki/roles/denied-*` to verify
+                    # graceful degradation with an explicit issuer_ref.
+                    "pki_deny_role",
                 ],
             },
         },
@@ -432,6 +435,77 @@ def test_certificate_managed_url_config_denied(
     assert "The certificate is in the correct state" in res["comment"]
     assert AIA_UNVERIFIED_NOTE in res["comment"]
     assert load_cert(str(cert_path)).serial_number == cert.serial_number
+
+
+@pytest.fixture
+def denied_role(vault_ca_setup):  # pylint: disable=unused-argument
+    """
+    A role whose configuration cannot be read by the minion
+    (via the pki_deny_role policy), configured with attributes
+    that end up in issued certificates.
+    """
+    role_name = "denied-role"
+    vault_write(
+        f"pki/roles/{role_name}",
+        ttl=3600,
+        max_ttl=86400,
+        allow_any_name=True,
+        enforce_hostnames=False,
+        organization="Test Org",
+    )
+    try:
+        yield role_name
+    finally:
+        vault_delete(f"pki/roles/{role_name}")
+
+
+ROLE_UNVERIFIED_NOTE = (
+    "Role-derived subject attributes and extensions were not verified "
+    "since the role `denied-role` on mount `pki` could not be read"
+)
+
+
+@pytest.mark.usefixtures("vault_ca_setup")
+def test_certificate_managed_role_read_denied(salt_call_cli, denied_role, tmp_path, private_key):
+    """
+    Ensure a denied role read access does not cause reissuance when
+    issuer_ref is specified explicitly, but fails the state otherwise.
+    """
+    cert_path = tmp_path / "cert"
+    state_args = {
+        "name": str(cert_path),
+        "common_name": "test.example.com",
+        "role_name": denied_role,
+        "issuer_ref": "root",
+        "private_key": private_key,
+        "ttl": "30m",
+        "ttl_remaining": 0,
+    }
+
+    res = _apply(salt_call_cli, "certificate_managed", **state_args)
+    assert res["result"] is True
+    assert "The certificate has been created" in res["comment"]
+    assert ROLE_UNVERIFIED_NOTE not in res["comment"]
+    cert = load_cert(str(cert_path))
+    assert _subject(cert, "CN") == "test.example.com"
+    assert _subject(cert, "O") == "Test Org"
+
+    res = _apply(salt_call_cli, "certificate_managed", **state_args)
+    assert res["result"] is True
+    assert not res["changes"]
+    assert "The certificate is in the correct state" in res["comment"]
+    assert ROLE_UNVERIFIED_NOTE in res["comment"]
+    assert load_cert(str(cert_path)).serial_number == cert.serial_number
+
+    # Without an explicit issuer_ref, the role read failure must fail the state
+    state_args.pop("issuer_ref")
+    ret = salt_call_cli.run("state.single", "vault_pki.certificate_managed", **state_args)
+    assert ret.returncode != 0
+    assert isinstance(ret.data, dict)
+    res = ret.data[next(iter(ret.data))]
+    assert res["result"] is False
+    assert not res["changes"]
+    assert "PermissionDenied" in res["comment"]
 
 
 def test_ca_certificate_managed_url_config_denied(
