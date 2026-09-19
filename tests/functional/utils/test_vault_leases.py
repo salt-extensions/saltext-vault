@@ -1,11 +1,15 @@
 import time
-from unittest.mock import patch
 
 import pytest
 
 from saltext.vault.utils import vault
 from saltext.vault.utils.vault import leases as vleases
 from tests.conftest import CONTAINER_TARGETS
+
+# pylint: disable=unused-import
+from tests.fixtures.vault import _event
+
+# pylint: enable=unused-import
 
 pytest.importorskip("docker")
 
@@ -27,12 +31,6 @@ def minion_config_overrides():
             },
         },
     }
-
-
-@pytest.fixture
-def _event():
-    with patch("saltext.vault.utils.vault.factory._get_event", autospec=True) as evt:
-        yield evt
 
 
 @pytest.fixture(params=[({}, False)])

@@ -15,6 +15,11 @@ from tests.support.vault import vault_write
 log = logging.getLogger(__name__)
 
 
+@pytest.fixture(params=(False, True))
+def testmode(request):
+    return request.param
+
+
 @pytest.fixture(scope="package")
 def minion_id():  # pragma: no cover
     return "func-tests-minion-opts"

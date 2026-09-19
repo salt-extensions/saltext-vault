@@ -15,10 +15,10 @@ from salt.utils.x509 import generate_rsa_privkey
 from salt.utils.x509 import load_cert
 
 from saltext.vault.states.vault_pki import ROLE_ATTRS_UNVERIFIED_NOTE
-from tests.functional.states.vault_pki.helpers import AIA_UNVERIFIED_NOTE
-from tests.functional.states.vault_pki.helpers import MOUNT_URL_CONFIG
-from tests.functional.states.vault_pki.helpers import _assert_embedded_aia
-from tests.functional.states.vault_pki.helpers import _not_valid_after
+from tests.helpers.vault_pki import AIA_UNVERIFIED_NOTE
+from tests.helpers.vault_pki import MOUNT_URL_CONFIG
+from tests.helpers.vault_pki import _assert_embedded_aia
+from tests.helpers.vault_pki import _not_valid_after
 from tests.support.vault import vault_write
 
 pytest.importorskip("docker")

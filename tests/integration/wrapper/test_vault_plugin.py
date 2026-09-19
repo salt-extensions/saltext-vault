@@ -3,14 +3,14 @@ import pytest
 from tests.conftest import CONTAINER_TARGETS
 
 # pylint: disable=unused-import
-from tests.functional.modules.test_vault_plugin import _auth_plugin
-from tests.functional.modules.test_vault_plugin import _db_plugin
-from tests.functional.modules.test_vault_plugin import _secret_plugin
-from tests.functional.modules.test_vault_plugin import auth_plugin
-from tests.functional.modules.test_vault_plugin import db_plugin
-from tests.functional.modules.test_vault_plugin import plugins_pinned
-from tests.functional.modules.test_vault_plugin import plugins_registered
-from tests.functional.modules.test_vault_plugin import secret_plugin
+from tests.fixtures.vault_plugin import _auth_plugin
+from tests.fixtures.vault_plugin import _db_plugin
+from tests.fixtures.vault_plugin import _secret_plugin
+from tests.fixtures.vault_plugin import auth_plugin
+from tests.fixtures.vault_plugin import db_plugin
+from tests.fixtures.vault_plugin import plugins_pinned
+from tests.fixtures.vault_plugin import plugins_registered
+from tests.fixtures.vault_plugin import secret_plugin
 from tests.functional.modules.test_vault_plugin import test_list
 from tests.functional.modules.test_vault_plugin import test_list_includes_custom_versioned
 from tests.functional.modules.test_vault_plugin import test_list_versions

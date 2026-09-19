@@ -1,15 +1,15 @@
 import pytest
 
 # pylint: disable=unused-import
+from tests.fixtures.vault_ssh import ec_priv
+from tests.fixtures.vault_ssh import ec_priv_file
+from tests.fixtures.vault_ssh import ec_pub
+from tests.fixtures.vault_ssh import iprole
 from tests.functional.modules.vault_ssh.conftest import ca_priv
 from tests.functional.modules.vault_ssh.conftest import ca_priv_file
 from tests.functional.modules.vault_ssh.conftest import ca_pub
 from tests.functional.modules.vault_ssh.conftest import ca_setup
-from tests.functional.modules.vault_ssh.conftest import ec_priv
-from tests.functional.modules.vault_ssh.conftest import ec_priv_file
-from tests.functional.modules.vault_ssh.conftest import ec_pub
 from tests.functional.modules.vault_ssh.conftest import hostrole
-from tests.functional.modules.vault_ssh.conftest import iprole
 from tests.functional.modules.vault_ssh.conftest import roles_setup
 from tests.functional.modules.vault_ssh.conftest import userrole
 

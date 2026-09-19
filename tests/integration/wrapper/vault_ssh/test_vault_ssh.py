@@ -3,8 +3,8 @@ import pytest
 from tests.conftest import CONTAINER_TARGETS
 
 # pylint: disable=unused-import
-from tests.functional.modules.vault_ssh.test_vault_ssh import _temp_ca
-from tests.functional.modules.vault_ssh.test_vault_ssh import _temp_role
+from tests.fixtures.vault_ssh import _temp_ca
+from tests.fixtures.vault_ssh import _temp_role
 from tests.functional.modules.vault_ssh.test_vault_ssh import test_create_ca
 from tests.functional.modules.vault_ssh.test_vault_ssh import test_create_ca_key_spec
 from tests.functional.modules.vault_ssh.test_vault_ssh import test_create_ca_with_keys

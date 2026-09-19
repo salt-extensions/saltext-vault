@@ -1,8 +1,12 @@
 import pytest
 
-from tests.support.vault import vault_delete
+# pylint: disable=unused-import
+from tests.fixtures.vault_ssh import _temp_ca
+from tests.fixtures.vault_ssh import _temp_role
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
+
+# pylint: enable=unused-import
 
 try:
     from cryptography.hazmat.primitives.serialization import SSHCertificateType
@@ -49,15 +53,6 @@ def test_read_role(vault_ssh):
     for var, val in expected.items():
         assert var in res
         assert res[var] == val
-
-
-@pytest.fixture
-def _temp_role():
-    name = "testrole"
-    try:
-        yield name
-    finally:
-        vault_delete(f"ssh/roles/{name}")
 
 
 def test_write_role_ca(vault_ssh, userrole, _temp_role):
@@ -120,14 +115,6 @@ def test_zeroaddress_roles(vault_ssh):
     assert vault_ssh.delete_zeroaddr_roles() is True
     res = vault_ssh.list_roles_zeroaddr()
     assert res == []
-
-
-@pytest.fixture
-def _temp_ca():
-    try:
-        yield
-    finally:
-        vault_delete("ssh/config/ca")
 
 
 @pytest.mark.usefixtures("_temp_ca")
