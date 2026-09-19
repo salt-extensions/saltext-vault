@@ -11,6 +11,11 @@ from saltext.vault.utils import vault
 from saltext.vault.utils.vault import cache as vcache
 from saltext.vault.utils.vault import leases as vleases
 
+# pylint: disable=unused-import
+from tests.unit.fixtures.vault import data
+
+# pylint: enable=unused-import
+
 
 @pytest.fixture
 def cbank():
@@ -20,11 +25,6 @@ def cbank():
 @pytest.fixture
 def ckey():
     return "test"
-
-
-@pytest.fixture
-def data():
-    return {"foo": "bar"}
 
 
 @pytest.fixture

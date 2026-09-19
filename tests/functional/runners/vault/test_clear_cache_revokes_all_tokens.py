@@ -1,6 +1,5 @@
 import copy
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 import salt.cache
@@ -8,7 +7,12 @@ import salt.crypt
 
 from saltext.vault.utils.vault import factory as vfactory
 from tests.conftest import CONTAINER_TARGETS
+
+# pylint: disable=unused-import
+from tests.fixtures.vault import _event
 from tests.support.vault import vault_write
+
+# pylint: enable=unused-import
 
 pytest.importorskip("docker")
 
@@ -78,12 +82,6 @@ def master_runtime(master_opts):
     Path(master_opts["pki_dir"]).mkdir(parents=True, exist_ok=True)
     (Path(master_opts["cachedir"]) / "proc").mkdir(parents=True, exist_ok=True)
     salt.crypt.MasterKeys(master_opts)
-
-
-@pytest.fixture
-def _event():
-    with patch("saltext.vault.utils.vault.factory._get_event", autospec=True) as evt:
-        yield evt
 
 
 @pytest.fixture

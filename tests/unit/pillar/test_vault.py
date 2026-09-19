@@ -1,6 +1,5 @@
 import logging
 from unittest.mock import ANY
-from unittest.mock import patch
 
 import pytest
 from salt.exceptions import InvalidConfigError
@@ -8,22 +7,16 @@ from salt.exceptions import InvalidConfigError
 import saltext.vault.utils.vault as vaultutil
 from saltext.vault.pillar import vault
 
+# pylint: disable=unused-import
+from tests.unit.fixtures.vault import data
+from tests.unit.fixtures.vault import read_kv
+
+# pylint: enable=unused-import
+
 
 @pytest.fixture
 def configure_loader_modules():
     return {vault: {}}
-
-
-@pytest.fixture
-def data():
-    return {"foo": "bar"}
-
-
-@pytest.fixture
-def read_kv(data):
-    with patch("saltext.vault.utils.vault.read_kv", autospec=True) as read:
-        read.return_value = data
-        yield read
 
 
 def test_any_path_required():

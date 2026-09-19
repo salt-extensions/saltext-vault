@@ -1,16 +1,14 @@
 import pytest
 
-from tests.support.vault import vault_delete
+# pylint: disable=unused-import
+from tests.fixtures.vault_ssh import _temp_ca
+from tests.fixtures.vault_ssh import _temp_role
+
+# pylint: enable=unused-import
+from tests.helpers.vault_ssh import CERT_CHECK
+from tests.helpers.vault_ssh import get_cert
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
-
-try:
-    from cryptography.hazmat.primitives.serialization import SSHCertificateType
-    from cryptography.hazmat.primitives.serialization import load_ssh_public_identity
-
-    CERT_CHECK = True
-except ImportError:
-    CERT_CHECK = False
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
@@ -49,15 +47,6 @@ def test_read_role(vault_ssh):
     for var, val in expected.items():
         assert var in res
         assert res[var] == val
-
-
-@pytest.fixture
-def _temp_role():
-    name = "testrole"
-    try:
-        yield name
-    finally:
-        vault_delete(f"ssh/roles/{name}")
 
 
 def test_write_role_ca(vault_ssh, userrole, _temp_role):
@@ -122,14 +111,6 @@ def test_zeroaddress_roles(vault_ssh):
     assert res == []
 
 
-@pytest.fixture
-def _temp_ca():
-    try:
-        yield
-    finally:
-        vault_delete("ssh/config/ca")
-
-
 @pytest.mark.usefixtures("_temp_ca")
 def test_create_ca(vault_ssh):
     res = vault_ssh.create_ca()
@@ -191,8 +172,7 @@ def test_sign_key_user(vault_ssh, ec_pub, container):
         expected.add("issuer_id")
     assert set(res) == expected
     if CERT_CHECK:
-        cert = load_cert(res["signed_key"])
-        assert cert.type == SSHCertificateType.USER
+        cert = get_cert(res["signed_key"], "user")
         assert cert.critical_options == {b"force-command": b"rm -rf /"}
         assert cert.extensions == {b"permit-pty": b""}
         assert cert.valid_principals == [b"foobar"]
@@ -206,8 +186,7 @@ def test_sign_key_host(vault_ssh, ec_pub, container):
         expected.add("issuer_id")
     assert set(res) == expected
     if CERT_CHECK:
-        cert = load_cert(res["signed_key"])
-        assert cert.type == SSHCertificateType.HOST
+        cert = get_cert(res["signed_key"], "host")
         assert not cert.critical_options
         assert cert.valid_principals == [b"foo.bar.biz"]
 
@@ -242,8 +221,7 @@ def test_generate_key_cert_user(vault_ssh, container, valid_principals, ttl, key
     assert res["private_key_type"] == "ssh-rsa"
     assert res["private_key"].startswith("-----BEGIN")
     if CERT_CHECK:
-        cert = load_cert(res["signed_key"])
-        assert cert.type == SSHCertificateType.USER
+        cert = get_cert(res["signed_key"], "user")
         assert cert.critical_options == {b"force-command": b"rm -rf /"}
         assert cert.extensions == {b"permit-pty": b""}
         if valid_principals is None:
@@ -272,8 +250,7 @@ def test_generate_key_cert_host(vault_ssh, container):
     assert res["private_key_type"] == "ssh-rsa"
     assert res["private_key"].startswith("-----BEGIN")
     if CERT_CHECK:
-        cert = load_cert(res["signed_key"])
-        assert cert.type == SSHCertificateType.HOST
+        cert = get_cert(res["signed_key"], "host")
         assert not cert.critical_options
         assert cert.valid_principals == [b"foo.bar.biz"]
 
@@ -295,7 +272,3 @@ def test_get_signing_policy_with_empty_role_lists(vault_ssh):
     assert "" not in policy.get("allowed_valid_principals", [])
     assert "" not in policy.get("allowed_extensions", [])
     assert policy.get("all_principals") is not True
-
-
-def load_cert(data):
-    return load_ssh_public_identity(data.encode())

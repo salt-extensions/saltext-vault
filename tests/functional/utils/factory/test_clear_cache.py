@@ -1,9 +1,12 @@
-from unittest.mock import patch
-
 import pytest
 
 from saltext.vault.utils.vault.client import AuthenticatedVaultClient
 from tests.conftest import CONTAINER_TARGETS
+
+# pylint: disable=unused-import
+from tests.fixtures.vault import _event
+
+# pylint: enable=unused-import
 from tests.support.vault import vault_write
 
 pytest.importorskip("docker")
@@ -41,12 +44,6 @@ def minion_config_overrides(approle):
             },
         },
     }
-
-
-@pytest.fixture
-def _event():
-    with patch("saltext.vault.utils.vault.factory._get_event", autospec=True) as evt:
-        yield evt
 
 
 @pytest.mark.parametrize("connection,session", ((False, False), (True, False), (False, True)))

@@ -14,7 +14,7 @@ from salt.utils.x509 import NAME_ATTRS_OID
 from salt.utils.x509 import load_cert
 
 from tests.conftest import CONTAINER_TARGETS
-from tests.functional.states.vault_pki.helpers import pregen_csr
+from tests.helpers.vault_pki import pregen_csr
 from tests.support.vault import vault_write
 
 pytest.importorskip("docker")

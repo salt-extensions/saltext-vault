@@ -99,15 +99,7 @@ def fake_runner(master, salt_run_cli):
         salt_run_cli.run("saltutil.sync_runners")
 
 
-@pytest.fixture
-def approle_synced(salt_run_cli, minion):
-    ret = salt_run_cli.run("vault.sync_approles", minion.id)
-    assert ret.returncode == 0
-    assert ret.data is True
-    return ret
-
-
-@pytest.mark.usefixtures("approle_synced", "fake_runner")
+@pytest.mark.usefixtures("fake_runner")
 def test_unwrap_error_fires_security_event(
     salt_call_cli, event_listener, master, minion, master_approle_mount, salt_version
 ):

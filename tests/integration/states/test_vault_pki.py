@@ -9,7 +9,11 @@ from salt.utils.x509 import NAME_ATTRS_OID
 from salt.utils.x509 import load_cert
 from saltfactories.utils import random_string
 
-from tests.support.vault import vault_delete
+# pylint: disable=unused-import
+from tests.fixtures.vault_pki import clean_pki_mount
+
+# pylint: enable=unused-import
+from tests.helpers.vault_pki import _subject
 from tests.support.vault import vault_read
 
 pytest.importorskip("docker")
@@ -133,27 +137,8 @@ def ca_minion(master, salt_version):
         yield factory
 
 
-@pytest.fixture
-def clean_pki_mount():
-    try:
-        yield
-    finally:
-        vault_delete("pki/root")
-
-
-def _subject(cert, typ):
-    return cert.subject.get_attributes_for_oid(NAME_ATTRS_OID[typ])[0].value
-
-
-def _apply(salt_call_cli, state_func, **kwargs):
-    ret = salt_call_cli.run("state.single", f"vault_pki.{state_func}", **kwargs)
-    assert ret.returncode == 0, ret.stderr
-    assert isinstance(ret.data, dict)
-    return ret.data[next(iter(ret.data))]
-
-
 @pytest.mark.usefixtures("clean_pki_mount")
-def test_intermediate_issuer_managed_with_remote_signing(salt_call_cli, ca_minion):
+def test_intermediate_issuer_managed_with_remote_signing(states, ca_minion):
     """
     Ensure an intermediate CA can be provisioned and rotated when its
     certificate is signed by a CA minion via peer communication,
@@ -169,9 +154,9 @@ def test_intermediate_issuer_managed_with_remote_signing(salt_call_cli, ca_minio
         "append_certs": [CA_CERT],
     }
 
-    res = _apply(salt_call_cli, "intermediate_issuer_managed", **state_args)
-    assert res["result"] is True
-    assert "created" in res["changes"]
+    res = states.vault_pki.intermediate_issuer_managed(**state_args)
+    assert res.result is True
+    assert "created" in res.changes
     issuer_info = vault_read("pki/issuer/default")["data"]
     cert = load_cert(issuer_info["certificate"])
     assert _subject(cert, "CN") == "Test Remote Intermediate CA"
@@ -187,19 +172,19 @@ def test_intermediate_issuer_managed_with_remote_signing(salt_call_cli, ca_minio
     assert _subject(load_cert(chain[1]), "CN") == "Test"
 
     # The state should be idempotent
-    res = _apply(salt_call_cli, "intermediate_issuer_managed", **state_args)
-    assert res["result"] is True
-    assert not res["changes"]
-    assert "present as specified" in res["comment"]
+    res = states.vault_pki.intermediate_issuer_managed(**state_args)
+    assert res.result is True
+    assert not res.changes
+    assert "present as specified" in res.comment
 
     # ... also when the signing policy overrides args (x509.certificate_managed works the same)
     state_args["max_path_length"] = 1
     state_args["subjectKeyIdentifier"] = "cafebabe"
     state_args["O"] = "Other org"
-    res = _apply(salt_call_cli, "intermediate_issuer_managed", **state_args)
-    assert res["result"] is True
-    assert not res["changes"]
-    assert "present as specified" in res["comment"]
+    res = states.vault_pki.intermediate_issuer_managed(**state_args)
+    assert res.result is True
+    assert not res.changes
+    assert "present as specified" in res.comment
     cert = load_cert(vault_read("pki/issuer/default")["data"]["certificate"])
     assert cert.extensions.get_extension_for_class(cx509.BasicConstraints).value.path_length == 0
     assert (
@@ -209,9 +194,9 @@ def test_intermediate_issuer_managed_with_remote_signing(salt_call_cli, ca_minio
 
     # Rotation should replace the default issuer, but reuse its key
     state_args["name"] = "Rotated Remote Intermediate CA"
-    res = _apply(salt_call_cli, "intermediate_issuer_managed", **state_args)
-    assert res["result"] is True
-    assert res["changes"]["cert"]["subject_name"] == {
+    res = states.vault_pki.intermediate_issuer_managed(**state_args)
+    assert res.result is True
+    assert res.changes["cert"]["subject_name"] == {
         "old": "CN=Test Remote Intermediate CA,O=Test Org",
         "new": "CN=Rotated Remote Intermediate CA,O=Test Org",
     }

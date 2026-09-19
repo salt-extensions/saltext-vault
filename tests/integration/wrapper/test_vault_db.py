@@ -5,11 +5,18 @@ import pytest
 from tests.conftest import CONTAINER_TARGETS
 
 # pylint: disable=unused-import
-from tests.functional.modules.test_vault_db import connection_setup
-from tests.functional.modules.test_vault_db import mysql_image
-from tests.functional.modules.test_vault_db import role_args_common
-from tests.functional.modules.test_vault_db import role_static_setup
-from tests.functional.modules.test_vault_db import roles_setup
+from tests.fixtures.mysql import create_mysql_combo
+from tests.fixtures.mysql import mysql_combo
+from tests.fixtures.mysql import mysql_container
+from tests.fixtures.vault_db import connection_setup
+from tests.fixtures.vault_db import mysql_image
+from tests.fixtures.vault_db import role_args_common
+from tests.fixtures.vault_db import role_static_setup
+from tests.fixtures.vault_db import roles_setup
+from tests.fixtures.vault_db import testdb
+from tests.fixtures.vault_db import testreissuerole
+from tests.fixtures.vault_db import testrole
+from tests.fixtures.vault_db import teststaticrole
 from tests.functional.modules.test_vault_db import test_clear_cached
 from tests.functional.modules.test_vault_db import test_delete_connection
 from tests.functional.modules.test_vault_db import test_delete_role
@@ -30,16 +37,9 @@ from tests.functional.modules.test_vault_db import test_update_connection
 from tests.functional.modules.test_vault_db import test_write_connection
 from tests.functional.modules.test_vault_db import test_write_role
 from tests.functional.modules.test_vault_db import test_write_static_role
-from tests.functional.modules.test_vault_db import testdb
-from tests.functional.modules.test_vault_db import testreissuerole
-from tests.functional.modules.test_vault_db import testrole
-from tests.functional.modules.test_vault_db import teststaticrole
 
 # pylint: enable=unused-import
-from tests.support.helpers import WrapperFuncProxy
-from tests.support.mysql import create_mysql_combo  # pylint: disable=unused-import
-from tests.support.mysql import mysql_combo  # pylint: disable=unused-import
-from tests.support.mysql import mysql_container  # pylint: disable=unused-import
+from tests.support.helpers import CliFuncProxy
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
 from tests.support.vault import vault_revoke
@@ -80,7 +80,7 @@ def master_config_overrides():
 @pytest.fixture(autouse=True)
 def vault_db(salt_ssh_cli, vault_policies):  # pylint: disable=unused-argument
     try:
-        yield WrapperFuncProxy("vault_db", salt_ssh_cli)
+        yield CliFuncProxy(salt_ssh_cli).vault_db
     finally:
         # prevent dangling leases, which prevent disabling the secret engine
         assert vault_revoke("database/creds", prefix=True)

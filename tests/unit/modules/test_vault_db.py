@@ -8,6 +8,11 @@ from salt.exceptions import SaltInvocationError
 from saltext.vault.modules import vault_db
 from saltext.vault.utils import vault
 
+# pylint: disable=unused-import
+from tests.unit.fixtures.vault import query
+
+# pylint: enable=unused-import
+
 
 @pytest.fixture
 def configure_loader_modules():
@@ -24,12 +29,6 @@ def _conn_absent():
         "saltext.vault.modules.vault_db.fetch_connection", return_value=None, autospec=True
     ) as fetch:
         yield fetch
-
-
-@pytest.fixture
-def query():
-    with patch("saltext.vault.utils.vault.query", return_value=True, autospec=True) as _query:
-        yield _query
 
 
 @pytest.mark.parametrize(

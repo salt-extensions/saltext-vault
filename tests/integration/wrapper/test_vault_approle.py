@@ -3,9 +3,9 @@ import pytest
 from tests.conftest import CONTAINER_TARGETS
 
 # pylint: disable=unused-import
+from tests.fixtures.vault_approle import approle_auth
+from tests.fixtures.vault_approle import roles_setup
 from tests.functional.modules.test_vault_approle import _cached_approle
-from tests.functional.modules.test_vault_approle import approle_auth
-from tests.functional.modules.test_vault_approle import roles_setup
 from tests.functional.modules.test_vault_approle import test_clear_cached
 from tests.functional.modules.test_vault_approle import test_delete
 from tests.functional.modules.test_vault_approle import test_destroy_secret_id
@@ -23,7 +23,7 @@ from tests.functional.modules.test_vault_approle import testreissuerole
 from tests.functional.modules.test_vault_approle import testrole
 
 # pylint: enable=unused-import
-from tests.support.helpers import WrapperFuncProxy
+from tests.support.helpers import CliFuncProxy
 
 pytest.importorskip("docker")
 
@@ -55,4 +55,4 @@ def master_config_overrides():
 
 @pytest.fixture(scope="module")
 def vault_approle(salt_ssh_cli, approle_auth, vault_policies):  # pylint: disable=unused-argument
-    return WrapperFuncProxy("vault_approle", salt_ssh_cli)
+    return CliFuncProxy(salt_ssh_cli).vault_approle

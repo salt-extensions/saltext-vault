@@ -14,6 +14,11 @@ from salt.exceptions import SaltInvocationError
 import saltext.vault.utils.vault as vaultutil
 from saltext.vault.modules import vault_pki
 
+# pylint: disable=unused-import
+from tests.unit.fixtures.vault import data
+
+# pylint: enable=unused-import
+
 
 @pytest.fixture
 def configure_loader_modules():
@@ -24,11 +29,6 @@ def configure_loader_modules():
             "__context__": {},
         }
     }
-
-
-@pytest.fixture
-def data():
-    return {"foo": "bar"}
 
 
 @pytest.fixture

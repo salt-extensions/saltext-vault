@@ -425,6 +425,19 @@ def secret_mounts(request, container):  # pylint: disable=unused-argument
 
 
 @pytest.fixture(scope="module")
+def pillar_defaults():
+    """
+    When using the pillar_base fixture, set pillar values for the default minion.
+    Expects a mapping of sls file name (without .sls suffix) to data it should
+    contain. The top file is created automatically, if not set.
+
+    By default, ensures the pillar is refreshed on the minion.
+    Return a tuple of False, {...} to not refresh it.
+    """
+    return {}
+
+
+@pytest.fixture(scope="module")
 def vault_secrets_defaults():
     """
     Set vault KV secrets by requiring the `vault_secrets` fixture and redefining

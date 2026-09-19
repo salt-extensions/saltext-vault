@@ -4,6 +4,7 @@ from contextlib import ExitStack
 
 import pytest
 
+from tests.support.helpers import CliFuncProxy
 from tests.support.vault import vault_delete_secret
 from tests.support.vault import vault_write_secret
 
@@ -45,19 +46,6 @@ def salt_ssh_cli(
         target_host="localhost",
         client_key=str(sshd_config_dir / "client_key"),
     )
-
-
-@pytest.fixture(scope="module")
-def pillar_defaults():
-    """
-    When using the pillar_base fixture, set pillar values for the default minion.
-    Expects a mapping of sls file name (without .sls suffix) to data it should
-    contain. The top file is created automatically, if not set.
-
-    By default, ensures the pillar is refreshed on the minion.
-    Return a tuple of False, {...} to not refresh it.
-    """
-    return {}
 
 
 @pytest.fixture(scope="module")
@@ -154,3 +142,19 @@ def _pillar_files(pillar_defaults, target, request=None):
     for sls_name, sls_contents in defs.items():
         files.append((f"{sls_name}.sls", json.dumps(sls_contents).replace("%ID", target)))
     return files, refresh
+
+
+@pytest.fixture(scope="module")
+def modules(minion):
+    """
+    Facilitate fixture reuse between functional and integration tests.
+    """
+    return CliFuncProxy(minion.salt_call_cli())
+
+
+@pytest.fixture(scope="module")
+def states(minion):
+    """
+    Facilitate fixture reuse between functional and integration tests.
+    """
+    return CliFuncProxy(minion.salt_call_cli(), states=True)

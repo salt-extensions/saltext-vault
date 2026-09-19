@@ -1,11 +1,18 @@
 from unittest.mock import ANY
-from unittest.mock import patch
 
 import pytest
 import salt.exceptions
 
 import saltext.vault.utils.vault as vaultutil
 from saltext.vault.sdb import vault
+
+# pylint: disable=unused-import
+from tests.unit.fixtures.vault import patch_kv
+from tests.unit.fixtures.vault import read_kv
+from tests.unit.fixtures.vault import write_kv
+from tests.unit.fixtures.vault import write_kv_err
+
+# pylint: enable=unused-import
 
 
 @pytest.fixture
@@ -16,13 +23,6 @@ def configure_loader_modules():
 @pytest.fixture
 def data():
     return {"bar": "super awesome"}
-
-
-@pytest.fixture
-def read_kv(data):
-    with patch("saltext.vault.utils.vault.read_kv", autospec=True) as read:
-        read.return_value = data
-        yield read
 
 
 @pytest.fixture
@@ -40,24 +40,6 @@ def read_kv_not_found_once(read_kv, data):
 def read_kv_err(read_kv):
     read_kv.side_effect = vaultutil.VaultPermissionDeniedError("damn")
     yield read_kv
-
-
-@pytest.fixture
-def write_kv():
-    with patch("saltext.vault.utils.vault.write_kv", autospec=True) as write:
-        yield write
-
-
-@pytest.fixture
-def write_kv_err(write_kv):
-    write_kv.side_effect = vaultutil.VaultPermissionDeniedError("damn")
-    yield write_kv
-
-
-@pytest.fixture
-def patch_kv():
-    with patch("saltext.vault.utils.vault.patch_kv", autospec=True) as patch_kv:
-        yield patch_kv
 
 
 @pytest.mark.parametrize(

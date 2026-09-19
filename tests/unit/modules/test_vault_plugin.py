@@ -1,11 +1,14 @@
-from unittest.mock import patch
-
 import pytest
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 
 from saltext.vault.modules import vault_plugin
 from saltext.vault.utils import vault
+
+# pylint: disable=unused-import
+from tests.unit.fixtures.vault import query
+
+# pylint: enable=unused-import
 
 
 @pytest.fixture
@@ -15,12 +18,6 @@ def configure_loader_modules():
             "__grains__": {"id": "test-minion"},
         }
     }
-
-
-@pytest.fixture
-def query():
-    with patch("saltext.vault.utils.vault.query", return_value=True, autospec=True) as _query:
-        yield _query
 
 
 @pytest.mark.parametrize(

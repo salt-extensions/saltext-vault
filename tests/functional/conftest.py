@@ -15,6 +15,11 @@ from tests.support.vault import vault_write
 log = logging.getLogger(__name__)
 
 
+@pytest.fixture(params=(False, True))
+def testmode(request):
+    return request.param
+
+
 @pytest.fixture(scope="package")
 def minion_id():  # pragma: no cover
     return "func-tests-minion-opts"
@@ -126,19 +131,6 @@ def modules(loaders):  # pragma: no cover
 @pytest.fixture(scope="module")
 def states(loaders):  # pragma: no cover
     return loaders.states
-
-
-@pytest.fixture(scope="module")
-def pillar_defaults():
-    """
-    When using the pillar_base fixture, set pillar values for the default minion.
-    Expects a mapping of sls file name (without .sls suffix) to data it should
-    contain. The top file is created automatically, if not set.
-
-    By default, ensures the pillar is refreshed on the minion.
-    Return a tuple of False, {...} to not refresh it.
-    """
-    return {}
 
 
 @pytest.fixture(scope="module")
