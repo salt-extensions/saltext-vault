@@ -55,6 +55,16 @@ log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 __virtualname__ = "vault_pki"
 
+URL_EXTS_UNVERIFIED_NOTE = (
+    "URL-derived certificate extensions (AIA) were not verified since "
+    "the URL configuration of mount `{mount}` could not be read/rendered"
+)
+
+ROLE_ATTRS_UNVERIFIED_NOTE = (
+    "Role-derived subject attributes and extensions were not verified "
+    "since the role `{role_name}` on mount `{mount}` could not be read"
+)
+
 
 def __virtual__():
     try:
@@ -141,6 +151,10 @@ def certificate_managed(
         This requires read access to the role, issuer and mount default URL configuration.
         If read access to the URL configuration is denied, URL-derived extensions
         are not verified and a note is appended to the state's comment instead.
+        The same graceful fallback applies to role-derived subject attributes and
+        extensions when read access to the role is denied, but only if ``issuer_ref``
+        is specified explicitly - otherwise, the role configuration is required
+        to discover the signing issuer and the state fails, as it always has.
 
         Also, when ``issuer_ref`` is unspecified, now uses the generic ``<mount>/sign*``
         endpoints instead of the issuer-specific ``<mount>/issuer/<issuer_ref>/sign/<role_name>``
@@ -152,6 +166,8 @@ def certificate_managed(
 
         # Need to read the role configuration in case of missing issuer_ref
         # and to more accurately predict changes.
+        # Note: When issuer_ref is specified explicitly, failure to read
+        # this does not cause reissuance, only a note.
         path "<mount>/roles/<role_name>" {
             capabilities = ["read"]
         }
@@ -384,15 +400,33 @@ def certificate_managed(
     )
     # An empty role_name and thus role_info is allowed when signing verbatim
     role_info: dict[str, typing.Any] = {}
+    role_unverified = False
     max_ttl = 0
     truncates_at = None
 
     def setup():
-        nonlocal alt_names, issuer_ref, role_info
+        nonlocal alt_names, issuer_ref, role_info, role_unverified
         if role_name is not None:
-            role_info = __salt__["vault_pki.read_role"](role_name, mount=mount)
-            if role_info is None:
-                raise CommandExecutionError(f"Role {role_name} does not exist")
+            try:
+                role_info = __salt__["vault_pki.read_role"](role_name, mount=mount)
+            except CommandExecutionError as err:
+                if "PermissionDenied" not in str(err) or issuer_ref is None:
+                    # Without an explicit issuer_ref, the role provides the reference
+                    # for reading the issuer this state compares certificates against,
+                    # hence a fallback would not be idempotent with non-default role issuers.
+                    raise
+                log.warning(
+                    "Failed reading role '%s'. Consider allowing read access to `%s/roles/%s`. "
+                    "Role-derived certificate attributes cannot be verified and the role's "
+                    "`max_ttl` cannot be taken into account without it.",
+                    role_name,
+                    mount,
+                    role_name,
+                )
+                role_unverified = True
+            else:
+                if role_info is None:
+                    raise CommandExecutionError(f"Role {role_name} does not exist")
 
         if csr and alt_names and role_info.get("use_csr_sans", True):
             # SANs don't fall back to alt_names (we simulate that when generating a CSR on the fly).
@@ -461,7 +495,7 @@ def certificate_managed(
                 effective_ttl,
                 int((truncates_at - datetime.now(tz=timezone.utc)).total_seconds()),
             )
-        return pki.check_cert_for_changes(
+        changes, unverified_url_exts, unverified_role_attrs = pki.check_cert_for_changes(
             current=current,
             issuer=issuer_info["certificate"],
             private_key=private_key,
@@ -478,13 +512,19 @@ def certificate_managed(
             key_usage=key_usage,
             not_after=not_after,
             private_key_passphrase=private_key_passphrase,
-            role_info=role_info,
+            role_info=None if role_unverified else role_info,
             serial_number=serial_number,
             ttl=effective_ttl,
             urls=urls,
             user_ids=user_ids,
             **cert_args,
         )
+        notes = []
+        if unverified_url_exts:
+            notes.append(URL_EXTS_UNVERIFIED_NOTE.format(mount=mount))
+        if unverified_role_attrs:
+            notes.append(ROLE_ATTRS_UNVERIFIED_NOTE.format(role_name=role_name, mount=mount))
+        return changes, notes
 
     def sign():
         issued_cert = __salt__["vault_pki.sign_certificate"](
@@ -818,7 +858,7 @@ def ca_certificate_managed(
                 ttl_seconds,
                 int((issuer_expiry - datetime.now(tz=timezone.utc)).total_seconds()),
             )
-        return pki.check_ca_cert_for_changes(
+        changes, unverified_url_exts = pki.check_ca_cert_for_changes(
             current=current,
             issuer=issuer_info["certificate"],
             private_key=private_key,
@@ -850,6 +890,10 @@ def ca_certificate_managed(
             urls=urls,
             **cert_args,
         )
+        notes = []
+        if unverified_url_exts:
+            notes.append(URL_EXTS_UNVERIFIED_NOTE.format(mount=mount))
+        return changes, notes
 
     def sign():
         nonlocal not_after
@@ -953,7 +997,7 @@ def _certificate_file_managed(
         Receives the (symlink-resolved) path of the current certificate file,
         the signing issuer's info, the mount's effective URL configuration and
         the CA chain to append, returns a tuple of (certificate changes,
-        whether URL-derived extensions could not be verified).
+        list of notes to append to the state's comment).
 
     sign
         Callback requesting the new certificate from Vault. Returns the certificate.
@@ -1042,12 +1086,8 @@ def _certificate_file_managed(
                 changes["replaced"] = True
             else:
                 urls = _get_urls(issuer_info, mount=mount)
-                changes, unverified_url_exts = check_cert(name, issuer_info, urls, ca_chain)
-                if unverified_url_exts:
-                    notes.append(
-                        "URL-derived certificate extensions (AIA) were not verified since "
-                        f"the URL configuration of mount `{mount}` could not be read/rendered"
-                    )
+                changes, check_notes = check_cert(name, issuer_info, urls, ca_chain)
+                notes.extend(check_notes)
 
         else:
             changes["created"] = True
@@ -1867,10 +1907,7 @@ def intermediate_issuer_managed(  # pylint: disable=too-many-arguments,too-many-
                 urls=urls,
             )
             if unverified_url_exts:
-                notes.append(
-                    "URL-derived certificate extensions (AIA) were not verified since "
-                    f"the URL configuration of mount `{issuer_mount}` could not be read/rendered"
-                )
+                notes.append(URL_EXTS_UNVERIFIED_NOTE.format(mount=issuer_mount))
         else:
             if "signing_policy" in cert_args:
                 x509_policy = __salt__["x509.get_signing_policy"](
@@ -2334,10 +2371,7 @@ def root_issuer_managed(  # pylint: disable=too-many-arguments,too-many-locals
             # URL-derived extensions don't trigger a rotation, but their drift
             # (or our inability to verify them) should be reported.
             if urls is None:
-                notes.append(
-                    "URL-derived certificate extensions (AIA) were not verified since "
-                    f"the URL configuration of mount `{mount}` could not be read/rendered"
-                )
+                notes.append(URL_EXTS_UNVERIFIED_NOTE.format(mount=mount))
             else:
                 notes.append(
                     "The issuer certificate's embedded AIA-related URLs do not match "

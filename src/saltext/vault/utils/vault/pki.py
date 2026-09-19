@@ -115,6 +115,16 @@ URL_EXTENSIONS = (
     "freshestCRL",
 )
 
+# Extension names (as rendered in change reports) that are derived
+# from the role configuration (<mount>/roles/<role_name>) during
+# regular (non-verbatim) issuance.
+ROLE_EXTENSIONS = (
+    "basicConstraints",
+    "keyUsage",
+    "extendedKeyUsage",
+    "certificatePolicies",
+)
+
 # https://github.com/golang/go/blob/72aa6db7943024b48c4d41c1fbc32b57b9fa036e/src/crypto/x509/x509.go
 EXTENDED_KEY_USAGE_OID = immutabletypes.freeze(
     {
@@ -172,19 +182,22 @@ def check_cert_for_changes(
     key_usage: list[str] | str | None,
     not_after: str | None,
     private_key_passphrase: str | None,
-    role_info: dict[str, typing.Any],
+    role_info: dict[str, typing.Any] | None,
     serial_number: str | None,
     ttl: int,
     urls: URLConfigs | None,
     user_ids: list[str] | str | None,
     **kwargs,
-) -> tuple[dict[str, typing.Any], dict[str, typing.Any]]:
+) -> tuple[dict[str, typing.Any], dict[str, typing.Any], dict[str, typing.Any]]:
     """
     Check whether an existing on-disk leaf certificate matches expected parameters.
 
-    Returns a tuple of ``(changes, unverified_url_exts)``. The second item is only
-    populated when ``urls`` is None and contains changes to URL-derived extensions,
-    which cannot be verified without access to the URL configuration.
+    Returns a tuple of ``(changes, unverified_url_exts, unverified_role_attrs)``.
+    The second item is only populated when ``urls`` is None and contains changes
+    to URL-derived extensions, which cannot be verified without access to the URL
+    configuration. The third item is only populated when ``role_info`` is None and
+    contains changes to role-derived subject attributes/extensions, which cannot
+    be verified without access to the role configuration.
 
     current
         Path of the existing certificate on disk.
@@ -239,6 +252,10 @@ def check_cert_for_changes(
 
     role_info
         Return value of :py:func:`read_role <saltext.vault.modules.vault_pki.read_role>`.
+        Pass ``None`` if a role is used, but its configuration could not be read,
+        in which case role-derived subject attributes and extensions are not
+        verified and their drift is reported separately instead of triggering
+        a reissuance.
 
     serial_number
         Single value for the **subject** SERIALNUMBER (OID: 2.5.4.5) name attribute (NOT the certificate's serial number!).
@@ -260,11 +277,13 @@ def check_cert_for_changes(
     kwargs
         All other kwargs passed to the cert signing endpoint or as CSR generation params.
     """
+    role_masked = role_info is None
+    role_info = role_info or {}
     cert, changes = _load_and_compare_cert_file(
         current, encoding=encoding, append_chain=append_chain or []
     )
     if cert is None:
-        return changes, {}
+        return changes, {}, {}
     ca = x509util.load_cert(issuer)
     csr_loaded: cx509.CertificateSigningRequest | None = None
     pk_loaded: Privkey | None = None
@@ -365,7 +384,35 @@ def check_cert_for_changes(
     unverified_url_exts: dict[str, typing.Any] = {}
     if urls is None:
         unverified_url_exts = _split_masked_ext_changes(changes, URL_EXTENSIONS)
-    return changes, unverified_url_exts
+    unverified_role_attrs: dict[str, typing.Any] = {}
+    if role_masked and not sign_verbatim:
+        # Verbatim issuance does not derive certificate attributes from the role.
+        unverified_role_attrs = _split_masked_ext_changes(changes, ROLE_EXTENSIONS)
+        if (
+            subject_drift := _split_uncontrolled_subject_changes(changes, cert.subject, builder)
+        ) is not None:
+            unverified_role_attrs["subject_name"] = subject_drift
+    return changes, unverified_url_exts, unverified_role_attrs
+
+
+def _split_uncontrolled_subject_changes(
+    changes: dict[str, typing.Any], current: cx509.Name, builder: cx509.CertificateBuilder
+) -> dict[str, typing.Any] | None:
+    """
+    When the role configuration cannot be read, subject name attributes derived
+    from it (O, OU, C, ...) are unknown. Remove the subject diff from a change
+    report in-place unless the attributes under our direct control
+    (CN, SERIALNUMBER, UID) themselves drifted.
+    """
+    if "subject_name" not in changes:
+        return None
+    expected = _getattr_safe(builder, "_subject_name") or cx509.Name([])
+    for oid in {attr.oid for attr in expected}:
+        cur_vals = [attr.value for attr in current.get_attributes_for_oid(oid)]
+        exp_vals = [attr.value for attr in expected.get_attributes_for_oid(oid)]
+        if cur_vals != exp_vals:
+            return None
+    return changes.pop("subject_name")
 
 
 def _build_regular_cert(
