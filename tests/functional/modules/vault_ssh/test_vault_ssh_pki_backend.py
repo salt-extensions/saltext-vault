@@ -2,20 +2,13 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers.vault_ssh import CERT_CHECK
+from tests.helpers.vault_ssh import get_cert
 from tests.support.vault import vault_create_secret_id
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_get_role_id
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write
-
-try:
-    from cryptography.hazmat.primitives.serialization import SSHCertificate
-    from cryptography.hazmat.primitives.serialization import SSHCertificateType
-    from cryptography.hazmat.primitives.serialization import load_ssh_public_identity
-
-    CERT_CHECK = True
-except ImportError:
-    CERT_CHECK = False
 
 pytestmark = [
     pytest.mark.skip_if_binaries_missing("vault"),
@@ -179,10 +172,7 @@ def _manage(cert_managed, args, exp=True, cert_type=None):
         return ret
     assert Path(args["name"]).exists()
     if CERT_CHECK:
-        cert = _get_cert(args["name"])
-        assert (
-            cert.type == SSHCertificateType.USER if cert_type == "user" else SSHCertificateType.HOST
-        )
+        cert = get_cert(args["name"], cert_type)
     return ret, cert
 
 
@@ -1045,18 +1035,3 @@ def test_user_key_id(cert_managed, user_args, roles_setup):
 @pytest.mark.usefixtures("existing_cert")
 def test_host_key_id(cert_managed, host_args, roles_setup):
     _key_id(cert_managed, host_args, roles_setup, "host")
-
-
-def _get_cert(cert):
-    try:
-        p = Path(cert)
-        if p.exists():
-            cert = p.read_bytes()
-    except Exception:  # pylint: disable=broad-except
-        pass
-    if isinstance(cert, str):
-        cert = cert.encode()
-    ret = load_ssh_public_identity(cert)
-    if not isinstance(ret, SSHCertificate):
-        raise ValueError(f"Expected SSHCertificate, got {ret.__class__.__name__}")
-    return ret

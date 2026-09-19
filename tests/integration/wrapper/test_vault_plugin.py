@@ -3,14 +3,14 @@ import pytest
 from tests.conftest import CONTAINER_TARGETS
 
 # pylint: disable=unused-import
-from tests.functional.modules.test_vault_plugin import _auth_plugin
-from tests.functional.modules.test_vault_plugin import _db_plugin
-from tests.functional.modules.test_vault_plugin import _secret_plugin
-from tests.functional.modules.test_vault_plugin import auth_plugin
-from tests.functional.modules.test_vault_plugin import db_plugin
-from tests.functional.modules.test_vault_plugin import plugins_pinned
-from tests.functional.modules.test_vault_plugin import plugins_registered
-from tests.functional.modules.test_vault_plugin import secret_plugin
+from tests.fixtures.vault_plugin import _auth_plugin
+from tests.fixtures.vault_plugin import _db_plugin
+from tests.fixtures.vault_plugin import _secret_plugin
+from tests.fixtures.vault_plugin import auth_plugin
+from tests.fixtures.vault_plugin import db_plugin
+from tests.fixtures.vault_plugin import plugins_pinned
+from tests.fixtures.vault_plugin import plugins_registered
+from tests.fixtures.vault_plugin import secret_plugin
 from tests.functional.modules.test_vault_plugin import test_list
 from tests.functional.modules.test_vault_plugin import test_list_includes_custom_versioned
 from tests.functional.modules.test_vault_plugin import test_list_versions
@@ -18,7 +18,7 @@ from tests.functional.modules.test_vault_plugin import test_pinned_version
 from tests.functional.modules.test_vault_plugin import test_plugin_register as _test_plugin_register
 
 # pylint: enable=unused-import
-from tests.support.helpers import WrapperFuncProxy
+from tests.support.helpers import CliFuncProxy
 from tests.support.vault import vault_plugin_deregister
 from tests.support.vault import vault_plugin_list
 from tests.support.vault import vault_plugin_read
@@ -56,7 +56,7 @@ def master_config_overrides():
 @pytest.fixture
 def vault_plugin(salt_ssh_cli, container):
     try:
-        yield WrapperFuncProxy("vault_plugin", salt_ssh_cli)
+        yield CliFuncProxy(salt_ssh_cli).vault_plugin
     finally:
         for plugin in vault_plugin_list(lambda x: not x["builtin"]):
             if (

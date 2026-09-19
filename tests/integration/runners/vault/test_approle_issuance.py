@@ -2,12 +2,10 @@ import logging
 import os
 
 import pytest
-import salt.utils.data
-import salt.utils.files
-import salt.utils.msgpack
-from saltfactories.utils import random_string
 
 from tests.conftest import CONTAINER_TARGETS
+from tests.fixtures.vault import approles_synced  # pylint: disable=unused-import
+from tests.helpers.vault import outdated_cached_config
 
 pytest.importorskip("docker")
 
@@ -92,21 +90,6 @@ def vault_pillar_defaults(minion):
     }
 
 
-@pytest.fixture
-def approles_synced(
-    salt_run_cli,
-    # minion_data_cache_present,  # pylint: disable=unused-argument
-    minion,
-):
-    ret = salt_run_cli.run("vault.sync_approles", minion.id)
-    assert ret.returncode == 0
-    assert ret.data is True
-    ret = salt_run_cli.run("vault.list_approles")
-    assert ret.returncode == 0
-    assert minion.id.lower() in ret.data
-    yield
-
-
 @pytest.mark.usefixtures("conn_cache_absent")
 def test_minion_can_authenticate(salt_call_cli):
     """
@@ -187,36 +170,18 @@ def test_minion_token_policies_are_assigned_as_expected(salt_call_cli, minion):
     }
 
 
-def _clear_auth_cache(minion_conn_cachedir):
-    token_cachefile = minion_conn_cachedir / "session" / "__token.p"
-    secret_id_cachefile = minion_conn_cachedir / "secret_id.p"
-    for file in (secret_id_cachefile, token_cachefile):
-        if file.exists():
-            file.unlink()
-
-
 @pytest.fixture
-def _cache_auth_outdated(minion_conn_cachedir, salt_call_cli):  # pylint: disable=unused-argument
-    config_cachefile = minion_conn_cachedir / "config.p"
-    if not config_cachefile.exists():
-        salt_call_cli.run("vault.query", "GET", "auth/token/lookup-self")
-        assert config_cachefile.exists()
-    cached_config = salt.utils.data.decode(salt.utils.msgpack.loads(config_cachefile.read_bytes()))
-    # reset approle config to defaults, make method token
-    cached_config["auth"]["method"] = "token"
-    cached_config["auth"]["approle_mount"] = "approle"
-    cached_config["auth"]["approle_name"] = "salt-master"
-    cached_config["auth"]["secret_id"] = None
-    cached_config["auth"].pop("role_id")
-    config_msgpack = salt.utils.msgpack.dumps(cached_config)
-    with salt.utils.files.fopen(config_cachefile, "wb") as f:
-        f.write(config_msgpack)
-    _clear_auth_cache(minion_conn_cachedir)
-    try:
+def _cache_auth_outdated(minion_conn_cachedir, salt_call_cli):
+    def _mutate(cached_config):
+        # reset approle config to defaults, make method token
+        cached_config["auth"]["method"] = "token"
+        cached_config["auth"]["approle_mount"] = "approle"
+        cached_config["auth"]["approle_name"] = "salt-master"
+        cached_config["auth"]["secret_id"] = None
+        cached_config["auth"].pop("role_id")
+
+    with outdated_cached_config(minion_conn_cachedir, salt_call_cli, _mutate):
         yield
-    finally:
-        if config_cachefile.exists():
-            config_cachefile.unlink()
 
 
 @pytest.mark.usefixtures("_cache_auth_outdated")
@@ -230,27 +195,6 @@ def test_auth_method_switch_does_not_break_minion_auth(salt_call_cli, caplog):
     assert ret.data
     assert ret.data.get("success") == "yeehaaw"
     assert "Master returned error and requested cache expiration" in caplog.text
-
-
-@pytest.fixture
-def _cache_server_outdated(minion_conn_cachedir, salt_call_cli):  # pylint: disable=unused-argument
-    config_cachefile = minion_conn_cachedir / "config.p"
-    if not config_cachefile.exists():
-        salt_call_cli.run("vault.query", "GET", "auth/token/lookup-self")
-        assert config_cachefile.exists()
-    cached_config = salt.utils.data.decode(salt.utils.msgpack.loads(config_cachefile.read_bytes()))
-    # change server URL
-    cached_config["server"]["url"] = "http://127.0.0.1:8"
-    cached_config["server"]["url_alts"] = ["http://127.0.0.1:8"]
-    config_msgpack = salt.utils.msgpack.dumps(cached_config)
-    with salt.utils.files.fopen(config_cachefile, "wb") as f:
-        f.write(config_msgpack)
-    _clear_auth_cache(minion_conn_cachedir)
-    try:
-        yield
-    finally:
-        if config_cachefile.exists():
-            config_cachefile.unlink()
 
 
 @pytest.mark.usefixtures("_cache_server_outdated")
@@ -313,22 +257,6 @@ def test_cache_is_used_for_master_token_information(salt_run_cli):
     assert ret.returncode == 0
     assert ret.data
     assert "__token" in ret.data
-
-
-@pytest.fixture(scope="module")
-def overriding_minion(master, issue_overrides):
-    assert master.is_running()
-    factory = master.salt_minion_daemon(
-        random_string("overriding-minion", uppercase=False),
-        defaults={"open_mode": True, "grains": {}},
-        overrides={"vault": {"issue_params": issue_overrides}},
-    )
-    with factory.started():
-        # Sync All
-        salt_call_cli = factory.salt_call_cli()
-        ret = salt_call_cli.run("saltutil.sync_all", _timeout=120)
-        assert ret.returncode == 0, ret
-        yield factory
 
 
 @pytest.fixture(scope="module")

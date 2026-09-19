@@ -2,13 +2,21 @@ import logging
 
 import pytest
 
-from tests.support.vault import vault_plugin_deregister
-from tests.support.vault import vault_plugin_list
-from tests.support.vault import vault_plugin_pin
+# pylint: disable=unused-import
+from tests.fixtures.vault_plugin import _auth_plugin
+from tests.fixtures.vault_plugin import _db_plugin
+from tests.fixtures.vault_plugin import _secret_plugin
+from tests.fixtures.vault_plugin import auth_plugin
+from tests.fixtures.vault_plugin import db_plugin
+from tests.fixtures.vault_plugin import plugins_pinned
+from tests.fixtures.vault_plugin import plugins_registered
+from tests.fixtures.vault_plugin import secret_plugin
+
+# pylint: enable=unused-import
+from tests.helpers.vault_plugin import reset_plugins
 from tests.support.vault import vault_plugin_read
 from tests.support.vault import vault_plugin_register
 from tests.support.vault import vault_plugin_show_pin
-from tests.support.vault import vault_plugin_unpin
 
 pytest.importorskip("docker")
 
@@ -20,114 +28,12 @@ pytestmark = [
 log = logging.getLogger(__name__)
 
 
-@pytest.fixture(scope="module")
-def _secret_plugin(vault_plugins):
-    name = "foo_secret"
-    path = vault_plugins / name
-    alt_path = vault_plugins / "explicit-cmd"
-    path.touch()
-    path.chmod(0o755)
-    alt_path.touch()
-    alt_path.chmod(0o755)
-    try:
-        yield {
-            "name": name,
-            "plugin_type": "secret",
-            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        }
-    finally:
-        path.unlink(missing_ok=True)
-        alt_path.unlink(missing_ok=True)
-
-
-@pytest.fixture
-def secret_plugin(_secret_plugin):
-    return _secret_plugin.copy()
-
-
-@pytest.fixture(scope="module")
-def _auth_plugin(vault_plugins):
-    name = "bar_auth"
-    path = vault_plugins / name
-    path.touch()
-    path.chmod(0o755)
-    try:
-        yield {
-            "name": name,
-            "plugin_type": "auth",
-            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        }
-    finally:
-        path.unlink(missing_ok=True)
-
-
-@pytest.fixture
-def auth_plugin(_auth_plugin):
-    return _auth_plugin.copy()
-
-
-@pytest.fixture(scope="module")
-def _db_plugin(vault_plugins):
-    name = "quux-database-plugin"
-    path = vault_plugins / name
-    path.touch()
-    path.chmod(0o755)
-    try:
-        yield {
-            "name": name,
-            "plugin_type": "database",
-            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        }
-    finally:
-        path.unlink(missing_ok=True)
-
-
-@pytest.fixture
-def db_plugin(_db_plugin):
-    return _db_plugin.copy()
-
-
 @pytest.fixture
 def vault_plugin(states, container):
     try:
         yield states.vault_plugin
     finally:
-        for plugin in vault_plugin_list(lambda x: not x["builtin"]):
-            if (
-                "vault" in container
-                and "latest" in container
-                and vault_plugin_show_pin(plugin["type"], plugin["name"])
-            ):
-                vault_plugin_unpin(plugin["type"], plugin["name"])
-            vault_plugin_deregister(plugin["type"], plugin["name"], version=plugin["version"])
-
-
-@pytest.fixture
-def plugins_registered(request):
-    defs = getattr(request, "param", {"secret_plugin": [], "db_plugin": [], "auth_plugin": []})
-    for fixture, versions in defs.items():
-        payload = request.getfixturevalue(fixture).copy()
-        if "command" not in payload:
-            payload["command"] = payload["name"]
-        for version in versions or [""]:
-            payload["version"] = version
-            vault_plugin_register(**payload)
-    yield defs
-
-
-@pytest.fixture
-def plugins_pinned(plugins_registered, request, container):  # pylint: disable=unused-argument
-    if "vault" not in container or "latest" not in container:
-        pytest.skip("Pins are only supported on recent Vault versions")
-    for fixture, pinned in request.param.items():
-        plugin_def = request.getfixturevalue(fixture)
-        vault_plugin_pin(plugin_def["plugin_type"], plugin_def["name"], version=pinned)
-    yield request.param
-
-
-@pytest.fixture(params=(False, True))
-def testmode(request):
-    return request.param
+        reset_plugins(container)
 
 
 def _reg_new(ret, secret_plugin, testmode, version=None):

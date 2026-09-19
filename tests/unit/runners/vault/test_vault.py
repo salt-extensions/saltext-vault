@@ -13,6 +13,13 @@ from saltext.vault.runners import vault
 from saltext.vault.utils.vault import api as vapi
 from saltext.vault.utils.vault import client as vclient
 
+# pylint: disable=unused-import
+from tests.unit.fixtures.vault import secret_id_response
+from tests.unit.fixtures.vault import secret_id_serialized
+from tests.unit.fixtures.vault import wrapped_response
+
+# pylint: enable=unused-import
+
 
 @pytest.fixture
 def configure_loader_modules(master_opts):
@@ -127,41 +134,6 @@ def token_response():
 
 
 @pytest.fixture
-def secret_id_response():
-    return {
-        "request_id": "0e8c388e-2cb6-bcb2-83b7-625127d568bb",
-        "lease_id": "",
-        "lease_duration": 0,
-        "renewable": False,
-        "data": {
-            "secret_id_accessor": "84896a0c-1347-aa90-a4f6-aca8b7558780",
-            "secret_id": "841771dc-11c9-bbc7-bcac-6a3945a69cd9",
-            "secret_id_ttl": 60,
-        },
-    }
-
-
-@pytest.fixture
-def wrapped_response():
-    return {
-        "request_id": "",
-        "lease_id": "",
-        "lease_duration": 0,
-        "renewable": False,
-        "data": None,
-        "warnings": None,
-        "wrap_info": {
-            "token": "test-wrapping-token",
-            "accessor": "test-wrapping-token-accessor",
-            "ttl": 180,
-            "creation_time": "2022-09-10T13:37:12.123456789+00:00",
-            "creation_path": "whatever/not/checked/here",
-            "wrapped_accessor": "84896a0c-1347-aa90-a4f6-aca8b7558780",
-        },
-    }
-
-
-@pytest.fixture
 def token_serialized(token_response):
     return {
         "client_token": token_response["auth"]["client_token"],
@@ -170,17 +142,6 @@ def token_serialized(token_response):
         "num_uses": token_response["auth"]["num_uses"],
         "creation_time": token_response["auth"]["creation_time"],
         # "expire_time": token_response["auth"]["expire_time"],
-    }
-
-
-@pytest.fixture
-def secret_id_serialized(secret_id_response):
-    return {
-        "secret_id": secret_id_response["data"]["secret_id"],
-        "secret_id_ttl": secret_id_response["data"]["secret_id_ttl"],
-        "secret_id_num_uses": 1,
-        # + creation_time
-        # + expire_time
     }
 
 

@@ -3,8 +3,8 @@ import pytest
 from tests.conftest import CONTAINER_TARGETS
 
 # pylint: disable=unused-import
-from tests.functional.modules.vault_ssh.test_vault_ssh import _temp_ca
-from tests.functional.modules.vault_ssh.test_vault_ssh import _temp_role
+from tests.fixtures.vault_ssh import _temp_ca
+from tests.fixtures.vault_ssh import _temp_role
 from tests.functional.modules.vault_ssh.test_vault_ssh import test_create_ca
 from tests.functional.modules.vault_ssh.test_vault_ssh import test_create_ca_key_spec
 from tests.functional.modules.vault_ssh.test_vault_ssh import test_create_ca_with_keys
@@ -23,7 +23,7 @@ from tests.functional.modules.vault_ssh.test_vault_ssh import test_write_role_ot
 from tests.functional.modules.vault_ssh.test_vault_ssh import test_zeroaddress_roles
 
 # pylint: enable=unused-import
-from tests.support.helpers import WrapperFuncProxy
+from tests.support.helpers import CliFuncProxy
 
 pytest.importorskip("docker")
 
@@ -39,4 +39,4 @@ pytestmark = [
 
 @pytest.fixture
 def vault_ssh(salt_ssh_cli, secret_mounts):  # pylint: disable=unused-argument
-    return WrapperFuncProxy("vault_ssh", salt_ssh_cli)
+    return CliFuncProxy(salt_ssh_cli).vault_ssh

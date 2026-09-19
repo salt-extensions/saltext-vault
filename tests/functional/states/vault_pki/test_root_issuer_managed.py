@@ -13,11 +13,11 @@ from cryptography.hazmat.primitives import hashes
 from salt.utils.x509 import load_cert
 
 from saltext.vault.utils.vault import helpers as hlp
-from tests.functional.states.vault_pki.helpers import AIA_UNVERIFIED_NOTE
-from tests.functional.states.vault_pki.helpers import MOUNT_URL_CONFIG
-from tests.functional.states.vault_pki.helpers import _assert_embedded_aia
-from tests.functional.states.vault_pki.helpers import _default_issuer
-from tests.functional.states.vault_pki.helpers import _import_configured_issuer
+from tests.helpers.vault_pki import AIA_UNVERIFIED_NOTE
+from tests.helpers.vault_pki import MOUNT_URL_CONFIG
+from tests.helpers.vault_pki import _assert_embedded_aia
+from tests.helpers.vault_pki import _default_issuer
+from tests.helpers.vault_pki import _import_configured_issuer
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write

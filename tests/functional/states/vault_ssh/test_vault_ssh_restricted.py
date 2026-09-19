@@ -8,7 +8,10 @@ CA has been configured yet.
 
 import pytest
 
-from tests.support.vault import vault_delete
+# pylint: disable=unused-import
+from tests.fixtures.vault_ssh import _temp_ca
+
+# pylint: enable=unused-import
 from tests.support.vault import vault_delete_policy
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write
@@ -50,19 +53,6 @@ def minion_config_overrides(container):  # pylint: disable=unused-argument
 @pytest.fixture
 def vault_ssh(states):
     return states.vault_ssh
-
-
-@pytest.fixture
-def _temp_ca():
-    try:
-        yield
-    finally:
-        vault_delete("ssh/config/ca")
-
-
-@pytest.fixture(params=(False, True))
-def testmode(request):
-    return request.param
 
 
 @pytest.mark.usefixtures("_temp_ca")

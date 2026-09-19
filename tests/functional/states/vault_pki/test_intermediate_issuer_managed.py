@@ -11,13 +11,13 @@ from cryptography import x509 as cx509
 from salt.utils.x509 import load_cert
 
 from saltext.vault.utils.vault import helpers as hlp
-from tests.functional.modules.test_vault_pki import DEFAULT_CLUSTER_AIA_PATH
-from tests.functional.states.vault_pki.helpers import AIA_UNVERIFIED_NOTE
-from tests.functional.states.vault_pki.helpers import MOUNT_URL_CONFIG
-from tests.functional.states.vault_pki.helpers import _assert_embedded_aia
-from tests.functional.states.vault_pki.helpers import _default_issuer
-from tests.functional.states.vault_pki.helpers import _not_valid_after
-from tests.functional.states.vault_pki.helpers import _subject_cn
+from tests.helpers.vault_pki import AIA_UNVERIFIED_NOTE
+from tests.helpers.vault_pki import DEFAULT_CLUSTER_AIA_PATH
+from tests.helpers.vault_pki import MOUNT_URL_CONFIG
+from tests.helpers.vault_pki import _assert_embedded_aia
+from tests.helpers.vault_pki import _default_issuer
+from tests.helpers.vault_pki import _not_valid_after
+from tests.helpers.vault_pki import _subject
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write
@@ -57,7 +57,7 @@ def test_intermediate_issuer_managed_create(vault_pki, int_ca_args, testmode):
     assert ret.changes["created"]["key_id"] == issuer_info["key_id"]
 
     cert = load_cert(issuer_info["certificate"])
-    assert _subject_cn(cert) == int_ca_args["name"]
+    assert _subject(cert) == int_ca_args["name"]
     basic_constraints = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
     assert basic_constraints.value.ca is True
     assert basic_constraints.value.path_length == 0
@@ -665,7 +665,7 @@ def test_intermediate_issuer_managed_changes(
         return
     assert new_info["issuer_id"] != existing_intermediate["issuer_id"]
     new_cert = load_cert(new_info["certificate"])
-    assert _subject_cn(new_cert) == "Rotated Intermediate CA"
+    assert _subject(new_cert) == "Rotated Intermediate CA"
     basic_constraints = new_cert.extensions.get_extension_for_class(cx509.BasicConstraints)
     # This will break soon. IIRC, issuing cert has a pathlen and x509_v2 not accounting for that was fixed
     assert basic_constraints.value.path_length is (2 if "issuer_ref" in int_ca_args else None)

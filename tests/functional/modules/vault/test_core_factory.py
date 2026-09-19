@@ -14,16 +14,6 @@ log = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="module")
-def vault_secrets_defaults():
-    return {"secret/foo": {"bar": "baz"}}
-
-
-@pytest.fixture
-def vault(modules, vault_secrets):  # pylint: disable=unused-argument
-    return modules.vault
-
-
-@pytest.fixture(scope="module")
 def minion_config_overrides():
     return {
         "vault": {
@@ -32,6 +22,16 @@ def minion_config_overrides():
             }
         }
     }
+
+
+@pytest.fixture(scope="module")
+def vault_secrets_defaults():
+    return {"secret/foo": {"bar": "baz"}}
+
+
+@pytest.fixture
+def vault(modules, vault_secrets):  # pylint: disable=unused-argument
+    return modules.vault
 
 
 @pytest.fixture

@@ -1,6 +1,2 @@
-import pytest
-
-
-@pytest.fixture(params=("secret", "secret-v1"))
-def secret_mount(request):
-    return request.param
+# pylint: disable-next=unused-import
+from tests.fixtures.vault import secret_mount

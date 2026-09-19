@@ -33,7 +33,7 @@ from tests.functional.modules.vault.test_vault_policies import test_policy_fetch
 from tests.functional.modules.vault.test_vault_policies import test_policy_write
 
 # pylint: enable=unused-import
-from tests.support.helpers import WrapperFuncProxy
+from tests.support.helpers import CliFuncProxy
 from tests.support.vault import vault_delete_policy
 from tests.support.vault import vault_list_policies
 
@@ -82,7 +82,7 @@ def _policies_clean():
 
 @pytest.fixture(scope="module")
 def vault(salt_ssh_cli, vault_policies):  # pylint: disable=unused-argument
-    return WrapperFuncProxy("vault", salt_ssh_cli)
+    return CliFuncProxy(salt_ssh_cli).vault
 
 
 @pytest.fixture(scope="module")

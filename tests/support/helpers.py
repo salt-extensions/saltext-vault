@@ -16,6 +16,7 @@ from unittest.mock import patch
 import salt.exceptions
 from saltfactories.utils.functional import PATCH_TARGET
 from saltfactories.utils.functional import Loaders
+from saltfactories.utils.functional import StateResult
 
 log = logging.getLogger(__name__)
 
@@ -42,10 +43,55 @@ class PatchedEnviron:
         os.environ.update(self.original_environ or {})
 
 
-class WrapperFuncProxy:
+class WrappedMod:
+    def __init__(self, cli, mod, exc=salt.exceptions.CommandExecutionError):
+        self.cli = cli
+        self.mod = mod
+        self.exc = exc
+
+    def __getattr__(self, key):
+        def _call(*args, _expect_fail=False, **kwargs):
+            ret = self.cli.run(f"{self.mod}.{key}", *args, **kwargs)
+            if _expect_fail is True:
+                assert ret.returncode > 0
+                return ret
+            if (
+                self.exc is not None
+                and ret.returncode > 0
+                and isinstance(ret.data, str)
+                and ret.data.startswith("An Exception occurred")
+            ):
+                raise self.exc(ret.data.split(":", maxsplit=1)[1].lstrip())
+            assert ret.returncode == 0
+            return ret.data
+
+        return _call
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}<{self.mod}.*>"
+
+
+class WrappedState:
+    def __init__(self, cli, mod):
+        self.cli = cli
+        self.mod = mod
+
+    def __getattr__(self, key):
+        def _call(name, *args, _expect_fail=False, **kwargs):
+            ret = self.cli.run("state.single", f"{self.mod}.{key}", name=name, *args, **kwargs)
+            assert (ret.returncode > 0) is _expect_fail
+            return StateResult(ret.data)  # type: ignore
+
+        return _call
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}<{self.mod}.*>"
+
+
+class CliFuncProxy:
     """
     Behave similarly to a loaded module in functional tests while executing via
-    salt_ssh_cli instead.
+    salt_call_cli/salt_ssh_cli instead.
 
     Allows to duplicate functional tests for execution modules into wrapper
     integration tests without most necessary modifications. Still consider
@@ -58,7 +104,7 @@ class WrapperFuncProxy:
         @pytest.fixture
         def my_module(salt_ssh_cli):
             try:
-                yield WrapperFuncProxy(salt_ssh_cli, exc=CommandExecutionError)
+                yield CliFuncProxy(salt_ssh_cli, exc=CommandExecutionError).my_module
             finally:
                 # Do cleanup or something
 
@@ -76,33 +122,15 @@ class WrapperFuncProxy:
                 my_module.foo("foo")
     """
 
-    def __init__(self, mod, salt_ssh_cli, exc=salt.exceptions.CommandExecutionError):
-        self.mod = mod
-        self.salt_ssh_cli = salt_ssh_cli
+    def __init__(self, cli, exc=salt.exceptions.CommandExecutionError, states=False):
+        self.cli = cli
         self.exc = exc
-        self.func = None
+        self.states = states
 
     def __getattr__(self, attr):
-        self.func = attr
-        return self
-
-    def __call__(self, *args, _expect_fail=False, **kwargs):
-        ret = self.salt_ssh_cli.run(f"{self.mod}.{self.func}", *args, **kwargs)
-        if _expect_fail is True:
-            assert ret.returncode > 0
-            return ret
-        if (
-            self.exc is not None
-            and ret.returncode > 0
-            and isinstance(ret.data, str)
-            and ret.data.startswith("An Exception occurred")
-        ):
-            raise self.exc(ret.data.split(":", maxsplit=1)[1].lstrip())
-        assert ret.returncode == 0
-        return ret.data
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}<{self.mod}.{self.func or '*'}>"
+        if self.states:
+            return WrappedState(self.cli, attr)
+        return WrappedMod(self.cli, attr, exc=self.exc)
 
 
 class ExtendedLoaders(Loaders):

@@ -120,8 +120,8 @@ CHANGED_FILES_MAP = (
             "tests/integration/*/test_*.py",
         ),
     ),
-    (
-        rf"{TESTS_DIR_REL}/support/mysql\.py",
+    (  # db fixtures/helpers also affect the lease beacon tests
+        rf"{TESTS_DIR_REL}/(?:support/mysql|fixtures/mysql|fixtures/vault_db|helpers/vault_db)\.py",
         (
             "tests/functional/*/test_vault_db.py",
             "tests/functional/*/vault_db/test_*.py",
@@ -131,6 +131,33 @@ CHANGED_FILES_MAP = (
             "tests/functional/*/vault_lease/test_*.py",
             "tests/integration/*/test_vault_lease.py",
             "tests/integration/*/vault_lease/test_*.py",
+        ),
+    ),
+    (  # core vault fixtures are pulled into the suite conftests (pillar_defaults)
+        rf"{TESTS_DIR_REL}/fixtures/vault\.py",
+        (
+            "tests/functional/*/test_*.py",
+            "tests/integration/*/test_*.py",
+        ),
+    ),
+    (  # core vault helpers are used by the runner and select wrapper tests
+        rf"{TESTS_DIR_REL}/helpers/vault\.py",
+        (
+            "tests/*/runners/test_vault.py",
+            "tests/*/runners/vault/test_*.py",
+            "tests/integration/wrapper/test_vault_pki.py",
+            "tests/integration/wrapper/vault_ssh/test_*.py",
+        ),
+    ),
+    (  # shared unit test fixtures
+        rf"{TESTS_DIR_REL}/unit/fixtures/.*\.py",
+        ("tests/unit/*/test_*.py",),
+    ),
+    (  # per-module shared fixtures/helpers affect the module's tests
+        rf"{TESTS_DIR_REL}/(?:fixtures|helpers)/(?P<mod_name>\w+?)\.py",
+        (
+            "tests/*/*/test_{mod_name}.py",
+            "tests/*/*/{mod_name}/test_*.py",
         ),
     ),
     (
