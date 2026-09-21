@@ -13,11 +13,11 @@ from cryptography.hazmat.primitives import serialization
 from salt.utils.x509 import generate_rsa_privkey
 from saltfactories.utils import random_string
 
-from tests.helpers.vault_pki import DEFAULT_CLUSTER_AIA_PATH
-from tests.helpers.vault_pki import DEFAULT_CLUSTER_PATH
-from tests.helpers.vault_pki import _import_configured_issuer
-from tests.helpers.vault_pki import _read_denied
-from tests.helpers.vault_pki import _wipe_issuers
+from tests.common.helpers.vault_pki import DEFAULT_CLUSTER_AIA_PATH
+from tests.common.helpers.vault_pki import DEFAULT_CLUSTER_PATH
+from tests.common.helpers.vault_pki import _import_configured_issuer
+from tests.common.helpers.vault_pki import _read_denied
+from tests.common.helpers.vault_pki import _wipe_issuers
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_disable_secret_engine
 from tests.support.vault import vault_enable_secret_engine

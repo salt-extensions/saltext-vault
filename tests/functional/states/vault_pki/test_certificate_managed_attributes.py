@@ -13,17 +13,12 @@ from cryptography.hazmat import asn1
 from salt.utils.x509 import NAME_ATTRS_OID
 from salt.utils.x509 import load_cert
 
-from tests.conftest import CONTAINER_TARGETS
-from tests.helpers.vault_pki import pregen_csr
+from tests.common import CONTAINER_TARGETS
+from tests.common.containers import genmarks
+from tests.common.helpers.vault_pki import pregen_csr
 from tests.support.vault import vault_write
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts"),
-    pytest.mark.parametrize("secret_mounts", ("pki",), indirect=True),
-]
+pytestmark = genmarks(mounts="pki")
 
 
 @pytest.mark.usefixtures("issuer_setup", "existing_cert")

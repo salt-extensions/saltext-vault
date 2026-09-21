@@ -12,30 +12,21 @@ import logging
 import pytest
 import salt.exceptions
 
-from tests.conftest import CONTAINER_TARGETS
+from tests.common.containers import genmarks
 from tests.support.vault import vault_delete_policy
 from tests.support.vault import vault_read_secret
 from tests.support.vault import vault_write
 from tests.support.vault import vault_write_policy
 from tests.support.vault import vault_write_secret
 
-pytest.importorskip("docker")
+pytestmark = genmarks(
+    "_cleanup",
+    internal_logic_only=True,
+    mounts=[[("kv", "secret-v1", "-version=1"), ("kv", "secret", "-version=2")]],
+)
 
 log = logging.getLogger(__name__)
 
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts", "_cleanup"),
-    pytest.mark.parametrize(
-        "secret_mounts",
-        [[("kv", "secret-v1", "-version=1"), ("kv", "secret", "-version=2")]],
-        indirect=True,
-    ),
-    pytest.mark.parametrize(
-        "container", (CONTAINER_TARGETS[0],), indirect=True
-    ),  # We only want to check the internal logic, not the API access
-]
 
 POLICY_NAME = "test-sdb-write-only"
 

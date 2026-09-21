@@ -12,14 +12,9 @@ from unittest.mock import patch
 
 import pytest
 
-pytest.importorskip("docker")
+from tests.common.containers import genmarks
 
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts"),
-    pytest.mark.parametrize("secret_mounts", ("database",), indirect=True),
-]
+pytestmark = genmarks(mounts="database")
 
 
 @pytest.fixture(scope="module")

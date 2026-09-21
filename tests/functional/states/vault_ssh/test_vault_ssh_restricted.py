@@ -8,8 +8,10 @@ CA has been configured yet.
 
 import pytest
 
+from tests.common.containers import genmarks
+
 # pylint: disable=unused-import
-from tests.fixtures.vault_ssh import _temp_ca
+from tests.common.fixtures.vault_ssh import _temp_ca
 
 # pylint: enable=unused-import
 from tests.support.vault import vault_delete_policy
@@ -17,13 +19,7 @@ from tests.support.vault import vault_read
 from tests.support.vault import vault_write
 from tests.support.vault import vault_write_policy
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts"),
-    pytest.mark.parametrize("secret_mounts", ("ssh",), indirect=True),
-]
+pytestmark = genmarks(mounts="ssh")
 
 
 POLICY = """\

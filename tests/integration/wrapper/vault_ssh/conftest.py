@@ -1,25 +1,23 @@
 import pytest
 
+from tests.common.containers import genmarks
+
 # pylint: disable=unused-import
-from tests.fixtures.vault_ssh import ec_priv
-from tests.fixtures.vault_ssh import ec_priv_file
-from tests.fixtures.vault_ssh import ec_pub
-from tests.fixtures.vault_ssh import iprole
-from tests.functional.modules.vault_ssh.conftest import ca_priv
-from tests.functional.modules.vault_ssh.conftest import ca_priv_file
-from tests.functional.modules.vault_ssh.conftest import ca_pub
-from tests.functional.modules.vault_ssh.conftest import ca_setup
-from tests.functional.modules.vault_ssh.conftest import hostrole
-from tests.functional.modules.vault_ssh.conftest import roles_setup
-from tests.functional.modules.vault_ssh.conftest import userrole
+from tests.common.fixtures.vault_ssh import ca_priv
+from tests.common.fixtures.vault_ssh import ca_priv_file
+from tests.common.fixtures.vault_ssh import ca_pub
+from tests.common.fixtures.vault_ssh import ca_setup
+from tests.common.fixtures.vault_ssh import ec_priv
+from tests.common.fixtures.vault_ssh import ec_priv_file
+from tests.common.fixtures.vault_ssh import ec_pub
+from tests.common.fixtures.vault_ssh import hostrole
+from tests.common.fixtures.vault_ssh import iprole
+from tests.common.fixtures.vault_ssh import roles_setup
+from tests.common.fixtures.vault_ssh import userrole
 
 # pylint: enable=unused-import
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-]
+pytestmark = genmarks()
 
 
 @pytest.fixture(scope="module")

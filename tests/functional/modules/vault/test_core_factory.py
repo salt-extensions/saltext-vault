@@ -3,12 +3,9 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("docker")
+from tests.common.containers import genmarks
 
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts", "vault_secrets"),
-]
+pytestmark = genmarks(mounts=True, secrets=True)
 
 log = logging.getLogger(__name__)
 

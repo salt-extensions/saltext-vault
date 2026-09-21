@@ -1,6 +1,6 @@
 import pytest
 
-from tests.conftest import CONTAINER_TARGETS
+from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
 from tests.functional.modules.vault.test_vault_kv import existing_secret
@@ -37,15 +37,7 @@ from tests.support.helpers import CliFuncProxy
 from tests.support.vault import vault_delete_policy
 from tests.support.vault import vault_list_policies
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts", "vault_policies", "vault_secrets"),
-    pytest.mark.parametrize(
-        "container", (CONTAINER_TARGETS[0],), indirect=True
-    ),  # We only want to check the internal logic, not the API access
-]
+pytestmark = genmarks(internal_logic_only=True, mounts=True, policies=True, secrets=True)
 
 
 @pytest.fixture(scope="module")

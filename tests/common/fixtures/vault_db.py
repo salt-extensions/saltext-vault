@@ -6,23 +6,11 @@ Note: ``testdb``/``teststaticrole`` require the ``mysql_container`` and
 """
 
 import pytest
-from saltfactories.utils import random_string
 
-from tests.support.mysql import MySQLImage
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
 from tests.support.vault import vault_revoke
 from tests.support.vault import vault_write
-
-
-@pytest.fixture(scope="module")
-def mysql_image():
-    version = "10.3"
-    return MySQLImage(
-        name="mariadb",
-        tag=version,
-        container_id=random_string(f"mariadb-{version}-"),
-    )
 
 
 @pytest.fixture

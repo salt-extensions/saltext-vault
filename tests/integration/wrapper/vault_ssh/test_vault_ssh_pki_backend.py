@@ -3,32 +3,22 @@ import logging
 import pytest
 from salt.utils.dictupdate import merge_recurse
 
-from tests.conftest import CONTAINER_TARGETS
-from tests.helpers.vault import check_cryptography
-from tests.helpers.vault_ssh import CERT_CHECK
-from tests.helpers.vault_ssh import belongs_to
-from tests.helpers.vault_ssh import get_cert
-from tests.helpers.vault_ssh import signed_by
+from tests.common.containers import genmarks
+from tests.common.helpers.vault_ssh import CERT_CHECK
+from tests.common.helpers.vault_ssh import belongs_to
+from tests.common.helpers.vault_ssh import get_cert
+from tests.common.helpers.vault_ssh import signed_by
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures(
-        "container", "secret_mounts", "vault_policies", "roles_setup", "ca_setup"
-    ),
-    pytest.mark.parametrize("secret_mounts", ("ssh",), indirect=True),
-    pytest.mark.parametrize(
-        "container", (CONTAINER_TARGETS[0],), indirect=True
-    ),  # We only want to check the internal logic, not the API access
-]
+pytestmark = genmarks(
+    "roles_setup",
+    "ca_setup",
+    internal_logic_only=True,
+    mounts="ssh",
+    policies=True,
+    _check_cryptography="40.0",
+)
 
 log = logging.getLogger(__name__)
-
-
-@pytest.fixture(scope="module", autouse=True)
-def _check_cryptography(salt_ssh_cli):
-    return check_cryptography(salt_ssh_cli, (40, 0), "ssh_pki")
 
 
 @pytest.fixture(scope="module", autouse=True)

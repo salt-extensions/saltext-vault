@@ -1,34 +1,28 @@
 import pytest
-from saltfactories.utils import random_string
+
+from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
-from tests.fixtures.mysql import create_mysql_combo
-from tests.fixtures.mysql import mysql_combo
-from tests.fixtures.mysql import mysql_container
-from tests.fixtures.vault_db import connection_setup
-from tests.fixtures.vault_db import role_args_common
-from tests.fixtures.vault_db import role_static_setup
-from tests.fixtures.vault_db import roles_setup
-from tests.fixtures.vault_db import testdb
-from tests.fixtures.vault_db import testreissuerole
-from tests.fixtures.vault_db import testrole
-from tests.fixtures.vault_db import teststaticrole
+from tests.common.fixtures.mysql import mysql_combo
+from tests.common.fixtures.mysql import mysql_container
+from tests.common.fixtures.mysql import mysql_image
+from tests.common.fixtures.vault_db import connection_setup
+from tests.common.fixtures.vault_db import role_args_common
+from tests.common.fixtures.vault_db import role_static_setup
+from tests.common.fixtures.vault_db import roles_setup
+from tests.common.fixtures.vault_db import testdb
+from tests.common.fixtures.vault_db import testreissuerole
+from tests.common.fixtures.vault_db import testrole
+from tests.common.fixtures.vault_db import teststaticrole
 
 # pylint: enable=unused-import
-from tests.support.mysql import MySQLImage
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
 from tests.support.vault import vault_plugin_read
 from tests.support.vault import vault_read
 from tests.support.vault import vault_revoke
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts"),
-    pytest.mark.parametrize("secret_mounts", ("database",), indirect=True),
-]
+pytestmark = genmarks(mounts="database")
 
 
 @pytest.fixture(scope="module")
@@ -40,16 +34,6 @@ def minion_config_overrides():
             },
         }
     }
-
-
-@pytest.fixture(scope="module")
-def mysql_image():
-    version = "10.5"
-    return MySQLImage(
-        name="mariadb",
-        tag=version,
-        container_id=random_string(f"mariadb-{version}-"),
-    )
 
 
 @pytest.fixture

@@ -3,33 +3,19 @@ import os
 
 import pytest
 
-from tests.conftest import CONTAINER_TARGETS
-from tests.fixtures.vault import approles_synced  # pylint: disable=unused-import
-from tests.helpers.vault import outdated_cached_config
+from tests.common.containers import genmarks
+from tests.common.helpers.vault import outdated_cached_config
 
-pytest.importorskip("docker")
+pytestmark = genmarks(
+    "master_approle_mount",
+    internal_logic_only=True,
+    mounts=[[("kv", "salt", "-version=2"), ("kv", "secret", "-version=2")]],
+    policies=True,
+    secrets=True,
+    pillar=True,
+)
 
 log = logging.getLogger(__name__)
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures(
-        "container",
-        "master_approle_mount",
-        "pillar_base",
-        "secret_mounts",
-        "vault_policies",
-        "vault_secrets",
-    ),
-    pytest.mark.parametrize(
-        "secret_mounts",
-        [[("kv", "salt", "-version=2"), ("kv", "secret", "-version=2")]],
-        indirect=True,
-    ),
-    pytest.mark.parametrize(
-        "container", (CONTAINER_TARGETS[0],), indirect=True
-    ),  # We only want to check the internal logic, not the API access
-]
 
 
 @pytest.fixture(scope="module")
@@ -88,6 +74,20 @@ def vault_pillar_defaults(minion):
         "salt/roles/dev": {"pillar_roles_0_acl_template": "worked"},
         "salt/roles/web": {"pillar_roles_1_acl_template": "worked"},
     }
+
+
+@pytest.fixture
+def approles_synced(
+    salt_run_cli,
+    minion,
+):
+    ret = salt_run_cli.run("vault.sync_approles", minion.id)
+    assert ret.returncode == 0
+    assert ret.data is True
+    ret = salt_run_cli.run("vault.list_approles")
+    assert ret.returncode == 0
+    assert minion.id.lower() in ret.data
+    return ret.data
 
 
 @pytest.mark.usefixtures("conn_cache_absent")

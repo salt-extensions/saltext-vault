@@ -15,23 +15,11 @@ from textwrap import dedent
 
 import pytest
 
-from tests.conftest import CONTAINER_TARGETS
+from tests.common.containers import genmarks
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures(
-        "container",
-        "master_approle_mount",
-        "secret_mounts",
-        "vault_policies",
-        "vault_secrets",
-    ),
-    pytest.mark.parametrize(
-        "container", (CONTAINER_TARGETS[0],), indirect=True
-    ),  # We only want to check the internal logic, not the API access
-]
+pytestmark = genmarks(
+    "master_approle_mount", internal_logic_only=True, mounts=True, policies=True, secrets=True
+)
 
 
 @pytest.fixture(scope="module")

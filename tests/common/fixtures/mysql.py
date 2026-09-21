@@ -1,5 +1,7 @@
 """
-This is copied from Salt's testsuite at tests/support/pytest/mysql.py.
+Shared fixtures for setting up MySQL-compatible database containers.
+
+Parts of this were copied from Salt's testsuite at tests/support/pytest/mysql.py.
 """
 
 import logging
@@ -15,6 +17,59 @@ pytest.importorskip("docker")
 import docker.errors  # isort:skip pylint:disable=wrong-import-position
 
 log = logging.getLogger(__name__)
+
+
+@pytest.fixture(scope="module", params=("10.5",), ids=lambda val: f"container={val}")
+def mysql_image(request):
+    return MySQLImage(
+        name="mariadb",
+        tag=request.param,
+        container_id=random_string(f"mariadb-{request.param}-"),
+    )
+
+
+@pytest.fixture(scope="module")
+def mysql_combo(mysql_image):
+    return MySQLCombo(
+        mysql_name=mysql_image.name,
+        mysql_version=mysql_image.tag,
+        mysql_user="salt-mysql-user",
+        mysql_passwd="Pa55w0rd!",
+        container_id=mysql_image.container_id,
+    )
+
+
+@pytest.fixture(scope="module")
+def mysql_container(salt_factories, mysql_combo):
+
+    container_environment = {
+        "MYSQL_ROOT_PASSWORD": mysql_combo.mysql_passwd,
+        "MYSQL_ROOT_HOST": mysql_combo.mysql_host,
+        "MYSQL_USER": mysql_combo.mysql_user,
+        "MYSQL_PASSWORD": mysql_combo.mysql_passwd,
+    }
+    if mysql_combo.mysql_database:
+        container_environment["MYSQL_DATABASE"] = mysql_combo.mysql_database
+
+    container = salt_factories.get_container(
+        mysql_combo.container_id,
+        "ghcr.io/saltstack/salt-ci-containers/{}:{}".format(  # pylint: disable=consider-using-f-string
+            mysql_combo.mysql_name, mysql_combo.mysql_version
+        ),
+        pull_before_start=True,
+        skip_on_pull_failure=True,
+        skip_if_docker_client_not_connectable=True,
+        container_run_kwargs={
+            "ports": {"3306/tcp": None},
+            "environment": container_environment,
+        },
+    )
+    container.before_start(set_container_name_before_start, container)
+    container.container_start_check(check_container_started, container, mysql_combo)
+    with container.started():
+        mysql_combo.container = container
+        mysql_combo.mysql_port = container.get_host_port_binding(3306, protocol="tcp", ipv6=False)
+        yield mysql_combo
 
 
 @dataclass(kw_only=True, slots=True)
@@ -62,42 +117,6 @@ class MySQLCombo:
             "connection_db": kwargs.get("connection_db") or "mysql",
             "connection_port": kwargs.get("connection_port") or self.mysql_port,
         }
-
-
-def get_test_versions():
-    test_versions = []
-    name = "mysql-server"
-    for version in ("5.5", "5.6", "5.7", "8.0"):
-        test_versions.append(
-            MySQLImage(
-                name=name,
-                tag=version,
-                container_id=random_string(f"mysql-{version}-"),
-            )
-        )
-    name = "mariadb"
-    for version in ("10.3", "10.4", "10.5"):
-        test_versions.append(
-            MySQLImage(
-                name=name,
-                tag=version,
-                container_id=random_string(f"mariadb-{version}-"),
-            )
-        )
-    name = "percona"
-    for version in ("5.6", "5.7", "8.0"):
-        test_versions.append(
-            MySQLImage(
-                name=name,
-                tag=version,
-                container_id=random_string(f"percona-{version}-"),
-            )
-        )
-    return test_versions
-
-
-def get_test_version_id(value):
-    return f"container={value}"
 
 
 def check_container_started(timeout_at, container, combo):

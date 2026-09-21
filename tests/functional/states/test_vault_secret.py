@@ -1,14 +1,10 @@
 import pytest
 
+from tests.common.containers import genmarks
 from tests.support.vault import vault_read_secret
 from tests.support.vault import vault_write_secret
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts"),
-]
+pytestmark = genmarks(mounts=True)
 
 
 @pytest.fixture

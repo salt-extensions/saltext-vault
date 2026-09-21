@@ -3,8 +3,11 @@ Shared fixtures for the vault_gpg test suites.
 """
 
 import platform
+import shutil
+import subprocess
 from pathlib import Path
 
+import psutil
 import pytest
 from saltfactories.utils import random_string
 
@@ -95,7 +98,7 @@ COflOxnEyLVHXnX8wUIzZwo=
 
 
 @pytest.fixture(scope="module")
-def _cached_bin(states, modules):
+def cached_vault_gpg_bin(states, modules):
     """
     Cache this plugin outside of test run-specific directories
     to avoid repeated downloads.
@@ -131,8 +134,10 @@ def _cached_bin(states, modules):
 
 
 @pytest.fixture(scope="module")
-def gpg_plugin(vault_plugins, container, states, _cached_bin):  # pylint: disable=unused-argument
-    bin_path, checksum = _cached_bin
+def gpg_plugin(
+    vault_plugins, container, states, cached_vault_gpg_bin
+):  # pylint: disable=unused-argument
+    bin_path, checksum = cached_vault_gpg_bin
     tgt = vault_plugins / "vault-gpg-plugin"
     try:
         ret = states.file.managed(
@@ -163,3 +168,63 @@ def gpg_mount(gpg_plugin):  # pylint: disable=unused-argument
         yield name
     finally:
         assert vault_disable_secret_engine(name)
+
+
+def _gpg_def(modules, gpghome):  # pylint: disable=unused-argument
+    return modules.gpg
+
+
+def _gpghome_def(tmp_path_factory):
+    root = tmp_path_factory.mktemp("gpghome")
+    root.chmod(mode=0o0700)
+    # just use /tmp, this test module does not run on OSes other than Linux/macOS
+    syml = Path("/tmp/" + random_string("gnupg"))
+    syml.symlink_to(root)  # the actual path can get too long for gpg
+    try:
+        yield syml
+    finally:
+        # Make sure we don't leave any gpg-agents running behind
+        _kill_gpg_agent(root)
+        syml.unlink()
+        shutil.rmtree(root, ignore_errors=True)
+
+
+gpg = pytest.fixture(scope="module")(_gpg_def)
+gpghome = pytest.fixture(scope="module")(_gpghome_def)
+
+# Some specific tests need the gpg/gpghome fixtures as class-scoped ones.
+# Others can work with the default module-scoped ones above.
+# When importing the class-scoped ones, ensure they are renamed to `gpg`/`gpghome`.
+gpg_class = pytest.fixture(scope="class")(_gpg_def)
+gpghome_class = pytest.fixture(scope="class")(_gpghome_def)
+
+
+def _kill_gpg_agent(root):
+    gpg_connect_agent = shutil.which("gpg-connect-agent")
+    if gpg_connect_agent:
+        gnupghome = root / ".gnupg"
+        if not gnupghome.is_dir():
+            gnupghome = root
+        try:
+            subprocess.run(
+                [gpg_connect_agent, "killagent", "/bye"],
+                env={"GNUPGHOME": str(gnupghome)},
+                shell=False,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except subprocess.CalledProcessError:
+            # This is likely CentOS 7 or Amazon Linux 2
+            pass
+
+    # If the above errored or was not enough, as a last resort, let's check
+    # the running processes.
+    for proc in psutil.process_iter():
+        try:
+            if "gpg-agent" in proc.name():
+                for arg in proc.cmdline():
+                    if str(root) in arg:
+                        proc.terminate()
+        except Exception:  # pylint: disable=broad-except
+            pass

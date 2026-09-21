@@ -1,15 +1,8 @@
 import pytest
 
-from tests.conftest import CONTAINER_TARGETS
+from tests.common.containers import genmarks
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container"),
-    pytest.mark.parametrize(
-        "container", (CONTAINER_TARGETS[0],), indirect=True
-    ),  # We only want to check the internal logic, not the API access
+pytestmark = genmarks(internal_logic_only=True) + [
     pytest.mark.parametrize(
         "approle",
         ({"bind_secret_id": False, "token_bound_cidrs": ["0.0.0.0/1", "128.0.0.0/1"]},),

@@ -2,23 +2,15 @@ import logging
 
 import pytest
 
-from tests.conftest import CONTAINER_TARGETS
+from tests.common.containers import genmarks
 from tests.support.vault import vault_list_secrets
 from tests.support.vault import vault_read_secret
 
-pytest.importorskip("docker")
+pytestmark = genmarks(
+    internal_logic_only=True, mounts=True, policies=True, secrets=True, pillar=True
+)
 
 log = logging.getLogger(__name__)
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures(
-        "container", "pillar_base", "secret_mounts", "vault_policies", "vault_secrets"
-    ),
-    pytest.mark.parametrize(
-        "container", (CONTAINER_TARGETS[0],), indirect=True
-    ),  # We only want to check the internal logic, not the API access
-]
 
 
 @pytest.fixture(scope="module")

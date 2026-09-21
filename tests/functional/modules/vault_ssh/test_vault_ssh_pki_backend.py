@@ -2,22 +2,16 @@ from pathlib import Path
 
 import pytest
 
-from tests.helpers.vault_ssh import CERT_CHECK
-from tests.helpers.vault_ssh import get_cert
+from tests.common.containers import genmarks
+from tests.common.helpers.vault_ssh import CERT_CHECK
+from tests.common.helpers.vault_ssh import get_cert
 from tests.support.vault import vault_create_secret_id
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_get_role_id
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write
 
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures(
-        "container", "secret_mounts", "vault_policies", "ca_setup", "roles_setup"
-    ),
-    pytest.mark.parametrize("secret_mounts", ("ssh",), indirect=True),
-    pytest.mark.parametrize("vault_policies", ("ssh_admin",), indirect=True),
-]
+pytestmark = genmarks("ca_setup", "roles_setup", mounts="ssh", policies="ssh_admin")
 
 
 @pytest.fixture(scope="module", autouse=True)

@@ -5,17 +5,10 @@ import pytest
 import salt.crypt
 import salt.exceptions
 
-from tests.conftest import CONTAINER_TARGETS
+from tests.common.containers import genmarks
 
-pytest.importorskip("docker")
+pytestmark = genmarks(internal_logic_only=True)
 
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container"),
-    pytest.mark.parametrize(
-        "container", (CONTAINER_TARGETS[0],), indirect=True
-    ),  # We only want to check the internal logic, not the API access
-]
 
 PEER_RUN_FUNCS = (
     "get_config",

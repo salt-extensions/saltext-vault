@@ -1,16 +1,18 @@
 import pytest
 
+from tests.common.containers import genmarks
+
 # pylint: disable=unused-import
-from tests.fixtures.vault_ssh import _temp_ca
-from tests.fixtures.vault_ssh import _temp_role
-from tests.fixtures.vault_ssh import ec_priv
-from tests.fixtures.vault_ssh import ec_priv_file
-from tests.fixtures.vault_ssh import ec_pub
-from tests.fixtures.vault_ssh import ec_pub_file
-from tests.fixtures.vault_ssh import hostrole
-from tests.fixtures.vault_ssh import iprole
-from tests.fixtures.vault_ssh import roles_setup
-from tests.fixtures.vault_ssh import userrole
+from tests.common.fixtures.vault_ssh import _temp_ca
+from tests.common.fixtures.vault_ssh import _temp_role
+from tests.common.fixtures.vault_ssh import ec_priv
+from tests.common.fixtures.vault_ssh import ec_priv_file
+from tests.common.fixtures.vault_ssh import ec_pub
+from tests.common.fixtures.vault_ssh import ec_pub_file
+from tests.common.fixtures.vault_ssh import hostrole
+from tests.common.fixtures.vault_ssh import iprole
+from tests.common.fixtures.vault_ssh import roles_setup
+from tests.common.fixtures.vault_ssh import userrole
 
 # pylint: enable=unused-import
 from tests.support.vault import vault_delete
@@ -18,13 +20,7 @@ from tests.support.vault import vault_list
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts"),
-    pytest.mark.parametrize("secret_mounts", ("ssh",), indirect=True),
-]
+pytestmark = genmarks(mounts="ssh")
 
 
 @pytest.fixture

@@ -4,16 +4,11 @@ Tests for the role_managed/role_absent states.
 
 import pytest
 
+from tests.common.containers import genmarks
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts"),
-    pytest.mark.parametrize("secret_mounts", ("pki",), indirect=True),
-]
+pytestmark = genmarks(mounts="pki")
 
 
 @pytest.mark.usefixtures("issuer_setup")

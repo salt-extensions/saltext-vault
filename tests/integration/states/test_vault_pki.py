@@ -9,20 +9,12 @@ from salt.utils.x509 import NAME_ATTRS_OID
 from salt.utils.x509 import load_cert
 from saltfactories.utils import random_string
 
-# pylint: disable=unused-import
-from tests.fixtures.vault_pki import clean_pki_mount
-
-# pylint: enable=unused-import
-from tests.helpers.vault_pki import _subject
+from tests.common.containers import genmarks
+from tests.common.fixtures.vault_pki import clean_pki_mount  # pylint: disable=unused-import
+from tests.common.helpers.vault_pki import _subject
 from tests.support.vault import vault_read
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts", "vault_policies"),
-    pytest.mark.parametrize("secret_mounts", ("pki",), indirect=True),
-]
+pytestmark = genmarks(mounts="pki", policies=True)
 
 
 # This hardcoded cert expires Nov 12 14:04:33 2032 GMT

@@ -6,30 +6,30 @@ import pytest
 from salt.utils.x509 import load_cert
 
 # pylint: disable=unused-import
-from tests.fixtures.vault_pki import aia_urls
-from tests.fixtures.vault_pki import ca2_cert
-from tests.fixtures.vault_pki import ca2_key
-from tests.fixtures.vault_pki import ca_cert
-from tests.fixtures.vault_pki import ca_cert_no_pathlen
-from tests.fixtures.vault_pki import ca_key
-from tests.fixtures.vault_pki import ca_key_no_pathlen
-from tests.fixtures.vault_pki import ca_sub_cert
-from tests.fixtures.vault_pki import ca_sub_key
-from tests.fixtures.vault_pki import clean_pki_mount
-from tests.fixtures.vault_pki import cluster_config
-from tests.fixtures.vault_pki import fresh_pki_mount
-from tests.fixtures.vault_pki import issuer_setup
-from tests.fixtures.vault_pki import issuer_setup_additional
-from tests.fixtures.vault_pki import issuer_setup_no_pathlen
-from tests.fixtures.vault_pki import issuer_setup_sub
-from tests.fixtures.vault_pki import private_key
-from tests.fixtures.vault_pki import role_read_denied
-from tests.fixtures.vault_pki import roles_setup
-from tests.fixtures.vault_pki import url_config_read_denied
+from tests.common.fixtures.vault_pki import aia_urls
+from tests.common.fixtures.vault_pki import ca2_cert
+from tests.common.fixtures.vault_pki import ca2_key
+from tests.common.fixtures.vault_pki import ca_cert
+from tests.common.fixtures.vault_pki import ca_cert_no_pathlen
+from tests.common.fixtures.vault_pki import ca_key
+from tests.common.fixtures.vault_pki import ca_key_no_pathlen
+from tests.common.fixtures.vault_pki import ca_sub_cert
+from tests.common.fixtures.vault_pki import ca_sub_key
+from tests.common.fixtures.vault_pki import clean_pki_mount
+from tests.common.fixtures.vault_pki import cluster_config
+from tests.common.fixtures.vault_pki import fresh_pki_mount
+from tests.common.fixtures.vault_pki import issuer_setup
+from tests.common.fixtures.vault_pki import issuer_setup_additional
+from tests.common.fixtures.vault_pki import issuer_setup_no_pathlen
+from tests.common.fixtures.vault_pki import issuer_setup_sub
+from tests.common.fixtures.vault_pki import private_key
+from tests.common.fixtures.vault_pki import role_read_denied
+from tests.common.fixtures.vault_pki import roles_setup
+from tests.common.fixtures.vault_pki import url_config_read_denied
 
 # pylint: enable=unused-import
-from tests.helpers.vault_pki import _default_issuer
-from tests.helpers.vault_pki import pregen_csr
+from tests.common.helpers.vault_pki import _default_issuer
+from tests.common.helpers.vault_pki import pregen_csr
 from tests.support.vault import vault_delete
 
 
