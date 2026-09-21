@@ -3,21 +3,21 @@ import json
 
 import pytest
 
-from tests.conftest import CONTAINER_TARGETS
+from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
-from tests.fixtures.vault_gpg import _cached_bin
-from tests.fixtures.vault_gpg import gpg_plugin
-from tests.fixtures.vault_gpg import key_a_fp
-from tests.fixtures.vault_gpg import key_a_priv
-from tests.fixtures.vault_gpg import key_a_priv_file
-from tests.fixtures.vault_gpg import key_a_pub
-from tests.fixtures.vault_gpg import key_a_pub_file
-from tests.fixtures.vault_gpg import key_b_pub
+from tests.common.fixtures.vault_gpg import cached_vault_gpg_bin
+from tests.common.fixtures.vault_gpg import gpg_mount
+from tests.common.fixtures.vault_gpg import gpg_plugin
+from tests.common.fixtures.vault_gpg import gpghome
+from tests.common.fixtures.vault_gpg import key_a_fp
+from tests.common.fixtures.vault_gpg import key_a_priv
+from tests.common.fixtures.vault_gpg import key_a_priv_file
+from tests.common.fixtures.vault_gpg import key_a_pub
+from tests.common.fixtures.vault_gpg import key_a_pub_file
+from tests.common.fixtures.vault_gpg import key_b_pub
 from tests.functional.modules.test_vault_gpg import TestDecrypt as _TestDecrypt
 from tests.functional.modules.test_vault_gpg import existing_key
-from tests.functional.modules.test_vault_gpg import gpg_mount
-from tests.functional.modules.test_vault_gpg import gpghome
 from tests.functional.modules.test_vault_gpg import secret_message_b64
 from tests.functional.modules.test_vault_gpg import test_create_key
 from tests.functional.modules.test_vault_gpg import test_delete_key
@@ -42,15 +42,7 @@ from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "vault_policies"),
-    pytest.mark.parametrize(
-        "container", (CONTAINER_TARGETS[0],), indirect=True
-    ),  # We only want to check the internal logic, not the API access
-]
+pytestmark = genmarks(internal_logic_only=True, policies=True)
 
 
 @pytest.fixture(scope="module")

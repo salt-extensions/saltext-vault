@@ -6,18 +6,14 @@ from unittest.mock import patch
 import pytest
 import salt.exceptions
 
+from tests.common.containers import genmarks
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_delete_approle
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "master_approle_mount"),
-]
+pytestmark = genmarks("master_approle_mount")
 
 log = logging.getLogger(__name__)
 

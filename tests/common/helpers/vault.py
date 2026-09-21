@@ -2,10 +2,8 @@
 Shared helpers for the core vault test suites.
 """
 
-import json
 from contextlib import contextmanager
 
-import pytest
 import salt.utils.data
 import salt.utils.files
 import salt.utils.msgpack
@@ -43,29 +41,3 @@ def outdated_cached_config(minion_conn_cachedir, salt_call_cli, mutate, clear_au
     finally:
         if config_cachefile.exists():
             config_cachefile.unlink()
-
-
-def check_cryptography(salt_ssh_cli, minimum, modules):
-    """
-    Skip when the host Python's cryptography library is missing or older
-    than ``minimum`` (version tuple). Returns the installed version.
-    """
-    # Cannot use `pip.list` since it fails in the test suite as well
-    # with missing `pkg_resources`.
-    ret = salt_ssh_cli.run("--raw", "python3 -m pip list --format=json")
-    assert ret.returncode == 0
-    assert isinstance(ret.data, dict)
-    res = json.loads(ret.data["stdout"])
-    for pkg in res:
-        if pkg["name"] == "cryptography":
-            version = tuple(int(x) for x in pkg["version"].split("."))
-            break
-    else:
-        pytest.skip("The host Python does not have cryptography")
-    if version < minimum:
-        minimum_str = ".".join(str(x) for x in minimum)
-        pytest.skip(
-            f"The {modules} modules require at least cryptography v{minimum_str} on the host. "
-            f"Installed: {'.'.join(str(x) for x in version)}"
-        )
-    return version

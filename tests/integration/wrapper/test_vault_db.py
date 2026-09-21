@@ -2,21 +2,20 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import CONTAINER_TARGETS
+from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
-from tests.fixtures.mysql import create_mysql_combo
-from tests.fixtures.mysql import mysql_combo
-from tests.fixtures.mysql import mysql_container
-from tests.fixtures.vault_db import connection_setup
-from tests.fixtures.vault_db import mysql_image
-from tests.fixtures.vault_db import role_args_common
-from tests.fixtures.vault_db import role_static_setup
-from tests.fixtures.vault_db import roles_setup
-from tests.fixtures.vault_db import testdb
-from tests.fixtures.vault_db import testreissuerole
-from tests.fixtures.vault_db import testrole
-from tests.fixtures.vault_db import teststaticrole
+from tests.common.fixtures.mysql import mysql_combo
+from tests.common.fixtures.mysql import mysql_container
+from tests.common.fixtures.mysql import mysql_image
+from tests.common.fixtures.vault_db import connection_setup
+from tests.common.fixtures.vault_db import role_args_common
+from tests.common.fixtures.vault_db import role_static_setup
+from tests.common.fixtures.vault_db import roles_setup
+from tests.common.fixtures.vault_db import testdb
+from tests.common.fixtures.vault_db import testreissuerole
+from tests.common.fixtures.vault_db import testrole
+from tests.common.fixtures.vault_db import teststaticrole
 from tests.functional.modules.test_vault_db import test_clear_cached
 from tests.functional.modules.test_vault_db import test_delete_connection
 from tests.functional.modules.test_vault_db import test_delete_role
@@ -44,16 +43,7 @@ from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
 from tests.support.vault import vault_revoke
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts", "vault_policies"),
-    pytest.mark.parametrize("secret_mounts", ("database",), indirect=True),
-    pytest.mark.parametrize(
-        "container", (CONTAINER_TARGETS[0],), indirect=True
-    ),  # We only want to check the internal logic, not the API access
-]
+pytestmark = genmarks(internal_logic_only=True, mounts="database", policies=True)
 
 
 @pytest.fixture(scope="module")

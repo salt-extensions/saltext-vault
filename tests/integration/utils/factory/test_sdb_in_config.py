@@ -1,6 +1,6 @@
 import pytest
 
-from tests.conftest import CONTAINER_TARGETS
+from tests.common.containers import genmarks
 from tests.support.helpers import PatchedEnviron
 from tests.support.vault import vault_create_secret_id
 from tests.support.vault import vault_delete_approle
@@ -9,12 +9,7 @@ from tests.support.vault import vault_enable_auth_method
 from tests.support.vault import vault_get_role_id
 from tests.support.vault import vault_write_approle
 
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.parametrize(
-        "container", (CONTAINER_TARGETS[0],), indirect=True
-    ),  # We only want to check the internal logic, not the API access
-]
+pytestmark = genmarks(internal_logic_only=True)
 
 
 @pytest.fixture(scope="module")

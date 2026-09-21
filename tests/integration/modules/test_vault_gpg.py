@@ -1,24 +1,16 @@
 import pytest
 
-from tests.conftest import CONTAINER_TARGETS
+from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
-from tests.functional.modules.test_vault_gpg import _cached_bin
+from tests.common.fixtures.vault_gpg import cached_vault_gpg_bin
+from tests.common.fixtures.vault_gpg import gpg_mount
+from tests.common.fixtures.vault_gpg import gpg_plugin
 from tests.functional.modules.test_vault_gpg import existing_key
-from tests.functional.modules.test_vault_gpg import gpg_mount
-from tests.functional.modules.test_vault_gpg import gpg_plugin
 
 # pylint: enable=unused-import
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "vault_policies"),
-    pytest.mark.parametrize(
-        "container", (CONTAINER_TARGETS[0],), indirect=True
-    ),  # We only want to check the internal logic, not the API access
-]
+pytestmark = genmarks(internal_logic_only=True, policies=True)
 
 
 @pytest.fixture(scope="module")

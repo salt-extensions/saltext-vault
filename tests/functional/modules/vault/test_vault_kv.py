@@ -4,23 +4,16 @@ import pytest
 from salt.exceptions import CommandExecutionError
 from saltfactories.utils import random_string
 
+from tests.common.containers import genmarks
 from tests.support.vault import vault_delete_secret
 from tests.support.vault import vault_destroy_secret
 from tests.support.vault import vault_read_secret
 from tests.support.vault import vault_read_secret_metadata
 from tests.support.vault import vault_write_secret
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("secret_mounts", "vault_secrets"),
-    pytest.mark.parametrize(
-        "secret_mounts",
-        [[("kv", "secret-v1", "-version=1"), ("kv", "secret", "-version=2")]],
-        indirect=True,
-    ),
-]
+pytestmark = genmarks(
+    mounts=[[("kv", "secret-v1", "-version=1"), ("kv", "secret", "-version=2")]], secrets=True
+)
 
 log = logging.getLogger(__name__)
 

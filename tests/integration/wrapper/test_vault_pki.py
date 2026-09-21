@@ -1,12 +1,11 @@
 import pytest
-from cryptography.hazmat.primitives import serialization
-from salt.utils.x509 import generate_rsa_privkey
 from salt.utils.x509 import load_cert
 
-from tests.conftest import CONTAINER_TARGETS
+from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
-from tests.fixtures.vault_pki import roles_setup
+from tests.common.fixtures.vault_pki import private_key as private_key_text
+from tests.common.fixtures.vault_pki import roles_setup
 from tests.functional.modules.test_vault_pki import clean_pki
 from tests.functional.modules.test_vault_pki import cluster_config
 from tests.functional.modules.test_vault_pki import empty_pki_mount
@@ -55,22 +54,19 @@ from tests.functional.modules.test_vault_pki import testkey
 from tests.functional.modules.test_vault_pki import testrole
 
 # pylint: enable=unused-import
-from tests.helpers.vault import check_cryptography
 from tests.support.helpers import CliFuncProxy
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
 from tests.support.vault import vault_write
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts", "vault_policies"),
-    pytest.mark.parametrize("secret_mounts", ("pki",), indirect=True),
-    pytest.mark.parametrize(
-        "container", (CONTAINER_TARGETS[0],), indirect=True
-    ),  # We only want to check the internal logic, not the API access
-]
+pytestmark = genmarks(
+    internal_logic_only=True,
+    mounts="pki",
+    policies=True,
+    # 3.1 introduces cryptography.hazmat.primitives.serialization.pkcs7,
+    # before that there is an ImportError in salt.utils.x509.
+    _check_cryptography="3.1",
+)
 
 
 @pytest.fixture(scope="module")
@@ -90,13 +86,6 @@ def master_config_overrides(salt_version):
     return opts
 
 
-@pytest.fixture(scope="module", autouse=True)
-def _check_cryptography(salt_ssh_cli):
-    # 3.1 introduces cryptography.hazmat.primitives.serialization.pkcs7,
-    # before that there is an ImportError in salt.utils.x509.
-    return check_cryptography(salt_ssh_cli, (3, 1), "x509_v2")
-
-
 @pytest.fixture
 def vault_pki(salt_ssh_cli, vault_policies):  # pylint: disable=unused-argument
     try:
@@ -109,16 +98,9 @@ def vault_pki(salt_ssh_cli, vault_policies):  # pylint: disable=unused-argument
 
 
 @pytest.fixture(scope="module")
-def private_key(tmp_path_factory):
-    pk = generate_rsa_privkey(2048)
-    pk_bytes = pk.private_bytes(
-        serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
-    data = pk_bytes.decode()
+def private_key(private_key_text, tmp_path_factory):
     with pytest.helpers.temp_file(  # type: ignore
-        "pk.pem", data, tmp_path_factory.mktemp("pki_wrapper")
+        "pk.pem", private_key_text, tmp_path_factory.mktemp("pki_wrapper")
     ) as pk:
         yield str(pk)
 

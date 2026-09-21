@@ -16,14 +16,15 @@ from salt.modules.x509_v2 import create_csr
 from salt.utils.x509 import load_cert
 
 from saltext.vault.utils.vault.helpers import dec2hex
+from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
-from tests.fixtures.vault_pki import private_key
-from tests.fixtures.vault_pki import roles_setup
+from tests.common.fixtures.vault_pki import private_key
+from tests.common.fixtures.vault_pki import roles_setup
 
 # pylint: enable=unused-import
-from tests.helpers.vault_pki import DEFAULT_CLUSTER_AIA_PATH
-from tests.helpers.vault_pki import DEFAULT_CLUSTER_PATH
+from tests.common.helpers.vault_pki import DEFAULT_CLUSTER_AIA_PATH
+from tests.common.helpers.vault_pki import DEFAULT_CLUSTER_PATH
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_disable_secret_engine
 from tests.support.vault import vault_enable_secret_engine
@@ -32,13 +33,7 @@ from tests.support.vault import vault_list_detailed
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts"),
-    pytest.mark.parametrize("secret_mounts", ("pki",), indirect=True),
-]
+pytestmark = genmarks(mounts="pki")
 
 
 @pytest.fixture(scope="module")

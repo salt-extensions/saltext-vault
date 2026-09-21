@@ -1,20 +1,18 @@
 import pytest
 
+from tests.common.containers import genmarks
+
 # pylint: disable=unused-import
-from tests.fixtures.vault_ssh import _temp_ca
-from tests.fixtures.vault_ssh import _temp_role
+from tests.common.fixtures.vault_ssh import _temp_ca
+from tests.common.fixtures.vault_ssh import _temp_role
 
 # pylint: enable=unused-import
-from tests.helpers.vault_ssh import CERT_CHECK
-from tests.helpers.vault_ssh import get_cert
+from tests.common.helpers.vault_ssh import CERT_CHECK
+from tests.common.helpers.vault_ssh import get_cert
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
 
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts"),
-    pytest.mark.parametrize("secret_mounts", ("ssh",), indirect=True),
-]
+pytestmark = genmarks(mounts="ssh")
 
 
 @pytest.mark.usefixtures("roles_setup")

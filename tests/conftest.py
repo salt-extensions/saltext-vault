@@ -18,6 +18,7 @@ from salt.version import __version_info__ as SALT_VERSION
 from saltfactories.utils import random_string
 
 from saltext.vault import PACKAGE_ROOT
+from tests.common import CONTAINER_TARGETS
 from tests.support.files_mapping import CHANGED_FILES_MAP
 from tests.support.files_mapping import REPO_ROOT
 from tests.support.files_mapping import TESTS_DIR_REL
@@ -316,11 +317,6 @@ def vault_plugins(tmp_path_factory):
 @pytest.fixture(scope="session")
 def vault_config():
     return {"plugin_directory": "/mnt/plugins"}
-
-
-CONTAINER_TARGETS = os.environ.get(
-    "TESTING_CONTAINER", "hashicorp/vault:latest,openbao/openbao:latest"
-).split(",")
 
 
 @pytest.fixture(

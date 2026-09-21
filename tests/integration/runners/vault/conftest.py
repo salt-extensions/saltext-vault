@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from saltfactories.utils import random_string
 
-from tests.helpers.vault import outdated_cached_config
+from tests.common.helpers.vault import outdated_cached_config
 
 
 @pytest.fixture(scope="module")

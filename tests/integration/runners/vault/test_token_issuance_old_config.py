@@ -3,19 +3,11 @@ import logging
 import pytest
 from saltfactories.utils import random_string
 
-from tests.conftest import CONTAINER_TARGETS
+from tests.common.containers import genmarks
 
-pytest.importorskip("docker")
+pytestmark = genmarks(internal_logic_only=True, mounts=True, policies=True, secrets=True)
 
 log = logging.getLogger(__name__)
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts", "vault_policies", "vault_secrets"),
-    pytest.mark.parametrize(
-        "container", (CONTAINER_TARGETS[0],), indirect=True
-    ),  # We only want to check the internal logic, not the API access
-]
 
 
 @pytest.fixture(scope="module")

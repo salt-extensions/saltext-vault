@@ -1,10 +1,10 @@
 import pytest
 
-from tests.conftest import CONTAINER_TARGETS
+from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
-from tests.fixtures.vault_ssh import _temp_ca
-from tests.fixtures.vault_ssh import _temp_role
+from tests.common.fixtures.vault_ssh import _temp_ca
+from tests.common.fixtures.vault_ssh import _temp_role
 from tests.functional.modules.vault_ssh.test_vault_ssh import test_create_ca
 from tests.functional.modules.vault_ssh.test_vault_ssh import test_create_ca_key_spec
 from tests.functional.modules.vault_ssh.test_vault_ssh import test_create_ca_with_keys
@@ -25,16 +25,7 @@ from tests.functional.modules.vault_ssh.test_vault_ssh import test_zeroaddress_r
 # pylint: enable=unused-import
 from tests.support.helpers import CliFuncProxy
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts", "vault_policies"),
-    pytest.mark.parametrize("secret_mounts", ("ssh",), indirect=True),
-    pytest.mark.parametrize(
-        "container", (CONTAINER_TARGETS[0],), indirect=True
-    ),  # We only want to check the internal logic, not the API access
-]
+pytestmark = genmarks(internal_logic_only=True, mounts="ssh", policies=True)
 
 
 @pytest.fixture

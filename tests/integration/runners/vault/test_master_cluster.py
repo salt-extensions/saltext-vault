@@ -6,16 +6,14 @@ import pytest
 import salt.utils.platform
 import salt.version
 
-pytest.importorskip("docker")
+from tests.common.containers import genmarks
+
+sver = int(salt.version.__version__.split(".")[0])
+pytestmark = genmarks(mounts=True, policies=True, secrets=True) + [
+    pytest.mark.skipif(sver < 3007, reason="Master cluster requires Salt 3007+"),
+]
 
 log = logging.getLogger(__name__)
-sver = int(salt.version.__version__.split(".")[0])
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.skipif(sver < 3007, reason="Master cluster requires Salt 3007+"),
-    pytest.mark.usefixtures("container", "secret_mounts", "vault_policies", "vault_secrets"),
-]
 
 
 @pytest.fixture(scope="module")

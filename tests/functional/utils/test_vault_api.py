@@ -4,16 +4,12 @@ import pytest
 from saltfactories.utils import random_string
 
 from saltext.vault.utils import vault
+from tests.common.containers import genmarks
 from tests.support.vault import vault_disable_auth_method
 from tests.support.vault import vault_enable_auth_method
 from tests.support.vault import vault_read
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container"),
-]
+pytestmark = genmarks()
 
 
 @pytest.fixture

@@ -3,17 +3,13 @@ from textwrap import dedent
 
 import pytest
 
+from tests.common.containers import genmarks
 from tests.support.vault import vault_delete_policy
 from tests.support.vault import vault_list_policies
 from tests.support.vault import vault_read_policy
 from tests.support.vault import vault_write_policy
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container"),
-]
+pytestmark = genmarks()
 
 log = logging.getLogger(__name__)
 

@@ -1,7 +1,6 @@
 import pytest
 
-# pylint: disable-next=unused-import
-from tests.fixtures.vault import secret_mount
+from tests.common.fixtures.vault import secret_mount  # pylint: disable=unused-import
 from tests.support.vault import vault_delete_secret
 
 

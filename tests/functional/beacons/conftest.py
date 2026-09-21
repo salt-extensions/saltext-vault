@@ -1,20 +1,18 @@
 import pytest
 
 # pylint: disable=unused-import
-from tests.fixtures.mysql import create_mysql_combo
-from tests.fixtures.mysql import mysql_combo
-from tests.fixtures.mysql import mysql_container
-from tests.fixtures.vault_db import connection_setup
-from tests.fixtures.vault_db import mysql_image
-from tests.fixtures.vault_db import role_args_common
-from tests.fixtures.vault_db import roles_setup
-from tests.fixtures.vault_db import testdb
+from tests.common.fixtures.mysql import mysql_combo
+from tests.common.fixtures.mysql import mysql_container
+from tests.common.fixtures.mysql import mysql_image
+from tests.common.fixtures.vault_db import connection_setup
+from tests.common.fixtures.vault_db import role_args_common
+from tests.common.fixtures.vault_db import roles_setup
+from tests.common.fixtures.vault_db import testdb
+
+# pylint: enable=unused-import
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
 from tests.support.vault import vault_revoke
-from tests.support.vault import vault_write
-
-# pylint: enable=unused-import
 
 
 @pytest.fixture

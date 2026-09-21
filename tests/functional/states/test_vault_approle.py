@@ -1,21 +1,18 @@
 import pytest
 
+from tests.common.containers import genmarks
+
 # pylint: disable=unused-import
-from tests.fixtures.vault_approle import approle_auth
-from tests.fixtures.vault_approle import roles_setup
-from tests.fixtures.vault_approle import testrole
+from tests.common.fixtures.vault_approle import approle_auth
+from tests.common.fixtures.vault_approle import roles_setup
+from tests.common.fixtures.vault_approle import testrole
 
 # pylint: enable=unused-import
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container"),
-]
+pytestmark = genmarks()
 
 
 @pytest.fixture(scope="module")

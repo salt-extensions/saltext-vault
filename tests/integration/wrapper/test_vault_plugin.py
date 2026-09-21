@@ -1,16 +1,16 @@
 import pytest
 
-from tests.conftest import CONTAINER_TARGETS
+from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
-from tests.fixtures.vault_plugin import _auth_plugin
-from tests.fixtures.vault_plugin import _db_plugin
-from tests.fixtures.vault_plugin import _secret_plugin
-from tests.fixtures.vault_plugin import auth_plugin
-from tests.fixtures.vault_plugin import db_plugin
-from tests.fixtures.vault_plugin import plugins_pinned
-from tests.fixtures.vault_plugin import plugins_registered
-from tests.fixtures.vault_plugin import secret_plugin
+from tests.common.fixtures.vault_plugin import _auth_plugin
+from tests.common.fixtures.vault_plugin import _db_plugin
+from tests.common.fixtures.vault_plugin import _secret_plugin
+from tests.common.fixtures.vault_plugin import auth_plugin
+from tests.common.fixtures.vault_plugin import db_plugin
+from tests.common.fixtures.vault_plugin import plugins_pinned
+from tests.common.fixtures.vault_plugin import plugins_registered
+from tests.common.fixtures.vault_plugin import secret_plugin
 from tests.functional.modules.test_vault_plugin import test_list
 from tests.functional.modules.test_vault_plugin import test_list_includes_custom_versioned
 from tests.functional.modules.test_vault_plugin import test_list_versions
@@ -25,15 +25,7 @@ from tests.support.vault import vault_plugin_read
 from tests.support.vault import vault_plugin_show_pin
 from tests.support.vault import vault_plugin_unpin
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "vault_policies"),
-    pytest.mark.parametrize(
-        "container", (CONTAINER_TARGETS[0],), indirect=True
-    ),  # We only want to check the internal logic, not the API access
-]
+pytestmark = genmarks(internal_logic_only=True, policies=True)
 
 
 @pytest.fixture(scope="module")

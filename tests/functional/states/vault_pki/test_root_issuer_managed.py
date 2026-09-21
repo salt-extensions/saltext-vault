@@ -13,22 +13,17 @@ from cryptography.hazmat.primitives import hashes
 from salt.utils.x509 import load_cert
 
 from saltext.vault.utils.vault import helpers as hlp
-from tests.helpers.vault_pki import AIA_UNVERIFIED_NOTE
-from tests.helpers.vault_pki import MOUNT_URL_CONFIG
-from tests.helpers.vault_pki import _assert_embedded_aia
-from tests.helpers.vault_pki import _default_issuer
-from tests.helpers.vault_pki import _import_configured_issuer
+from tests.common.containers import genmarks
+from tests.common.helpers.vault_pki import AIA_UNVERIFIED_NOTE
+from tests.common.helpers.vault_pki import MOUNT_URL_CONFIG
+from tests.common.helpers.vault_pki import _assert_embedded_aia
+from tests.common.helpers.vault_pki import _default_issuer
+from tests.common.helpers.vault_pki import _import_configured_issuer
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write
 
-pytest.importorskip("docker")
-
-pytestmark = [
-    pytest.mark.skip_if_binaries_missing("vault"),
-    pytest.mark.usefixtures("container", "secret_mounts"),
-    pytest.mark.parametrize("secret_mounts", ("pki",), indirect=True),
-]
+pytestmark = genmarks(mounts="pki")
 
 
 @pytest.mark.usefixtures("clean_pki_mount")
