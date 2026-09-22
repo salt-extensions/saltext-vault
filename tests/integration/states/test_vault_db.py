@@ -6,9 +6,7 @@ import salt.utils.beacons
 from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
-from tests.common.fixtures.mysql import mysql_combo
 from tests.common.fixtures.mysql import mysql_container
-from tests.common.fixtures.mysql import mysql_image
 from tests.common.fixtures.vault_db import connection_setup
 from tests.common.fixtures.vault_db import role_args_common
 from tests.common.fixtures.vault_db import roles_setup

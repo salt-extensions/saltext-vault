@@ -82,10 +82,10 @@ def test_write(vault_approle, approle_auth, container):
         "token_type": "service",
     }
     expected = args.copy()
-    if "vault" in container and "latest" in container:
+    if container.is_vault_latest():
         args["alias_metadata"] = {"foo": "bar"}
         expected["alias_metadata"] = {"foo": "bar"}
-    elif "openbao" in container:
+    elif container.is_openbao():
         expected["token_strictly_bind_ip"] = args["token_strictly_bind_ip"] = True
         expected["token_bound_cidrs"] = []
         args["token_bound_cidrs"] = None

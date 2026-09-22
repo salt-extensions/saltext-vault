@@ -51,10 +51,8 @@ def vault_plugin(salt_ssh_cli, container):
         yield CliFuncProxy(salt_ssh_cli).vault_plugin
     finally:
         for plugin in vault_plugin_list(lambda x: not x["builtin"]):
-            if (
-                "vault" in container
-                and "latest" in container
-                and vault_plugin_show_pin(plugin["type"], plugin["name"])
+            if container.is_vault_latest() and vault_plugin_show_pin(
+                plugin["type"], plugin["name"]
             ):
                 vault_plugin_unpin(plugin["type"], plugin["name"])
             vault_plugin_deregister(plugin["type"], plugin["name"], version=plugin["version"])
@@ -128,7 +126,7 @@ def test_list_pins(vault_plugin, plugins_pinned, db_plugin, secret_plugin):
     indirect=True,
 )
 def test_pin(vault_plugin, secret_plugin, db_plugin, container):
-    if "vault" not in container or "latest" not in container:
+    if not container.is_vault_latest():
         pytest.skip("Pins are only supported on recent Vault versions")
     res = vault_plugin.pin("secret", secret_plugin["name"], version="9.2.3")
     assert res is True
@@ -273,7 +271,7 @@ def test_plugin_deregister(vault_plugin, secret_plugin):
 
 
 def test_reload(vault_plugin, container):
-    if "vault" not in container or "latest" not in container:
+    if not container.is_vault_latest():
         pytest.skip("API is only available on recent Vault versions")
     res = vault_plugin.reload("auth", "approle", globally=True)
     assert res

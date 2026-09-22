@@ -140,7 +140,7 @@ def test_read_ca(vault_ssh, ca_pub):
 @pytest.mark.usefixtures("ca_setup")
 def test_destroy_ca(vault_ssh, container):
     res = vault_ssh.destroy_ca()
-    if "openbao" in container:
+    if container.is_openbao():
         assert res["warnings"]
         assert "Deleted 1 issuers" in res["warnings"][0]
     else:
@@ -148,7 +148,7 @@ def test_destroy_ca(vault_ssh, container):
     try:
         res = vault_read("ssh/config/ca", raise_errors=True)
     except RuntimeError as err:
-        if "openbao" in container:
+        if container.is_openbao():
             assert "no default issuer currently configured" in str(err)
         else:
             assert "keys haven't been configured yet" in str(err)
@@ -166,7 +166,7 @@ def test_sign_key_user(vault_ssh, ec_pub, container):
         valid_principals=["foobar"],
     )
     expected = {"serial_number", "signed_key"}
-    if "openbao" in container:
+    if container.is_openbao():
         expected.add("issuer_id")
     assert set(res) == expected
     if CERT_CHECK:
@@ -180,7 +180,7 @@ def test_sign_key_user(vault_ssh, ec_pub, container):
 def test_sign_key_host(vault_ssh, ec_pub, container):
     res = vault_ssh.sign_key("hostrole", ec_pub, cert_type="host", valid_principals=["foo.bar.biz"])
     expected = {"serial_number", "signed_key"}
-    if "openbao" in container:
+    if container.is_openbao():
         expected.add("issuer_id")
     assert set(res) == expected
     if CERT_CHECK:
@@ -213,7 +213,7 @@ def test_generate_key_cert_user(vault_ssh, container, valid_principals, ttl, key
         valid_principals=valid_principals,
     )
     expected = {"private_key", "private_key_type", "serial_number", "signed_key"}
-    if "openbao" in container:
+    if container.is_openbao():
         expected.add("issuer_id")
     assert set(res) == expected
     assert res["private_key_type"] == "ssh-rsa"
@@ -242,7 +242,7 @@ def test_generate_key_cert_host(vault_ssh, container):
         "hostrole", cert_type="host", valid_principals=["foo.bar.biz"]
     )
     expected = {"private_key", "private_key_type", "serial_number", "signed_key"}
-    if "openbao" in container:
+    if container.is_openbao():
         expected.add("issuer_id")
     assert set(res) == expected
     assert res["private_key_type"] == "ssh-rsa"

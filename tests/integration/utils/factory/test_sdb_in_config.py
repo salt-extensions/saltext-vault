@@ -1,5 +1,6 @@
 import pytest
 
+from tests.common import DEFAULT_ROOT_TOKEN
 from tests.common.containers import genmarks
 from tests.support.helpers import PatchedEnviron
 from tests.support.vault import vault_create_secret_id
@@ -55,7 +56,7 @@ def approle_configured(container):  # pylint: disable=unused-argument
 @pytest.fixture(autouse=True)
 def auth_in_env(approle_configured):
     with PatchedEnviron(
-        VAULT_TOKEN="testsecret",
+        VAULT_TOKEN=DEFAULT_ROOT_TOKEN,
         VAULT_ROLEID=approle_configured["role_id"],
         VAULT_SECRETID=approle_configured["secret_id"],
     ):
@@ -65,7 +66,7 @@ def auth_in_env(approle_configured):
 def test_sdb_in_config_token(salt_call_cli):
     res = salt_call_cli.run("vault.query", "GET", "auth/token/lookup-self")
     assert res.returncode == 0
-    assert res.data["data"]["id"] == "testsecret"
+    assert res.data["data"]["id"] == DEFAULT_ROOT_TOKEN
 
 
 def test_sdb_in_config_role_id_secret_id(salt_run_cli):

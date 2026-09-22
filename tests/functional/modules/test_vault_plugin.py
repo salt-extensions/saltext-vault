@@ -214,7 +214,7 @@ def test_list_pins(vault_plugin, plugins_pinned, db_plugin, secret_plugin):
 
 
 def test_list_pins_empty(vault_plugin, container):
-    if "vault" not in container or "latest" not in container:
+    if not container.is_vault_latest():
         pytest.skip("Pins are only supported on recent Vault versions")
     res = vault_plugin.list_pins()
     assert res == []
@@ -247,7 +247,7 @@ def test_pinned_version(vault_plugin, plugins_pinned, secret_plugin):
 @pytest.mark.usefixtures("plugins_registered")
 @pytest.mark.parametrize("plugins_registered", ({"db_plugin": ["1.0.0"]}))
 def test_pinned_version_empty(vault_plugin, container, db_plugin):
-    if "vault" not in container or "latest" not in container:
+    if not container.is_vault_latest():
         pytest.skip("Pins are only supported on recent Vault versions")
     res = vault_plugin.pinned_version("secret", "nonexistent-plugin")
     assert res is None
@@ -268,7 +268,7 @@ def test_pinned_version_empty(vault_plugin, container, db_plugin):
     indirect=True,
 )
 def test_pin(vault_plugin, secret_plugin, auth_plugin, db_plugin, container):
-    if "vault" not in container or "latest" not in container:
+    if not container.is_vault_latest():
         pytest.skip("Pins are only supported on recent Vault versions")
     res = vault_plugin.pin("secret", secret_plugin["name"], version="9.2.3")
     assert res is True
@@ -407,7 +407,7 @@ def test_get_config_with_version(vault_plugin, auth_plugin, db_plugin, secret_pl
     # Explicit unversioned failure for versioned
     # Note: This does not test the special case where only a single version is registered,
     # which started to matter in Vault 2.1.0+. It's still tested by the state module tests though.
-    is_vault_latest = "vault" in container and "latest" in container
+    is_vault_latest = container.is_vault_latest()
     with pytest.raises(
         CommandExecutionError,
         match="VaultNotFound" if not is_vault_latest else "VaultInvocationError",
@@ -557,7 +557,7 @@ def test_deregister_with_build_metadata_version(vault_plugin, secret_plugin):
     indirect=True,
 )
 def test_reload(vault_plugin, secret_plugin, container):
-    if "vault" not in container or "latest" not in container:
+    if not container.is_vault_latest():
         pytest.skip("API is only available on recent Vault versions")
     res = vault_plugin.reload("secret", secret_plugin["name"])
     assert res is False
@@ -586,7 +586,7 @@ def test_reload_named(vault_plugin, auth_plugin, container):
     assert res
     assert isinstance(res, str)
     res = vault_plugin.reload_named("nonexistent-plugin")
-    if "openbao" in container or "latest" in container:
+    if container.is_openbao() or container.is_latest():
         # old Vault versions don't check for affected mounts
         assert res is False
 

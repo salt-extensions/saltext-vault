@@ -151,7 +151,7 @@ def existing_intermediate(
 ):  # pylint: disable=unused-argument
     int_ca_args.update(getattr(request, "param", {}))
     if int_ca_args.get("issuer_ref"):
-        if "vault" not in container or "latest" not in container:
+        if not container.is_vault_latest():
             if "excluded_alt_names" in int_ca_args or any(
                 not val.lower().startswith("dns")
                 for val in int_ca_args.get("permitted_alt_names", [])
@@ -163,10 +163,12 @@ def existing_intermediate(
                         for val in int_ca_args["permitted_alt_names"]
                         if val.lower().startswith("dns")
                     ]
-        if "vault" in container and "latest" not in container:
+        if not container.is_openbao() and not container.is_latest():
             int_ca_args.pop("key_usage", None)
-    if "delta_crl_endpoints" in int_ca_args and (
-        "vault" in container and "latest" not in container
+    if (
+        "delta_crl_endpoints" in int_ca_args
+        and not container.is_openbao()
+        and not container.is_latest()
     ):
         int_ca_args.pop("delta_crl_endpoints")
     ret = vault_pki.intermediate_issuer_managed(**int_ca_args)
@@ -199,7 +201,7 @@ def existing_root(
     if "excluded_alt_names" in root_ca_args or any(
         not val.lower().startswith("dns") for val in root_ca_args.get("permitted_alt_names", [])
     ):
-        if "vault" not in container or "latest" not in container:
+        if not container.is_vault_latest():
             root_ca_args.pop("excluded_alt_names", None)
             if "permitted_alt_names" in root_ca_args:
                 root_ca_args["permitted_alt_names"] = [
@@ -210,7 +212,7 @@ def existing_root(
     if (
         "delta_crl_endpoints" in root_ca_args
         or "key_usage" in root_ca_args
-        and ("vault" in container and "latest" not in container)
+        and (not container.is_openbao() and not container.is_latest())
     ):
         root_ca_args.pop("delta_crl_endpoints", None)
         root_ca_args.pop("key_usage", None)

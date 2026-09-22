@@ -50,7 +50,7 @@ def teststaticrole(mysql_container):
 def testdb(mysql_container, container_host_ref):
     return {
         "plugin_name": "mysql-database-plugin",
-        "connection_url": f"{{{{username}}}}:{{{{password}}}}@tcp({container_host_ref}:{mysql_container.mysql_port})/",
+        "connection_url": f"{{{{username}}}}:{{{{password}}}}@tcp({container_host_ref}:{mysql_container.port})/",
         "allowed_roles": "testrole,teststaticrole,testreissuerole",
         "username": "root",
         "password": mysql_container.mysql_passwd,
