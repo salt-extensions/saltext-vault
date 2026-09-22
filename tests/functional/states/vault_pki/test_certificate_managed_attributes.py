@@ -808,7 +808,7 @@ def test_certificate_managed_urls(cert_typ, issuer_setup, aia_urls, container):
     if issuer_first_configured:
         exp_aia["removed"]["caIssuers"] = ["URI:https://one.root.ca", "URI:https://two.root.ca"]
         # delta_crl_distribution_points requires recent releases, not present in 1.14.8
-        assert ("freshestCRL" in ret.changes["extensions"]["removed"]) is ("latest" in container)
+        assert ("freshestCRL" in ret.changes["extensions"]["removed"]) is (container.is_latest())
     else:
         assert "freshestCRL" not in ret.changes["extensions"]["removed"]
     assert ret.changes["extensions"]["changed"]["authorityInfoAccess"]["value"] == exp_aia
@@ -1109,7 +1109,7 @@ def test_certificate_managed_key_usage(vault_pki, cert_args, testmode, roles_set
     "call_type", ("pk", "pk_verbatim", "pk_verbatim_kwargs", "csr", "csr_verbatim")
 )
 def test_ca_certificate_managed_key_usage(vault_pki, ca_cert_args, call_type, container):
-    if "vault" not in container or "latest" not in container:
+    if not (container.is_openbao() or container.is_latest()):
         pytest.skip("key_usage requires Vault 1.20/OpenBao")
     csr = "csr" in call_type
     verbatim = "verbatim" in call_type
@@ -1225,7 +1225,7 @@ def test_ca_certificate_managed_name_constraints(vault_pki, ca_cert_args, contai
     csr = "csr" in call_type
     verbatim = "verbatim" in call_type
     ca_cert_args["permitted_alt_names"] = ["dns:.foo.bar"]
-    if has_all_constraints := "vault" in container and "latest" in container:
+    if has_all_constraints := container.is_vault_latest():
         ca_cert_args["permitted_alt_names"].extend(
             ["email:.email.foo.bar", "ip:0.0.0.0/1", "uri:.uri.foo.bar"]
         )

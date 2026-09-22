@@ -128,7 +128,7 @@ def test_present_time_param_change(vault_approle, roleargs, approle_auth, testmo
 
 @pytest.mark.usefixtures("roles_setup", "testrole")
 def test_present_alias_metadata_change(vault_approle, roleargs, approle_auth, container, modules):
-    if "vault" not in container or "latest" not in container:
+    if not container.is_vault_latest():
         pytest.skip("Only supported on recent Vault releases")
     prev_metadata = {"foo": "bar", "bar": "baz"}
     modules.vault_approle.write("testrole", mount=approle_auth, alias_metadata=prev_metadata)
@@ -148,7 +148,7 @@ def test_present_alias_metadata_change(vault_approle, roleargs, approle_auth, co
 
 @pytest.mark.usefixtures("roles_setup", "testrole")
 def test_present_token_strictly_bind_ip_change(vault_approle, roleargs, approle_auth, container):
-    if "openbao" not in container:
+    if not container.is_openbao():
         pytest.skip("Only supported on OpenBao")
     roleargs["token_strictly_bind_ip"] = True
     ret = vault_approle.present("testrole", **roleargs)

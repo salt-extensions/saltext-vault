@@ -7,9 +7,7 @@ import pytest
 from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
-from tests.common.fixtures.mysql import mysql_combo
 from tests.common.fixtures.mysql import mysql_container
-from tests.common.fixtures.mysql import mysql_image
 from tests.common.fixtures.vault_db import connection_setup
 from tests.common.fixtures.vault_db import role_args_common
 from tests.common.fixtures.vault_db import role_static_setup
@@ -96,7 +94,7 @@ def test_fetch_connection_empty(vault_db):
 def test_write_connection(vault_db, mysql_container, container_host_ref):
     args = {
         "plugin": "mysql",
-        "connection_url": f"{{{{username}}}}:{{{{password}}}}@tcp({container_host_ref}:{mysql_container.mysql_port})/",
+        "connection_url": f"{{{{username}}}}:{{{{password}}}}@tcp({container_host_ref}:{mysql_container.port})/",
         "allowed_roles": ["testrole", "teststaticrole"],
         "username": "root",
         "password": mysql_container.mysql_passwd,

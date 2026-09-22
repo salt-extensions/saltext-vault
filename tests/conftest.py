@@ -6,19 +6,20 @@ import os
 import re
 import shutil
 import subprocess
-import time
 from pathlib import Path
 
 import pytest
 import salt.utils.path
 import salt.utils.platform
 from pytestshellutils.utils import ports
-from pytestshellutils.utils.processes import ProcessResult
 from salt.version import __version_info__ as SALT_VERSION
 from saltfactories.utils import random_string
 
 from saltext.vault import PACKAGE_ROOT
 from tests.common import CONTAINER_TARGETS
+from tests.common import DEFAULT_ROOT_TOKEN
+from tests.common.containers import ContainerImage
+from tests.common.containers import VaultContainer
 from tests.support.files_mapping import CHANGED_FILES_MAP
 from tests.support.files_mapping import REPO_ROOT
 from tests.support.files_mapping import TESTS_DIR_REL
@@ -82,7 +83,7 @@ def master_config_defaults(vault_port):  # pragma: no cover
         "vault": {
             "auth": {
                 "method": "token",
-                "token": "testsecret",
+                "token": DEFAULT_ROOT_TOKEN,
             },
             "issue": {
                 "token": {
@@ -136,7 +137,7 @@ def minion_config_defaults(vault_port):  # pragma: no cover
         "vault": {
             "auth": {
                 "method": "token",
-                "token": "testsecret",
+                "token": DEFAULT_ROOT_TOKEN,
             },
             "server": {
                 "url": f"http://127.0.0.1:{vault_port}",
@@ -326,68 +327,21 @@ def vault_config():
 def container(
     request, salt_factories, vault_port, vault_environ, vault_plugins, vault_config
 ):  # pylint: disable=unused-argument
-    vault_binary = salt.utils.path.which("vault")
-
-    if "openbao" in request.param:
-        env = {
-            "BAO_DEV_ROOT_TOKEN_ID": "testsecret",
-            "BAO_LOCAL_CONFIG": json.dumps(vault_config),
-        }
+    if isinstance(request.param, ContainerImage):
+        image = request.param
     else:
-        env = {
-            "VAULT_DEV_ROOT_TOKEN_ID": "testsecret",
-            "SKIP_SETCAP": "1",
-            "VAULT_LOCAL_CONFIG": json.dumps(vault_config),
-        }
+        image = ContainerImage.from_str(request.param)
 
-    factory = salt_factories.get_container(
-        "vault",
-        request.param,
-        check_ports=[vault_port],
-        container_run_kwargs={
-            "cap_add": ["IPC_LOCK"],
-            "ports": {"8200/tcp": vault_port},
-            "environment": env,
-            "volumes": {
-                str(vault_plugins): {
-                    "bind": vault_config.get("plugin_directory", "/mnt/plugins"),
-                    "mode": "z",
-                }
-            },
-        },
-        pull_before_start=True,
-        skip_on_pull_failure=True,
-        skip_if_docker_client_not_connectable=True,
+    vault_setup = VaultContainer(
+        image=image,
+        port=vault_port,
+        plugins=vault_plugins,
+        root_token=DEFAULT_ROOT_TOKEN,
+        vault_config=vault_config,
     )
-
-    with factory.started() as factory:
-        attempts = 0
-        while attempts < 3:
-            attempts += 1
-            time.sleep(1)
-            proc = subprocess.run(
-                [vault_binary, "login", "token=testsecret"],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            if proc.returncode == 0:
-                break
-            ret = ProcessResult(
-                returncode=proc.returncode,
-                stdout=proc.stdout,  # type: ignore
-                stderr=proc.stderr,  # type: ignore
-                cmdline=proc.args,
-                data=None,
-            )
-            log.debug("Failed to authenticate against vault:\n%s", ret)
-            time.sleep(4)
-        else:
-            pytest.fail("Failed to login to vault")
-
-        # get rid of default mount so we can ensure state does not leak between test modules
-        vault_disable_secret_engine("secret")
-        yield request.param
+    container = vault_setup.configure(salt_factories)
+    with container.started():
+        yield vault_setup
 
 
 @pytest.fixture(scope="module", params=((("kv", "secret", "-version=2"),),))

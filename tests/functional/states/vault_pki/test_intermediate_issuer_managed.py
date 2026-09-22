@@ -142,7 +142,7 @@ def test_intermediate_issuer_managed_ok(vault_pki, int_ca_args, container):
     ku = cert.extensions.get_extension_for_class(cx509.KeyUsage)
     assert ku.critical is True
     assert ku.value.digital_signature is (
-        "signing_cert" in int_ca_args or "vault" not in container or "latest" in container
+        "signing_cert" in int_ca_args or container.is_openbao() or container.is_latest()
     )
     assert ku.value.crl_sign is True
     assert ku.value.key_cert_sign is True
@@ -268,7 +268,7 @@ def test_intermediate_issuer_managed_issuance_error_reported_early(
     ``err`` requested), ensure the state fails early if the requested validity
     exceeds the issuer's expiry, even in test mode.
     """
-    if "vault" in container and "latest" in container:
+    if container.is_vault_latest():
         vault_write(
             "pki/issuer/root", issuer_name="root", leaf_not_after_behavior="always_enforce_err"
         )
@@ -452,7 +452,7 @@ def test_intermediate_issuer_managed_issuer_changes(vault_pki, int_ca_args, test
         "added": issuer_params["crl_endpoints"],
         "removed": [],
     }
-    if "vault" not in container or "latest" in container:
+    if container.is_openbao() or container.is_latest():
         assert issuer_changes["delta_crl_endpoints"] == {
             "added": issuer_params["delta_crl_endpoints"],
             "removed": [],
@@ -471,7 +471,7 @@ def test_intermediate_issuer_managed_issuer_changes(vault_pki, int_ca_args, test
     ) is testmode
     assert (issuer_info["issuing_certificates"] != [issuer_params["aia_urls"]]) is testmode
     assert (issuer_info["crl_distribution_points"] != issuer_params["crl_endpoints"]) is testmode
-    if "vault" not in container or "latest" in container:
+    if container.is_openbao() or container.is_latest():
         assert (
             issuer_info["delta_crl_distribution_points"] != issuer_params["delta_crl_endpoints"]
         ) is testmode

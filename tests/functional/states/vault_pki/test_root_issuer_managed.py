@@ -102,8 +102,8 @@ def test_root_issuer_managed_create(
     if aia_urls.get("crl_distribution_points"):
         cert.extensions.get_extension_for_class(cx509.CRLDistributionPoints)
     if aia_urls.get("delta_crl_distribution_points"):
-        if ("vault" in container and "latest" in container) or (
-            "openbao" in container and aia_urls.get("crl_distribution_points")
+        if container.is_vault_latest() or (
+            container.is_openbao() and aia_urls.get("crl_distribution_points")
         ):
             cert.extensions.get_extension_for_class(cx509.FreshestCRL)
     basic_constraints = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
@@ -145,7 +145,7 @@ def test_root_issuer_managed_issuer_changes(vault_pki, root_ca_args, testmode, c
         "added": issuer_params["crl_endpoints"],
         "removed": [],
     }
-    if "vault" not in container or "latest" in container:
+    if container.is_openbao() or container.is_latest():
         assert issuer_changes["delta_crl_endpoints"] == {
             "added": issuer_params["delta_crl_endpoints"],
             "removed": [],
@@ -164,7 +164,7 @@ def test_root_issuer_managed_issuer_changes(vault_pki, root_ca_args, testmode, c
     ) is testmode
     assert (issuer_info["issuing_certificates"] != [issuer_params["aia_urls"]]) is testmode
     assert (issuer_info["crl_distribution_points"] != issuer_params["crl_endpoints"]) is testmode
-    if "vault" not in container or "latest" in container:
+    if container.is_openbao() or container.is_latest():
         assert (
             issuer_info["delta_crl_distribution_points"] != issuer_params["delta_crl_endpoints"]
         ) is testmode
@@ -615,12 +615,12 @@ def test_root_issuer_managed_ok(vault_pki, root_ca_args, testmode, container):
     sans = cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName)
     assert len(sans.value._general_names._general_names) == 4  # cn is excluded
     nc = cert.extensions.get_extension_for_class(cx509.NameConstraints)
-    if "vault" not in container or "latest" not in container:
-        assert len(nc.value.permitted_subtrees) == 1
-        assert nc.value.excluded_subtrees is None
-    else:
+    if container.is_vault_latest():
         assert len(nc.value.permitted_subtrees) == 5
         assert len(nc.value.excluded_subtrees) == 5
+    else:
+        assert len(nc.value.permitted_subtrees) == 1
+        assert nc.value.excluded_subtrees is None
 
     # Demonstrate that URL changes don't cause rotation
     vault_write(
@@ -680,12 +680,12 @@ def test_root_issuer_managed_changes(
     assert basic_constraints.value.ca is True
     assert basic_constraints.value.path_length == 2
     nc = cert.extensions.get_extension_for_class(cx509.NameConstraints)
-    if "vault" not in container or "latest" not in container:
-        assert len(nc.value.permitted_subtrees) == 2
-        assert nc.value.excluded_subtrees is None
-    else:
+    if container.is_vault_latest():
         assert len(nc.value.permitted_subtrees) == 6
         assert len(nc.value.excluded_subtrees) == 5
+    else:
+        assert len(nc.value.permitted_subtrees) == 2
+        assert nc.value.excluded_subtrees is None
     expected_ext_changes = {
         "basicConstraints",
         "subjectAltName",
@@ -782,12 +782,12 @@ def test_root_issuer_managed_changes(
         assert key_usage.value.key_cert_sign
         assert not key_usage.value.digital_signature
     nc = new_cert.extensions.get_extension_for_class(cx509.NameConstraints)
-    if "vault" not in container or "latest" not in container:
-        assert len(nc.value.permitted_subtrees) == 1
-        assert nc.value.excluded_subtrees is None
-    else:
+    if container.is_vault_latest():
         assert len(nc.value.permitted_subtrees) == 5
         assert len(nc.value.excluded_subtrees) == 4
+    else:
+        assert len(nc.value.permitted_subtrees) == 1
+        assert nc.value.excluded_subtrees is None
 
 
 @pytest.mark.usefixtures("existing_root")
@@ -1110,7 +1110,7 @@ def test_root_issuer_managed_changes_aia(vault_pki, root_ca_args, testmode, aia_
             {"authorityInfoAccess", "cRLDistributionPoints", "freshestCRL"},
             "removed",
         )
-        if "vault" in container and "latest" not in container:
+        if not (container.is_openbao() or container.is_latest()):
             aia_urls.pop("delta_crl_distribution_points")
             exp.remove("freshestCRL")
     elif "issuing_certificates" in aia_urls:
@@ -1126,9 +1126,9 @@ def test_root_issuer_managed_changes_aia(vault_pki, root_ca_args, testmode, aia_
             "changed",
         )
     elif "delta_crl_distribution_points" in aia_urls:
-        if "vault" in container and "latest" not in container:
+        if not (container.is_openbao() or container.is_latest()):
             pytest.skip("delta_crl_distribution_points requires Vault 2.0+ or OpenBao")
-        elif "openbao" in container and "crl_distribution_points" not in aia_urls:
+        elif container.is_openbao() and "crl_distribution_points" not in aia_urls:
             pytest.skip("delta_crl_distribution_points requires crl_distribution_points on OpenBao")
         _, exp, act = (
             aia_urls["delta_crl_distribution_points"].append("https://crl3.root.ca"),

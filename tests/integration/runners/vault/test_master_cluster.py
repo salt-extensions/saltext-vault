@@ -6,6 +6,7 @@ import pytest
 import salt.utils.platform
 import salt.version
 
+from tests.common import DEFAULT_ROOT_TOKEN
 from tests.common.containers import genmarks
 
 sver = int(salt.version.__version__.split(".")[0])
@@ -30,7 +31,7 @@ def vault_master_config(vault_port):
             ],
         },
         "vault": {
-            "auth": {"token": "testsecret"},
+            "auth": {"token": DEFAULT_ROOT_TOKEN},
             "cache": {
                 "backend": "file",
             },

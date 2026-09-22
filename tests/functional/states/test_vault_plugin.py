@@ -410,7 +410,7 @@ def test_unregistered_version_ok(vault_plugin, auth_plugin, testmode):
     indirect=True,
 )
 def test_version_pinned_create_changes(vault_plugin, auth_plugin, testmode, container):
-    if "vault" not in container or "latest" not in container:
+    if not container.is_vault_latest():
         pytest.skip("Pins are only supported on recent Vault versions")
     ret = vault_plugin.version_pinned(
         auth_plugin["name"],

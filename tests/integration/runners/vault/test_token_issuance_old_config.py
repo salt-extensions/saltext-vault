@@ -3,6 +3,7 @@ import logging
 import pytest
 from saltfactories.utils import random_string
 
+from tests.common import DEFAULT_ROOT_TOKEN
 from tests.common.containers import genmarks
 
 pytestmark = genmarks(internal_logic_only=True, mounts=True, policies=True, secrets=True)
@@ -26,7 +27,7 @@ def master_config_defaults(vault_port):
         "vault": {
             "auth": {
                 "allow_minion_override": True,
-                "token": "testsecret",
+                "token": DEFAULT_ROOT_TOKEN,
                 "token_backend": "file",
                 "ttl": 90,
                 "uses": 3,
