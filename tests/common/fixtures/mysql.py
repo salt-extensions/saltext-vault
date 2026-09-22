@@ -16,7 +16,7 @@ from tests.common.containers import ContainerImage
 log = logging.getLogger(__name__)
 
 
-@pytest.fixture(scope="module", params=("10.5",), ids=lambda val: f"container={val}")
+@pytest.fixture(scope="module", params=("10.5",))
 def mysql_container(salt_factories, request):
     image = ContainerImage(name="mariadb", tag=request.param)
     mysql_config = MySQLContainer(image=image)

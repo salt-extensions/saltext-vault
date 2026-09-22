@@ -13,7 +13,7 @@ from cryptography.hazmat import asn1
 from salt.utils.x509 import NAME_ATTRS_OID
 from salt.utils.x509 import load_cert
 
-from tests.common import CONTAINER_TARGETS
+from tests.common.containers import CONTAINER_TARGETS
 from tests.common.containers import genmarks
 from tests.common.helpers.vault_pki import pregen_csr
 from tests.support.vault import vault_write

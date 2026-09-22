@@ -17,7 +17,6 @@ from salt.utils.path import which
 from saltfactories.utils import random_string
 
 import tests.support.vault
-from tests.common import CONTAINER_TARGETS
 from tests.common import DEFAULT_ROOT_TOKEN
 
 if typing.TYPE_CHECKING:
@@ -33,6 +32,44 @@ except ImportError:
     APIError = Exception  # type: ignore
 
 log = logging.getLogger(__name__)
+
+
+@dataclass(kw_only=True, slots=True)
+class ContainerImage:
+    name: str
+    tag: str
+
+    @classmethod
+    def from_str(cls, image: str) -> "ContainerImage":
+        try:
+            name, tag = image.rsplit(":", maxsplit=1)
+        except ValueError:
+            name, tag = image, "latest"
+        if "/" not in name:
+            if name.startswith("bao"):
+                name = f"open{name}"
+            if "openbao" in name:
+                name = f"openbao/{name}"
+            elif "vault" in name:
+                name = f"hashicorp/{name}"
+            else:
+                raise RuntimeError(f"Unknown Vault container image name: {name}")
+        return cls(name=name, tag=tag)
+
+    @property
+    def display(self) -> str:
+        return f"{self.name.rsplit('/', maxsplit=1)[-1]}:{self.tag}"
+
+    def __str__(self):
+        return f"{self.name}:{self.tag}"
+
+
+CONTAINER_TARGETS = tuple(
+    ContainerImage.from_str(tgt)
+    for tgt in os.environ.get(
+        "TESTING_CONTAINER", "hashicorp/vault:latest,openbao/openbao:latest"
+    ).split(",")
+)
 
 require_vault_bin = pytest.mark.skip_if_binaries_missing("vault")
 no_container_parametrization = pytest.mark.parametrize(
@@ -147,23 +184,6 @@ def genmarks(
         marks.append(no_container_parametrization)
 
     return marks
-
-
-@dataclass(kw_only=True, slots=True)
-class ContainerImage:
-    name: str
-    tag: str
-
-    @classmethod
-    def from_str(cls, image: str) -> "ContainerImage":
-        try:
-            name, tag = image.rsplit(":", maxsplit=1)
-        except ValueError:
-            name, tag = image, "latest"
-        return cls(name=name, tag=tag)
-
-    def __str__(self):
-        return f"{self.name}:{self.tag}"
 
 
 @dataclass(kw_only=True, slots=True)
