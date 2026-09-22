@@ -3,6 +3,8 @@ import time
 
 import pytest
 
+from tests.common import gen_master_opts
+from tests.common import gen_minion_opts
 from tests.common.containers import genmarks
 
 pytestmark = genmarks(internal_logic_only=True, policies=True)
@@ -12,35 +14,17 @@ log = logging.getLogger(__name__)
 
 @pytest.fixture(scope="module")
 def master_config_overrides():
-    return {
-        "vault": {
-            "cache": {
-                "backend": "file",
-            },
-            "issue": {
-                "token": {
-                    "params": {
-                        "num_uses": 0,
-                        "ttl": 180,
-                    }
-                }
-            },
-        }
-    }
+    return gen_master_opts(backend="file", params={"num_uses": 0, "ttl": 180})
 
 
 @pytest.fixture(scope="module")
 def minion_config_overrides():
-    return {
-        "vault": {
-            "auth": {
-                "token_lifecycle": {
-                    "minimum_ttl": 177,
-                    "renew_increment": None,
-                }
-            }
+    return gen_minion_opts(
+        token_lifecycle={
+            "minimum_ttl": 177,
+            "renew_increment": None,
         }
-    }
+    )
 
 
 def test_minimum_ttl_is_respected(salt_call_cli):

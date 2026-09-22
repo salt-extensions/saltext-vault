@@ -4,10 +4,12 @@ from datetime import datetime
 
 import pytest
 
+from tests.common import gen_minion_opts
 from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
 from tests.common.fixtures.mysql import mysql_container
+from tests.common.fixtures.vault_db import clean_db_mount
 from tests.common.fixtures.vault_db import connection_setup
 from tests.common.fixtures.vault_db import role_args_common
 from tests.common.fixtures.vault_db import role_static_setup
@@ -18,9 +20,7 @@ from tests.common.fixtures.vault_db import testrole
 from tests.common.fixtures.vault_db import teststaticrole
 
 # pylint: enable=unused-import
-from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
-from tests.support.vault import vault_revoke
 from tests.support.vault import vault_write
 
 pytestmark = genmarks(mounts="database")
@@ -28,31 +28,13 @@ pytestmark = genmarks(mounts="database")
 
 @pytest.fixture(scope="module")
 def minion_config_overrides():
-    return {
-        "vault": {
-            "cache": {
-                "backend": "disk",  # ensure a persistent cache is available for get_creds
-            },
-        }
-    }
+    # ensure a persistent cache is available for get_creds
+    return gen_minion_opts(backend="disk")
 
 
 @pytest.fixture
-def vault_db(modules):
-    try:
-        yield modules.vault_db
-    finally:
-        # prevent dangling leases, which prevent disabling the secret engine
-        assert vault_revoke("database/creds", prefix=True)
-        if "testdb" in vault_list("database/config"):
-            vault_delete("database/config/testdb")
-            assert "testdb" not in vault_list("database/config")
-        if "testrole" in vault_list("database/roles"):
-            vault_delete("database/roles/testrole")
-            assert "testrole" not in vault_list("database/roles")
-        if "teststaticrole" in vault_list("database/static-roles"):
-            vault_delete("database/static-roles/teststaticrole")
-            assert "teststaticrole" not in vault_list("database/static-roles")
+def vault_db(modules, clean_db_mount):  # pylint: disable=unused-argument
+    return modules.vault_db
 
 
 @pytest.mark.usefixtures("connection_setup")

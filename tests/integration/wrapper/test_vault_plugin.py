@@ -1,5 +1,7 @@
 import pytest
 
+from tests.common import CliFuncProxy
+from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
@@ -7,6 +9,7 @@ from tests.common.fixtures.vault_plugin import _auth_plugin
 from tests.common.fixtures.vault_plugin import _db_plugin
 from tests.common.fixtures.vault_plugin import _secret_plugin
 from tests.common.fixtures.vault_plugin import auth_plugin
+from tests.common.fixtures.vault_plugin import clean_plugins
 from tests.common.fixtures.vault_plugin import db_plugin
 from tests.common.fixtures.vault_plugin import plugins_pinned
 from tests.common.fixtures.vault_plugin import plugins_registered
@@ -18,44 +21,20 @@ from tests.functional.modules.test_vault_plugin import test_pinned_version
 from tests.functional.modules.test_vault_plugin import test_plugin_register as _test_plugin_register
 
 # pylint: enable=unused-import
-from tests.support.helpers import CliFuncProxy
-from tests.support.vault import vault_plugin_deregister
-from tests.support.vault import vault_plugin_list
 from tests.support.vault import vault_plugin_read
 from tests.support.vault import vault_plugin_show_pin
-from tests.support.vault import vault_plugin_unpin
 
 pytestmark = genmarks(internal_logic_only=True, policies=True)
 
 
 @pytest.fixture(scope="module")
 def master_config_overrides():
-    return {
-        "vault": {
-            "cache": {
-                "backend": "disk",  # ensure a persistent cache is available for get_secret_id
-            },
-            "policies": {
-                "assign": [
-                    "salt_minion",
-                    "plugin_admin",
-                ],
-            },
-        }
-    }
+    return gen_master_opts(backend="disk", policies="plugin_admin")
 
 
 @pytest.fixture
-def vault_plugin(salt_ssh_cli, container):
-    try:
-        yield CliFuncProxy(salt_ssh_cli).vault_plugin
-    finally:
-        for plugin in vault_plugin_list(lambda x: not x["builtin"]):
-            if container.is_vault_latest() and vault_plugin_show_pin(
-                plugin["type"], plugin["name"]
-            ):
-                vault_plugin_unpin(plugin["type"], plugin["name"])
-            vault_plugin_deregister(plugin["type"], plugin["name"], version=plugin["version"])
+def vault_plugin(salt_ssh_cli, container, clean_plugins):  # pylint: disable=unused-argument
+    return CliFuncProxy(salt_ssh_cli).vault_plugin
 
 
 @pytest.mark.usefixtures("plugins_registered")

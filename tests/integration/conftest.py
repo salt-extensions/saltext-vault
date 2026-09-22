@@ -1,10 +1,10 @@
 import copy
-import json
 from contextlib import ExitStack
 
 import pytest
 
-from tests.support.helpers import CliFuncProxy
+from tests.common import CliFuncProxy
+from tests.common.helpers import _pillar_files
 from tests.support.vault import vault_delete_secret
 from tests.support.vault import vault_write_secret
 
@@ -118,30 +118,6 @@ def _vault_pillar_data(vault_pillar_defaults, secret_mounts):  # pylint: disable
     finally:
         for path in pillar_data:
             vault_delete_secret(path, metadata=True)
-
-
-def _pillar_files(pillar_defaults, target, request=None):
-    try:
-        refresh, pillar_defaults = pillar_defaults[0], pillar_defaults[1]
-    except KeyError:
-        refresh = True
-    if request:
-        overrides = getattr(request, "param", {})
-        try:
-            refresh, overrides = overrides[0], overrides[1]
-        except KeyError:
-            pass
-    else:
-        overrides = {}
-    defs = pillar_defaults.copy()
-    defs.update(overrides)
-    if defs and "top" not in defs:
-        top = {"base": {target: list(defs)}}
-        defs["top"] = top
-    files = []
-    for sls_name, sls_contents in defs.items():
-        files.append((f"{sls_name}.sls", json.dumps(sls_contents).replace("%ID", target)))
-    return files, refresh
 
 
 @pytest.fixture(scope="module")

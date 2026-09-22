@@ -153,7 +153,7 @@ def ca_setup(ca_priv, ca_pub):
 
 
 @pytest.fixture
-def _temp_ca():
+def clean_ssh_issuer():
     try:
         yield
     finally:
@@ -161,7 +161,7 @@ def _temp_ca():
 
 
 @pytest.fixture
-def _temp_role():
+def temp_rolename():
     name = "testrole"
     try:
         yield name

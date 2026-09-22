@@ -4,6 +4,8 @@ from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
 from tests.common.fixtures.vault_gpg import cached_vault_gpg_bin
+from tests.common.fixtures.vault_gpg import clean_gpg_keys
+from tests.common.fixtures.vault_gpg import existing_key
 from tests.common.fixtures.vault_gpg import gpg
 from tests.common.fixtures.vault_gpg import gpg_mount
 from tests.common.fixtures.vault_gpg import gpg_plugin
@@ -16,10 +18,7 @@ from tests.common.fixtures.vault_gpg import key_a_pub_file
 from tests.common.fixtures.vault_gpg import key_b_pub
 
 # pylint: enable=unused-import
-from tests.support.vault import vault_delete
-from tests.support.vault import vault_list
 from tests.support.vault import vault_read
-from tests.support.vault import vault_write
 
 pytest.importorskip("gnupg", reason="Needs python-gnupg library")
 pytestmark = genmarks(internal_logic_only=True) + [
@@ -29,32 +28,8 @@ pytestmark = genmarks(internal_logic_only=True) + [
 
 
 @pytest.fixture
-def vault_gpg(states, gpg_mount):  # pylint: disable=unused-argument
-    try:
-        yield states.vault_gpg
-    finally:
-        for key in vault_list(f"{gpg_mount}/keys"):
-            assert vault_delete(f"{gpg_mount}/keys/{key}")
-
-
-@pytest.fixture
-def existing_key(gpg_mount, request):
-    name = "testkey"
-    defaults = {
-        "real_name": "Salt Test",
-        "email": "salt@te.st",
-        "comment": "Hello",
-        "key_bits": 2048,
-        "exportable": False,
-    }
-    params = getattr(request, "param", {})
-    defaults.update(params)
-    assert vault_write(f"{gpg_mount}/keys/{name}", generate=True, **defaults)
-
-    try:
-        yield name
-    finally:
-        assert vault_delete(f"{gpg_mount}/keys/{name}")
+def vault_gpg(states, gpg_mount, clean_gpg_keys):  # pylint: disable=unused-argument
+    return states.vault_gpg
 
 
 def test_key_present_create(vault_gpg, testmode, gpg_mount, gpg, salt_version):

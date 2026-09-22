@@ -5,7 +5,7 @@ import pytest
 from tests.common.containers import genmarks
 
 pytestmark = genmarks(
-    "_cleanup",
+    "clean_kv_mount",
     internal_logic_only=True,
     mounts=[[("kv", "secret-v1", "-version=1"), ("kv", "secret", "-version=2")]],
 )
@@ -23,16 +23,16 @@ def sdb_runner(master_loaders, secret_mounts):  # pylint: disable=unused-argumen
     return master_loaders.runners.sdb
 
 
-def test_sdb_module(sdb, secret_mount):
-    uri = f"sdb://sdbvault/{secret_mount}/test_sdb/foo"
+def test_sdb_module(sdb, kv_mount):
+    uri = f"sdb://sdbvault/{kv_mount}/test_sdb/foo"
     ret = sdb.set(uri, value="bar")
     assert ret is True
     ret = sdb.get(uri)
     assert ret == "bar"
 
 
-def test_sdb_runner(sdb_runner, secret_mount):
-    uri = f"sdb://sdbvault/{secret_mount}/test_sdb_runner/foo"
+def test_sdb_runner(sdb_runner, kv_mount):
+    uri = f"sdb://sdbvault/{kv_mount}/test_sdb_runner/foo"
     ret = sdb_runner.set(uri, value="bar")
     assert ret is True
     ret = sdb_runner.get(uri)

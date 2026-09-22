@@ -9,13 +9,13 @@ from tests.common.fixtures.vault_plugin import _auth_plugin
 from tests.common.fixtures.vault_plugin import _db_plugin
 from tests.common.fixtures.vault_plugin import _secret_plugin
 from tests.common.fixtures.vault_plugin import auth_plugin
+from tests.common.fixtures.vault_plugin import clean_plugins
 from tests.common.fixtures.vault_plugin import db_plugin
 from tests.common.fixtures.vault_plugin import plugins_pinned
 from tests.common.fixtures.vault_plugin import plugins_registered
 from tests.common.fixtures.vault_plugin import secret_plugin
 
 # pylint: enable=unused-import
-from tests.common.helpers.vault_plugin import reset_plugins
 from tests.support.vault import vault_plugin_read
 from tests.support.vault import vault_plugin_register
 from tests.support.vault import vault_plugin_show_pin
@@ -26,11 +26,8 @@ log = logging.getLogger(__name__)
 
 
 @pytest.fixture
-def vault_plugin(states, container):
-    try:
-        yield states.vault_plugin
-    finally:
-        reset_plugins(container)
+def vault_plugin(states, container, clean_plugins):  # pylint: disable=unused-argument
+    return states.vault_plugin
 
 
 def _reg_new(ret, secret_plugin, testmode, version=None):

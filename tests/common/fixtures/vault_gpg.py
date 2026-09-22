@@ -11,10 +11,22 @@ import psutil
 import pytest
 from saltfactories.utils import random_string
 
+from tests.support.vault import vault_delete
 from tests.support.vault import vault_disable_secret_engine
 from tests.support.vault import vault_enable_secret_engine
+from tests.support.vault import vault_list
 from tests.support.vault import vault_plugin_deregister
 from tests.support.vault import vault_plugin_register
+from tests.support.vault import vault_write
+
+
+@pytest.fixture(scope="class")
+def tmp_path_(tmp_path_factory):
+    tmpdir = tmp_path_factory.mktemp("vault-gpg")
+    try:
+        yield tmpdir
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 @pytest.fixture(scope="class")
@@ -168,6 +180,33 @@ def gpg_mount(gpg_plugin):  # pylint: disable=unused-argument
         yield name
     finally:
         assert vault_disable_secret_engine(name)
+
+
+@pytest.fixture(scope="class")
+def clean_gpg_keys(gpg_mount):
+    try:
+        yield
+    finally:
+        for key in vault_list(f"{gpg_mount}/keys"):
+            assert vault_delete(f"{gpg_mount}/keys/{key}")
+
+
+@pytest.fixture(scope="class")
+def existing_key(gpg_mount, request):
+    name = "testkey"
+    defaults = {
+        "real_name": "Salt Test",
+        "email": "salt@te.st",
+        "comment": "Hello",
+        "key_bits": 2048,
+        "exportable": False,
+    }
+    defaults.update(getattr(request, "param", {}))
+    assert vault_write(f"{gpg_mount}/keys/{name}", generate=True, **defaults)
+    try:
+        yield name
+    finally:
+        assert vault_delete(f"{gpg_mount}/keys/{name}")
 
 
 def _gpg_def(modules, gpghome):  # pylint: disable=unused-argument

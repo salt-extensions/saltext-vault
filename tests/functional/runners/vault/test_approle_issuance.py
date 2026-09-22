@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 import salt.exceptions
 
+from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_delete_approle
@@ -20,20 +21,11 @@ log = logging.getLogger(__name__)
 
 @pytest.fixture(scope="module")
 def master_config_overrides(master_approle_mount):  # pylint: disable=unused-argument
-    return {
-        "vault": {
-            "issue": {
-                "type": "approle",
-                "approle": {
-                    "params": {
-                        "secret_id_ttl": "1h",
-                        "token_explicit_max_ttl": "1h",
-                    }
-                },
-                "allow_minion_override_params": True,
-            },
-        }
-    }
+    return gen_master_opts(
+        issue="approle",
+        params={"secret_id_ttl": "1h", "token_explicit_max_ttl": "1h"},
+        allow_override=True,
+    )
 
 
 def _get_approle(name, mount):

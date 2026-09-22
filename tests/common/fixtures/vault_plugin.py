@@ -4,8 +4,12 @@ Shared fixtures for the vault_plugin test suites.
 
 import pytest
 
+from tests.support.vault import vault_plugin_deregister
+from tests.support.vault import vault_plugin_list
 from tests.support.vault import vault_plugin_pin
 from tests.support.vault import vault_plugin_register
+from tests.support.vault import vault_plugin_show_pin
+from tests.support.vault import vault_plugin_unpin
 
 
 @pytest.fixture(scope="module")
@@ -96,3 +100,16 @@ def plugins_pinned(plugins_registered, request, container):  # pylint: disable=u
         plugin_def = request.getfixturevalue(fixture)
         vault_plugin_pin(plugin_def["plugin_type"], plugin_def["name"], version=pinned)
     yield request.param
+
+
+@pytest.fixture
+def clean_plugins(container):
+    try:
+        yield
+    finally:
+        for plugin in vault_plugin_list(lambda x: not x["builtin"]):
+            if container.is_vault_latest() and vault_plugin_show_pin(
+                plugin["type"], plugin["name"]
+            ):
+                vault_plugin_unpin(plugin["type"], plugin["name"])
+            vault_plugin_deregister(plugin["type"], plugin["name"], version=plugin["version"])

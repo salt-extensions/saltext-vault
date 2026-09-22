@@ -7,17 +7,12 @@ from tests.support.vault import vault_read_secret
 from tests.support.vault import vault_write_secret
 
 pytestmark = genmarks(
-    "_cleanup",
+    "clean_kv_mount",
     internal_logic_only=True,
     mounts=[[("kv", "secret-v1", "-version=1"), ("kv", "secret", "-version=2")]],
 )
 
 log = logging.getLogger(__name__)
-
-
-@pytest.fixture
-def vault(loaders, secret_mounts):  # pylint: disable=unused-argument
-    return loaders.sdb.vault
 
 
 @pytest.mark.parametrize(
@@ -29,8 +24,8 @@ def vault(loaders, secret_mounts):  # pylint: disable=unused-argument
         "questionmark_root?item",
     ),
 )
-def test_set_get(vault, secret_mount, key):
-    key = f"{secret_mount}/{key}"
+def test_set_get(vault, kv_mount, key):
+    key = f"{kv_mount}/{key}"
     vault_path, data_key = _split(key)
     vault.set(key, "success")
     assert vault_read_secret(vault_path) == {data_key: "success"}
@@ -47,8 +42,8 @@ def test_set_get(vault, secret_mount, key):
     ),
 )
 @pytest.mark.parametrize("patch", (False, True))
-def test_set_patch(vault, secret_mount, key, patch):
-    key = f"{secret_mount}/{key}"
+def test_set_patch(vault, kv_mount, key, patch):
+    key = f"{kv_mount}/{key}"
     vault_path, data_key = _split(key)
     vault.set(key, "success", {"patch": patch})
     vault.set(f"{vault_path}/other_{data_key}", "patched", {"patch": patch})
@@ -62,18 +57,18 @@ def test_set_patch(vault, secret_mount, key, patch):
 
 
 @pytest.fixture
-def _whole_secret_values(secret_mount):
+def _whole_secret_values(kv_mount):
     paths = ("root_item", "nested/item")
     data = {"password": "p4ssw0rd", "desc": "test_user"}
     ret = []
     for path in paths:
-        full = f"{secret_mount}/{path}"
+        full = f"{kv_mount}/{path}"
         vault_write_secret(full, **data)
         ret.append(full)
     return tuple(ret), data
 
 
-@pytest.mark.usefixtures("secret_mount")
+@pytest.mark.usefixtures("kv_mount")
 def test_get_whole_secret(vault, _whole_secret_values):
     paths, data = _whole_secret_values
     for path in paths:

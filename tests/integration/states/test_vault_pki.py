@@ -9,8 +9,10 @@ from salt.utils.x509 import NAME_ATTRS_OID
 from salt.utils.x509 import load_cert
 from saltfactories.utils import random_string
 
+from tests.common import gen_master_opts
+from tests.common import gen_minion_opts
 from tests.common.containers import genmarks
-from tests.common.fixtures.vault_pki import clean_pki_mount  # pylint: disable=unused-import
+from tests.common.fixtures.vault_pki import clean_pki_issuers  # pylint: disable=unused-import
 from tests.common.helpers.vault_pki import _subject
 from tests.support.vault import vault_read
 
@@ -73,30 +75,16 @@ HdI7Pfaf/l0HozAw/Al+LXbpmSBdfmz0U/EGAKRqXMW5+vQ7XHXD
 
 @pytest.fixture(scope="module")
 def master_config_overrides():
-    return {
+    return gen_master_opts(
         # Allow minions to request certificate signing by the CA minion
-        "peer": {
-            ".*": [
-                "x509.sign_remote_certificate",
-            ],
-        },
-        "vault": {
-            "policies": {
-                "assign": [
-                    "salt_minion",
-                    "pki_admin",
-                ],
-            },
-        },
-    }
+        {"peer": {".*": ["x509.sign_remote_certificate"]}},
+        policies="pki_admin",
+    )
 
 
 @pytest.fixture(scope="module")
-def minion_config_overrides(salt_version):
-    if salt_version[0] < 3008:
-        # Need to enable x509_v2 explicitly on Salt <3008
-        return {"features": {"x509_v2": True}}
-    return {}
+def minion_config_overrides():
+    return gen_minion_opts(x509v2=True)
 
 
 @pytest.fixture(scope="module")
@@ -129,7 +117,7 @@ def ca_minion(master, salt_version):
         yield factory
 
 
-@pytest.mark.usefixtures("clean_pki_mount")
+@pytest.mark.usefixtures("clean_pki_issuers")
 def test_intermediate_issuer_managed_with_remote_signing(states, ca_minion):
     """
     Ensure an intermediate CA can be provisioned and rotated when its

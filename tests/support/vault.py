@@ -9,7 +9,7 @@ import salt.utils.path
 from pytestshellutils.utils.processes import ProcessResult
 
 from tests.common import DEFAULT_ROOT_TOKEN
-from tests.support.runtests import RUNTIME_VARS
+from tests.common import FILES_DIR
 
 log = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ def vault_write_policy_file(policy, filename=None, *, vault_addr=None, vault_tok
                 "policy",
                 "write",
                 policy,
-                f"{RUNTIME_VARS.FILES}/vault/policies/{filename}.hcl",
+                f"{FILES_DIR}/policies/{filename}.hcl",
             ],
             vault_addr=vault_addr,
             vault_token=vault_token,
@@ -244,7 +244,7 @@ def vault_write_secret(path, *, vault_addr=None, vault_token=None, **kwargs):
 
 
 def vault_write_secret_file(path, data_name, *, vault_addr=None, vault_token=None):
-    data_path = f"{RUNTIME_VARS.FILES}/vault/data/{data_name}.json"
+    data_path = f"{FILES_DIR}/secret_data/{data_name}.json"
     with salt.utils.files.fopen(data_path) as f:
         data = json.load(f)
     cmd = ["kv", "put", path, f"@{data_path}"]

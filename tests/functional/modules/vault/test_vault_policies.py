@@ -1,13 +1,13 @@
 import logging
-from textwrap import dedent
 
 import pytest
 
 from tests.common.containers import genmarks
-from tests.support.vault import vault_delete_policy
+from tests.common.fixtures.vault import clean_policies  # pylint: disable=unused-import
+from tests.common.fixtures.vault import temp_policy  # pylint: disable=unused-import
+from tests.common.fixtures.vault import temp_policy_rules  # pylint: disable=unused-import
 from tests.support.vault import vault_list_policies
 from tests.support.vault import vault_read_policy
-from tests.support.vault import vault_write_policy
 
 pytestmark = genmarks()
 
@@ -15,39 +15,13 @@ log = logging.getLogger(__name__)
 
 
 @pytest.fixture
-def vault(modules, container):  # pylint: disable=unused-argument
-    try:
-        yield modules.vault
-    finally:
-        # We're explicitly using the vault CLI and not the salt vault module
-        policies = vault_list_policies()
-        for policy in ("functional_test_policy", "policy_write_test"):
-            if policy in policies:
-                vault_delete_policy(policy)
+def vault(modules, container, clean_policies):  # pylint: disable=unused-argument
+    return modules.vault
 
 
-@pytest.fixture
-def policy_rules():
-    return dedent("""
-        path "secret/some/thing" {
-            capabilities = ["read"]
-        }
-        """).strip()
-
-
-@pytest.fixture
-def existing_policy(policy_rules, container):  # pylint: disable=unused-argument
-    name = "functional_test_policy"
-    vault_write_policy(name, policy_rules)
-    try:
-        yield name
-    finally:
-        vault_delete_policy(name)
-
-
-def test_policy_fetch(vault, policy_rules, existing_policy):
-    ret = vault.policy_fetch(existing_policy)
-    assert ret == policy_rules
+def test_policy_fetch(vault, temp_policy_rules, temp_policy):
+    ret = vault.policy_fetch(temp_policy)
+    assert ret == temp_policy_rules
 
 
 def test_policy_fetch_missing(vault):
@@ -55,18 +29,18 @@ def test_policy_fetch_missing(vault):
     assert ret is None
 
 
-def test_policy_write(vault, policy_rules):
-    ret = vault.policy_write("policy_write_test", policy_rules)
+def test_policy_write(vault, temp_policy_rules):
+    ret = vault.policy_write("test_policy_write", temp_policy_rules)
     assert ret is True
-    assert vault_read_policy("policy_write_test") == policy_rules
+    assert vault_read_policy("test_policy_write") == temp_policy_rules
 
 
-def test_policy_delete(vault, existing_policy):
-    ret = vault.policy_delete(existing_policy)
+def test_policy_delete(vault, temp_policy):
+    ret = vault.policy_delete(temp_policy)
     assert ret is True
-    assert "functional_test_policy" not in vault_list_policies()
+    assert temp_policy not in vault_list_policies()
 
 
-def test_policies_list(vault, existing_policy):
+def test_policies_list(vault, temp_policy):
     ret = vault.policies_list()
-    assert existing_policy in ret
+    assert temp_policy in ret

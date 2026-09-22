@@ -1,5 +1,4 @@
 import base64
-import shutil
 import stat
 
 import pytest
@@ -10,6 +9,8 @@ from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
 from tests.common.fixtures.vault_gpg import cached_vault_gpg_bin
+from tests.common.fixtures.vault_gpg import clean_gpg_keys
+from tests.common.fixtures.vault_gpg import existing_key
 from tests.common.fixtures.vault_gpg import gpg_class as gpg
 from tests.common.fixtures.vault_gpg import gpg_mount
 from tests.common.fixtures.vault_gpg import gpg_plugin
@@ -20,12 +21,11 @@ from tests.common.fixtures.vault_gpg import key_a_priv_file
 from tests.common.fixtures.vault_gpg import key_a_pub
 from tests.common.fixtures.vault_gpg import key_a_pub_file
 from tests.common.fixtures.vault_gpg import key_b_pub
+from tests.common.fixtures.vault_gpg import tmp_path_
 
 # pylint: enable=unused-import
-from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
-from tests.support.vault import vault_write
 
 pytest.importorskip("gnupg", reason="Needs python-gnupg library")
 pytestmark = genmarks(internal_logic_only=True) + [
@@ -35,39 +35,8 @@ pytestmark = genmarks(internal_logic_only=True) + [
 
 
 @pytest.fixture(scope="class")
-def vault_gpg(modules, gpg_mount):  # pylint: disable=unused-argument
-    try:
-        yield modules.vault_gpg
-    finally:
-        for key in vault_list(f"{gpg_mount}/keys"):
-            assert vault_delete(f"{gpg_mount}/keys/{key}")
-
-
-@pytest.fixture(scope="class")
-def tmp_path_(tmp_path_factory):
-    tmpdir = tmp_path_factory.mktemp("vault-gpg")
-    try:
-        yield tmpdir
-    finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)
-
-
-@pytest.fixture(scope="class")
-def existing_key(gpg_mount, request):
-    name = "testkey"
-    exportable = getattr(request, "param", False)
-    assert vault_write(
-        f"{gpg_mount}/keys/{name}",
-        generate=True,
-        real_name="Salt Test",
-        email="salt@te.st",
-        comment="Hello",
-        exportable=exportable,
-    )
-    try:
-        yield name
-    finally:
-        assert vault_delete(f"{gpg_mount}/keys/{name}")
+def vault_gpg(modules, gpg_mount, clean_gpg_keys):  # pylint: disable=unused-argument
+    return modules.vault_gpg
 
 
 def test_create_key(vault_gpg, gpg_mount, salt_version, gpg):
@@ -174,7 +143,7 @@ def test_delete_key_missing(vault_gpg, gpg_mount):
     assert res is True
 
 
-@pytest.mark.parametrize("existing_key", (True,), indirect=True)
+@pytest.mark.parametrize("existing_key", ({"exportable": True},), indirect=True)
 def test_export_private_key(vault_gpg, gpg_mount, existing_key):
     res = vault_gpg.export_private_key(existing_key, mount=gpg_mount)
     assert res.startswith("-----BEGIN PGP PRIVATE")
@@ -185,7 +154,7 @@ def test_export_private_key_fail(vault_gpg, gpg_mount, existing_key):
         vault_gpg.export_private_key(existing_key, mount=gpg_mount)
 
 
-@pytest.mark.parametrize("existing_key", (True,), indirect=True)
+@pytest.mark.parametrize("existing_key", ({"exportable": True},), indirect=True)
 def test_export_private_key_to_file(vault_gpg, gpg_mount, existing_key, tmp_path):
     dst = tmp_path / "subdir" / "exported.key"
     res = vault_gpg.export_private_key(existing_key, path=str(dst), mount=gpg_mount)
@@ -196,7 +165,7 @@ def test_export_private_key_to_file(vault_gpg, gpg_mount, existing_key, tmp_path
 
 
 @pytest.mark.requires_salt(3007)
-@pytest.mark.parametrize("existing_key", (True,), indirect=True)
+@pytest.mark.parametrize("existing_key", ({"exportable": True},), indirect=True)
 def test_export_private_key_to_gpg(vault_gpg, gpg_mount, existing_key, gpg, gpghome):
     fp = vault_read(f"{gpg_mount}/keys/{existing_key}")["data"]["fingerprint"].upper()
     res = vault_gpg.export_private_key(
@@ -207,7 +176,7 @@ def test_export_private_key_to_gpg(vault_gpg, gpg_mount, existing_key, gpg, gpgh
     assert any(key["fingerprint"] == fp for key in keys)
 
 
-@pytest.mark.parametrize("existing_key", (True,), indirect=True)
+@pytest.mark.parametrize("existing_key", ({"exportable": True},), indirect=True)
 def test_export_public_key(vault_gpg, gpg_mount, existing_key):
     res = vault_gpg.export_public_key(existing_key, mount=gpg_mount)
     assert res.startswith("-----BEGIN PGP PUBLIC")
@@ -219,7 +188,7 @@ def test_export_public_key_missing(vault_gpg, gpg_mount):
 
 
 @pytest.mark.parametrize("parent_exists", (False, True))
-@pytest.mark.parametrize("existing_key", (True,), indirect=True)
+@pytest.mark.parametrize("existing_key", ({"exportable": True},), indirect=True)
 def test_export_public_key_to_file(vault_gpg, gpg_mount, existing_key, tmp_path, parent_exists):
     if not parent_exists:
         tmp_path = tmp_path / "subdir"
@@ -232,7 +201,7 @@ def test_export_public_key_to_file(vault_gpg, gpg_mount, existing_key, tmp_path,
 
 
 @pytest.mark.requires_salt(3007)
-@pytest.mark.parametrize("existing_key", (True,), indirect=True)
+@pytest.mark.parametrize("existing_key", ({"exportable": True},), indirect=True)
 def test_export_public_key_to_gpg(vault_gpg, gpg_mount, existing_key, gpg, gpghome):
     fp = vault_read(f"{gpg_mount}/keys/{existing_key}")["data"]["fingerprint"].upper()
     res = vault_gpg.export_public_key(

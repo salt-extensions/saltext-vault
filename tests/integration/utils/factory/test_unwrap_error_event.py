@@ -15,6 +15,7 @@ from textwrap import dedent
 
 import pytest
 
+from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 
 pytestmark = genmarks(
@@ -24,21 +25,7 @@ pytestmark = genmarks(
 
 @pytest.fixture(scope="module")
 def master_config_overrides(master_approle_mount):  # pylint: disable=unused-argument
-    return {
-        "vault": {
-            "cache": {
-                "backend": "file",
-            },
-            "issue": {
-                "type": "approle",
-            },
-            "policies": {
-                "assign": [
-                    "salt_minion",
-                ],
-            },
-        },
-    }
+    return gen_master_opts(backend="file", issue="approle")
 
 
 @pytest.fixture(scope="module")

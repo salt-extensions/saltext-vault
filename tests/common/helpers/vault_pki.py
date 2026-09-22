@@ -22,8 +22,8 @@ DEFAULT_CLUSTER_PATH = "https://cluster1.vault.local/v1/pki"
 DEFAULT_CLUSTER_AIA_PATH = "http://foo.bar.baz/aia/"
 
 
-def _wipe_issuers():
-    vault_delete("pki/root")
+def _wipe_issuers(mount="pki"):
+    vault_delete(f"{mount}/root")
 
 
 def _import_configured_issuer(certs, key, issuer_config, mount="pki"):

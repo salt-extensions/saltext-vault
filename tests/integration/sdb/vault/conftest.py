@@ -1,1 +1,1 @@
-from tests.common.fixtures.vault import secret_mount  # pylint: disable=unused-import
+from tests.common.fixtures.vault import kv_mount  # pylint: disable=unused-import

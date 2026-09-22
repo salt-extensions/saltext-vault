@@ -6,6 +6,7 @@ import pytest
 import salt.utils.data
 import salt.utils.msgpack
 
+from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 from tests.common.helpers.vault import outdated_cached_config
 
@@ -18,31 +19,14 @@ log = logging.getLogger(__name__)
 
 @pytest.fixture(scope="module")
 def master_config_overrides():
-    return {
+    return gen_master_opts(
+        backend="file",
+        params={"num_uses": 0},
+        policies=["salt_minion_{minion}", "salt_role_{pillar[roles]}"],
+        policy_cache_time=0,
         # ensure approles/entities are generated during pillar rendering
-        "ext_pillar": [{"vault": "secret/path/foo"}],
-        "vault": {
-            "cache": {
-                "backend": "file",
-            },
-            "issue": {
-                "type": "token",
-                "token": {
-                    "params": {
-                        "num_uses": 0,
-                    }
-                },
-            },
-            "policies": {
-                "assign": [
-                    "salt_minion",
-                    "salt_minion_{minion}",
-                    "salt_role_{pillar[roles]}",
-                ],
-                "cache_time": 0,
-            },
-        },
-    }
+        pillars="secret/path/foo",
+    )
 
 
 @pytest.fixture(scope="module")

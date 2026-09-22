@@ -31,9 +31,9 @@ def minion_config_overrides(secret_mounts):  # pylint: disable=unused-argument
     return opts
 
 
-def test_config_get_opts(config, secret_mount):
+def test_config_get_opts(config, kv_mount):
     # The minion loads sdb:// opts during startup. At this point, it's already resolved
-    ret = config.get(f"test_vault_sdb_opts_{secret_mount}")
+    ret = config.get(f"test_vault_sdb_opts_{kv_mount}")
     assert ret == "baz"
 
 
@@ -50,6 +50,6 @@ def pillar_defaults(secret_mounts):  # pylint: disable=unused-argument
     return {"sdb_test": pillars}
 
 
-def test_config_get_pillar(config, secret_mount):
-    ret = config.get(f"test_vault_sdb_pillar_{secret_mount}")
+def test_config_get_pillar(config, kv_mount):
+    ret = config.get(f"test_vault_sdb_pillar_{kv_mount}")
     assert ret == "baz"

@@ -16,20 +16,31 @@ from salt.modules.x509_v2 import create_csr
 from salt.utils.x509 import load_cert
 
 from saltext.vault.utils.vault.helpers import dec2hex
+from tests.common import gen_minion_opts
 from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
+from tests.common.fixtures.vault_pki import ca2_cert
+from tests.common.fixtures.vault_pki import ca2_key
+from tests.common.fixtures.vault_pki import ca_cert
+from tests.common.fixtures.vault_pki import ca_key
+from tests.common.fixtures.vault_pki import ca_sub_cert
+from tests.common.fixtures.vault_pki import ca_sub_key
+from tests.common.fixtures.vault_pki import clean_pki_issuers
+from tests.common.fixtures.vault_pki import clean_pki_roles
+from tests.common.fixtures.vault_pki import cluster_config_set
+from tests.common.fixtures.vault_pki import fresh_pki_mount
+from tests.common.fixtures.vault_pki import issuer_setup
+from tests.common.fixtures.vault_pki import issuer_setup_additional
+from tests.common.fixtures.vault_pki import issuer_setup_sub
 from tests.common.fixtures.vault_pki import private_key
 from tests.common.fixtures.vault_pki import roles_setup
+from tests.common.fixtures.vault_pki import testrole
 
 # pylint: enable=unused-import
 from tests.common.helpers.vault_pki import DEFAULT_CLUSTER_AIA_PATH
 from tests.common.helpers.vault_pki import DEFAULT_CLUSTER_PATH
-from tests.support.vault import vault_delete
-from tests.support.vault import vault_disable_secret_engine
-from tests.support.vault import vault_enable_secret_engine
 from tests.support.vault import vault_list
-from tests.support.vault import vault_list_detailed
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write
 
@@ -37,104 +48,23 @@ pytestmark = genmarks(mounts="pki")
 
 
 @pytest.fixture(scope="module")
-def minion_config_overrides(salt_version):
-    if salt_version[0] < 3008:
-        # Need to enable x509_v2 explicitly on Salt <3008
-        return {"features": {"x509_v2": True}}
-    return {}
-
-
-@pytest.fixture
-def testrole(request):
-    defaults = {
-        "ttl": 3600,
-        "max_ttl": 86400,
-        "allow_any_name": True,
-        "allowed_other_sans": ["*"],
-        "allowed_uri_sans": ["*"],
-        "issuer_ref": "testissuer",
-    }
-    defaults.update(getattr(request, "param", {}))
-    return defaults
-
-
-@pytest.fixture
-def testissuer():
-    return {"issuer_name": "testissuer", "common_name": "Test Issuer CA"}
-
-
-@pytest.fixture
-def testissuer2():
-    return {"issuer_name": "testissuer2", "common_name": "Test Issuer CA 2"}
-
-
-@pytest.fixture
-def root_issuer_setup():
-    root_ca_args = {"issuer_name": "test-issuer-root", "common_name": "Test Issuer Root CA"}
-
-    vault_write("pki/root/generate/internal", **root_ca_args)
-    return vault_read(f"pki/issuer/{root_ca_args['issuer_name']}")["data"]
-
-
-@pytest.fixture(params=[["testissuer"]])
-def issuers_setup(request, root_issuer_setup):  # pylint: disable=unused-argument
-    try:
-        issuer_configs = {}
-        for issuer_name in request.param:
-            issuer_args = request.getfixturevalue(issuer_name)
-
-            csr_resp = vault_write("pki/intermediate/generate/internal", **issuer_args)["data"]
-            sign_resp = vault_write(
-                "/pki/root/sign-intermediate", csr=csr_resp["csr"], **issuer_args
-            )["data"]
-            resp = vault_write(
-                "/pki/intermediate/set-signed", certificate=sign_resp["certificate"]
-            )["data"]
-            for issuer in resp["imported_issuers"]:
-                vault_write(f"/pki/issuer/{issuer}", **issuer_args)
-                assert vault_read(f"pki/issuer/{issuer_name}")
-                issuer_configs.setdefault(issuer_name, []).append(issuer_args.copy())
-                issuer_configs[issuer_name][-1]["issuer_id"] = issuer
-        yield issuer_configs
-    finally:
-        all_issuers = vault_list_detailed("pki/issuers")
-        issuers_names = []
-        if len(all_issuers) > 0:
-            issuers_names = [v["issuer_name"] for v in all_issuers["key_info"].values()]
-        for issuer_name in request.param:
-            if issuer_name in issuers_names:
-                vault_delete(f"pki/issuer/{issuer_name}")
+def minion_config_overrides():
+    return gen_minion_opts(x509v2=True)
 
 
 @pytest.fixture
 def vault_pki(modules):
-    try:
-        yield modules.vault_pki
-    finally:
-        testroles = {"testrole", "testrole2"}
-        for role in testroles.intersection(vault_list("pki/roles")):
-            vault_delete(f"pki/roles/{role}")
-        assert not testroles.intersection(vault_list("pki/roles"))
-
-        vault_delete("pki/issuer/test-issuer-root")
-
-
-@pytest.fixture
-def generated_root():
-    try:
-        yield
-    finally:
-        vault_delete("pki/issuer/generated-root")
+    return modules.vault_pki
 
 
 @pytest.mark.usefixtures("roles_setup")
 def test_list_roles(vault_pki):
     ret = vault_pki.list_roles()
-    assert ret == ["testrole"]
+    assert "testrole" in ret
 
 
-def test_list_empty_roles(vault_pki):
-    ret = vault_pki.list_roles()
+def test_list_empty_roles(vault_pki, fresh_pki_mount):
+    ret = vault_pki.list_roles(mount=fresh_pki_mount)
     assert ret == []
 
 
@@ -145,6 +75,7 @@ def test_delete_role(vault_pki):
     assert "testrole" not in vault_list("pki/roles")
 
 
+@pytest.mark.usefixtures("clean_pki_roles")
 @pytest.mark.parametrize("key_usage", ("DigitalSignature", ["DigitalSignature", "KeyAgreement"]))
 def test_write_role(vault_pki, key_usage):
     assert vault_pki.write_role("testrole2", ttl="360h", key_usage=key_usage) is True
@@ -160,26 +91,26 @@ def test_update_role(vault_pki):
     assert vault_read("pki/roles/testrole")["data"]["ttl"] == 14400  # 4 hours in seconds
 
 
-@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("issuer_setup", "issuer_setup_additional")
 def test_list_issuers(vault_pki):
     ret = [info["issuer_name"] for info in vault_pki.list_issuers().values()]
-    assert set(ret) == {"test-issuer-root", "testissuer"}
+    assert set(ret) == {"root", "additional"}
 
 
-def test_get_issuer_id(vault_pki, issuers_setup, root_issuer_setup):
-    issuer_id = issuers_setup["testissuer"][0]["issuer_id"]
+def test_get_issuer_id(vault_pki, issuer_setup, issuer_setup_additional):
+    issuer_id = issuer_setup_additional["issuer_id"]
 
     # by issuer_id
     ret = vault_pki.get_issuer_id(issuer_id)
     assert ret == issuer_id
 
     # by name
-    ret = vault_pki.get_issuer_id("testissuer")
+    ret = vault_pki.get_issuer_id("additional")
     assert ret == issuer_id
 
     # default
     ret = vault_pki.get_issuer_id()
-    assert ret == root_issuer_setup["issuer_id"]
+    assert ret == issuer_setup["issuer_id"]
 
     # missing
     with pytest.raises(CommandExecutionError, match="No issuer is associated with reference"):
@@ -192,10 +123,10 @@ def test_get_issuer_id_default_unconfigured(vault_pki):
         vault_pki.get_issuer_id()
 
 
-@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("issuer_setup")
 def test_read_issuer(vault_pki):
-    ret = vault_pki.read_issuer("testissuer")
-    assert ret["issuer_name"] == "testissuer"
+    ret = vault_pki.read_issuer("root")
+    assert ret["issuer_name"] == "root"
     assert "ca_chain" in ret
     assert "certificate" in ret
 
@@ -204,16 +135,16 @@ def test_read_issuer_missing(vault_pki):
     assert vault_pki.read_issuer("missing-no") is None
 
 
-def test_read_issuer_default_missing(vault_pki, empty_pki_mount):
+def test_read_issuer_default_missing(vault_pki, fresh_pki_mount):
     """
     Reading the default issuer while none is configured should return None
     instead of raising. The server reports this case differently from an
     unknown issuer reference (``no default issuer currently configured``).
     """
-    assert vault_pki.read_issuer(mount=empty_pki_mount) is None
+    assert vault_pki.read_issuer(mount=fresh_pki_mount) is None
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_issue_certificate(vault_pki):
     # Certificate expiration is always in UTC, so we need to compare with UTC.
     run_time = datetime.now(tz=timezone.utc)
@@ -236,7 +167,7 @@ def test_issue_certificate(vault_pki):
     assert "certificate" in ret
     certificate = load_cert(ret["certificate"])
 
-    assert certificate.issuer.rfc4514_string() == "CN=Test Issuer CA"
+    assert certificate.issuer.rfc4514_string() == "CN=Test,O=Salt,C=US"
 
     assert certificate.subject.rfc4514_string() == "CN=test.example.com"
     san = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName)
@@ -262,7 +193,7 @@ def test_issue_certificate(vault_pki):
     )
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize("value_is_list", (False, True))
 def test_issue_certificate_with_dict_alt_names(vault_pki, value_is_list):
     alt_names = {
@@ -307,21 +238,22 @@ def test_issue_certificate_with_dict_alt_names(vault_pki, value_is_list):
         )
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup")
-@pytest.mark.parametrize("issuers_setup", [["testissuer", "testissuer2"]], indirect=True)
+@pytest.mark.usefixtures("issuer_setup", "issuer_setup_additional", "roles_setup")
 def test_issue_certificate_with_alternative_issuer(vault_pki):
     ret = vault_pki.issue_certificate(
         role_name="testrole",
         common_name="test.example.com",
         ttl="2h",
-        issuer_ref="testissuer2",
+        issuer_ref="additional",
     )
     assert "certificate" in ret
     certificate = load_cert(ret["certificate"])
-    assert certificate.issuer.rfc4514_string() == "CN=Test Issuer CA 2"
+    assert (
+        certificate.issuer.rfc4514_string() == "CN=Test Reissuer,O=SaltStack,L=Seattle,ST=WA,C=US"
+    )
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup", "testrole")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup", "testrole")
 @pytest.mark.parametrize("testrole", ({"require_cn": False},))
 def test_issue_certificate_without_common_name(vault_pki):
     ret = vault_pki.issue_certificate(
@@ -335,8 +267,7 @@ def test_issue_certificate_without_common_name(vault_pki):
         cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_sign_certificate_with_private_key(vault_pki, private_key):
     # Certificate expiration is always in UTC, so we need to compare with UTC.
     run_time = datetime.now(tz=timezone.utc)
@@ -351,7 +282,7 @@ def test_sign_certificate_with_private_key(vault_pki, private_key):
     assert "certificate" in ret
     certificate = load_cert(ret["certificate"])
 
-    assert certificate.issuer.rfc4514_string() == "CN=Test Issuer CA"
+    assert certificate.issuer.rfc4514_string() == "CN=Test,O=Salt,C=US"
 
     assert certificate.subject.rfc4514_string() == "CN=test.example.com"
     san = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName)
@@ -361,8 +292,7 @@ def test_sign_certificate_with_private_key(vault_pki, private_key):
     assert "test.example.com" in dns_sans
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_sign_certificate_with_csr(vault_pki, private_key):
     run_time = datetime.now(tz=timezone.utc)
     csr = create_csr(
@@ -383,7 +313,7 @@ def test_sign_certificate_with_csr(vault_pki, private_key):
     assert "certificate" in ret
     certificate = load_cert(ret["certificate"])
 
-    assert certificate.issuer.rfc4514_string() == "CN=Test Issuer CA"
+    assert certificate.issuer.rfc4514_string() == "CN=Test,O=Salt,C=US"
 
     assert certificate.subject.rfc4514_string() == "CN=test.example.com"
     san = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName)
@@ -393,7 +323,7 @@ def test_sign_certificate_with_csr(vault_pki, private_key):
     assert "test.example.com" in dns_sans
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize(
     "sans_as_list,sign_verbatim", ((False, False), (True, False), (True, True))
 )
@@ -444,7 +374,7 @@ def test_sign_certificate_with_dict_alt_names(vault_pki, private_key, sans_as_li
         )
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_sign_certificate_with_sign_verbatim(vault_pki, private_key):
     ret = vault_pki.sign_certificate(
         "testrole",
@@ -462,8 +392,7 @@ def test_sign_certificate_with_sign_verbatim(vault_pki, private_key):
     assert certificate.subject.get_attributes_for_oid(x509.OID_LOCALITY_NAME)[0].value == "Boston"
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup")
-@pytest.mark.parametrize("issuers_setup", [["testissuer", "testissuer2"]], indirect=True)
+@pytest.mark.usefixtures("issuer_setup", "issuer_setup_additional", "roles_setup")
 def test_sign_certificate_with_alternative_issuer(vault_pki, private_key):
     ret = vault_pki.sign_certificate(
         "testrole",
@@ -471,17 +400,19 @@ def test_sign_certificate_with_alternative_issuer(vault_pki, private_key):
         private_key=private_key,
         ttl="2h",
         sign_verbatim=True,
-        issuer_ref="testissuer2",
+        issuer_ref="additional",
         alt_names=["dns:test2.example.com"],
         L="Boston",
         C="US",
     )
     assert "certificate" in ret
     certificate = load_cert(ret["certificate"])
-    assert certificate.issuer.rfc4514_string() == "CN=Test Issuer CA 2"
+    assert (
+        certificate.issuer.rfc4514_string() == "CN=Test Reissuer,O=SaltStack,L=Seattle,ST=WA,C=US"
+    )
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_sign_certificate_with_der_encoding(vault_pki, private_key):
     ret = vault_pki.sign_certificate(
         "testrole",
@@ -497,7 +428,7 @@ def test_sign_certificate_with_der_encoding(vault_pki, private_key):
     assert encoding.lower() == "der"
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup", "testrole")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup", "testrole")
 @pytest.mark.parametrize("testrole", ({"require_cn": False},))
 def test_sign_certificate_without_common_name(vault_pki, private_key):
     ret = vault_pki.sign_certificate(
@@ -513,7 +444,7 @@ def test_sign_certificate_without_common_name(vault_pki, private_key):
         cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
 
 
-@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("issuer_setup")
 def test_sign_certificate_without_role_name(vault_pki, private_key):
     with pytest.raises(SaltInvocationError, match="`role_name` is required"):
         vault_pki.sign_certificate(
@@ -523,7 +454,7 @@ def test_sign_certificate_without_role_name(vault_pki, private_key):
         )
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_sign_certificate_verbatim_without_common_name(vault_pki, private_key):
     ret = vault_pki.sign_certificate(
         role_name="testrole",
@@ -539,8 +470,8 @@ def test_sign_certificate_verbatim_without_common_name(vault_pki, private_key):
         cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
 
 
-@pytest.mark.usefixtures("issuers_setup")
-@pytest.mark.parametrize("issuer_ref", (None, "testissuer"))
+@pytest.mark.usefixtures("issuer_setup")
+@pytest.mark.parametrize("issuer_ref", (None, "root"))
 def test_sign_certificate_verbatim_without_role_name(vault_pki, private_key, issuer_ref):
     ret = vault_pki.sign_certificate(
         common_name="test.example.com",
@@ -554,7 +485,7 @@ def test_sign_certificate_verbatim_without_role_name(vault_pki, private_key, iss
     assert cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value == "test.example.com"
 
 
-@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("issuer_setup")
 @pytest.mark.parametrize(
     "call_type", ("pk", "pk_verbatim", "pk_verbatim_kwargs", "csr", "csr_verbatim")
 )
@@ -563,7 +494,7 @@ def test_sign_intermediate(vault_pki, private_key, container, call_type):
     sign_verbatim = "verbatim" in call_type
     issuer_ref = None
     if call_type in ("pk_verbatim", "csr"):
-        issuer_ref = "testissuer"  # ensure we test that endpoint as well
+        issuer_ref = "root"  # ensure we test that endpoint as well
 
     key_usage = None
     permitted_alt_names = [
@@ -708,25 +639,25 @@ def test_sign_intermediate(vault_pki, private_key, container, call_type):
         assert est is None
 
 
-@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("issuer_setup")
 def test_read_issuer_certificate(vault_pki):
-    ret = vault_pki.read_issuer_certificate("testissuer")
+    ret = vault_pki.read_issuer_certificate("root")
 
     certificate = load_cert(ret)
 
-    assert certificate.subject.rfc4514_string() == "CN=Test Issuer CA"
+    assert certificate.subject.rfc4514_string() == "CN=Test,O=Salt,C=US"
 
 
-@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("issuer_setup_sub")
 def test_read_issuer_certificate_with_chain(vault_pki):
-    ret = vault_pki.read_issuer_certificate("testissuer", include_chain=True)
+    ret = vault_pki.read_issuer_certificate("sub", include_chain=True)
 
     certificate, chain = load_cert(ret, load_chain=True)
 
-    assert certificate.subject.rfc4514_string() == "CN=Test Issuer CA"
+    assert certificate.subject.rfc4514_string() == "CN=TestSub,O=Salt,C=US"
     assert len(chain) == 1
 
-    assert chain[0].subject.rfc4514_string() == "CN=Test Issuer Root CA"
+    assert chain[0].subject.rfc4514_string() == "CN=Test,O=Salt,C=US"
 
 
 def test_read_issuer_certificate_missing(vault_pki):
@@ -734,44 +665,44 @@ def test_read_issuer_certificate_missing(vault_pki):
         vault_pki.read_issuer_certificate("missingissuer")
 
 
-@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("issuer_setup")
 def test_delete_issuer(vault_pki):
     ret = [info["issuer_name"] for info in vault_pki.list_issuers().values()]
-    assert "testissuer" in ret
+    assert "root" in ret
 
-    ret = vault_pki.delete_issuer("testissuer")
+    ret = vault_pki.delete_issuer("root")
     assert ret
 
     ret = [info["issuer_name"] for info in vault_pki.list_issuers().values()]
-    assert "testissuer" not in ret
+    assert "root" not in ret
 
     # Does not throw missing issuer exception
-    assert vault_pki.delete_issuer("testissuer", include_key=True) is True
+    assert vault_pki.delete_issuer("root", include_key=True) is True
 
 
-@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("issuer_setup")
 def test_delete_issuer_with_private_key(vault_pki):
-    ret = vault_pki.read_issuer("testissuer")
+    ret = vault_pki.read_issuer("root")
     assert ret["key_id"]
     private_key_id = ret["key_id"]
 
-    ret = vault_pki.delete_issuer("testissuer", include_key=True)
+    ret = vault_pki.delete_issuer("root", include_key=True)
     assert ret
 
     ret = [info["issuer_name"] for info in vault_pki.list_issuers().values()]
-    assert "testissuer" not in ret
+    assert "root" not in ret
 
     keys = vault_list("pki/keys")
     assert private_key_id not in keys
 
 
-@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("issuer_setup")
 def test_delete_key(vault_pki):
-    ret = vault_pki.read_issuer("testissuer")
+    ret = vault_pki.read_issuer("root")
     assert ret["key_id"]
     private_key_id = ret["key_id"]
 
-    ret = vault_pki.delete_issuer("testissuer")
+    ret = vault_pki.delete_issuer("root")
     assert ret
 
     ret = vault_pki.delete_key(private_key_id)
@@ -779,87 +710,83 @@ def test_delete_key(vault_pki):
     assert private_key_id not in vault_list("pki/keys")
 
 
-@pytest.mark.usefixtures("issuers_setup")
-def test_update_issuer(vault_pki):
+@pytest.mark.usefixtures("issuer_setup_additional")
+def test_update_issuer(vault_pki, issuer_setup):
     ret = vault_pki.update_issuer(
-        "testissuer",
+        "additional",
         aia_urls=["http://aia.example.com/ca.list"],
     )
     assert ret
 
     # Now update OCSP endpoints.
     ret = vault_pki.update_issuer(
-        "testissuer",
+        "additional",
         ocsp_servers=["http://ocsp.example.com"],
     )
 
     # Now update CRL endpoints.
     ret = vault_pki.update_issuer(
-        "testissuer",
+        "additional",
         crl_endpoints=["http://crl.example.com/ca.crl"],
     )
 
-    ret = vault_pki.read_issuer("testissuer")
+    ret = vault_pki.read_issuer("additional")
     assert "http://crl.example.com/ca.crl" in ret["crl_distribution_points"]
     assert "http://aia.example.com/ca.list" in ret["issuing_certificates"]
     assert "http://ocsp.example.com" in ret["ocsp_servers"]
 
     # Now update manual chain and usage.
     issuer_id = ret["issuer_id"]
-    root_id = vault_pki.read_issuer("test-issuer-root")["issuer_id"]
+    root_id = issuer_setup["issuer_id"]
     ret = vault_pki.update_issuer(
-        "testissuer",
+        "additional",
         manual_chain=[issuer_id, root_id],
         usage=["read-only", "issuing-certificates", "crl-signing"],
     )
     assert ret
 
-    ret = vault_pki.read_issuer("testissuer")
+    ret = vault_pki.read_issuer("additional")
     assert ret["manual_chain"] == [issuer_id, root_id]
     assert set(ret["usage"].split(",")) == {"read-only", "issuing-certificates", "crl-signing"}
 
 
-@pytest.mark.usefixtures("issuers_setup")
-def test_update_issuer_name_and_templating(vault_pki):
-    issuer_id = vault_pki.read_issuer("testissuer")["issuer_id"]
+def test_update_issuer_name_and_templating(vault_pki, issuer_setup):
+    # No name restoration needed, the issuer_setup teardown wipes all issuers.
+    issuer_id = issuer_setup["issuer_id"]
     aia_urls = ["http://aia.example.com/{{issuer_id}}/ca.der"]
-    try:
-        # The templating flag is stored alongside the AIA URLs,
-        # it does not stick when patched without any of them set.
-        assert (
-            vault_pki.update_issuer(
-                "testissuer",
-                name="testissuer-renamed",
-                aia_urls=aia_urls,
-                aia_url_templating=True,
-            )
-            is True
+    # The templating flag is stored alongside the AIA URLs,
+    # it does not stick when patched without any of them set.
+    assert (
+        vault_pki.update_issuer(
+            "root",
+            name="root-renamed",
+            aia_urls=aia_urls,
+            aia_url_templating=True,
         )
-        ret = vault_pki.read_issuer("testissuer-renamed")
-        assert ret["issuer_id"] == issuer_id
-        assert ret["issuer_name"] == "testissuer-renamed"
-        assert ret["issuing_certificates"] == aia_urls
-        assert ret["enable_aia_url_templating"] is True
-    finally:
-        # Restore the name, otherwise the issuers_setup teardown does not find the issuer
-        vault_write(f"pki/issuer/{issuer_id}", issuer_name="testissuer")
+        is True
+    )
+    ret = vault_pki.read_issuer("root-renamed")
+    assert ret["issuer_id"] == issuer_id
+    assert ret["issuer_name"] == "root-renamed"
+    assert ret["issuing_certificates"] == aia_urls
+    assert ret["enable_aia_url_templating"] is True
 
 
-@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("issuer_setup")
 def test_update_issuer_delta_crl_endpoints(vault_pki):
-    if "delta_crl_distribution_points" not in vault_pki.read_issuer("testissuer"):
+    if "delta_crl_distribution_points" not in vault_pki.read_issuer("root"):
         pytest.skip("Server does not support delta CRL distribution points on issuers")
     # The delta CRL endpoints are stored alongside the other AIA URLs,
     # they do not stick when patched without any of them set.
     assert (
         vault_pki.update_issuer(
-            "testissuer",
+            "root",
             crl_endpoints=["http://crl.example.com/ca.crl"],
             delta_crl_endpoints=["http://crl.example.com/delta.crl"],
         )
         is True
     )
-    ret = vault_pki.read_issuer("testissuer")
+    ret = vault_pki.read_issuer("root")
     assert ret["crl_distribution_points"] == ["http://crl.example.com/ca.crl"]
     assert ret["delta_crl_distribution_points"] == ["http://crl.example.com/delta.crl"]
 
@@ -879,28 +806,28 @@ def test_read_urls(vault_pki):
         vault_write("pki/config/urls", **{key: [] for key in urls})
 
 
-@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("issuer_setup")
 def test_read_issuer_crl(vault_pki):
-    ret_complete = vault_pki.read_issuer_crl("testissuer")
+    ret_complete = vault_pki.read_issuer_crl("root")
 
     crl_complete = x509.load_pem_x509_crl(ret_complete.encode())
-    assert crl_complete.issuer.rfc4514_string() == "CN=Test Issuer CA"
-    ret_delta = vault_pki.read_issuer_crl("testissuer", delta=True)
+    assert crl_complete.issuer.rfc4514_string() == "CN=Test,O=Salt,C=US"
+    ret_delta = vault_pki.read_issuer_crl("root", delta=True)
     crl_delta = x509.load_pem_x509_crl(ret_delta.encode())
-    assert crl_delta.issuer.rfc4514_string() == "CN=Test Issuer CA"
+    assert crl_delta.issuer.rfc4514_string() == "CN=Test,O=Salt,C=US"
     assert ret_delta != ret_complete
 
     # An issuer that is not allowed to sign CRLs does not have one
-    assert vault_pki.update_issuer("testissuer", usage=["read-only", "issuing-certificates"])
-    assert vault_pki.read_issuer_crl("testissuer") is None
+    assert vault_pki.update_issuer("root", usage=["read-only", "issuing-certificates"])
+    assert vault_pki.read_issuer_crl("root") is None
 
 
-@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("issuer_setup")
 def test_read_issuer_crl_missing_issuer(vault_pki):
     assert vault_pki.read_issuer_crl("missing_issuer") is None
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize("revoke_by", ("serial", "serial_int", "certificate"))
 def test_revoke_certificate(vault_pki, private_key, revoke_by):
     ret = vault_pki.sign_certificate(
@@ -926,13 +853,13 @@ def test_revoke_certificate(vault_pki, private_key, revoke_by):
     assert serial in revoked_certs
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_revoke_certificate_missing(vault_pki):
     ret = vault_pki.revoke_certificate(serial=1337)
     assert ret is False
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 @pytest.mark.parametrize("revoke_by", ("serial", "certificate"))
 def test_revoke_certificate_with_private_key(vault_pki, revoke_by):
     ret = vault_pki.issue_certificate(
@@ -963,7 +890,7 @@ def test_revoke_certificate_serial_certificate_exclusive(vault_pki):
         vault_pki.revoke_certificate(serial="aa:bb:cc", certificate="certdata")
 
 
-@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("issuer_setup")
 def test_get_default_issuer(vault_pki):
     before = vault_pki.get_default_issuer()
     assert before
@@ -975,27 +902,26 @@ def test_get_default_issuer(vault_pki):
     assert after is None
 
 
-@pytest.mark.usefixtures("issuers_setup")
-@pytest.mark.parametrize("issuers_setup", [["testissuer", "testissuer2"]], indirect=True)
+@pytest.mark.usefixtures("issuer_setup", "issuer_setup_additional")
 def test_set_default_issuer(vault_pki):
     before = vault_pki.get_default_issuer()
 
     assert before
-    ret = vault_pki.set_default_issuer(name="testissuer2")
+    ret = vault_pki.set_default_issuer(name="additional")
     assert ret
 
     after = vault_pki.get_default_issuer()
     assert after != before
 
 
-@pytest.mark.usefixtures("generated_root")
-def test_generate_root(vault_pki, empty_pki_mount):
+@pytest.mark.usefixtures("clean_pki_issuers")
+def test_generate_root(vault_pki, fresh_pki_mount):
     ret = vault_pki.generate_root(
         common_name="generated root",
         issuer_name="generated-root",
         key_name="generated-root-key",
         ttl="2h",
-        mount=empty_pki_mount,
+        mount=fresh_pki_mount,
     )
 
     assert "certificate" in ret
@@ -1006,31 +932,31 @@ def test_generate_root(vault_pki, empty_pki_mount):
     assert timedelta(hours=2) <= validity <= timedelta(hours=2, minutes=5)
 
     assert (
-        vault_read(f"{empty_pki_mount}/key/{ret['key_id']}")["data"]["key_name"]
+        vault_read(f"{fresh_pki_mount}/key/{ret['key_id']}")["data"]["key_name"]
         == "generated-root-key"
     )
 
-    ret = vault_pki.list_issuers(mount=empty_pki_mount)
+    ret = vault_pki.list_issuers(mount=fresh_pki_mount)
     assert len(ret) == 1
 
 
-@pytest.mark.usefixtures("generated_root")
-def test_generate_root_exported(vault_pki, empty_pki_mount):
+@pytest.mark.usefixtures("clean_pki_issuers")
+def test_generate_root_exported(vault_pki, fresh_pki_mount):
     ret = vault_pki.generate_root(
         common_name="generated root",
         key_type="exported",
-        mount=empty_pki_mount,
+        mount=fresh_pki_mount,
     )
 
     assert "certificate" in ret
     assert "private_key" in ret
 
 
-@pytest.mark.usefixtures("generated_root")
-def test_generate_root_deprecated_params(vault_pki, caplog, empty_pki_mount):
+@pytest.mark.usefixtures("clean_pki_issuers")
+def test_generate_root_deprecated_params(vault_pki, caplog, fresh_pki_mount):
     with caplog.at_level(logging.DEBUG):
         ret = vault_pki.generate_root(
-            common_name="generated root", type="exported", key_type="rsa", mount=empty_pki_mount
+            common_name="generated root", type="exported", key_type="rsa", mount=fresh_pki_mount
         )
 
     assert "certificate" in ret
@@ -1066,8 +992,7 @@ def test_generate_root_reserved_issuer_name(vault_pki):
         vault_pki.generate_root("root", issuer_name="default")
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_list_certificates(vault_pki, private_key):
     ret = vault_pki.sign_certificate(
         "testrole",
@@ -1084,35 +1009,23 @@ def test_list_certificates(vault_pki, private_key):
     assert serial in all_certs
 
 
-@pytest.fixture
-def empty_pki_mount():
-    # The module-scoped pki mount retains issued certificates,
-    # so use a separate mount to test empty listing.
-    assert vault_enable_secret_engine("pki", "pki-empty")
-    try:
-        yield "pki-empty"
-    finally:
-        vault_disable_secret_engine("pki-empty")
-
-
-def test_list_certificates_empty(vault_pki, empty_pki_mount):
+def test_list_certificates_empty(vault_pki, fresh_pki_mount):
     """
     A mount without any issued certificates should yield an empty list,
     not a not-found error.
     """
-    assert vault_pki.list_certificates(mount=empty_pki_mount) == []
+    assert vault_pki.list_certificates(mount=fresh_pki_mount) == []
 
 
-def test_list_revoked_certificates_empty(vault_pki, empty_pki_mount):
+def test_list_revoked_certificates_empty(vault_pki, fresh_pki_mount):
     """
     A mount without any revoked certificates should yield an empty list,
     not a not-found error.
     """
-    assert vault_pki.list_revoked_certificates(mount=empty_pki_mount) == []
+    assert vault_pki.list_revoked_certificates(mount=fresh_pki_mount) == []
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup")
 def test_read_certificate(vault_pki, private_key):
     ret = vault_pki.sign_certificate(
         "testrole",
@@ -1128,8 +1041,7 @@ def test_read_certificate(vault_pki, private_key):
     assert read_certificate.serial_number == signed_certificate.serial_number
 
 
-@pytest.mark.usefixtures("issuers_setup", "roles_setup")
-@pytest.mark.usefixtures("roles_setup")
+@pytest.mark.usefixtures("issuer_setup_sub", "roles_setup")
 def test_read_certificate_full(vault_pki, private_key):
     ret = vault_pki.sign_certificate(
         "testrole",
@@ -1151,10 +1063,10 @@ def test_read_certificate_full(vault_pki, private_key):
     read_certificate, chain = load_cert(f"{ret['certificate']}{''.join(ca_chain)}", load_chain=True)
     assert read_certificate.serial_number == signed_certificate.serial_number
     assert chain
-    assert chain[0].subject.rfc4514_string() == "CN=Test Issuer CA"
+    assert chain[0].subject.rfc4514_string() == "CN=TestSub,O=Salt,C=US"
 
 
-@pytest.mark.usefixtures("issuers_setup")
+@pytest.mark.usefixtures("issuer_setup")
 @pytest.mark.parametrize("serial", ("ca", "crl", "ca_chain"))
 def test_read_certificate_full_special(serial, vault_pki):
     ret = vault_pki.read_certificate_full(serial)
@@ -1164,24 +1076,7 @@ def test_read_certificate_full_special(serial, vault_pki):
 
 
 @pytest.fixture
-def clean_pki():
-    """
-    Remove issuers and keys created during a test.
-    Issuers need to be deleted before the keys they reference.
-    """
-    issuers_before = set(vault_list("pki/issuers"))
-    keys_before = set(vault_list("pki/keys"))
-    try:
-        yield
-    finally:
-        for issuer in set(vault_list("pki/issuers")) - issuers_before:
-            vault_delete(f"pki/issuer/{issuer}")
-        for key in set(vault_list("pki/keys")) - keys_before:
-            vault_delete(f"pki/key/{key}")
-
-
-@pytest.fixture
-def testkey(clean_pki):  # pylint: disable=unused-argument
+def testkey(clean_pki_issuers):  # pylint: disable=unused-argument
     return vault_write("pki/keys/generate/internal", key_name="testkey")["data"]
 
 
@@ -1242,11 +1137,11 @@ def test_list_keys(vault_pki, testkey):
     assert ret[testkey["key_id"]]["key_name"] == "testkey"
 
 
-def test_list_keys_empty(vault_pki, empty_pki_mount):
-    assert vault_pki.list_keys(mount=empty_pki_mount) == {}
+def test_list_keys_empty(vault_pki, fresh_pki_mount):
+    assert vault_pki.list_keys(mount=fresh_pki_mount) == {}
 
 
-@pytest.mark.usefixtures("clean_pki")
+@pytest.mark.usefixtures("clean_pki_issuers")
 def test_generate_key(vault_pki):
     ret = vault_pki.generate_key(
         "internal", key_name="testkey-generated", key_algo="ec", key_bits=384
@@ -1257,7 +1152,7 @@ def test_generate_key(vault_pki):
     assert vault_read(f"pki/key/{ret['key_id']}")["data"]["key_type"] == "ec"
 
 
-@pytest.mark.usefixtures("clean_pki")
+@pytest.mark.usefixtures("clean_pki_issuers")
 def test_generate_key_exported(vault_pki):
     ret = vault_pki.generate_key("exported", key_name="testkey-exported")
     assert ret["key_id"]
@@ -1281,7 +1176,7 @@ def test_generate_key_kms_requires_managed_arg(vault_pki):
         vault_pki.generate_key("kms")
 
 
-@pytest.mark.usefixtures("clean_pki")
+@pytest.mark.usefixtures("clean_pki_issuers")
 def test_generate_intermediate_csr(vault_pki):
     ret = vault_pki.generate_intermediate_csr(
         "internal", key_name="testkey-csr", common_name="Test Intermediate CA"
@@ -1337,7 +1232,7 @@ def test_generate_intermediate(vault_pki, testkey, local_ca):
     assert basic_constraints.value.path_length == 0
 
 
-@pytest.mark.usefixtures("clean_pki")
+@pytest.mark.usefixtures("clean_pki_issuers")
 def test_import_issuer_intermediate(vault_pki, modules, local_ca):
     csr_resp = vault_write(
         "pki/intermediate/generate/internal", common_name="Test Imported Intermediate CA"
@@ -1362,7 +1257,7 @@ def test_import_issuer_intermediate(vault_pki, modules, local_ca):
     assert certificate.subject.rfc4514_string() == "CN=Test Imported Intermediate CA"
 
 
-@pytest.mark.usefixtures("clean_pki")
+@pytest.mark.usefixtures("clean_pki_issuers")
 def test_import_issuer(vault_pki, local_ca):
     with pytest.helpers.temp_file("cert", contents=local_ca["cert"]) as cert_file:  # type: ignore
         # File needed for wrapper test
@@ -1375,7 +1270,7 @@ def test_import_issuer(vault_pki, local_ca):
     assert certificate.subject.rfc4514_string() == "CN=Local Root CA"
 
 
-@pytest.mark.usefixtures("clean_pki")
+@pytest.mark.usefixtures("clean_pki_issuers")
 def test_import_issuer_with_private_key(vault_pki, local_ca):
     with pytest.helpers.temp_file("cert", contents=local_ca["cert"]) as cert_file:  # type: ignore
         with pytest.helpers.temp_file("pk", contents=local_ca["key"]) as pk_file:  # type: ignore
@@ -1425,16 +1320,7 @@ def test_write_urls_requires_parameter(vault_pki):
         vault_pki.write_urls()
 
 
-@pytest.fixture
-def cluster_config():
-    vault_write(  # pylint: disable=kwarg-superseded-by-positional-arg
-        "pki/config/cluster",
-        path=DEFAULT_CLUSTER_PATH,
-        aia_path=DEFAULT_CLUSTER_AIA_PATH,
-    )
-
-
-@pytest.mark.usefixtures("cluster_config")
+@pytest.mark.usefixtures("cluster_config_set")
 def test_read_cluster_config(vault_pki):
     res = vault_pki.read_cluster_config()
     assert res["path"] == DEFAULT_CLUSTER_PATH

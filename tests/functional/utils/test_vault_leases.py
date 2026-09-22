@@ -4,6 +4,7 @@ import pytest
 
 from saltext.vault.utils import vault
 from saltext.vault.utils.vault import leases as vleases
+from tests.common import gen_minion_opts
 from tests.common.containers import genmarks
 from tests.common.fixtures.vault import _event  # pylint: disable=unused-import
 
@@ -12,13 +13,7 @@ pytestmark = genmarks(internal_logic_only=True)
 
 @pytest.fixture(scope="module")
 def minion_config_overrides():
-    return {
-        "vault": {
-            "cache": {
-                "expire_events": True,
-            },
-        },
-    }
+    return gen_minion_opts(expire_events=True)
 
 
 @pytest.fixture(params=[({}, False)])

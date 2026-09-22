@@ -2,14 +2,13 @@ import pytest
 
 # pylint: disable=unused-import
 from tests.common.fixtures.mysql import mysql_container
+from tests.common.fixtures.vault_db import clean_db_mount
 from tests.common.fixtures.vault_db import connection_setup
 from tests.common.fixtures.vault_db import role_args_common
 from tests.common.fixtures.vault_db import roles_setup
 from tests.common.fixtures.vault_db import testdb
 
 # pylint: enable=unused-import
-from tests.support.vault import vault_delete
-from tests.support.vault import vault_list
 from tests.support.vault import vault_revoke
 
 
@@ -27,18 +26,8 @@ def testrole():
 
 
 @pytest.fixture
-def vault_db(modules):
-    try:
-        yield modules.vault_db
-    finally:
-        # prevent dangling leases, which prevent disabling the secret engine
-        assert vault_revoke("database/creds", prefix=True)
-        if "testdb" in vault_list("database/config"):
-            vault_delete("database/config/testdb")
-            assert "testdb" not in vault_list("database/config")
-        if "testrole" in vault_list("database/roles"):
-            vault_delete("database/roles/testrole")
-            assert "testrole" not in vault_list("database/roles")
+def vault_db(modules, clean_db_mount):  # pylint: disable=unused-argument
+    return modules.vault_db
 
 
 @pytest.fixture(params=({},))

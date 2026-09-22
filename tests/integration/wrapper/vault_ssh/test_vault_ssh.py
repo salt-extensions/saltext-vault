@@ -1,10 +1,11 @@
 import pytest
 
+from tests.common import CliFuncProxy
 from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
-from tests.common.fixtures.vault_ssh import _temp_ca
-from tests.common.fixtures.vault_ssh import _temp_role
+from tests.common.fixtures.vault_ssh import clean_ssh_issuer
+from tests.common.fixtures.vault_ssh import temp_rolename
 from tests.functional.modules.vault_ssh.test_vault_ssh import test_create_ca
 from tests.functional.modules.vault_ssh.test_vault_ssh import test_create_ca_key_spec
 from tests.functional.modules.vault_ssh.test_vault_ssh import test_create_ca_with_keys
@@ -23,7 +24,6 @@ from tests.functional.modules.vault_ssh.test_vault_ssh import test_write_role_ot
 from tests.functional.modules.vault_ssh.test_vault_ssh import test_zeroaddress_roles
 
 # pylint: enable=unused-import
-from tests.support.helpers import CliFuncProxy
 
 pytestmark = genmarks(internal_logic_only=True, mounts="ssh", policies=True)
 

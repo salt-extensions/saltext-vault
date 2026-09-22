@@ -3,10 +3,14 @@ import json
 
 import pytest
 
+from tests.common import CliFuncProxy
+from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
 from tests.common.fixtures.vault_gpg import cached_vault_gpg_bin
+from tests.common.fixtures.vault_gpg import clean_gpg_keys
+from tests.common.fixtures.vault_gpg import existing_key
 from tests.common.fixtures.vault_gpg import gpg_mount
 from tests.common.fixtures.vault_gpg import gpg_plugin
 from tests.common.fixtures.vault_gpg import gpghome
@@ -16,8 +20,8 @@ from tests.common.fixtures.vault_gpg import key_a_priv_file
 from tests.common.fixtures.vault_gpg import key_a_pub
 from tests.common.fixtures.vault_gpg import key_a_pub_file
 from tests.common.fixtures.vault_gpg import key_b_pub
+from tests.common.fixtures.vault_gpg import tmp_path_
 from tests.functional.modules.test_vault_gpg import TestDecrypt as _TestDecrypt
-from tests.functional.modules.test_vault_gpg import existing_key
 from tests.functional.modules.test_vault_gpg import secret_message_b64
 from tests.functional.modules.test_vault_gpg import test_create_key
 from tests.functional.modules.test_vault_gpg import test_delete_key
@@ -34,38 +38,21 @@ from tests.functional.modules.test_vault_gpg import test_list_keys
 from tests.functional.modules.test_vault_gpg import test_read_key
 from tests.functional.modules.test_vault_gpg import test_sign_verify as _test_sign_verify
 from tests.functional.modules.test_vault_gpg import test_sign_verify_path
-from tests.functional.modules.test_vault_gpg import tmp_path_
 
 # pylint: enable=unused-import
-from tests.support.helpers import CliFuncProxy
-from tests.support.vault import vault_delete
-from tests.support.vault import vault_list
 from tests.support.vault import vault_read
 
-pytestmark = genmarks(internal_logic_only=True, policies=True)
+pytestmark = genmarks("clean_gpg_keys", internal_logic_only=True, policies=True)
 
 
 @pytest.fixture(scope="module")
 def master_config_overrides():
-    return {
-        "vault": {
-            "policies": {
-                "assign": [
-                    "salt_minion",
-                    "gpg_admin",
-                ],
-            },
-        }
-    }
+    return gen_master_opts(policies="gpg_admin")
 
 
 @pytest.fixture(scope="class")
-def vault_gpg(salt_ssh_cli, gpg_mount):
-    try:
-        yield CliFuncProxy(salt_ssh_cli).vault_gpg
-    finally:
-        for key in vault_list(f"{gpg_mount}/keys"):
-            assert vault_delete(f"{gpg_mount}/keys/{key}")
+def vault_gpg(salt_ssh_cli, gpg_mount):  # pylint: disable=unused-argument
+    return CliFuncProxy(salt_ssh_cli).vault_gpg
 
 
 @pytest.fixture(scope="class")

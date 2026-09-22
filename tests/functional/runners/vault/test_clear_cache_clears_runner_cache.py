@@ -1,11 +1,13 @@
 import pytest
 import salt.cache
 
+from tests.common import gen_master_opts
+
 
 @pytest.fixture(scope="module")
 def master_config_overrides():
     # ensure we get the session backend
-    return {"vault": {"cache": {"backend": "session"}}}
+    return gen_master_opts(backend="session")
 
 
 def test_clear_cache_removes_rendered_policies_with_session_backend(runners, master_opts):

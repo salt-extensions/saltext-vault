@@ -1,6 +1,7 @@
 import pytest
 
 from saltext.vault.utils.vault.client import AuthenticatedVaultClient
+from tests.common import gen_minion_opts
 from tests.common.containers import genmarks
 from tests.common.fixtures.vault import _event  # pylint: disable=unused-import
 from tests.support.vault import vault_write
@@ -15,20 +16,7 @@ def vault_secrets_defaults():
 
 @pytest.fixture(scope="module")
 def minion_config_overrides(approle):
-    return {
-        "vault": {
-            "auth": {
-                "method": "approle",
-                "approle_mount": approle["mount"],
-                "role_id": approle["role_id"],
-                "secret_id": approle["secret_id"],
-            },
-            "cache": {
-                "backend": "disk",
-                "expire_events": True,
-            },
-        },
-    }
+    return gen_minion_opts(approle=approle, backend="disk", expire_events=True)
 
 
 @pytest.mark.parametrize("connection,session", ((False, False), (True, False), (False, True)))

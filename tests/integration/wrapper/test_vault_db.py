@@ -2,10 +2,13 @@ from pathlib import Path
 
 import pytest
 
+from tests.common import CliFuncProxy
+from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
 from tests.common.fixtures.mysql import mysql_container
+from tests.common.fixtures.vault_db import clean_db_mount
 from tests.common.fixtures.vault_db import connection_setup
 from tests.common.fixtures.vault_db import role_args_common
 from tests.common.fixtures.vault_db import role_static_setup
@@ -36,51 +39,18 @@ from tests.functional.modules.test_vault_db import test_write_role
 from tests.functional.modules.test_vault_db import test_write_static_role
 
 # pylint: enable=unused-import
-from tests.support.helpers import CliFuncProxy
-from tests.support.vault import vault_delete
-from tests.support.vault import vault_list
-from tests.support.vault import vault_revoke
 
 pytestmark = genmarks(internal_logic_only=True, mounts="database", policies=True)
 
 
 @pytest.fixture(scope="module")
 def master_config_overrides():
-    """
-    You can override the default configuration per package by overriding this
-    fixture in a conftest.py file.
-    """
-    return {
-        "vault": {
-            "cache": {
-                "backend": "disk",
-            },
-            "policies": {
-                "assign": [
-                    "salt_minion",
-                    "database_admin",
-                ],
-            },
-        }
-    }
+    return gen_master_opts(backend="disk", policies="database_admin")
 
 
 @pytest.fixture(autouse=True)
-def vault_db(salt_ssh_cli, vault_policies):  # pylint: disable=unused-argument
-    try:
-        yield CliFuncProxy(salt_ssh_cli).vault_db
-    finally:
-        # prevent dangling leases, which prevent disabling the secret engine
-        assert vault_revoke("database/creds", prefix=True)
-        if "testdb" in vault_list("database/config"):
-            vault_delete("database/config/testdb")
-            assert "testdb" not in vault_list("database/config")
-        if "testrole" in vault_list("database/roles"):
-            vault_delete("database/roles/testrole")
-            assert "testrole" not in vault_list("database/roles")
-        if "teststaticrole" in vault_list("database/static-roles"):
-            vault_delete("database/static-roles/teststaticrole")
-            assert "teststaticrole" not in vault_list("database/static-roles")
+def vault_db(salt_ssh_cli, vault_policies, clean_db_mount):  # pylint: disable=unused-argument
+    return CliFuncProxy(salt_ssh_cli).vault_db
 
 
 @pytest.fixture(params=({},))

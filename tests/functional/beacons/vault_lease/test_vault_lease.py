@@ -1,5 +1,6 @@
 import pytest
 
+from tests.common import gen_minion_opts
 from tests.common.containers import genmarks
 
 pytestmark = genmarks(mounts="database")
@@ -7,13 +8,7 @@ pytestmark = genmarks(mounts="database")
 
 @pytest.fixture(scope="module")
 def minion_config_overrides():
-    return {
-        "vault": {
-            "cache": {
-                "backend": "disk",  # ensure a persistent cache is available for get_creds
-            },
-        }
-    }
+    return gen_minion_opts(backend="disk")
 
 
 @pytest.mark.usefixtures("existing_alt_lease")

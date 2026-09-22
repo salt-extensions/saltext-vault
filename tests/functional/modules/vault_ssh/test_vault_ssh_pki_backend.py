@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.common import gen_minion_opts
 from tests.common.containers import genmarks
 from tests.common.helpers.vault_ssh import CERT_CHECK
 from tests.common.helpers.vault_ssh import get_cert
@@ -99,16 +100,11 @@ def entity(
 
 @pytest.fixture(scope="module")
 def minion_config_overrides(entity, master_approle_mount):
-    return {
-        "vault": {
-            "auth": {
-                "method": "approle",
-                "role_id": entity["role_id"],
-                "secret_id": entity["secret_id"],
-                "approle_mount": master_approle_mount,
-            }
-        }
-    }
+    return gen_minion_opts(
+        auth_roleid=entity["role_id"],
+        auth_secid=entity["secret_id"],
+        auth_mount=master_approle_mount,
+    )
 
 
 @pytest.fixture

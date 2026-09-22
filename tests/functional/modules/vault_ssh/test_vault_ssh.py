@@ -3,8 +3,8 @@ import pytest
 from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
-from tests.common.fixtures.vault_ssh import _temp_ca
-from tests.common.fixtures.vault_ssh import _temp_role
+from tests.common.fixtures.vault_ssh import clean_ssh_issuer
+from tests.common.fixtures.vault_ssh import temp_rolename
 
 # pylint: enable=unused-import
 from tests.common.helpers.vault_ssh import CERT_CHECK
@@ -47,22 +47,22 @@ def test_read_role(vault_ssh):
         assert res[var] == val
 
 
-def test_write_role_ca(vault_ssh, userrole, _temp_role):
+def test_write_role_ca(vault_ssh, userrole, temp_rolename):
     key_type = userrole.pop("key_type")
-    res = vault_ssh.write_role_ca(_temp_role, **userrole)
+    res = vault_ssh.write_role_ca(temp_rolename, **userrole)
     assert res is True
-    data = vault_read(f"ssh/roles/{_temp_role}")["data"]
+    data = vault_read(f"ssh/roles/{temp_rolename}")["data"]
     assert data["key_type"] == key_type
     for var, val in userrole.items():
         assert var in data
         assert data[var] == val
 
 
-def test_write_role_otp(vault_ssh, iprole, _temp_role):
+def test_write_role_otp(vault_ssh, iprole, temp_rolename):
     key_type = iprole.pop("key_type")
-    res = vault_ssh.write_role_otp(_temp_role, **iprole)
+    res = vault_ssh.write_role_otp(temp_rolename, **iprole)
     assert res is True
-    data = vault_read(f"ssh/roles/{_temp_role}")["data"]
+    data = vault_read(f"ssh/roles/{temp_rolename}")["data"]
     assert data["key_type"] == key_type
     for var, val in iprole.items():
         assert var in data
@@ -109,14 +109,14 @@ def test_zeroaddress_roles(vault_ssh):
     assert res == []
 
 
-@pytest.mark.usefixtures("_temp_ca")
+@pytest.mark.usefixtures("clean_ssh_issuer")
 def test_create_ca(vault_ssh):
     res = vault_ssh.create_ca()
     assert res.startswith("ssh-rsa ")
     assert "public_key" in vault_read("ssh/config/ca")["data"]
 
 
-@pytest.mark.usefixtures("_temp_ca")
+@pytest.mark.usefixtures("clean_ssh_issuer")
 def test_create_ca_key_spec(vault_ssh):
     res = vault_ssh.create_ca(key_type="ec", key_bits=384)
     assert res.startswith("ecdsa-")
@@ -124,7 +124,7 @@ def test_create_ca_key_spec(vault_ssh):
     assert "public_key" in vault_read("ssh/config/ca")["data"]
 
 
-@pytest.mark.usefixtures("_temp_ca")
+@pytest.mark.usefixtures("clean_ssh_issuer")
 def test_create_ca_with_keys(vault_ssh, ec_pub, ec_priv_file):
     res = vault_ssh.create_ca(public_key=ec_pub, private_key=ec_priv_file)
     assert res == ec_pub

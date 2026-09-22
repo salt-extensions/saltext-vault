@@ -5,6 +5,7 @@ import pytest
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 
+from tests.common import gen_minion_opts
 from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
@@ -22,13 +23,8 @@ pytestmark = genmarks()
 
 @pytest.fixture(scope="module")
 def minion_config_overrides():
-    return {
-        "vault": {
-            "cache": {
-                "backend": "disk",  # ensure a persistent cache is available for get_secret_id
-            },
-        }
-    }
+    # ensure a persistent cache is available for get_secret_id
+    return gen_minion_opts(backend="disk")
 
 
 @pytest.fixture

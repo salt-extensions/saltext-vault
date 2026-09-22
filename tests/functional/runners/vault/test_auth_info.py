@@ -1,5 +1,6 @@
 import pytest
 
+from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 
 pytestmark = genmarks(internal_logic_only=True) + [
@@ -20,16 +21,7 @@ def auth_method(request):
 def master_config_overrides(auth_method, approle):
     if auth_method == "token":
         return {}
-    return {
-        "vault": {
-            "auth": {
-                "method": "approle",
-                "approle_mount": approle["mount"],
-                "approle_name": "test-role",
-                "role_id": approle["role_id"],
-            },
-        },
-    }
+    return gen_master_opts(approle=approle)
 
 
 @pytest.mark.usefixtures("master_config_overrides")

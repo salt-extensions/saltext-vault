@@ -1,5 +1,6 @@
 import pytest
 
+from tests.common import gen_minion_opts
 from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
@@ -17,13 +18,7 @@ pytestmark = genmarks()
 
 @pytest.fixture(scope="module")
 def minion_config_overrides():
-    return {
-        "vault": {
-            "cache": {
-                "backend": "disk",
-            },
-        }
-    }
+    return gen_minion_opts(backend="disk")
 
 
 @pytest.fixture

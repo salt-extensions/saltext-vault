@@ -26,7 +26,7 @@ from tests.support.vault import vault_write
 pytestmark = genmarks(mounts="pki")
 
 
-@pytest.mark.usefixtures("clean_pki_mount")
+@pytest.mark.usefixtures("clean_pki_issuers")
 @pytest.mark.parametrize(
     "testmode,pathlen,aia_urls",
     (
@@ -858,7 +858,7 @@ def test_root_issuer_managed_changes_not_after(vault_pki, root_ca_args, allow_pr
     assert (_default_issuer() == issuer_info) is not allow_premature_rotation
 
 
-@pytest.mark.usefixtures("clean_pki_mount")
+@pytest.mark.usefixtures("clean_pki_issuers")
 @pytest.mark.parametrize("allow_premature_rotation", (False, True))
 def test_root_issuer_managed_changes_existing_key(
     vault_pki, root_ca_args, testmode, allow_premature_rotation
@@ -1035,7 +1035,7 @@ def test_root_issuer_managed_ok_aia(vault_pki, root_ca_args):
 
 
 @pytest.mark.parametrize("aia_urls", (MOUNT_URL_CONFIG,), indirect=True)
-@pytest.mark.usefixtures("clean_pki_mount", "aia_urls", "url_config_read_denied")
+@pytest.mark.usefixtures("clean_pki_issuers", "aia_urls", "url_config_read_denied")
 def test_root_issuer_managed_url_config_denied(vault_pki, root_ca_args):
     """
     Ensure a denied URL read access does not cause rotation, only a note.

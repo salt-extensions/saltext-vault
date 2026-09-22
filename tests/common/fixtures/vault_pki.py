@@ -294,6 +294,22 @@ def private_key():
     return pk_bytes.decode()
 
 
+@pytest.fixture
+def testrole(request):
+    defaults = {
+        "ttl": 3600,
+        "max_ttl": 86400,
+        "allow_any_name": True,
+        "enforce_hostnames": False,
+        "allowed_other_sans": ["*"],
+        "allowed_uri_sans": ["*"],
+        "allowed_user_ids": ["*"],
+        "allowed_serial_numbers": ["*"],
+    }
+    defaults.update(getattr(request, "param", {}))
+    return defaults
+
+
 @pytest.fixture(params=[["testrole"]])
 def roles_setup(request):  # pylint: disable=unused-argument
     try:
@@ -375,8 +391,7 @@ def aia_urls(request):
         )
 
 
-@pytest.fixture(scope="module", autouse=True)
-def cluster_config(secret_mounts):  # pylint: disable=unused-argument
+def _cluster_config(secret_mounts):  # pylint: disable=unused-argument
     # Can't reset these once they have been set on a mount,
     # so just set them once.
     vault_write(  # pylint: disable=kwarg-superseded-by-positional-arg
@@ -384,6 +399,12 @@ def cluster_config(secret_mounts):  # pylint: disable=unused-argument
         path=DEFAULT_CLUSTER_PATH,
         aia_path=DEFAULT_CLUSTER_AIA_PATH,
     )
+
+
+# Set the cluster config once per module. Used in the state tests.
+cluster_config = pytest.fixture(scope="module", autouse=True)(_cluster_config)
+# Ensure the cluster config is set before a specific test. Used in the execution module tests.
+cluster_config_set = pytest.fixture(_cluster_config)
 
 
 @pytest.fixture
@@ -399,7 +420,11 @@ def url_config_read_denied():
 
 
 @pytest.fixture
-def clean_pki_mount():
+def clean_pki_issuers():
+    """
+    Ensures all issuers and keys are removed after the test has run.
+    Roles and other configs are left alone.
+    """
     try:
         yield
     finally:
@@ -407,8 +432,23 @@ def clean_pki_mount():
 
 
 @pytest.fixture
+def clean_pki_roles():
+    """
+    Removes all roles that start with ``test``
+    """
+    try:
+        yield
+    finally:
+        for role in vault_list("pki/roles"):
+            if role.startswith("test"):
+                vault_delete(f"pki/roles/{role}")
+
+
+@pytest.fixture
 def fresh_pki_mount():
-    name = random_string("fresh-mount", uppercase=False)
+    # The name must match the pki_admin policy's `pki*` path glob,
+    # which gates access in the Salt-SSH (wrapper) integration tests.
+    name = random_string("pki-fresh-", uppercase=False)
     vault_enable_secret_engine("pki", name)
     try:
         yield name
