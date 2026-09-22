@@ -16,8 +16,8 @@ from salt.version import __version_info__ as SALT_VERSION
 from saltfactories.utils import random_string
 
 from saltext.vault import PACKAGE_ROOT
-from tests.common import CONTAINER_TARGETS
 from tests.common import DEFAULT_ROOT_TOKEN
+from tests.common.containers import CONTAINER_TARGETS
 from tests.common.containers import ContainerImage
 from tests.common.containers import VaultContainer
 from tests.support.files_mapping import CHANGED_FILES_MAP
@@ -448,6 +448,40 @@ def container_host_ref():
     # `host.docker.internal` exists, but does not work in CI for some reason.
     # There, return the default IP address of the host on the default network (hardcoded).
     return os.environ.get("CONTAINER_HOST_REF", "172.17.0.1")
+
+
+def _mounts_id(val):
+    if isinstance(val, str):
+        val = (val,)
+    return ",".join(mount if isinstance(mount, str) else mount[1] for mount in val)
+
+
+def _policies_id(val):
+    if not val:
+        return "dflt"
+    if isinstance(val, str):
+        return val
+    return ",".join(val)
+
+
+def pytest_make_parametrize_id(config, val, argname):  # pylint: disable=unused-argument
+    if argname == "container":
+        image = val if isinstance(val, ContainerImage) else ContainerImage.from_str(val)
+        return f"cnt={image.display.replace('openbao', 'bao')}"
+    if argname == "mysql_container":
+        return f"mysql={val}"
+    if argname == "secret_mounts":
+        return f"mnt={_mounts_id(val)}"
+    if argname == "vault_policies":
+        return f"pol={_policies_id(val)}"
+    if argname == "testmode":
+        return f"mode={'test' if val else 'apply'}"
+    if argname in ("roles_setup", "issuers_setup"):
+        # A sequence of role/issuer fixture names or a mapping of name -> arg overrides
+        return f"{argname.split('_', maxsplit=1)[0]}={','.join(val)}"
+    if isinstance(val, bool) or val is None:
+        return f"{argname.lstrip('_')}={val}"
+    return None
 
 
 def pytest_configure(config):
