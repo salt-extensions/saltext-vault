@@ -3,12 +3,10 @@ import pytest
 from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
-from tests.common.fixtures.vault_ssh import _temp_ca
-from tests.common.fixtures.vault_ssh import _temp_role
-from tests.common.fixtures.vault_ssh import ec_priv
-from tests.common.fixtures.vault_ssh import ec_priv_file
-from tests.common.fixtures.vault_ssh import ec_pub
-from tests.common.fixtures.vault_ssh import ec_pub_file
+from tests.common.fixtures.vault_ssh import ca_priv
+from tests.common.fixtures.vault_ssh import ca_pub
+from tests.common.fixtures.vault_ssh import ca_setup
+from tests.common.fixtures.vault_ssh import clean_ssh_issuer
 from tests.common.fixtures.vault_ssh import hostrole
 from tests.common.fixtures.vault_ssh import iprole
 from tests.common.fixtures.vault_ssh import roles_setup
@@ -18,7 +16,6 @@ from tests.common.fixtures.vault_ssh import userrole
 from tests.support.vault import vault_delete
 from tests.support.vault import vault_list
 from tests.support.vault import vault_read
-from tests.support.vault import vault_write
 
 pytestmark = genmarks(mounts="ssh")
 
@@ -42,17 +39,7 @@ def vault_ssh(states):
         pass
 
 
-@pytest.fixture
-def ca_setup(ec_priv, ec_pub):
-    vault_write("ssh/config/ca", private_key=ec_priv, public_key=ec_pub)
-    assert vault_read("ssh/config/ca", default=False)
-    try:
-        yield
-    finally:
-        vault_delete("ssh/config/ca")
-
-
-@pytest.mark.usefixtures("_temp_ca")
+@pytest.mark.usefixtures("clean_ssh_issuer")
 def test_ca_present(vault_ssh, testmode):
     ret = vault_ssh.ca_present("foobar", test=testmode)
     assert ret.result is (None if testmode else True)

@@ -2,6 +2,7 @@ import logging
 
 import pytest
 
+from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 from tests.support.vault import vault_list_secrets
 from tests.support.vault import vault_read_secret
@@ -38,20 +39,7 @@ def pillar_defaults():
 
 @pytest.fixture(scope="module")
 def master_config_overrides():
-    return {
-        "vault": {
-            "cache": {
-                "backend": "file",
-            },
-            "issue": {
-                "token": {
-                    "params": {
-                        "num_uses": 1,
-                    }
-                }
-            },
-        }
-    }
+    return gen_master_opts(backend="file", params={"num_uses": 1})
 
 
 def test_vault_read_secret(salt_call_cli):

@@ -5,8 +5,8 @@ from contextlib import ExitStack
 import pytest
 from saltfactories.utils import random_string
 
-from tests.integration.conftest import _pillar_files
-from tests.support.helpers import ExtendedLoaders
+from tests.common import ExtendedLoaders
+from tests.common.helpers import _pillar_files
 from tests.support.vault import vault_disable_auth_method
 from tests.support.vault import vault_enable_auth_method
 from tests.support.vault import vault_read
@@ -166,6 +166,6 @@ def approle(container, request):  # pylint: disable=unused-argument
         secret_id = None
         if defaults.get("bind_secret_id", True):
             secret_id = vault_write(f"auth/{mount}/role/{role}/secret-id")["data"]["secret_id"]
-        yield {"mount": mount, "role_id": role_id, "secret_id": secret_id}
+        yield {"mount": mount, "role_id": role_id, "secret_id": secret_id, "name": role}
     finally:
         assert vault_disable_auth_method(mount)

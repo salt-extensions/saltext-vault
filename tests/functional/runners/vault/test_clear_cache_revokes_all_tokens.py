@@ -6,6 +6,7 @@ import salt.cache
 import salt.crypt
 
 from saltext.vault.utils.vault import factory as vfactory
+from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 from tests.common.fixtures.vault import _event  # pylint: disable=unused-import
 from tests.support.vault import vault_write
@@ -31,37 +32,20 @@ def master_config_overrides(
     Authenticate the master via AppRole, otherwise its (statically configured)
     token is exempt from revocation during cache clearance.
     """
-    return {
-        "vault": {
-            "auth": {
-                "method": "approle",
-                "approle_mount": approle["mount"],
-                "approle_name": "test-role",
-                "role_id": approle["role_id"],
-                "secret_id": approle["secret_id"],
-            },
-            "cache": {
-                "backend": "disk",
-                "expire_events": True,
-            },
-            "issue": {
-                "type": request.param,
-                "approle": {
-                    "params": {
-                        "token_explicit_max_ttl": "1h",
-                    }
-                },
-                "token": {
-                    "params": {
-                        "explicit_max_ttl": "1h",
-                    }
-                },
-            },
-            "policies": {
-                "assign": ["salt_minion"],
-            },
+    return gen_master_opts(
+        {
+            "vault": {
+                "issue": {
+                    "approle": {"params": {"token_explicit_max_ttl": "1h"}},
+                    "token": {"params": {"explicit_max_ttl": "1h"}},
+                }
+            }
         },
-    }
+        approle=approle,
+        backend="disk",
+        expire_events=True,
+        issue=request.param,
+    )
 
 
 @pytest.fixture(scope="module")

@@ -1,11 +1,5 @@
-from pathlib import Path
-
-from saltext.vault import PACKAGE_ROOT
-
-TESTS_DIR = Path(__file__).resolve().parent.parent
-REPO_ROOT = TESTS_DIR.parent
-PACKAGE_ROOT_REL = PACKAGE_ROOT.relative_to(REPO_ROOT)
-TESTS_DIR_REL = TESTS_DIR.relative_to(REPO_ROOT)
+from tests.common import PACKAGE_ROOT_REL
+from tests.common import TESTS_DIR_REL
 
 CHANGED_FILES_MAP = (
     (  # Full run when any of the core modules, noxfile or pyproject.toml have changes. Also CHANGELOG for release PR.
@@ -16,6 +10,7 @@ CHANGED_FILES_MAP = (
             f"{TESTS_DIR_REL}/conftest.py",
             f"{TESTS_DIR_REL}/common/__init__.py",
             f"{TESTS_DIR_REL}/common/containers.py",
+            f"{TESTS_DIR_REL}/common/helpers/__init__.py",
             f"{PACKAGE_ROOT_REL}/utils/vault/__init__.py",
             f"{PACKAGE_ROOT_REL}/utils/vault/auth.py",
             f"{PACKAGE_ROOT_REL}/utils/vault/cache.py",
@@ -116,14 +111,14 @@ CHANGED_FILES_MAP = (
         ),
     ),
     (
-        rf"{TESTS_DIR_REL}/support/(?:helpers|vault)\.py",
+        rf"{TESTS_DIR_REL}/support/vault\.py",
         (
             "tests/functional/*/test_*.py",
             "tests/integration/*/test_*.py",
         ),
     ),
     (  # db fixtures/helpers also affect the lease beacon tests
-        rf"{TESTS_DIR_REL}/(?:common/fixtures/mysql|common/fixtures/vault_db|common/helpers/vault_db)\.py",
+        rf"{TESTS_DIR_REL}/common/(?:fixtures/mysql|(?:fixtures|helpers)/vault_db)\.py",
         (
             "tests/functional/*/test_vault_db.py",
             "tests/functional/*/vault_db/test_*.py",
@@ -135,18 +130,14 @@ CHANGED_FILES_MAP = (
             "tests/integration/*/vault_lease/test_*.py",
         ),
     ),
-    (  # core vault fixtures: _event + secret_mount (sdb only currently)
+    (  # Vault fixtures contains _event, which affects more tests
         rf"{TESTS_DIR_REL}/common/fixtures/vault\.py",
         (
-            "tests/functional/runners/vault/test_clear_cache_revokes_all_tokens.py",
             "tests/functional/utils/factory/test_clear_cache.py",
             "tests/functional/utils/test_vault_leases.py",
-            "tests/*/sdb/vault/test_*.py",
+            "tests/*/*/test_vault.py",
+            "tests/*/*/vault/test_*.py",
         ),
-    ),
-    (  # shared unit test fixtures
-        rf"{TESTS_DIR_REL}/unit/fixtures/.*\.py",
-        ("tests/unit/*/test_*.py",),
     ),
     (  # per-module shared fixtures/helpers affect the module's tests
         rf"{TESTS_DIR_REL}/common/(?:fixtures|helpers)/(?P<mod_name>\w+?)\.py",
@@ -155,7 +146,11 @@ CHANGED_FILES_MAP = (
             "tests/*/*/{mod_name}/test_*.py",
         ),
     ),
-    (
+    (  # shared unit test fixtures
+        rf"{TESTS_DIR_REL}/unit/fixtures/.*\.py",
+        ("tests/unit/*/test_*.py",),
+    ),
+    (  # run unit tests for other support modules - including this one
         rf"{TESTS_DIR_REL}/support/.*\.py",
         ("tests/unit/*/test_*.py",),
     ),

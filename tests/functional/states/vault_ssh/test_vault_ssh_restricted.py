@@ -8,12 +8,9 @@ CA has been configured yet.
 
 import pytest
 
+from tests.common import gen_minion_opts
 from tests.common.containers import genmarks
-
-# pylint: disable=unused-import
-from tests.common.fixtures.vault_ssh import _temp_ca
-
-# pylint: enable=unused-import
+from tests.common.fixtures.vault_ssh import clean_ssh_issuer  # pylint: disable=unused-import
 from tests.support.vault import vault_delete_policy
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write
@@ -34,14 +31,8 @@ def minion_config_overrides(container):  # pylint: disable=unused-argument
     vault_write_policy("ssh_ca_writeonly", POLICY)
     res = vault_write("auth/token/create", policies=["ssh_ca_writeonly"])
     try:
-        yield {
-            "vault": {
-                "auth": {
-                    "method": "token",
-                    "token": res["auth"]["client_token"],
-                },
-            },
-        }
+        opts = gen_minion_opts(auth_token=res["auth"]["client_token"])
+        yield opts
     finally:
         vault_delete_policy("ssh_ca_writeonly")
 
@@ -51,7 +42,7 @@ def vault_ssh(states):
     return states.vault_ssh
 
 
-@pytest.mark.usefixtures("_temp_ca")
+@pytest.mark.usefixtures("clean_ssh_issuer")
 def test_ca_present(vault_ssh, testmode):
     ret = vault_ssh.ca_present("foobar", test=testmode)
     assert ret.result is (None if testmode else True)

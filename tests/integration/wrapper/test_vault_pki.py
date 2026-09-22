@@ -1,18 +1,28 @@
 import pytest
 from salt.utils.x509 import load_cert
 
+from tests.common import CliFuncProxy
+from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
+from tests.common.fixtures.vault_pki import ca2_cert
+from tests.common.fixtures.vault_pki import ca2_key
+from tests.common.fixtures.vault_pki import ca_cert
+from tests.common.fixtures.vault_pki import ca_key
+from tests.common.fixtures.vault_pki import ca_sub_cert
+from tests.common.fixtures.vault_pki import ca_sub_key
+from tests.common.fixtures.vault_pki import clean_pki_issuers
+from tests.common.fixtures.vault_pki import clean_pki_roles
+from tests.common.fixtures.vault_pki import cluster_config_set
+from tests.common.fixtures.vault_pki import fresh_pki_mount
+from tests.common.fixtures.vault_pki import issuer_setup
+from tests.common.fixtures.vault_pki import issuer_setup_additional
+from tests.common.fixtures.vault_pki import issuer_setup_sub
 from tests.common.fixtures.vault_pki import private_key as private_key_text
 from tests.common.fixtures.vault_pki import roles_setup
-from tests.functional.modules.test_vault_pki import clean_pki
-from tests.functional.modules.test_vault_pki import cluster_config
-from tests.functional.modules.test_vault_pki import empty_pki_mount
-from tests.functional.modules.test_vault_pki import generated_root
-from tests.functional.modules.test_vault_pki import issuers_setup
+from tests.common.fixtures.vault_pki import testrole
 from tests.functional.modules.test_vault_pki import local_ca
-from tests.functional.modules.test_vault_pki import root_issuer_setup
 from tests.functional.modules.test_vault_pki import test_delete_issuer
 from tests.functional.modules.test_vault_pki import test_delete_role
 from tests.functional.modules.test_vault_pki import test_generate_intermediate
@@ -48,15 +58,9 @@ from tests.functional.modules.test_vault_pki import test_update_role
 from tests.functional.modules.test_vault_pki import test_write_cluster_config
 from tests.functional.modules.test_vault_pki import test_write_role
 from tests.functional.modules.test_vault_pki import test_write_urls
-from tests.functional.modules.test_vault_pki import testissuer
-from tests.functional.modules.test_vault_pki import testissuer2
 from tests.functional.modules.test_vault_pki import testkey
-from tests.functional.modules.test_vault_pki import testrole
 
 # pylint: enable=unused-import
-from tests.support.helpers import CliFuncProxy
-from tests.support.vault import vault_delete
-from tests.support.vault import vault_list
 from tests.support.vault import vault_write
 
 pytestmark = genmarks(
@@ -71,16 +75,7 @@ pytestmark = genmarks(
 
 @pytest.fixture(scope="module")
 def master_config_overrides(salt_version):
-    opts = {
-        "vault": {
-            "policies": {
-                "assign": [
-                    "salt_minion",
-                    "pki_admin",
-                ]
-            },
-        },
-    }
+    opts = gen_master_opts(policies="pki_admin")
     if salt_version[0] < 3008:
         opts["ssh_minion_opts"] = {"features": {"x509_v2": True}}
     return opts
@@ -88,13 +83,7 @@ def master_config_overrides(salt_version):
 
 @pytest.fixture
 def vault_pki(salt_ssh_cli, vault_policies):  # pylint: disable=unused-argument
-    try:
-        yield CliFuncProxy(salt_ssh_cli).vault_pki
-    finally:
-        if "testrole" in vault_list("pki/roles"):
-            vault_delete("pki/roles/testrole")
-            assert "testrole" not in vault_list("pki/roles")
-        vault_delete("pki/issuer/test-issuer-root")
+    return CliFuncProxy(salt_ssh_cli).vault_pki
 
 
 @pytest.fixture(scope="module")
@@ -105,7 +94,7 @@ def private_key(private_key_text, tmp_path_factory):
         yield str(pk)
 
 
-@pytest.mark.usefixtures("clean_pki")
+@pytest.mark.usefixtures("clean_pki_issuers")
 def test_import_issuer_intermediate(vault_pki, salt_call_cli, local_ca):
     csr_resp = vault_write(
         "pki/intermediate/generate/internal", common_name="Test Imported Intermediate CA"

@@ -1,8 +1,10 @@
 import pytest
 
 from tests.common import DEFAULT_ROOT_TOKEN
+from tests.common import PatchedEnviron
+from tests.common import gen_master_opts
+from tests.common import gen_minion_opts
 from tests.common.containers import genmarks
-from tests.support.helpers import PatchedEnviron
 from tests.support.vault import vault_create_secret_id
 from tests.support.vault import vault_delete_approle
 from tests.support.vault import vault_disable_auth_method
@@ -15,29 +17,18 @@ pytestmark = genmarks(internal_logic_only=True)
 
 @pytest.fixture(scope="module")
 def minion_config_overrides():
-    return {
-        "osenv": {"driver": "env"},
-        "vault": {
-            "auth": {
-                "token": "sdb://osenv/VAULT_TOKEN",
-            },
-            "config_location": "local",
-        },
-    }
+    return gen_minion_opts(
+        {"osenv": {"driver": "env"}}, auth_token="sdb://osenv/VAULT_TOKEN", config_location="local"
+    )
 
 
 @pytest.fixture(scope="module")
 def master_config_overrides():
-    return {
-        "osenv": {"driver": "env"},
-        "vault": {
-            "auth": {
-                "method": "approle",
-                "role_id": "sdb://osenv/VAULT_ROLEID",
-                "secret_id": "sdb://osenv/VAULT_SECRETID",
-            },
-        },
-    }
+    return gen_master_opts(
+        {"osenv": {"driver": "env"}},
+        auth_roleid="sdb://osenv/VAULT_ROLEID",
+        auth_secid="sdb://osenv/VAULT_SECRETID",
+    )
 
 
 @pytest.fixture(scope="module")

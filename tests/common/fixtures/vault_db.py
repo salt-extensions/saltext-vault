@@ -98,3 +98,29 @@ def role_static_setup(connection_setup, teststaticrole):  # pylint: disable=unus
         if role_name in vault_list("database/static-roles"):
             vault_delete(f"database/static-roles/{role_name}")
             assert role_name not in vault_list("database/static-roles")
+
+
+@pytest.fixture
+def clean_db_mount():
+    try:
+        yield
+    finally:
+        # prevent dangling leases, which prevent disabling the secret engine
+        assert vault_revoke("database/creds", prefix=True)
+        test_dbs = [db for db in vault_list("database/config") if db.startswith("test")]
+        test_roles = [role for role in vault_list("database/roles") if role.startswith("test")]
+        test_static_roles = [
+            role for role in vault_list("database/static-roles") if role.startswith("test")
+        ]
+        if test_dbs:
+            for test_db in test_dbs:
+                vault_delete(f"database/config/{test_db}")
+            assert not set(test_dbs).intersection(vault_list("database/config"))
+        if test_roles:
+            for test_role in test_roles:
+                vault_delete(f"database/roles/{test_role}")
+            assert not set(test_roles).intersection(vault_list("database/roles"))
+        if test_static_roles:
+            for test_role in test_static_roles:
+                vault_delete(f"database/static-roles/{test_role}")
+            assert not set(test_static_roles).intersection(vault_list("database/static-roles"))

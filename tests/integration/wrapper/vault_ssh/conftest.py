@@ -1,5 +1,6 @@
 import pytest
 
+from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
@@ -22,13 +23,4 @@ pytestmark = genmarks()
 
 @pytest.fixture(scope="module")
 def master_config_overrides():
-    return {
-        "vault": {
-            "policies": {
-                "assign": [
-                    "salt_minion",
-                    "ssh_admin",
-                ]
-            },
-        },
-    }
+    return gen_master_opts(policies="ssh_admin")

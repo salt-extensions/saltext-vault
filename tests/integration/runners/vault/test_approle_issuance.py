@@ -3,6 +3,7 @@ import os
 
 import pytest
 
+from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 from tests.common.helpers.vault import outdated_cached_config
 
@@ -20,45 +21,29 @@ log = logging.getLogger(__name__)
 
 @pytest.fixture(scope="module")
 def master_config_overrides(master_approle_mount):  # pylint: disable=unused-argument
-    return {
-        # ensure approles/entities are generated during pillar rendering
-        "ext_pillar": [
-            {"vault": "salt/minions/{minion}"},
-            {"vault": "salt/roles/{pillar[role]}"},
-            {"vault": "salt/roles/{pillar[roles]}"},
-        ],
-        "vault": {
-            "cache": {
-                "backend": "file",
-            },
-            "issue": {
-                "allow_minion_override_params": True,
-                "type": "approle",
-                "approle": {
-                    "params": {
-                        "secret_id_num_uses": 0,
-                        "secret_id_ttl": 1800,
-                        "token_explicit_max_ttl": 1800,
-                        "token_num_uses": 0,
-                    }
-                },
-            },
-            "metadata": {
-                "entity": {
-                    "minion-id": "{minion}",
-                    "role": "{pillar[role]}",
-                    "roles": "{pillar[roles]}",
-                },
-            },
-            "policies": {
-                "assign": [
-                    "salt_minion",
-                    "salt_minion_{minion}",
-                    "salt_role_{pillar[roles]}",
-                ],
-            },
+    return gen_master_opts(
+        backend="file",
+        issue="approle",
+        allow_override=True,
+        params={
+            "secret_id_num_uses": 0,
+            "secret_id_ttl": 1800,
+            "token_explicit_max_ttl": 1800,
+            "token_num_uses": 0,
         },
-    }
+        policies=["salt_minion_{minion}", "salt_role_{pillar[roles]}"],
+        entity_metadata={
+            "minion-id": "{minion}",
+            "role": "{pillar[role]}",
+            "roles": "{pillar[roles]}",
+        },
+        # ensure approles/entities are generated during pillar rendering
+        pillars=[
+            "salt/minions/{minion}",
+            "salt/roles/{pillar[role]}",
+            "salt/roles/{pillar[roles]}",
+        ],
+    )
 
 
 @pytest.fixture(scope="module")

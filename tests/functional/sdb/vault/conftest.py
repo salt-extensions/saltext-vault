@@ -1,13 +1,9 @@
 import pytest
 
-from tests.common.fixtures.vault import secret_mount  # pylint: disable=unused-import
-from tests.support.vault import vault_delete_secret
+from tests.common.fixtures.vault import clean_kv_mount  # pylint: disable=unused-import
+from tests.common.fixtures.vault import kv_mount  # pylint: disable=unused-import
 
 
 @pytest.fixture
-def _cleanup():
-    try:
-        yield
-    finally:
-        for mount in ("secret", "secret-v1"):
-            vault_delete_secret(mount, metadata=True, recursive=True)
+def vault(loaders, secret_mounts):  # pylint: disable=unused-argument
+    return loaders.sdb.vault

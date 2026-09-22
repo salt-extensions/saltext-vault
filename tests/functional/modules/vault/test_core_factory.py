@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.common import gen_minion_opts
 from tests.common.containers import genmarks
 
 pytestmark = genmarks(mounts=True, secrets=True)
@@ -12,23 +13,12 @@ log = logging.getLogger(__name__)
 
 @pytest.fixture(scope="module")
 def minion_config_overrides():
-    return {
-        "vault": {
-            "cache": {
-                "backend": "disk",
-            }
-        }
-    }
+    return gen_minion_opts(backend="disk")
 
 
 @pytest.fixture(scope="module")
 def vault_secrets_defaults():
     return {"secret/foo": {"bar": "baz"}}
-
-
-@pytest.fixture
-def vault(modules, vault_secrets):  # pylint: disable=unused-argument
-    return modules.vault
 
 
 @pytest.fixture

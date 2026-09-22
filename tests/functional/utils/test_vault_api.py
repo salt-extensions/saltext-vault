@@ -32,49 +32,49 @@ def test_approle_api_list_empty_mount(approle_api, fresh_auth_mount):
 
 
 @pytest.fixture
-def role_name(approle_api, fresh_auth_mount):
+def temp_role(approle_api, fresh_auth_mount):
     name = random_string("test-role-", uppercase=False)
     approle_api.write_approle(name, mount=fresh_auth_mount, token_ttl="10m", token_policies=["foo"])
     return name
 
 
-def test_approle_api_write_and_read_approle(approle_api, fresh_auth_mount, role_name):
-    assert role_name in approle_api.list_approles(mount=fresh_auth_mount)
-    res = approle_api.read_approle(role_name, mount=fresh_auth_mount)
+def test_approle_api_write_and_read_approle(approle_api, fresh_auth_mount, temp_role):
+    assert temp_role in approle_api.list_approles(mount=fresh_auth_mount)
+    res = approle_api.read_approle(temp_role, mount=fresh_auth_mount)
     assert res["token_ttl"] == 600
     assert res["token_policies"] == ["foo"]
     approle_api.write_approle(
-        role_name, mount=fresh_auth_mount, token_ttl="20m", token_policies=["foo", "bar"]
+        temp_role, mount=fresh_auth_mount, token_ttl="20m", token_policies=["foo", "bar"]
     )
-    res = approle_api.read_approle(role_name, mount=fresh_auth_mount)
+    res = approle_api.read_approle(temp_role, mount=fresh_auth_mount)
     assert res["token_ttl"] == 1200
     assert res["token_policies"] == ["foo", "bar"]
 
 
-def test_approle_api_delete_approle(approle_api, fresh_auth_mount, role_name):
-    approle_api.delete_approle(role_name, mount=fresh_auth_mount)
-    assert role_name not in approle_api.list_approles(mount=fresh_auth_mount)
+def test_approle_api_delete_approle(approle_api, fresh_auth_mount, temp_role):
+    approle_api.delete_approle(temp_role, mount=fresh_auth_mount)
+    assert temp_role not in approle_api.list_approles(mount=fresh_auth_mount)
     with pytest.raises(vault.VaultNotFoundError):
-        approle_api.read_approle(role_name, mount=fresh_auth_mount)
+        approle_api.read_approle(temp_role, mount=fresh_auth_mount)
 
 
 @pytest.mark.parametrize("wrap", (False, "30s"))
-def test_approle_api_read_role_id(approle_api, fresh_auth_mount, role_name, wrap):
-    res = approle_api.read_role_id(role_name, mount=fresh_auth_mount, wrap=wrap)
+def test_approle_api_read_role_id(approle_api, fresh_auth_mount, temp_role, wrap):
+    res = approle_api.read_role_id(temp_role, mount=fresh_auth_mount, wrap=wrap)
     if wrap:
         assert isinstance(res, vault.VaultWrappedResponse)
         res = approle_api.client.unwrap(
             res,
-            expected_creation_path=f"auth/{fresh_auth_mount}/role/{role_name}/role-id",
+            expected_creation_path=f"auth/{fresh_auth_mount}/role/{temp_role}/role-id",
         )["data"]["role_id"]
-    expected = vault_read(f"auth/{fresh_auth_mount}/role/{role_name}/role-id")["data"]["role_id"]
+    expected = vault_read(f"auth/{fresh_auth_mount}/role/{temp_role}/role-id")["data"]["role_id"]
     assert res == expected
 
 
 @pytest.mark.parametrize("wrap", (False, "30s"))
-def test_approle_api_generate_secret_id(approle_api, fresh_auth_mount, role_name, wrap):
+def test_approle_api_generate_secret_id(approle_api, fresh_auth_mount, temp_role, wrap):
     res = approle_api.generate_secret_id(
-        role_name,
+        temp_role,
         mount=fresh_auth_mount,
         metadata={"foo": "bar"},
         num_uses=3,
@@ -85,38 +85,38 @@ def test_approle_api_generate_secret_id(approle_api, fresh_auth_mount, role_name
         assert isinstance(res, vault.VaultWrappedResponse)
         secret_id = approle_api.client.unwrap(
             res,
-            expected_creation_path=f"auth/{fresh_auth_mount}/role/{role_name}/secret-id",
+            expected_creation_path=f"auth/{fresh_auth_mount}/role/{temp_role}/secret-id",
         )["data"]["secret_id"]
     else:
         assert isinstance(res, vault.VaultSecretId)
         assert res.is_valid()
         secret_id = str(res)
-    info = approle_api.read_secret_id(role_name, mount=fresh_auth_mount, secret_id=secret_id)
+    info = approle_api.read_secret_id(temp_role, mount=fresh_auth_mount, secret_id=secret_id)
     assert info["metadata"] == {"foo": "bar"}
     assert info["secret_id_num_uses"] == 3
     assert info["secret_id_ttl"] == 600
 
 
-def test_approle_api_read_secret_id_by_accessor(approle_api, fresh_auth_mount, role_name):
-    secret_id = approle_api.generate_secret_id(role_name, mount=fresh_auth_mount)
+def test_approle_api_read_secret_id_by_accessor(approle_api, fresh_auth_mount, temp_role):
+    secret_id = approle_api.generate_secret_id(temp_role, mount=fresh_auth_mount)
     info = approle_api.read_secret_id(
-        role_name, mount=fresh_auth_mount, accessor=secret_id.accessor
+        temp_role, mount=fresh_auth_mount, accessor=secret_id.accessor
     )
     assert info["secret_id_accessor"] == secret_id.accessor
 
 
-def test_approle_api_read_secret_id_missing(approle_api, fresh_auth_mount, role_name):
+def test_approle_api_read_secret_id_missing(approle_api, fresh_auth_mount, temp_role):
     with pytest.raises(vault.VaultNotFoundError):
-        approle_api.read_secret_id(role_name, mount=fresh_auth_mount, secret_id="nonexistent")
+        approle_api.read_secret_id(temp_role, mount=fresh_auth_mount, secret_id="nonexistent")
 
 
 @pytest.mark.parametrize("by", ("secret_id", "accessor"))
-def test_approle_api_destroy_secret_id(approle_api, fresh_auth_mount, role_name, by):
-    secret_id = approle_api.generate_secret_id(role_name, mount=fresh_auth_mount)
+def test_approle_api_destroy_secret_id(approle_api, fresh_auth_mount, temp_role, by):
+    secret_id = approle_api.generate_secret_id(temp_role, mount=fresh_auth_mount)
     kwargs = {by: str(secret_id) if by == "secret_id" else secret_id.accessor}
-    approle_api.destroy_secret_id(role_name, mount=fresh_auth_mount, **kwargs)
+    approle_api.destroy_secret_id(temp_role, mount=fresh_auth_mount, **kwargs)
     with pytest.raises(vault.VaultNotFoundError):
-        approle_api.read_secret_id(role_name, mount=fresh_auth_mount, secret_id=str(secret_id))
+        approle_api.read_secret_id(temp_role, mount=fresh_auth_mount, secret_id=str(secret_id))
 
 
 @pytest.fixture

@@ -12,18 +12,18 @@ import pytest
 import salt.utils.path
 import salt.utils.platform
 from pytestshellutils.utils import ports
-from salt.version import __version_info__ as SALT_VERSION
 from saltfactories.utils import random_string
 
 from saltext.vault import PACKAGE_ROOT
 from tests.common import DEFAULT_ROOT_TOKEN
+from tests.common import REPO_ROOT
+from tests.common import SALT_VERSION
+from tests.common import TESTS_DIR_REL
+from tests.common import PatchedEnviron
 from tests.common.containers import CONTAINER_TARGETS
 from tests.common.containers import ContainerImage
 from tests.common.containers import VaultContainer
 from tests.support.files_mapping import CHANGED_FILES_MAP
-from tests.support.files_mapping import REPO_ROOT
-from tests.support.files_mapping import TESTS_DIR_REL
-from tests.support.helpers import PatchedEnviron
 from tests.support.vault import vault_delete_policy
 from tests.support.vault import vault_disable_auth_method
 from tests.support.vault import vault_disable_secret_engine
@@ -287,9 +287,7 @@ def salt_version():
     # instantiating a master and minion specifically for this fixture or dropping the scope
     # to "module", which would mean it could not be used for any fixtures that need to run
     # before daemons are initialized.
-    if os.environ.get("SALT_REQUIREMENT") == "salt==master":
-        return (SALT_VERSION[0] + 1, 0)
-    return tuple(SALT_VERSION)
+    return SALT_VERSION
 
 
 @pytest.fixture(scope="session")
@@ -476,9 +474,9 @@ def pytest_make_parametrize_id(config, val, argname):  # pylint: disable=unused-
         return f"pol={_policies_id(val)}"
     if argname == "testmode":
         return f"mode={'test' if val else 'apply'}"
-    if argname in ("roles_setup", "issuers_setup"):
-        # A sequence of role/issuer fixture names or a mapping of name -> arg overrides
-        return f"{argname.split('_', maxsplit=1)[0]}={','.join(val)}"
+    if argname == "roles_setup":
+        # A sequence of role fixture names or a mapping of name -> arg overrides
+        return f"roles={','.join(val)}"
     if isinstance(val, bool) or val is None:
         return f"{argname.lstrip('_')}={val}"
     return None

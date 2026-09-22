@@ -1,6 +1,7 @@
 import pytest
 import salt.cache
 
+from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 
 pytestmark = genmarks(internal_logic_only=True)
@@ -13,7 +14,7 @@ CKEY = "config"
 def master_config_overrides():
     # Ensure the minion caches the connection configuration on disk,
     # otherwise it does not persist between salt-call invocations.
-    return {"vault": {"cache": {"backend": "disk"}}}
+    return gen_master_opts(backend="disk")
 
 
 @pytest.fixture

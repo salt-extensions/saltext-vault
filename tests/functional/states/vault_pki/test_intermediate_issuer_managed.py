@@ -26,7 +26,7 @@ from tests.support.vault import vault_write
 pytestmark = genmarks(mounts="pki")
 
 
-@pytest.mark.usefixtures("clean_pki_mount")
+@pytest.mark.usefixtures("clean_pki_issuers")
 def test_intermediate_issuer_managed_create(vault_pki, int_ca_args, testmode):
     # the hard-coded ca_cert is valid until 2036, consider swapping it with ca2_cert
     int_ca_args["days_valid"] = 1825
@@ -210,7 +210,7 @@ def test_intermediate_issuer_managed_not_after(vault_pki, int_ca_args):
     assert "has been rotated" in ret.comment
 
 
-@pytest.mark.usefixtures("clean_pki_mount")
+@pytest.mark.usefixtures("clean_pki_issuers")
 @pytest.mark.parametrize("int_ca_args", ("vault_ca",), indirect=True)
 def test_intermediate_issuer_managed_not_after_exceeding_issuer(vault_pki, int_ca_args):
     """
@@ -239,7 +239,7 @@ def test_intermediate_issuer_managed_not_after_exceeding_issuer(vault_pki, int_c
     assert not ret.changes
 
 
-@pytest.mark.usefixtures("clean_pki_mount")
+@pytest.mark.usefixtures("clean_pki_issuers")
 @pytest.mark.parametrize("int_ca_args", ("vault_ca",), indirect=True)
 def test_intermediate_issuer_managed_issuer_expiry_undercuts_days_remaining(vault_pki, int_ca_args):
     """
@@ -257,7 +257,7 @@ def test_intermediate_issuer_managed_issuer_expiry_undercuts_days_remaining(vaul
     assert not vault_list(f"{int_ca_args['mount']}/issuers")
 
 
-@pytest.mark.usefixtures("clean_pki_mount")
+@pytest.mark.usefixtures("clean_pki_issuers")
 @pytest.mark.parametrize("int_ca_args", ("vault_ca",), indirect=True)
 def test_intermediate_issuer_managed_issuance_error_reported_early(
     vault_pki, int_ca_args, container, testmode
@@ -514,7 +514,7 @@ def test_intermediate_issuer_managed_issuer_ok(vault_pki, int_ca_args, testmode)
 
 @pytest.mark.parametrize("int_ca_args", ("vault_ca",), indirect=True)
 @pytest.mark.parametrize("aia_urls", (MOUNT_URL_CONFIG,), indirect=True)
-@pytest.mark.usefixtures("clean_pki_mount", "aia_urls", "url_config_read_denied")
+@pytest.mark.usefixtures("clean_pki_issuers", "aia_urls", "url_config_read_denied")
 def test_intermediate_issuer_managed_url_config_denied(vault_pki, int_ca_args):
     """
     Ensure a denied URL read access does not cause rotation, only a note.
@@ -546,7 +546,7 @@ def test_intermediate_issuer_managed_url_config_denied(vault_pki, int_ca_args):
     ),
     indirect=True,
 )
-@pytest.mark.usefixtures("clean_pki_mount", "url_config_read_denied")
+@pytest.mark.usefixtures("clean_pki_issuers", "url_config_read_denied")
 def test_intermediate_issuer_managed_cluster_config_denied(vault_pki, int_ca_args):
     """
     Ensure a denied cluster config read access does not cause rotation when the
@@ -700,7 +700,7 @@ def test_intermediate_issuer_managed_changes_rotate_key(
     assert new_cert.public_key().public_numbers() != old_cert.public_key().public_numbers()
 
 
-@pytest.mark.usefixtures("clean_pki_mount")
+@pytest.mark.usefixtures("clean_pki_issuers")
 @pytest.mark.parametrize("int_ca_args", ("salt_ca",), indirect=True)
 def test_intermediate_issuer_managed_changes_existing_key(vault_pki, int_ca_args, testmode):
     key_1 = vault_write(f"{int_ca_args['mount']}/keys/generate/internal", key_name="old_key")[

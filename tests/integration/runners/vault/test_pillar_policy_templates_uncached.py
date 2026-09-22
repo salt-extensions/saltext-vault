@@ -2,6 +2,7 @@ import logging
 
 import pytest
 
+from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 
 pytestmark = genmarks(internal_logic_only=True, mounts=True, policies=True, pillar=True)
@@ -11,34 +12,24 @@ log = logging.getLogger(__name__)
 
 @pytest.fixture(scope="module")
 def master_config_overrides():
-    return {
-        "ext_pillar": [{"vault": "secret/path/foo"}],
-        "vault": {
-            "issue": {
-                "token": {
-                    "params": {
-                        # otherwise the tests might fail because of
-                        # cached tokens (should not, because by default,
-                        # the cache is valid for one session only)
-                        "num_uses": 1,
-                    },
-                },
-            },
-            "policies": {
-                "assign": [
-                    "salt_minion",
-                    "salt_minion_{minion}",
-                    "salt_role_{pillar[roles]}",
-                    "salt_unsafe_{grains[foo]}",
-                    "extpillar_this_should_always_be_absent_{pillar[vault_sourced]}",
-                    "sdb_this_should_always_be_absent_{pillar[vault_sourced_sdb]}",
-                    "exe_this_should_always_be_absent_{pillar[vault_sourced_exe]}",
-                ],
-                "cache_time": 0,
-            },
-        },
-        "minion_data_cache": False,
-    }
+    opts = gen_master_opts(
+        # otherwise the tests might fail because of
+        # cached tokens (should not, because by default,
+        # the cache is valid for one session only)
+        params={"num_uses": 1},
+        policies=[
+            "salt_minion_{minion}",
+            "salt_role_{pillar[roles]}",
+            "salt_unsafe_{grains[foo]}",
+            "extpillar_this_should_always_be_absent_{pillar[vault_sourced]}",
+            "sdb_this_should_always_be_absent_{pillar[vault_sourced_sdb]}",
+            "exe_this_should_always_be_absent_{pillar[vault_sourced_exe]}",
+        ],
+        policy_cache_time=0,
+        pillars="secret/path/foo",
+    )
+    opts["minion_data_cache"] = False
+    return opts
 
 
 @pytest.fixture(scope="module")

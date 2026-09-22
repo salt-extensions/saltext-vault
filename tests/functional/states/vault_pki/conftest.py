@@ -5,6 +5,8 @@ Suite-specific fixtures for the vault_pki state tests.
 import pytest
 from salt.utils.x509 import load_cert
 
+from tests.common import gen_minion_opts
+
 # pylint: disable=unused-import
 from tests.common.fixtures.vault_pki import aia_urls
 from tests.common.fixtures.vault_pki import ca2_cert
@@ -15,7 +17,7 @@ from tests.common.fixtures.vault_pki import ca_key
 from tests.common.fixtures.vault_pki import ca_key_no_pathlen
 from tests.common.fixtures.vault_pki import ca_sub_cert
 from tests.common.fixtures.vault_pki import ca_sub_key
-from tests.common.fixtures.vault_pki import clean_pki_mount
+from tests.common.fixtures.vault_pki import clean_pki_issuers
 from tests.common.fixtures.vault_pki import cluster_config
 from tests.common.fixtures.vault_pki import fresh_pki_mount
 from tests.common.fixtures.vault_pki import issuer_setup
@@ -25,6 +27,7 @@ from tests.common.fixtures.vault_pki import issuer_setup_sub
 from tests.common.fixtures.vault_pki import private_key
 from tests.common.fixtures.vault_pki import role_read_denied
 from tests.common.fixtures.vault_pki import roles_setup
+from tests.common.fixtures.vault_pki import testrole
 from tests.common.fixtures.vault_pki import url_config_read_denied
 
 # pylint: enable=unused-import
@@ -34,11 +37,8 @@ from tests.support.vault import vault_delete
 
 
 @pytest.fixture(scope="module")
-def minion_config_overrides(salt_version):
-    if salt_version[0] < 3008:
-        # Need to enable x509_v2 explicitly on Salt <3008
-        return {"features": {"x509_v2": True}}
-    return {}
+def minion_config_overrides():
+    return gen_minion_opts(x509v2=True)
 
 
 @pytest.fixture
@@ -47,22 +47,6 @@ def vault_pki(states):
         yield states.vault_pki
     finally:
         vault_delete("pki/roles/dummy")
-
-
-@pytest.fixture
-def testrole(request):
-    defaults = {
-        "ttl": 3600,
-        "max_ttl": 86400,
-        "allow_any_name": True,
-        "enforce_hostnames": False,
-        "allowed_other_sans": ["*"],
-        "allowed_uri_sans": ["*"],
-        "allowed_user_ids": ["*"],
-        "allowed_serial_numbers": ["*"],
-    }
-    defaults.update(getattr(request, "param", {}))
-    return defaults
 
 
 @pytest.fixture
@@ -147,7 +131,7 @@ def int_ca_args(
 
 @pytest.fixture
 def existing_intermediate(
-    vault_pki, int_ca_args, clean_pki_mount, request, aia_urls, container
+    vault_pki, int_ca_args, clean_pki_issuers, request, aia_urls, container
 ):  # pylint: disable=unused-argument
     int_ca_args.update(getattr(request, "param", {}))
     if int_ca_args.get("issuer_ref"):
@@ -195,7 +179,7 @@ def root_ca_args():
 
 @pytest.fixture
 def existing_root(
-    vault_pki, root_ca_args, clean_pki_mount, request, aia_urls, container
+    vault_pki, root_ca_args, clean_pki_issuers, request, aia_urls, container
 ):  # pylint: disable=unused-argument
     root_ca_args.update(getattr(request, "param", {}))
     if "excluded_alt_names" in root_ca_args or any(

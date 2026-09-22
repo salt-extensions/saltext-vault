@@ -3,6 +3,7 @@ import logging
 
 import pytest
 
+from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 
 pytestmark = genmarks(internal_logic_only=True, mounts=True, policies=True, pillar=True)
@@ -12,31 +13,21 @@ log = logging.getLogger(__name__)
 
 @pytest.fixture(scope="module")
 def master_config_overrides():
-    return {
-        "ext_pillar": [{"vault": "secret/path/foo"}],
-        "vault": {
-            "issue": {
-                "token": {
-                    "params": {
-                        # otherwise the tests might fail because of
-                        # cached tokens
-                        "num_uses": 1,
-                    },
-                },
-            },
-            "policies": {
-                "assign": [
-                    "salt_minion",
-                    "salt_minion_{minion}",
-                    "salt_role_{pillar[roles]}",
-                    "salt_unsafe_{grains[foo]}",
-                    "extpillar_this_will_not_always_be_absent_{pillar[vault_sourced]}",
-                ],
-                "cache_time": 0,
-            },
-        },
-        "minion_data_cache": True,
-    }
+    opts = gen_master_opts(
+        # otherwise the tests might fail because of
+        # cached tokens
+        params={"num_uses": 1},
+        policies=[
+            "salt_minion_{minion}",
+            "salt_role_{pillar[roles]}",
+            "salt_unsafe_{grains[foo]}",
+            "extpillar_this_will_not_always_be_absent_{pillar[vault_sourced]}",
+        ],
+        policy_cache_time=0,
+        pillars="secret/path/foo",
+    )
+    opts["minion_data_cache"] = True
+    return opts
 
 
 @pytest.fixture(scope="module")
