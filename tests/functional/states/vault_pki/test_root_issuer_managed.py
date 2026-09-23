@@ -923,7 +923,6 @@ def test_root_issuer_managed_changes_existing_key(
     assert ret.changes["key_id"]["new"] == key_2["key_id"]
 
 
-@pytest.mark.skip(reason="Too specific and costly test.")
 @pytest.mark.usefixtures("existing_root")
 @pytest.mark.parametrize(
     "aia_urls",
@@ -1023,6 +1022,7 @@ def test_root_issuer_managed_changes_existing_key(
     ),
     indirect=True,
 )
+@pytest.mark.behavior
 def test_root_issuer_managed_ok_aia(vault_pki, root_ca_args):
     issuer_info = _default_issuer()
     ret = vault_pki.root_issuer_managed(**root_ca_args)
@@ -1055,8 +1055,6 @@ def test_root_issuer_managed_url_config_denied(vault_pki, root_ca_args):
     assert _default_issuer()["issuer_id"] == issuer_info["issuer_id"]
 
 
-# TODO: Add a marker and toggle for these kinds of tests
-@pytest.mark.skip(reason="Too specific and costly test.")
 @pytest.mark.usefixtures("existing_root")
 @pytest.mark.parametrize(
     "aia_urls",
@@ -1091,6 +1089,7 @@ def test_root_issuer_managed_url_config_denied(vault_pki, root_ca_args):
     ),
     indirect=True,
 )
+@pytest.mark.behavior
 def test_root_issuer_managed_changes_aia(vault_pki, root_ca_args, testmode, aia_urls, container):
     exp = act = None
     if not aia_urls:
@@ -1144,6 +1143,7 @@ def test_root_issuer_managed_changes_aia(vault_pki, root_ca_args, testmode, aia_
     vault_write("pki/config/urls", **aia_urls)
     issuer_info = _default_issuer()
     root_ca_args["days_remaining"] = 10000  # force re-issuance, otherwise changes are not reported
+    root_ca_args["days_valid"] = 10001
     ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
     assert ret.result is not False
     assert (ret.result is None) is testmode

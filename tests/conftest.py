@@ -487,9 +487,19 @@ def pytest_configure(config):
         "markers",
         "requires_salt(major, minor?): mark test to only run on Salt versions equal to or higher than <major>.<minor or 0>",
     )
+    config.addinivalue_line(
+        "markers",
+        "behavior: mark test as validating assumptions about external (Vault/OpenBao) "
+        "server behavior. Skipped unless --behavior-tests is passed.",
+    )
 
 
 def pytest_runtest_setup(item):
+    if item.get_closest_marker("behavior") is not None and not item.config.getoption(
+        "--behavior-tests"
+    ):
+        pytest.skip(reason="Too specific and costly test. Run with --behavior-tests")
+
     requires_salt_marker = item.get_closest_marker("requires_salt")
     if requires_salt_marker is not None:
         if len(requires_salt_marker.args) not in (1, 2) or requires_salt_marker.kwargs:
@@ -522,6 +532,14 @@ def pytest_addoption(parser):
         help=("Only run modified test files"),
     )
 
+    test_selection_group.addoption(
+        "--behavior-tests",
+        dest="behavior_tests",
+        action="store_true",
+        default=False,
+        help=("Only run tests that validate assumptions about external server behavior"),
+    )
+
     custom_exit = parser.getgroup("Custom Exit Code")
     custom_exit.addoption(
         "--allow-empty-runs",
@@ -536,6 +554,29 @@ def pytest_collection_modifyitems(config, items):
     yield
     run_changed_files(config, items)
     run_changed_tests(config, items)
+    run_behavior_tests(config, items)
+
+
+def run_behavior_tests(config, items):
+    if not config.getoption("--behavior-tests"):
+        return
+    terminal_reporter = config.pluginmanager.getplugin("terminalreporter")
+    terminal_reporter.ensure_newline()
+    terminal_reporter.section("Behavior Tests Selection (--behavior-tests)", sep=">")
+
+    selected = []
+    deselected = []
+
+    for item in items:
+        if item.get_closest_marker("behavior") is not None:
+            selected.append(item)
+        else:
+            deselected.append(item)
+
+    items[:] = selected
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+    terminal_reporter.section("Behavior Tests Selection End (--behavior-tests)", sep="<")
 
 
 def run_changed_tests(config, items):
