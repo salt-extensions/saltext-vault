@@ -26,7 +26,7 @@ from tests.functional.modules.test_vault_approle import testreissuerole
 
 # pylint: enable=unused-import
 
-pytestmark = genmarks(internal_logic_only=True, policies=True)
+pytestmark = genmarks(internal_logic=True, policies=True)
 
 
 @pytest.fixture(scope="module")

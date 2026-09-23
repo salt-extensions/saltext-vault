@@ -39,7 +39,7 @@ from tests.functional.modules.vault.test_vault_policies import test_policy_write
 
 pytestmark = genmarks(
     "clean_policies",
-    internal_logic_only=True,
+    internal_logic=True,
     mounts=True,
     policies=True,
     secrets=True,

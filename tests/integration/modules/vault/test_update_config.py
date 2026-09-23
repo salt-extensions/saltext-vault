@@ -4,7 +4,7 @@ import salt.cache
 from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 
-pytestmark = genmarks(internal_logic_only=True)
+pytestmark = genmarks(internal_logic=True)
 
 CBANK = "vault/connection"
 CKEY = "config"

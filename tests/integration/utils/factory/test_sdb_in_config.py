@@ -12,7 +12,7 @@ from tests.support.vault import vault_enable_auth_method
 from tests.support.vault import vault_get_role_id
 from tests.support.vault import vault_write_approle
 
-pytestmark = genmarks(internal_logic_only=True)
+pytestmark = genmarks(internal_logic=True)
 
 
 @pytest.fixture(scope="module")

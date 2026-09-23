@@ -21,7 +21,7 @@ from tests.common.fixtures.vault_gpg import key_b_pub
 from tests.support.vault import vault_read
 
 pytest.importorskip("gnupg", reason="Needs python-gnupg library")
-pytestmark = genmarks(internal_logic_only=True) + [
+pytestmark = genmarks(internal_logic=True) + [
     pytest.mark.skip_if_binaries_missing("gpg", reason="Needs gpg binary"),
     pytest.mark.skip_unless_on_platforms(linux=True, darwin=True),
 ]

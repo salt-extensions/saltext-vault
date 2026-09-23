@@ -42,7 +42,7 @@ from tests.functional.modules.test_vault_gpg import test_sign_verify_path
 # pylint: enable=unused-import
 from tests.support.vault import vault_read
 
-pytestmark = genmarks("clean_gpg_keys", internal_logic_only=True, policies=True)
+pytestmark = genmarks("clean_gpg_keys", internal_logic=True, policies=True)
 
 
 @pytest.fixture(scope="module")

@@ -6,7 +6,7 @@ from tests.common.containers import genmarks
 
 pytestmark = genmarks(
     "clean_kv_mount",
-    internal_logic_only=True,
+    internal_logic=True,
     mounts=[[("kv", "secret-v1", "-version=1"), ("kv", "secret", "-version=2")]],
 )
 

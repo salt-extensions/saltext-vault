@@ -20,11 +20,14 @@ import pytest
 from tests.common import REPO_ROOT
 from tests.common import SALT_VERSION
 from tests.common import TESTS_DIR_REL
+from tests.common.containers import CONTAINER_FLAGS
 from tests.common.containers import VaultContainer
+from tests.common.containers import container_targets
 from tests.common.containers import terminate_configured_containers
 from tests.support.files_mapping import CHANGED_FILES_MAP
 from tests.support.markers import ContainerMarker
 from tests.support.markers import KindMarker
+from tests.support.markers import Marker
 from tests.support.markers import SkipMarker
 from tests.support.markers import SuiteMarker
 from tests.support.markers import apply_selection
@@ -65,11 +68,19 @@ markers.add(
         desc="mark test to only run on Salt versions equal to or higher than <major>.<minor or 0>",
     )
 )
+
 markers.add(
     KindMarker(
         "behavior",
         default_skip=True,
         desc="mark test as validating assumptions about external (Vault/OpenBao) server behavior.",
+    )
+)
+markers.add(
+    Marker(
+        "internal_logic",
+        desc="mark test to only run against a single container image (the first target), "
+        "e.g. because it only exercises internal logic and does not depend on the API.",
     )
 )
 
@@ -109,6 +120,30 @@ def pytest_addoption(parser):
         default=False,
         help="Do not exit with > 0 if no tests are collected in a run",
     )
+
+    container_group = parser.getgroup("Container Selection")
+    for flag, image_name in CONTAINER_FLAGS:
+        container_group.addoption(
+            flag,
+            action="append",
+            nargs="?",
+            const="latest",
+            metavar="TAG",
+            help=f"Test against this {image_name} container image tag (repeatable). "
+            "If any of these flags is passed, they replace the TESTING_CONTAINER default.",
+        )
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_generate_tests(metafunc):
+    # tryfirst ensures the container param is recorded before all others,
+    # so its `cnt=` component leads the test IDs consistently.
+    if "container" not in metafunc.fixturenames:
+        return
+    targets = container_targets(metafunc.config)
+    if metafunc.definition.get_closest_marker("internal_logic") is not None:
+        targets = targets[:1]
+    metafunc.parametrize("container", targets, indirect=True, scope="session")
 
 
 @pytest.hookimpl(trylast=True, wrapper=True)

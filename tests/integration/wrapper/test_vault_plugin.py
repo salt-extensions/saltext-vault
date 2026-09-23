@@ -24,7 +24,7 @@ from tests.functional.modules.test_vault_plugin import test_plugin_register as _
 from tests.support.vault import vault_plugin_read
 from tests.support.vault import vault_plugin_show_pin
 
-pytestmark = genmarks(internal_logic_only=True, policies=True)
+pytestmark = genmarks(internal_logic=True, policies=True)
 
 
 @pytest.fixture(scope="module")

@@ -14,7 +14,6 @@ from saltext.vault import PACKAGE_ROOT
 from tests.common import DEFAULT_ROOT_TOKEN
 from tests.common import SALT_VERSION
 from tests.common import PatchedEnviron
-from tests.common.containers import CONTAINER_TARGETS
 from tests.common.containers import ContainerImage
 from tests.common.containers import VaultContainer
 from tests.support.vault import vault_delete_policy
@@ -315,10 +314,7 @@ def vault_config():
     return {"plugin_directory": "/mnt/plugins"}
 
 
-@pytest.fixture(
-    scope="session",
-    params=CONTAINER_TARGETS,
-)
+@pytest.fixture(scope="session")
 def container(
     request, salt_factories, vault_port, vault_environ, vault_plugins, vault_config
 ):  # pylint: disable=unused-argument

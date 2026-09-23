@@ -9,7 +9,7 @@ from tests.common.containers import genmarks
 
 log = logging.getLogger(__name__)
 
-pytestmark = genmarks(internal_logic_only=True, policies=True)
+pytestmark = genmarks(internal_logic=True, policies=True)
 
 
 @pytest.fixture(scope="module")

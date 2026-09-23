@@ -6,7 +6,7 @@ from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 
 pytestmark = genmarks(
-    internal_logic_only=True,
+    internal_logic=True,
     mounts=[[("kv", "secret-v1", "-version=1"), ("kv", "secret", "-version=2")]],
     policies=True,
 )
