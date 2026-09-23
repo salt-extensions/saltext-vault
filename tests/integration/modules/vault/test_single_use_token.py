@@ -7,9 +7,7 @@ from tests.common.containers import genmarks
 from tests.support.vault import vault_list_secrets
 from tests.support.vault import vault_read_secret
 
-pytestmark = genmarks(
-    internal_logic_only=True, mounts=True, policies=True, secrets=True, pillar=True
-)
+pytestmark = genmarks(internal_logic=True, mounts=True, policies=True, secrets=True, pillar=True)
 
 log = logging.getLogger(__name__)
 

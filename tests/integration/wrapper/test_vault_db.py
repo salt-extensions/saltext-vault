@@ -40,7 +40,7 @@ from tests.functional.modules.test_vault_db import test_write_static_role
 
 # pylint: enable=unused-import
 
-pytestmark = genmarks(internal_logic_only=True, mounts="database", policies=True)
+pytestmark = genmarks(internal_logic=True, mounts="database", policies=True)
 
 
 @pytest.fixture(scope="module")

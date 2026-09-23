@@ -11,7 +11,7 @@ from tests.common.fixtures.vault_gpg import gpg_plugin
 
 # pylint: enable=unused-import
 
-pytestmark = genmarks(internal_logic_only=True, policies=True)
+pytestmark = genmarks(internal_logic=True, policies=True)
 
 
 @pytest.fixture(scope="module")

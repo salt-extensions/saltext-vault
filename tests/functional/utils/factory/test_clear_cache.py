@@ -6,7 +6,7 @@ from tests.common.containers import genmarks
 from tests.common.fixtures.vault import _event  # pylint: disable=unused-import
 from tests.support.vault import vault_write
 
-pytestmark = genmarks(internal_logic_only=True, mounts=True, policies="salt_minion", secrets=True)
+pytestmark = genmarks(internal_logic=True, mounts=True, policies="salt_minion", secrets=True)
 
 
 @pytest.fixture(scope="module")

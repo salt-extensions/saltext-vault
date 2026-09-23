@@ -8,7 +8,7 @@ from tests.common import gen_minion_opts
 from tests.common.containers import genmarks
 from tests.common.fixtures.vault import _event  # pylint: disable=unused-import
 
-pytestmark = genmarks(internal_logic_only=True)
+pytestmark = genmarks(internal_logic=True)
 
 
 @pytest.fixture(scope="module")

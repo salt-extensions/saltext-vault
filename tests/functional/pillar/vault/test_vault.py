@@ -6,7 +6,7 @@ import pytest
 
 from tests.common.containers import genmarks
 
-pytestmark = genmarks(internal_logic_only=True, mounts=True, secrets=True)
+pytestmark = genmarks(internal_logic=True, mounts=True, secrets=True)
 
 
 @pytest.fixture(scope="module")

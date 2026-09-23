@@ -64,7 +64,7 @@ from tests.functional.modules.test_vault_pki import testkey
 from tests.support.vault import vault_write
 
 pytestmark = genmarks(
-    internal_logic_only=True,
+    internal_logic=True,
     mounts="pki",
     policies=True,
     # 3.1 introduces cryptography.hazmat.primitives.serialization.pkcs7,

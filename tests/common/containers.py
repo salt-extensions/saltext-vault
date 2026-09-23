@@ -185,10 +185,33 @@ CONTAINER_TARGETS = tuple(
     ).split(",")
 )
 
+_container_targets_key: "pytest.StashKey[tuple[ContainerImage, ...]]" = pytest.StashKey()
+
+CONTAINER_FLAGS = (("--vault", "hashicorp/vault"), ("--bao", "openbao/openbao"))
+
+
+def container_targets(config: pytest.Config) -> tuple[ContainerImage, ...]:
+    """
+    The container images to test against. Derived from the --vault/--bao
+    CLI flags. When absent, defaults to the TESTING_CONTAINER env var.
+    """
+    try:
+        return config.stash[_container_targets_key]
+    except KeyError:
+        pass
+    targets = {}
+    for flag, image_name in CONTAINER_FLAGS:
+        for tag in config.getoption(flag) or ():
+            image = ContainerImage(name=image_name, tag=tag)
+            targets[str(image)] = image
+    resolved = tuple(targets.values()) or CONTAINER_TARGETS
+    config.stash[_container_targets_key] = resolved
+    return resolved
+
+
 require_vault_bin = pytest.mark.skip_if_binaries_missing("vault")
-no_container_parametrization = pytest.mark.parametrize(
-    "container", (CONTAINER_TARGETS[0],), indirect=True
-)
+# Only run the test against a single container image (the first target)
+internal_logic_mark = pytest.mark.internal_logic
 
 
 FIXTURE_KWARGS = {
@@ -203,7 +226,7 @@ Mount: TypeAlias = str | tuple[str, str] | tuple[str, str, str]
 
 def genmarks(
     *fixtures,
-    internal_logic_only: bool = False,
+    internal_logic: bool = False,
     pillar: bool = False,
     policies: Literal[True] | str | Sequence[str] | Sequence[Sequence[str]] | None = None,
     mounts: Literal[True] | str | Sequence[Mount] | Sequence[Sequence[Mount]] | None = None,
@@ -294,8 +317,8 @@ def genmarks(
 
     marks.append(pytest.mark.usefixtures(*usefixtures))
     marks.extend(parametrize)
-    if internal_logic_only:
-        marks.append(no_container_parametrization)
+    if internal_logic:
+        marks.append(internal_logic_mark)
 
     return marks
 

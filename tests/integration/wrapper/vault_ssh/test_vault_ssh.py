@@ -25,7 +25,7 @@ from tests.functional.modules.vault_ssh.test_vault_ssh import test_zeroaddress_r
 
 # pylint: enable=unused-import
 
-pytestmark = genmarks(internal_logic_only=True, mounts="ssh", policies=True)
+pytestmark = genmarks(internal_logic=True, mounts="ssh", policies=True)
 
 
 @pytest.fixture

@@ -12,7 +12,6 @@ from cryptography.hazmat import asn1
 from salt.utils.x509 import NAME_ATTRS_OID
 from salt.utils.x509 import load_cert
 
-from tests.common.containers import CONTAINER_TARGETS
 from tests.common.containers import genmarks
 from tests.common.helpers.vault_pki import pregen_csr
 from tests.support.vault import vault_write
@@ -1278,7 +1277,7 @@ def test_ca_certificate_managed_name_constraints(vault_pki, ca_cert_args, contai
 
 
 @pytest.mark.usefixtures("issuer_setup", "roles_setup")
-@pytest.mark.parametrize("container", (CONTAINER_TARGETS[0],), indirect=True)
+@pytest.mark.internal_logic
 def test_certificate_managed_csr_ignored_warnings(
     vault_pki, cert_args, caplog, testrole, private_key
 ):

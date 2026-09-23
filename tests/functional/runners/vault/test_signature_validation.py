@@ -7,7 +7,7 @@ import salt.exceptions
 
 from tests.common.containers import genmarks
 
-pytestmark = genmarks(internal_logic_only=True)
+pytestmark = genmarks(internal_logic=True)
 
 
 PEER_RUN_FUNCS = (

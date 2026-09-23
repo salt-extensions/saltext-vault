@@ -13,7 +13,7 @@ from tests.support.vault import vault_write
 
 pytestmark = genmarks(
     "master_approle_mount",
-    internal_logic_only=True,
+    internal_logic=True,
     policies=[("salt_master", "salt_minion")],
 ) + [
     # For tokens, the master needs to hold the minion policies itself to be able

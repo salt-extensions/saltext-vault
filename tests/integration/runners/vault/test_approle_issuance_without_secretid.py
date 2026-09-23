@@ -6,7 +6,7 @@ from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 
 pytestmark = genmarks(
-    "master_approle_mount", internal_logic_only=True, mounts=True, policies=True, secrets=True
+    "master_approle_mount", internal_logic=True, mounts=True, policies=True, secrets=True
 )
 
 log = logging.getLogger(__name__)

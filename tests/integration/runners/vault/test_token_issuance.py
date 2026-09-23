@@ -10,9 +10,7 @@ from tests.common import gen_master_opts
 from tests.common.containers import genmarks
 from tests.common.helpers.vault import outdated_cached_config
 
-pytestmark = genmarks(
-    internal_logic_only=True, mounts=True, policies=True, secrets=True, pillar=True
-)
+pytestmark = genmarks(internal_logic=True, mounts=True, policies=True, secrets=True, pillar=True)
 
 log = logging.getLogger(__name__)
 

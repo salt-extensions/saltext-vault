@@ -9,7 +9,7 @@ from tests.common.helpers.vault import outdated_cached_config
 
 pytestmark = genmarks(
     "master_approle_mount",
-    internal_logic_only=True,
+    internal_logic=True,
     mounts=[[("kv", "salt", "-version=2"), ("kv", "secret", "-version=2")]],
     policies=True,
     secrets=True,

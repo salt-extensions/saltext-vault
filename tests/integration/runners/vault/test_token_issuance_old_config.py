@@ -6,7 +6,7 @@ from saltfactories.utils import random_string
 from tests.common import DEFAULT_ROOT_TOKEN
 from tests.common.containers import genmarks
 
-pytestmark = genmarks(internal_logic_only=True, mounts=True, policies=True, secrets=True)
+pytestmark = genmarks(internal_logic=True, mounts=True, policies=True, secrets=True)
 
 log = logging.getLogger(__name__)
 

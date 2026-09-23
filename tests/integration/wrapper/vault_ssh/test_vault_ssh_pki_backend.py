@@ -12,7 +12,7 @@ from tests.common.helpers.vault_ssh import signed_by
 pytestmark = genmarks(
     "roles_setup",
     "ca_setup",
-    internal_logic_only=True,
+    internal_logic=True,
     mounts="ssh",
     policies=True,
     _check_cryptography="40.0",
