@@ -12,11 +12,13 @@ from typing import Literal
 from typing import TypeAlias
 
 import pytest
+from pytestshellutils.utils.processes import MatchString
 from pytestshellutils.utils.processes import ProcessResult
 from salt.utils.path import which
 from saltfactories.utils import random_string
 
-import tests.support.vault
+# Cyclic import. Don't reference attributes before mod init completion!
+import tests.support.vault  # pylint: disable=cyclic-import
 from tests.common import DEFAULT_ROOT_TOKEN
 
 if typing.TYPE_CHECKING:
@@ -32,6 +34,35 @@ except ImportError:
     APIError = Exception  # type: ignore
 
 log = logging.getLogger(__name__)
+
+# All containers configured during this test run. When a run is aborted,
+# the regular fixture/atexit cleanup regularly fails to remove the
+# containers, so pytest_keyboard_interrupt force-terminates these.
+_configured_containers: list["SFContainer"] = []
+_run_aborted: bool = False  # pylint: disable=invalid-name
+
+
+def run_aborted() -> bool:
+    """
+    Whether the test run was aborted (ctrl-c) and the testing containers
+    have already been force-terminated.
+    """
+    return _run_aborted
+
+
+def terminate_configured_containers():
+    """
+    Force cleanup of all containers configured during this test run.
+    ``terminate()`` is idempotent, so any subsequent fixture teardown
+    turns into a no-op.
+    """
+    global _run_aborted  # pylint: disable=global-statement
+    _run_aborted = True
+    for container in _configured_containers:
+        try:
+            container.terminate()
+        except Exception:  # pylint: disable=broad-except
+            log.warning("Failed to terminate container %s", container, exc_info=True)
 
 
 @dataclass(kw_only=True, slots=True)
@@ -203,6 +234,7 @@ class Container:
         container.after_start(self.after_start, container)
         container.before_terminate(self.before_terminate, container)
         container.container_start_check(self._start_check(), container)
+        _configured_containers.append(container)
         return container
 
     def _configure(self, salt_factories: "FactoriesManager"):
@@ -404,8 +436,8 @@ class VaultContainer(Container):
             return True
         ret = ProcessResult(
             returncode=proc.returncode,
-            stdout=proc.stdout,  # type: ignore
-            stderr=proc.stderr,  # type: ignore
+            stdout=MatchString(proc.stdout),
+            stderr=MatchString(proc.stderr),
             cmdline=proc.args,
             data=None,
         )

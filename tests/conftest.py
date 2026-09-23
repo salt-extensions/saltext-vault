@@ -23,6 +23,7 @@ from tests.common import PatchedEnviron
 from tests.common.containers import CONTAINER_TARGETS
 from tests.common.containers import ContainerImage
 from tests.common.containers import VaultContainer
+from tests.common.containers import terminate_configured_containers
 from tests.support.files_mapping import CHANGED_FILES_MAP
 from tests.support.vault import vault_delete_policy
 from tests.support.vault import vault_disable_auth_method
@@ -733,6 +734,15 @@ def run_changed_files(config, items):
     else:
         terminal_reporter.write_line("Nothing was deselected")
     terminal_reporter.section("Changed Files Test Selection End (--changed-files)", sep="<")
+
+
+def pytest_keyboard_interrupt(excinfo):  # pylint: disable=unused-argument
+    # On ctrl-c, the regular container cleanup (fixture finalization and
+    # saltfactories' atexit fallback) cannot be relied upon: the whole
+    # process group is signaled, so pytest may be killed before/during
+    # teardown, and killed processes don't run atexit handlers.
+    # Remove containers here, before teardown, while we still can.
+    terminate_configured_containers()
 
 
 @pytest.hookimpl(trylast=True)
