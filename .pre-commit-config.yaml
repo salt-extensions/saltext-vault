@@ -153,4 +153,13 @@ repos:
       - id: actionlint
         additional_dependencies:
           - shellcheck-py==0.11.0.1
+
+  - repo: local
+    hooks:
+      - id: check-files-mapping
+        name: Verify the changed-files-to-tests map
+        entry: python .pre-commit-hooks/check-files-mapping.py
+        language: python
+        pass_filenames: false
+        files: ^(tests/|src/|noxfile\.py|pyproject\.toml)
   # <---- Code Analysis --------------------------------------------------------------------------
