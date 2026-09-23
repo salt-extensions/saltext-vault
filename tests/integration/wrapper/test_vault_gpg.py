@@ -125,8 +125,9 @@ class TestDecryptWrapper(_TestDecrypt):
             vault_gpg, gpg_mount, existing_key, file, secret_message, tmp_path, armor
         )
 
+    @pytest.mark.skip("Salt-SSH can't handle byte returns")
     def test_decode_base64(self, *_, **__):
-        pytest.skip("Salt-SSH can't handle byte returns")
+        pass
 
     @pytest.mark.requires_salt(3007)
     @pytest.mark.usefixtures("_check_gnupglib")

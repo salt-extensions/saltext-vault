@@ -406,9 +406,8 @@ def test_unregistered_version_ok(vault_plugin, auth_plugin, testmode):
     ),
     indirect=True,
 )
-def test_version_pinned_create_changes(vault_plugin, auth_plugin, testmode, container):
-    if not container.is_vault_latest():
-        pytest.skip("Pins are only supported on recent Vault versions")
+@pytest.mark.requires_backend("vault>=1.16")
+def test_version_pinned_create_changes(vault_plugin, auth_plugin, testmode):
     ret = vault_plugin.version_pinned(
         auth_plugin["name"],
         plugin_type="auth",
@@ -442,6 +441,7 @@ def test_version_pinned_create_changes(vault_plugin, auth_plugin, testmode, cont
     ),
     indirect=True,
 )
+@pytest.mark.requires_backend("vault>=1.16")
 def test_version_pinned_update_changes(vault_plugin, auth_plugin, testmode):
     ret = vault_plugin.version_pinned(
         auth_plugin["name"],
@@ -478,6 +478,7 @@ def test_version_pinned_update_changes(vault_plugin, auth_plugin, testmode):
     ),
     indirect=True,
 )
+@pytest.mark.requires_backend("vault>=1.16")
 def test_version_pinned_ok(vault_plugin, auth_plugin, testmode):
     ret = vault_plugin.version_pinned(
         auth_plugin["name"],
@@ -509,6 +510,7 @@ def test_version_pinned_ok(vault_plugin, auth_plugin, testmode):
     ),
     indirect=True,
 )
+@pytest.mark.requires_backend("vault>=1.16")
 def test_version_unpinned_changes(vault_plugin, auth_plugin, testmode):
     ret = vault_plugin.version_unpinned(
         auth_plugin["name"],

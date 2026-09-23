@@ -1067,25 +1067,40 @@ def test_root_issuer_managed_url_config_denied(vault_pki, root_ca_args):
         {
             "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
         },
-        {
-            "crl_distribution_points": [
-                "https://crl1.root.ca",
-                "https://crl2.root.ca",
-            ],  # required on OpenBao
-            "delta_crl_distribution_points": [
-                "https://deltacrl1.root.ca",
-                "https://deltacrl2.root.ca",
-            ],
-        },
-        {
-            "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
-            "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
-            "delta_crl_distribution_points": [
-                "https://deltacrl1.root.ca",
-                "https://deltacrl2.root.ca",
-            ],
-            "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
-        },
+        pytest.param(
+            {
+                "delta_crl_distribution_points": [
+                    "https://deltacrl1.root.ca",
+                    "https://deltacrl2.root.ca",
+                ],
+            },
+            marks=pytest.mark.requires_backend("vault>=1.20"),
+        ),
+        pytest.param(
+            {
+                "crl_distribution_points": [  # required on OpenBao
+                    "https://crl1.root.ca",
+                    "https://crl2.root.ca",
+                ],
+                "delta_crl_distribution_points": [
+                    "https://deltacrl1.root.ca",
+                    "https://deltacrl2.root.ca",
+                ],
+            },
+            marks=pytest.mark.requires_backend("vault>=1.20", "openbao"),
+        ),
+        pytest.param(
+            {
+                "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
+                "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
+                "delta_crl_distribution_points": [
+                    "https://deltacrl1.root.ca",
+                    "https://deltacrl2.root.ca",
+                ],
+                "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
+            },
+            marks=pytest.mark.requires_backend("vault>=1.20", "openbao"),
+        ),
     ),
     indirect=True,
 )
@@ -1127,10 +1142,6 @@ def test_root_issuer_managed_changes_aia(
             "changed",
         )
     elif "delta_crl_distribution_points" in aia_urls:
-        if not (container.is_openbao() or container.is_latest()):
-            pytest.skip("delta_crl_distribution_points requires Vault 2.0+ or OpenBao")
-        elif container.is_openbao() and "crl_distribution_points" not in aia_urls:
-            pytest.skip("delta_crl_distribution_points requires crl_distribution_points on OpenBao")
         _, exp, act = (
             aia_urls["delta_crl_distribution_points"].append("https://crl3.root.ca"),
             {"freshestCRL"},

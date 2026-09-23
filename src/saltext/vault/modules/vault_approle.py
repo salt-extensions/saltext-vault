@@ -205,7 +205,7 @@ def write(
 
     alias_metadata
         .. important::
-            Only available on Vault, not OpenBao.
+            Requires Vault 2.0+.
 
         Map of arbitrary string to arbitrary string that pre-populates the custom metadata
         of new entity aliases created at login.

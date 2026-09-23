@@ -79,6 +79,7 @@ def test_list_detailed(vault_plugin, auth_plugin, db_plugin, secret_plugin):
     ),
     indirect=True,
 )
+@pytest.mark.requires_backend("vault>=1.16")
 def test_list_pins(vault_plugin, plugins_pinned, db_plugin, secret_plugin):
     # Just basic testing for wrapper
     res = vault_plugin.list_pins()
@@ -104,9 +105,8 @@ def test_list_pins(vault_plugin, plugins_pinned, db_plugin, secret_plugin):
     ),
     indirect=True,
 )
-def test_pin(vault_plugin, secret_plugin, db_plugin, container):
-    if not container.is_vault_latest():
-        pytest.skip("Pins are only supported on recent Vault versions")
+@pytest.mark.requires_backend("vault>=1.16")
+def test_pin(vault_plugin, secret_plugin, db_plugin):
     res = vault_plugin.pin("secret", secret_plugin["name"], version="9.2.3")
     assert res is True
     assert vault_plugin_show_pin("secret", secret_plugin["name"]) == "v9.2.3"
@@ -140,6 +140,7 @@ def test_pin(vault_plugin, secret_plugin, db_plugin, container):
     ),
     indirect=True,
 )
+@pytest.mark.requires_backend("vault>=1.16")
 def test_unpin(vault_plugin, secret_plugin, db_plugin):
     res = vault_plugin.unpin("secret", secret_plugin["name"])
     assert res is True
@@ -192,6 +193,7 @@ def test_get_config_without_version(vault_plugin, auth_plugin, db_plugin):
     ),
     indirect=True,
 )
+@pytest.mark.requires_backend("vault>=1.16")
 def test_get_config_without_version_but_pin(vault_plugin, db_plugin):
     res = vault_plugin.get_config("database", db_plugin["name"])
     expected = vault_plugin_read("database", db_plugin["name"], "9.1.0")
@@ -249,9 +251,8 @@ def test_plugin_deregister(vault_plugin, secret_plugin):
     assert vault_plugin_read(**secret_plugin, _nofail=True) is False
 
 
-def test_reload(vault_plugin, container):
-    if not container.is_vault_latest():
-        pytest.skip("API is only available on recent Vault versions")
+@pytest.mark.requires_backend("vault>=1.16")
+def test_reload(vault_plugin):
     res = vault_plugin.reload("auth", "approle", globally=True)
     assert res
     assert isinstance(res, str)

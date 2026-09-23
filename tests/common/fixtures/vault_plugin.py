@@ -93,9 +93,9 @@ def plugins_registered(request):
 
 
 @pytest.fixture
-def plugins_pinned(plugins_registered, request, container):  # pylint: disable=unused-argument
-    if not container.is_vault_latest():
-        pytest.skip("Pins are only supported on recent Vault versions")
+def plugins_pinned(plugins_registered, request):  # pylint: disable=unused-argument
+    # Requires Vault >= 1.16, ensure tests are marked with
+    # @pytest.mark.requires_backend("vault>=1.16")
     for fixture, pinned in request.param.items():
         plugin_def = request.getfixturevalue(fixture)
         vault_plugin_pin(plugin_def["plugin_type"], plugin_def["name"], version=pinned)
