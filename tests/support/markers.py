@@ -16,8 +16,6 @@ any of its hook methods::
 """
 
 import contextlib
-import operator
-import re
 import typing
 from collections.abc import Callable
 from dataclasses import KW_ONLY
@@ -326,44 +324,17 @@ class SuiteMarker(KindMarker):
         self._validate_options(config)
 
 
-# Regex for `name`, `name>=2` etc.
-_CONTAINER_SPEC_RE = re.compile(
-    r"^(?P<name>[a-z][a-z0-9_-]*)\s*(?:(?P<op>>=|<=|>|<)\s*(?P<ver>\d+(?:\.\d+)*))?$"
-)
-# Regex for `>=2` etc.
-_CONTAINER_VERSION_SPEC_RE = re.compile(r"^(?P<op>>=|<=|>|<)?\s*(?P<ver>\d+(?:\.\d+)*)$")
-_CONTAINER_SPEC_OPS = {
-    ">=": operator.ge,
-    "<=": operator.le,
-    ">": operator.gt,
-    "<": operator.lt,
-}
-_CONTAINER_SPEC_LOWER_BOUND_OPS = (">=", ">")
-
-
-def _version_tuple(version: str) -> tuple[int, ...]:
-    parts = tuple(int(part) for part in version.split("."))
-    # Strip trailing zeros to make tuple comparisons well-behaved
-    # (e.g. min 1.15 vs tag 1.15.0 and vice versa).
-    while parts and parts[-1] == 0:
-        parts = parts[:-1]
-    return parts
-
-
 @dataclass
 class ContainerMarker(Marker):
     """
     A mark declaring that a test requires a specific testing container.
 
-    With ``allowed_names``, it takes one or more specs of the form
-    ``<container name>`` or ``<container name><op><version>`` with ops
-    ``>=``, ``>``, ``<=``, ``<``, e.g. ``vault>=1.15`` or ``openbao<2.1``.
-    Without, specs are pure version constraints, where the op defaults
-    to ``>=``, e.g. ``<2.1``, ``>=12.0`` or just ``12``.
+    It takes one or more container specs, whose format is described in
+    ``ContainerImage.matches``, e.g. ``vault>=1.15`` or ``openbao<2.1``
+    (with ``allowed_names``) or ``>=12.0`` (without).
     A test runs if the container it is parametrized with satisfies at
     least one spec. Non-matching parametrizations are deselected during
-    collection. Non-numeric tags like ``latest`` are assumed to be the
-    newest version: they satisfy lower bounds, but never upper bounds.
+    collection.
 
     Items without corresponding container parametrization are unaffected.
 
@@ -377,8 +348,9 @@ class ContainerMarker(Marker):
 
     image_cls
         The class representing the fixture's parameters. Parameters are
-        expected to be instances of it (with ``name``/``tag`` attributes)
-        or strings parseable via its ``from_str`` classmethod.
+        expected to be instances of it or strings parseable via its
+        ``from_str`` classmethod. Matching is delegated to its ``matches``
+        method.
     """
 
     fixture_name: str = field(kw_only=True)
@@ -399,60 +371,18 @@ class ContainerMarker(Marker):
             )
 
     def _satisfied(self, item: pytest.Item, marker: pytest.Mark) -> bool:
-        specs = self._parse_marker(marker)
-        image = self._container_image(item)
-        if image is None:
-            return True
-        container = None
-        if self.allowed_names is not None:
-            container = next((name for name in self.allowed_names if name in image.name), None)
-        for spec_container, op, bound in specs:
-            if spec_container is not None and container != spec_container:
-                continue
-            if op is None or bound is None:
-                return True
-            try:
-                version = _version_tuple(image.tag)
-            except ValueError:
-                # Non-numeric tags like `latest` are assumed to be the newest
-                # version: they satisfy lower bounds, but never upper bounds.
-                if op in _CONTAINER_SPEC_LOWER_BOUND_OPS:
-                    return True
-                continue
-            if _CONTAINER_SPEC_OPS[op](version, bound):
-                return True
-        return False
-
-    def _parse_marker(
-        self, marker: pytest.Mark
-    ) -> list[tuple[str | None, str | None, tuple[int, ...] | None]]:
         if not marker.args or marker.kwargs:
             raise pytest.UsageError(
                 f"The '{self.name}' marker requires at least one "
                 "positional container spec and no keyword arguments"
             )
-        specs = []
-        for spec in marker.args:
-            if self.allowed_names is None:
-                match = isinstance(spec, str) and _CONTAINER_VERSION_SPEC_RE.match(spec.strip())
-                if not match:
-                    raise pytest.UsageError(
-                        f"Invalid container version spec for '{self.name}': '{spec}'"
-                    )
-                specs.append((None, match["op"] or ">=", _version_tuple(match["ver"])))
-                continue
-            match = isinstance(spec, str) and _CONTAINER_SPEC_RE.match(spec.strip())
-            if not match:
-                raise pytest.UsageError(f"Invalid container spec for '{self.name}': '{spec}'")
-            if (container := match["name"]) not in self.allowed_names:
-                raise pytest.UsageError(
-                    f"Unknown container name in spec for '{self.name}': '{spec}'. "
-                    f"Allowed: {', '.join(self.allowed_names)}"
-                )
-            specs.append(
-                (container, match["op"], _version_tuple(match["ver"]) if match["ver"] else None)
-            )
-        return specs
+        image = self._container_image(item)
+        if image is None:
+            return True
+        try:
+            return image.matches(*marker.args, allowed_names=self.allowed_names)
+        except ValueError as err:
+            raise pytest.UsageError(f"Invalid spec for '{self.name}' marker: {err}") from None
 
     def _container_image(self, item: pytest.Item):
         callspec = getattr(item, "callspec", None)

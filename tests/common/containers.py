@@ -1,6 +1,8 @@
 import json
 import logging
+import operator
 import os
+import re
 import subprocess
 import time
 import typing
@@ -8,6 +10,7 @@ from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field
+from typing import ClassVar
 from typing import Literal
 from typing import TypeAlias
 
@@ -65,10 +68,90 @@ def terminate_configured_containers():
             log.warning("Failed to terminate container %s", container, exc_info=True)
 
 
+# Regex for `name`, `name>=2` etc.
+_SPEC_RE = re.compile(
+    r"^(?P<name>[a-z][a-z0-9_-]*)\s*(?:(?P<op>>=|<=|>|<)\s*(?P<ver>\d+(?:\.\d+)*))?$"
+)
+# Regex for `>=2` etc.
+_VERSION_SPEC_RE = re.compile(r"^(?P<op>>=|<=|>|<)?\s*(?P<ver>\d+(?:\.\d+)*)$")
+_SPEC_OPS = {
+    ">=": operator.ge,
+    "<=": operator.le,
+    ">": operator.gt,
+    "<": operator.lt,
+}
+_LOWER_BOUND_OPS = (">=", ">")
+
+
+def _version_tuple(version: str) -> tuple[int, ...]:
+    parts = tuple(int(part) for part in version.split("."))
+    # Strip trailing zeros to make tuple comparisons well-behaved
+    # (e.g. min 1.15 vs tag 1.15.0 and vice versa).
+    while parts and parts[-1] == 0:
+        parts = parts[:-1]
+    return parts
+
+
+def _parse_spec(
+    spec: str, allowed_names: Sequence[str] | None
+) -> tuple[str | None, str | None, tuple[int, ...] | None]:
+    if allowed_names is None:
+        match = isinstance(spec, str) and _VERSION_SPEC_RE.match(spec.strip())
+        if not match:
+            raise ValueError(f"Invalid container version spec: '{spec}'")
+        return None, match["op"] or ">=", _version_tuple(match["ver"])
+    match = isinstance(spec, str) and _SPEC_RE.match(spec.strip())
+    if not match:
+        raise ValueError(f"Invalid container spec: '{spec}'")
+    if (name := match["name"]) not in allowed_names:
+        raise ValueError(
+            f"Unknown container name in spec '{spec}'. Allowed: {', '.join(allowed_names)}"
+        )
+    return name, match["op"], _version_tuple(match["ver"]) if match["ver"] else None
+
+
 @dataclass(kw_only=True, slots=True)
 class ContainerImage:
     name: str
     tag: str
+
+    def matches(self, *specs: str, allowed_names: Sequence[str] | None = None) -> bool:
+        """
+        Whether this image satisfies at least one of the specs.
+
+        With ``allowed_names``, specs are of the form ``<name>`` or
+        ``<name><op><version>`` with ops ``>=``, ``>``, ``<=``, ``<``,
+        e.g. ``vault>=1.20`` or ``openbao``. The image belongs to the
+        first allowed name its image name contains.
+        Without, specs are pure version constraints, where the op
+        defaults to ``>=``, e.g. ``<2.1``, ``>=12.0`` or just ``12``.
+
+        Non-numeric tags like ``latest`` are assumed to be the newest
+        version: they satisfy lower bounds, but never upper bounds.
+        Raises ValueError for invalid specs.
+        """
+        if not specs:
+            raise ValueError("Need at least one container spec")
+        container = None
+        if allowed_names is not None:
+            container = next((name for name in allowed_names if name in self.name), None)
+        for spec in specs:
+            spec_name, op, bound = _parse_spec(spec, allowed_names)
+            if spec_name is not None and container != spec_name:
+                continue
+            if op is None or bound is None:
+                return True
+            try:
+                version = _version_tuple(self.tag)
+            except ValueError:
+                # Non-numeric tags like `latest` are assumed to be the newest
+                # version: they satisfy lower bounds, but never upper bounds.
+                if op in _LOWER_BOUND_OPS:
+                    return True
+                continue
+            if _SPEC_OPS[op](version, bound):
+                return True
+        return False
 
     @classmethod
     def from_str(cls, image: str) -> "ContainerImage":
@@ -131,7 +214,7 @@ def genmarks(
     Generate whole-module ``pytestmark`` contents for functional/integration tests.
     Also ensures the ``docker`` library is available, otherwise skips the tests.
 
-    internal_logic_only
+    internal_logic
         Set this to true to avoid running the test module with multiple containers.
         Should only be used when the tests don't depend on the API (because they test internal logic only).
 
@@ -219,6 +302,10 @@ def genmarks(
 
 @dataclass(kw_only=True, slots=True)
 class Container:
+    # Container names that are valid in `matches` specs, e.g. to account
+    # for forks. None means specs are pure version constraints.
+    SPEC_NAMES: ClassVar[tuple[str, ...] | None] = None
+
     image: ContainerImage
     container: "SFContainer | None" = field(init=False, default=None)
     container_id: str | None = None
@@ -227,6 +314,14 @@ class Container:
     def __post_init__(self):
         if self.container_id is None:
             self.container_id = self._default_container_id()
+
+    def matches(self, *specs: str) -> bool:
+        """
+        Whether the image satisfies at least one of the specs,
+        e.g. ``container.matches("vault>=1.20", "openbao")``.
+        See ``ContainerImage.matches`` for the spec format.
+        """
+        return self.image.matches(*specs, allowed_names=self.SPEC_NAMES)
 
     def configure(self, salt_factories: "FactoriesManager"):
         container = self._configure(salt_factories)
@@ -334,6 +429,8 @@ class Container:
 
 @dataclass(kw_only=True, slots=True, repr=False)
 class VaultContainer(Container):
+    SPEC_NAMES: ClassVar[tuple[str, ...] | None] = ("vault", "openbao")
+
     plugins: "Path | None" = None
     root_token: str = DEFAULT_ROOT_TOKEN
     vault_config: Mapping[str, typing.Any] | None = None
@@ -347,12 +444,6 @@ class VaultContainer(Container):
 
     def is_openbao(self) -> bool:
         return "openbao" in self.image.name
-
-    def is_latest(self) -> bool:
-        return self.image.tag == "latest"
-
-    def is_vault_latest(self) -> bool:
-        return not self.is_openbao() and self.is_latest()
 
     def after_start(self, container: "SFContainer"):
         # super() is broken in slots dataclasses on Python < 3.12 (gh-90562),

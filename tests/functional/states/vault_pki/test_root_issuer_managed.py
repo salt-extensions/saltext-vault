@@ -1,4 +1,4 @@
-# pylint: disable=too-many-lines
+
 """
 Tests for the root_issuer_managed state.
 """
@@ -102,7 +102,7 @@ def test_root_issuer_managed_create(
     if aia_urls.get("crl_distribution_points"):
         cert.extensions.get_extension_for_class(cx509.CRLDistributionPoints)
     if aia_urls.get("delta_crl_distribution_points"):
-        if container.is_vault_latest() or (
+        if container.matches("vault>=1.20") or (
             container.is_openbao() and aia_urls.get("crl_distribution_points")
         ):
             cert.extensions.get_extension_for_class(cx509.FreshestCRL)
@@ -145,7 +145,7 @@ def test_root_issuer_managed_issuer_changes(vault_pki, root_ca_args, testmode, c
         "added": issuer_params["crl_endpoints"],
         "removed": [],
     }
-    if container.is_openbao() or container.is_latest():
+    if container.matches("vault>=1.20", "openbao"):
         assert issuer_changes["delta_crl_endpoints"] == {
             "added": issuer_params["delta_crl_endpoints"],
             "removed": [],
@@ -164,7 +164,7 @@ def test_root_issuer_managed_issuer_changes(vault_pki, root_ca_args, testmode, c
     ) is testmode
     assert (issuer_info["issuing_certificates"] != [issuer_params["aia_urls"]]) is testmode
     assert (issuer_info["crl_distribution_points"] != issuer_params["crl_endpoints"]) is testmode
-    if container.is_openbao() or container.is_latest():
+    if container.matches("vault>=1.20", "openbao"):
         assert (
             issuer_info["delta_crl_distribution_points"] != issuer_params["delta_crl_endpoints"]
         ) is testmode
@@ -426,7 +426,7 @@ def test_root_issuer_managed_rotation_preserves_all_issuer_config_and_reports_im
     indirect=True,
 )
 def test_root_issuer_managed_rotation_reports_recovery_failure_changes(
-    vault_pki, root_ca_args, existing_root
+    vault_pki, root_ca_args, existing_root, container
 ):
     """
     When we try to recover unspecified, but customized issuer config and fail, we report
@@ -456,7 +456,7 @@ def test_root_issuer_managed_rotation_reports_recovery_failure_changes(
         "ocsp_servers": {"removed": ["https://ocsp.example.com"], "added": []},
         "usage": {"added": ["ocsp-signing"], "removed": []},
     }
-    if "delta_crl_endpoints" not in root_ca_args:
+    if not container.matches("vault>=1.20", "openbao"):
         exp_changes.pop("delta_crl_endpoints")
     assert ret.changes["issuer"] == exp_changes
 
@@ -615,7 +615,7 @@ def test_root_issuer_managed_ok(vault_pki, root_ca_args, testmode, container):
     sans = cert.extensions.get_extension_for_class(cx509.SubjectAlternativeName)
     assert len(sans.value._general_names._general_names) == 4  # cn is excluded
     nc = cert.extensions.get_extension_for_class(cx509.NameConstraints)
-    if container.is_vault_latest():
+    if container.matches("vault>=1.19"):
         assert len(nc.value.permitted_subtrees) == 5
         assert len(nc.value.excluded_subtrees) == 5
     else:
@@ -680,7 +680,7 @@ def test_root_issuer_managed_changes(
     assert basic_constraints.value.ca is True
     assert basic_constraints.value.path_length == 2
     nc = cert.extensions.get_extension_for_class(cx509.NameConstraints)
-    if container.is_vault_latest():
+    if container.matches("vault>=1.19"):
         assert len(nc.value.permitted_subtrees) == 6
         assert len(nc.value.excluded_subtrees) == 5
     else:
@@ -782,7 +782,7 @@ def test_root_issuer_managed_changes(
         assert key_usage.value.key_cert_sign
         assert not key_usage.value.digital_signature
     nc = new_cert.extensions.get_extension_for_class(cx509.NameConstraints)
-    if container.is_vault_latest():
+    if container.matches("vault>=1.19"):
         assert len(nc.value.permitted_subtrees) == 5
         assert len(nc.value.excluded_subtrees) == 4
     else:
@@ -1126,7 +1126,7 @@ def test_root_issuer_managed_changes_aia(
             {"authorityInfoAccess", "cRLDistributionPoints", "freshestCRL"},
             "removed",
         )
-        if not (container.is_openbao() or container.is_latest()):
+        if not container.matches("vault>=1.20", "openbao"):
             aia_urls.pop("delta_crl_distribution_points")
             exp.remove("freshestCRL")
     elif "issuing_certificates" in aia_urls:

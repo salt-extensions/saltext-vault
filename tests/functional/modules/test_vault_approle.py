@@ -78,7 +78,7 @@ def test_write(vault_approle, approle_auth, container):
         "token_type": "service",
     }
     expected = args.copy()
-    if container.is_vault_latest():
+    if container.matches("vault>=2"):
         args["alias_metadata"] = {"foo": "bar"}
         expected["alias_metadata"] = {"foo": "bar"}
     elif container.is_openbao():

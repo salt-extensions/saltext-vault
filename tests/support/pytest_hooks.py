@@ -20,6 +20,7 @@ import pytest
 from tests.common import REPO_ROOT
 from tests.common import SALT_VERSION
 from tests.common import TESTS_DIR_REL
+from tests.common.containers import VaultContainer
 from tests.common.containers import terminate_configured_containers
 from tests.support.files_mapping import CHANGED_FILES_MAP
 from tests.support.markers import ContainerMarker
@@ -50,7 +51,7 @@ markers.add(
     ContainerMarker(
         "requires_backend",
         fixture_name="container",
-        allowed_names=("vault", "openbao"),
+        allowed_names=VaultContainer.SPEC_NAMES,
         signature="(*specs)",
         desc="mark test to only run against containers matching at least one spec, "
         "e.g. 'vault>=1.15' or 'openbao'. Non-matching parametrizations are deselected.",

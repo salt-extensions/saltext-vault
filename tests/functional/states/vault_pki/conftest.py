@@ -135,7 +135,7 @@ def existing_intermediate(
 ):  # pylint: disable=unused-argument
     int_ca_args.update(getattr(request, "param", {}))
     if int_ca_args.get("issuer_ref"):
-        if not container.is_vault_latest():
+        if not container.matches("vault>=1.19"):
             if "excluded_alt_names" in int_ca_args or any(
                 not val.lower().startswith("dns")
                 for val in int_ca_args.get("permitted_alt_names", [])
@@ -147,13 +147,9 @@ def existing_intermediate(
                         for val in int_ca_args["permitted_alt_names"]
                         if val.lower().startswith("dns")
                     ]
-        if not container.is_openbao() and not container.is_latest():
+        if not container.matches("vault>=1.20", "openbao"):
             int_ca_args.pop("key_usage", None)
-    if (
-        "delta_crl_endpoints" in int_ca_args
-        and not container.is_openbao()
-        and not container.is_latest()
-    ):
+    if "delta_crl_endpoints" in int_ca_args and not container.matches("vault>=1.20", "openbao"):
         int_ca_args.pop("delta_crl_endpoints")
     ret = vault_pki.intermediate_issuer_managed(**int_ca_args)
     assert ret.result is True
@@ -185,7 +181,7 @@ def existing_root(
     if "excluded_alt_names" in root_ca_args or any(
         not val.lower().startswith("dns") for val in root_ca_args.get("permitted_alt_names", [])
     ):
-        if not container.is_vault_latest():
+        if not container.matches("vault>=1.19"):
             root_ca_args.pop("excluded_alt_names", None)
             if "permitted_alt_names" in root_ca_args:
                 root_ca_args["permitted_alt_names"] = [
@@ -194,10 +190,8 @@ def existing_root(
                     if val.lower().startswith("dns")
                 ]
     if (
-        "delta_crl_endpoints" in root_ca_args
-        or "key_usage" in root_ca_args
-        and (not container.is_openbao() and not container.is_latest())
-    ):
+        "delta_crl_endpoints" in root_ca_args or "key_usage" in root_ca_args
+    ) and not container.matches("vault>=1.20", "openbao"):
         root_ca_args.pop("delta_crl_endpoints", None)
         root_ca_args.pop("key_usage", None)
     ret = vault_pki.root_issuer_managed(**root_ca_args)

@@ -98,14 +98,14 @@ def test_intermediate_issuer_managed_create(vault_pki, int_ca_args, testmode):
                 "email:test@root.ca",
             ],
             "key_usage": ["DigitalSignature"],
-            "permitted_alt_names": [  # types other than dns require Vault 1.19+, filtered in existing_root
+            "permitted_alt_names": [  # types other than dns require Vault 1.19+, filtered in existing_intermediate
                 "dns:.foo.bar",
                 "email:.foo.bar",
                 "ip:0.0.0.0/1",
                 "ip:2001:500::/30",
                 "uri:.bar.baz",
             ],
-            "excluded_alt_names": [  # requires Vault 1.19+, also filtered in existing_root
+            "excluded_alt_names": [  # requires Vault 1.19+, also filtered in existing_intermediate
                 "dns:no.foo.bar",
                 "email:no.foo.bar",
                 "ip:0.0.0.0/24",
@@ -142,7 +142,7 @@ def test_intermediate_issuer_managed_ok(vault_pki, int_ca_args, container):
     ku = cert.extensions.get_extension_for_class(cx509.KeyUsage)
     assert ku.critical is True
     assert ku.value.digital_signature is (
-        "signing_cert" in int_ca_args or container.is_openbao() or container.is_latest()
+        "signing_cert" in int_ca_args or container.matches("vault>=1.20", "openbao")
     )
     assert ku.value.crl_sign is True
     assert ku.value.key_cert_sign is True
@@ -268,7 +268,7 @@ def test_intermediate_issuer_managed_issuance_error_reported_early(
     ``err`` requested), ensure the state fails early if the requested validity
     exceeds the issuer's expiry, even in test mode.
     """
-    if container.is_vault_latest():
+    if container.matches("vault>=1.18.2"):
         vault_write(
             "pki/issuer/root", issuer_name="root", leaf_not_after_behavior="always_enforce_err"
         )
@@ -452,7 +452,7 @@ def test_intermediate_issuer_managed_issuer_changes(vault_pki, int_ca_args, test
         "added": issuer_params["crl_endpoints"],
         "removed": [],
     }
-    if container.is_openbao() or container.is_latest():
+    if container.matches("vault>=1.20", "openbao"):
         assert issuer_changes["delta_crl_endpoints"] == {
             "added": issuer_params["delta_crl_endpoints"],
             "removed": [],
@@ -471,7 +471,7 @@ def test_intermediate_issuer_managed_issuer_changes(vault_pki, int_ca_args, test
     ) is testmode
     assert (issuer_info["issuing_certificates"] != [issuer_params["aia_urls"]]) is testmode
     assert (issuer_info["crl_distribution_points"] != issuer_params["crl_endpoints"]) is testmode
-    if container.is_openbao() or container.is_latest():
+    if container.matches("vault>=1.20", "openbao"):
         assert (
             issuer_info["delta_crl_distribution_points"] != issuer_params["delta_crl_endpoints"]
         ) is testmode
