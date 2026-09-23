@@ -88,7 +88,7 @@ def load_map():
 
 def resolve(cfm, file):
     """
-    Mirror the resolution logic in ``run_changed_files`` (tests/conftest.py).
+    Mirror the resolution logic in ``run_changed_files`` (tests/support/pytest_hooks.py).
     """
     for ptrn, maps in cfm:
         if not isinstance(ptrn, str):
