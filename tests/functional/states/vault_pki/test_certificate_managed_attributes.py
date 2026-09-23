@@ -1,4 +1,3 @@
-# pylint: disable=too-many-lines
 """
 Tests for the (ca_)certificate_managed states:
 certificate contents (subject, SANs, extensions, AIA URLs, sign-verbatim).
@@ -807,8 +806,10 @@ def test_certificate_managed_urls(cert_typ, issuer_setup, aia_urls, container):
 
     if issuer_first_configured:
         exp_aia["removed"]["caIssuers"] = ["URI:https://one.root.ca", "URI:https://two.root.ca"]
-        # delta_crl_distribution_points requires recent releases, not present in 1.14.8
-        assert ("freshestCRL" in ret.changes["extensions"]["removed"]) is (container.is_latest())
+        # delta_crl_distribution_points requires Vault 1.20+/OpenBao, not present in 1.14.8
+        assert ("freshestCRL" in ret.changes["extensions"]["removed"]) is (
+            container.matches("vault>=1.20", "openbao")
+        )
     else:
         assert "freshestCRL" not in ret.changes["extensions"]["removed"]
     assert ret.changes["extensions"]["changed"]["authorityInfoAccess"]["value"] == exp_aia
@@ -1224,7 +1225,7 @@ def test_ca_certificate_managed_name_constraints(vault_pki, ca_cert_args, contai
     csr = "csr" in call_type
     verbatim = "verbatim" in call_type
     ca_cert_args["permitted_alt_names"] = ["dns:.foo.bar"]
-    if has_all_constraints := container.is_vault_latest():
+    if has_all_constraints := container.matches("vault>=1.19"):
         ca_cert_args["permitted_alt_names"].extend(
             ["email:.email.foo.bar", "ip:0.0.0.0/1", "uri:.uri.foo.bar"]
         )

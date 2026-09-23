@@ -108,7 +108,7 @@ def clean_plugins(container):
         yield
     finally:
         for plugin in vault_plugin_list(lambda x: not x["builtin"]):
-            if container.is_vault_latest() and vault_plugin_show_pin(
+            if container.matches("vault>=1.16") and vault_plugin_show_pin(
                 plugin["type"], plugin["name"]
             ):
                 vault_plugin_unpin(plugin["type"], plugin["name"])

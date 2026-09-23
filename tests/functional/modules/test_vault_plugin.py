@@ -405,10 +405,9 @@ def test_get_config_with_version(vault_plugin, auth_plugin, db_plugin, secret_pl
     # Explicit unversioned failure for versioned
     # Note: This does not test the special case where only a single version is registered,
     # which started to matter in Vault 2.1.0+. It's still tested by the state module tests though.
-    is_vault_latest = container.is_vault_latest()
     with pytest.raises(
         CommandExecutionError,
-        match="VaultNotFound" if not is_vault_latest else "VaultInvocationError",
+        match="VaultNotFound" if not container.matches("vault>=2.1.0") else "VaultInvocationError",
     ):
         vault_plugin.get_config("database", db_plugin["name"], version="")
 
@@ -583,8 +582,9 @@ def test_reload_named(vault_plugin, auth_plugin, container):
     assert res
     assert isinstance(res, str)
     res = vault_plugin.reload_named("nonexistent-plugin")
-    if container.is_openbao() or container.is_latest():
-        # old Vault versions don't check for affected mounts
+    if container.matches("vault>=1.16", "openbao"):
+        # Old Vault versions don't check for affected mounts.
+        # Note: Don't know the exact version constraint on Vault.
         assert res is False
 
 

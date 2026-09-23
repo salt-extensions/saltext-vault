@@ -110,7 +110,7 @@ def test_ca_certificate_managed_issuance_error_reported_early(
     ``err`` requested), ensure the state fails early if the requested validity
     exceeds the issuer's expiry, even in test mode.
     """
-    if container.is_vault_latest():
+    if container.matches("vault>=1.18.2"):
         vault_write(
             "pki/issuer/root", issuer_name="root", leaf_not_after_behavior="always_enforce_err"
         )

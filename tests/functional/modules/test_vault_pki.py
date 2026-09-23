@@ -534,7 +534,7 @@ def test_sign_intermediate(vault_pki, private_key, container, call_type):
             "excluded": excluded_alt_names,
         }
     else:
-        if container.is_openbao() or container.is_latest():
+        if container.matches("vault>=1.20", "openbao"):
             key_usage = "DigitalSignature"
         call_args = {
             "common_name": "bar.example.com",
@@ -618,7 +618,7 @@ def test_sign_intermediate(vault_pki, private_key, container, call_type):
     pst = nc.value.permitted_subtrees or []
     pst_vals = [str(gn.value) for gn in pst]
     assert ".example.com" in pst_vals
-    if sign_verbatim or container.is_vault_latest():
+    if sign_verbatim or container.matches("vault>=1.19"):
         assert len(pst) == 4
         assert ".uri.example.com" in pst_vals
         assert "example.com" in pst_vals
@@ -627,7 +627,7 @@ def test_sign_intermediate(vault_pki, private_key, container, call_type):
         assert len(pst) == 1
 
     est = nc.value.excluded_subtrees
-    if sign_verbatim or container.is_vault_latest():
+    if sign_verbatim or container.matches("vault>=1.19"):
         assert est is not None
         assert len(est) == 4
         est_vals = [str(gn.value) for gn in est]
