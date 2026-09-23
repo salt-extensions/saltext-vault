@@ -1108,9 +1108,8 @@ def test_certificate_managed_key_usage(vault_pki, cert_args, testmode, roles_set
 @pytest.mark.parametrize(
     "call_type", ("pk", "pk_verbatim", "pk_verbatim_kwargs", "csr", "csr_verbatim")
 )
-def test_ca_certificate_managed_key_usage(vault_pki, ca_cert_args, call_type, container):
-    if not (container.is_openbao() or container.is_latest()):
-        pytest.skip("key_usage requires Vault 1.20/OpenBao")
+@pytest.mark.requires_backend("vault>=1.20", "openbao")
+def test_ca_certificate_managed_key_usage(vault_pki, ca_cert_args, call_type):
     csr = "csr" in call_type
     verbatim = "verbatim" in call_type
     # Ensure we recognize the extension being changed

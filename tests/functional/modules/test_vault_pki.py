@@ -773,9 +773,8 @@ def test_update_issuer_name_and_templating(vault_pki, issuer_setup):
 
 
 @pytest.mark.usefixtures("issuer_setup")
+@pytest.mark.requires_backend("vault>=1.20", "openbao")
 def test_update_issuer_delta_crl_endpoints(vault_pki):
-    if "delta_crl_distribution_points" not in vault_pki.read_issuer("root"):
-        pytest.skip("Server does not support delta CRL distribution points on issuers")
     # The delta CRL endpoints are stored alongside the other AIA URLs,
     # they do not stick when patched without any of them set.
     assert (
@@ -1304,9 +1303,8 @@ def test_write_urls(vault_pki):
         )
 
 
+@pytest.mark.requires_backend("vault>=1.20", "openbao")
 def test_write_urls_delta_crl_endpoints(vault_pki):
-    if "delta_crl_distribution_points" not in vault_read("pki/config/urls")["data"]:
-        pytest.skip("Server does not support delta CRL distribution points in the URL config")
     try:
         assert vault_pki.write_urls(delta_crl_endpoints=["http://crl.example.com/delta.crl"])
         data = vault_read("pki/config/urls")["data"]

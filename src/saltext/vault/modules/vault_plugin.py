@@ -625,7 +625,7 @@ def reload(plugin_type, name, globally=False):
     respecting a potentially modified pin.
 
     .. note::
-        Only available on Vault.
+        Requires Vault 1.16+.
 
     .. note::
         Must be run inside the root namespace.
