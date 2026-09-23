@@ -22,41 +22,68 @@ from tests.common import SALT_VERSION
 from tests.common import TESTS_DIR_REL
 from tests.common.containers import terminate_configured_containers
 from tests.support.files_mapping import CHANGED_FILES_MAP
+from tests.support.markers import ContainerMarker
+from tests.support.markers import KindMarker
+from tests.support.markers import SkipMarker
+from tests.support.markers import SuiteMarker
+from tests.support.markers import apply_selection
+from tests.support.markers import markers
+from tests.support.markers import reporter_section
+
+
+def _check_requires_salt(major, minor=0):
+    if (int(major), int(minor)) > SALT_VERSION:
+        return f"Requires at least Salt {major}.{minor}"
+    return None
+
+
+# Select specific kinds of tests, alternative to passing the path.
+for _suite, _subdir in (("unit", "unit"), ("func", "functional"), ("int", "integration")):
+    markers.add(
+        SuiteMarker(
+            _suite, group="suite", display_name=_subdir, path=REPO_ROOT / TESTS_DIR_REL / _subdir
+        )
+    )
+
+
+markers.add(
+    ContainerMarker(
+        "requires_backend",
+        fixture_name="container",
+        allowed_names=("vault", "openbao"),
+        signature="(*specs)",
+        desc="mark test to only run against containers matching at least one spec, "
+        "e.g. 'vault>=1.15' or 'openbao'. Non-matching parametrizations are deselected.",
+    )
+)
+markers.add(
+    SkipMarker(
+        "requires_salt",
+        check=_check_requires_salt,
+        signature="(major, minor?)",
+        desc="mark test to only run on Salt versions equal to or higher than <major>.<minor or 0>",
+    )
+)
+markers.add(
+    KindMarker(
+        "behavior",
+        default_skip=True,
+        desc="mark test as validating assumptions about external (Vault/OpenBao) server behavior.",
+    )
+)
 
 
 def pytest_configure(config):
-    config.addinivalue_line(
-        "markers",
-        "requires_salt(major, minor?): mark test to only run on Salt versions equal to or higher than <major>.<minor or 0>",
-    )
-    config.addinivalue_line(
-        "markers",
-        "behavior: mark test as validating assumptions about external (Vault/OpenBao) "
-        "server behavior. Skipped unless --behavior-tests is passed.",
-    )
+    markers.configure(config)
 
 
 def pytest_runtest_setup(item):
-    if item.get_closest_marker("behavior") is not None and not item.config.getoption(
-        "--behavior-tests"
-    ):
-        pytest.skip(reason="Too specific and costly test. Run with --behavior-tests")
-
-    requires_salt_marker = item.get_closest_marker("requires_salt")
-    if requires_salt_marker is not None:
-        if len(requires_salt_marker.args) not in (1, 2) or requires_salt_marker.kwargs:
-            raise pytest.UsageError(
-                "The 'requires_salt' marker only accepts one or two positional arguments"
-            )
-        try:
-            major, minor = int(requires_salt_marker.args[0]), int(requires_salt_marker.args[1])
-        except IndexError:
-            major, minor = int(requires_salt_marker.args[0]), 0
-        if (major, minor) > SALT_VERSION:
-            pytest.skip(reason=f"Requires at least Salt {major}.{minor}")
+    markers.runtest_setup(item)
 
 
 def pytest_addoption(parser):
+    markers.addoption(parser)
+
     test_selection_group = parser.getgroup("Tests Selection")
     test_selection_group.addoption(
         "--changed-files",
@@ -74,14 +101,6 @@ def pytest_addoption(parser):
         help=("Only run modified test files"),
     )
 
-    test_selection_group.addoption(
-        "--behavior-tests",
-        dest="behavior_tests",
-        action="store_true",
-        default=False,
-        help=("Only run tests that validate assumptions about external server behavior"),
-    )
-
     custom_exit = parser.getgroup("Custom Exit Code")
     custom_exit.addoption(
         "--allow-empty-runs",
@@ -96,61 +115,27 @@ def pytest_collection_modifyitems(config, items):
     yield
     run_changed_files(config, items)
     run_changed_tests(config, items)
-    run_behavior_tests(config, items)
-
-
-def run_behavior_tests(config, items):
-    if not config.getoption("--behavior-tests"):
-        return
-    terminal_reporter = config.pluginmanager.getplugin("terminalreporter")
-    terminal_reporter.ensure_newline()
-    terminal_reporter.section("Behavior Tests Selection (--behavior-tests)", sep=">")
-
-    selected = []
-    deselected = []
-
-    for item in items:
-        if item.get_closest_marker("behavior") is not None:
-            selected.append(item)
-        else:
-            deselected.append(item)
-
-    items[:] = selected
-    if deselected:
-        config.hook.pytest_deselected(items=deselected)
-    terminal_reporter.section("Behavior Tests Selection End (--behavior-tests)", sep="<")
+    markers.collection_modifyitems(config, items)
 
 
 def run_changed_tests(config, items):
     if not config.getoption("--changed-tests"):
         return
-    terminal_reporter = config.pluginmanager.getplugin("terminalreporter")
-    terminal_reporter.ensure_newline()
-    terminal_reporter.section("Changed Tests Selection (--changed-tests)", sep=">")
 
-    changed = _get_git_modified(terminal_reporter)
-    if changed is None:
-        return
-
-    selected = []
-    deselected = []
-
-    for item in items:
+    def _predicate(item):
         itempath = Path(str(item.fspath)).resolve().relative_to(REPO_ROOT)
-        if (
+        return (
             str(itempath) in changed
             and itempath.is_relative_to(TESTS_DIR_REL)
             and itempath.suffix == ".py"
             and itempath.stem != "conftest"
-        ):
-            selected.append(item)
-        else:
-            deselected.append(item)
+        )
 
-    items[:] = selected
-    if deselected:
-        config.hook.pytest_deselected(items=deselected)
-    terminal_reporter.section("Changed Tests Selection End (--changed-tests)", sep="<")
+    with reporter_section(config, "Changed Tests Selection (--changed-tests)") as reporter:
+        changed = _get_git_modified(reporter)
+        if changed is None:
+            return
+        apply_selection(config, items, _predicate)
 
 
 def _get_git_modified(terminal_reporter):
@@ -159,7 +144,7 @@ def _get_git_modified(terminal_reporter):
     except subprocess.CalledProcessError as err:
         if terminal_reporter:
             terminal_reporter.write_line(
-                f"Failed to get changed files from git: {err}", bold=True, red=True
+                f"!! Failed to get changed files from git: {err}", bold=True, red=True
             )
             terminal_reporter.write_line(err.stderr)
         return
@@ -170,7 +155,7 @@ def _get_git_modified(terminal_reporter):
     except subprocess.CalledProcessError as err:
         if terminal_reporter:
             terminal_reporter.write_line(
-                f"Failed to get unstaged files from git: {err}", bold=True, red=True
+                f"!! Failed to get unstaged files from git: {err}", bold=True, red=True
             )
             terminal_reporter.write_line(err.stderr)
         return
@@ -179,102 +164,98 @@ def _get_git_modified(terminal_reporter):
     )
 
 
+def _get_ci_modified(terminal_reporter):
+    if changed_files := os.environ.get("CHANGED_FILES"):
+        try:
+            return json.loads(changed_files)
+        except json.JSONDecodeError as err:
+            terminal_reporter.write_line(
+                f"!! Failed to parse CHANGED_FILES env var as JSON: {err}", bold=True, red=True
+            )
+            return None
+
+    if not (changed_files_path := REPO_ROOT / "changed_files.txt").exists():
+        terminal_reporter.write_line(
+            f"!! CHANGED_FILES env var not set, missing file at {changed_files_path}",
+            bold=True,
+            red=True,
+        )
+        return None
+
+    try:
+        return json.loads(changed_files_path.read_text())
+    except json.JSONDecodeError as err:
+        terminal_reporter.write_line(
+            f"!! Failed to parse file contents of {changed_files_path} as JSON: {err}",
+            bold=True,
+            red=True,
+        )
+    except OSError as err:
+        terminal_reporter.write_line(
+            f"!! Failed to read file contents of {changed_files_path}: {err}",
+            bold=True,
+            red=True,
+        )
+    return None
+
+
 def run_changed_files(config, items):
     if not config.getoption("--changed-files"):
         return
-    terminal_reporter = config.pluginmanager.getplugin("terminalreporter")
-    terminal_reporter.ensure_newline()
-    terminal_reporter.section("Changed Files Test Selection (--changed-files)", sep=">")
 
-    if os.environ.get("CI"):
-        if changed_files := os.environ.get("CHANGED_FILES"):
-            try:
-                changed = json.loads(changed_files)
-            except json.JSONDecodeError as err:
-                terminal_reporter.write_line(
-                    f"Failed to parse CHANGED_FILES env var as JSON: {err}", bold=True, red=True
-                )
-                return
-        elif not (changed_files_path := REPO_ROOT / "changed_files.txt").exists():
-            terminal_reporter.write_line(
-                f"CHANGED_FILES env var not set, missing file at {changed_files_path}",
-                bold=True,
-                red=True,
-            )
-            return
+    with reporter_section(config, "Changed Files Test Selection (--changed-files)") as reporter:
+        if os.environ.get("CI"):
+            changed = _get_ci_modified(reporter)
         else:
-            try:
-                changed = json.loads(changed_files_path.read_text())
-            except json.JSONDecodeError as err:
-                terminal_reporter.write_line(
-                    f"Failed to parse file contents of {changed_files_path} as JSON: {err}",
-                    bold=True,
-                    red=True,
-                )
-                return
-            except OSError as err:
-                terminal_reporter.write_line(
-                    f"Failed to read file contents of {changed_files_path}: {err}",
-                    bold=True,
-                    red=True,
-                )
-                return
-    else:
-        changed = _get_git_modified(terminal_reporter)
+            changed = _get_git_modified(reporter)
+
         if changed is None:
             return
 
-    selected_test_globs = set()
+        selected_test_globs = set()
 
-    for file in (Path(f) for f in changed):
-        for ptrn, maps in CHANGED_FILES_MAP:
-            if not isinstance(ptrn, str):
-                if str(file) in ptrn:
-                    selected_test_globs.update(maps)
+        for file in (Path(f) for f in changed):
+            for ptrn, maps in CHANGED_FILES_MAP:
+                if not isinstance(ptrn, str):
+                    if str(file) in ptrn:
+                        selected_test_globs.update(maps)
+                        break
+                elif match := re.match(ptrn, str(file)):
+                    gdict = match.groupdict(default="")
+                    selected_test_globs.update(glob.format(**gdict) for glob in maps)
                     break
-            elif match := re.match(ptrn, str(file)):
-                gdict = match.groupdict(default="")
-                selected_test_globs.update(glob.format(**gdict) for glob in maps)
-                break
+            else:
+                if file.suffix == ".py":
+                    reporter.write_line(f"  No rule for changed file '{file}', skipping")
+            if "*" in selected_test_globs:
+                reporter.write_line(f"  Changed file '{file}' needs full test run", red=True)
+                return
+
+        selected_mods = set()
+        deselected_mods = set()
+
+        def _predicate(item):
+            itempath = Path(str(item.fspath)).resolve().relative_to(REPO_ROOT)
+            if itempath in deselected_mods:
+                return False
+            if itempath not in selected_mods:
+                if not any(fnmatch.fnmatch(itempath, ptrn) for ptrn in selected_test_globs):
+                    deselected_mods.add(itempath)
+                    return False
+                selected_mods.add(itempath)
+            return True
+
+        if deselected := apply_selection(config, items, _predicate):
+            reporter.write_line(
+                f"  Deselected {len(deselected_mods)} mods with {len(deselected)} items",
+                yellow=True,
+            )
+            if os.environ.get("CI"):
+                reporter.write_line("  Deselected mods:", bold=True)
+                for mod in sorted(deselected_mods):
+                    reporter.write_line(f"    * {mod}")
         else:
-            if file.suffix == ".py":
-                terminal_reporter.write_line(f"No rule for changed file '{file}', skipping")
-        if "*" in selected_test_globs:
-            terminal_reporter.write_line(f"Changed file '{file}' needs full test run")
-            return
-
-    selected_mods = set()
-    deselected_mods = set()
-    selected = []
-    deselected = []
-
-    for item in items:
-        itempath = Path(str(item.fspath)).resolve().relative_to(REPO_ROOT)
-        if itempath in selected_mods:
-            selected.append(item)
-        elif itempath in deselected_mods:
-            deselected.append(item)
-        elif any(fnmatch.fnmatch(itempath, ptrn) for ptrn in selected_test_globs):
-            selected.append(item)
-            selected_mods.add(itempath)
-        else:
-            deselected.append(item)
-            deselected_mods.add(itempath)
-
-    items[:] = selected
-    if deselected:
-        config.hook.pytest_deselected(items=deselected)
-        terminal_reporter.write_line(
-            f"Deselected {len(deselected_mods)} mods with {len(deselected)} items"
-        )
-        if os.environ.get("CI"):
-            terminal_reporter.write_line("Deselected mods:", bold=True)
-            for mod in sorted(deselected_mods):
-                terminal_reporter.write_line(f"  * {mod}")
-
-    else:
-        terminal_reporter.write_line("Nothing was deselected")
-    terminal_reporter.section("Changed Files Test Selection End (--changed-files)", sep="<")
+            reporter.write_line("Nothing was deselected")
 
 
 def pytest_keyboard_interrupt(excinfo):  # pylint: disable=unused-argument

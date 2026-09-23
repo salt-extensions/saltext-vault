@@ -1022,8 +1022,8 @@ def test_root_issuer_managed_changes_existing_key(
     ),
     indirect=True,
 )
-@pytest.mark.behavior
-def test_root_issuer_managed_ok_aia(vault_pki, root_ca_args):
+@pytest.mark.behavior_test
+def test_root_issuer_managed_ok_aia(vault_pki, root_ca_args):  # pragma: no cover
     issuer_info = _default_issuer()
     ret = vault_pki.root_issuer_managed(**root_ca_args)
     assert ret.result is True
@@ -1089,8 +1089,10 @@ def test_root_issuer_managed_url_config_denied(vault_pki, root_ca_args):
     ),
     indirect=True,
 )
-@pytest.mark.behavior
-def test_root_issuer_managed_changes_aia(vault_pki, root_ca_args, testmode, aia_urls, container):
+@pytest.mark.behavior_test
+def test_root_issuer_managed_changes_aia(
+    vault_pki, root_ca_args, testmode, aia_urls, container
+):  # pragma: no cover
     exp = act = None
     if not aia_urls:
         aia_urls, exp, act = (
