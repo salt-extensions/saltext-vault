@@ -28,7 +28,6 @@ from tests.common.containers import terminate_configured_containers
 from tests.support.files_mapping import CHANGED_FILES_MAP
 from tests.support.markers import ContainerMarker
 from tests.support.markers import KindMarker
-from tests.support.markers import Marker
 from tests.support.markers import SkipMarker
 from tests.support.markers import SuiteMarker
 from tests.support.markers import apply_selection
@@ -78,7 +77,7 @@ markers.add(
     )
 )
 markers.add(
-    Marker(
+    KindMarker(
         "internal_logic",
         desc="mark test to only run against a single container image (the first target), "
         "e.g. because it only exercises internal logic and does not depend on the API.",
@@ -162,7 +161,7 @@ def pytest_generate_tests(metafunc):
     # the container matrix varies per invocation, unlike static params.
     if "container" in metafunc.fixturenames:
         targets = container_targets(metafunc.config)
-        if metafunc.definition.get_closest_marker("internal_logic") is not None:
+        if metafunc.definition.get_closest_marker("internal_logic_test") is not None:
             targets = targets[:1]
         metafunc.parametrize("container", targets, indirect=True, scope="session")
     _suppress_single_param_ids(metafunc)
