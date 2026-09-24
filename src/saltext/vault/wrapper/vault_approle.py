@@ -18,6 +18,8 @@ from saltext.vault.modules.vault_approle import read
 from saltext.vault.modules.vault_approle import write
 from saltext.vault.utils.functools import namespaced_function
 
+__func_alias__ = {"list_": "list"}
+
 globals_dict = globals()
 
 clear_cached = namespaced_function(clear_cached, globals_dict)
