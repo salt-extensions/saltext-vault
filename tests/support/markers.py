@@ -174,6 +174,7 @@ class KindMarker(Marker):
     own name, i.e. each kind forms its own selection dimension.
 
     A ``display_name`` overrides ``name`` in --help output and skip messages.
+    It defaults to ``name``, but with underscores replaced by spaces.
 
     Membership is determined by ``matches``, which defaults to the presence
     of the mark. Subclasses can derive it differently (see ``SuiteMarker``).
@@ -187,7 +188,7 @@ class KindMarker(Marker):
         if self.group is None:
             self.group = self.name
         if self.display_name is None:
-            self.display_name = self.name
+            self.display_name = self.name.replace("_", " ")
 
     def matches(self, item: pytest.Item) -> bool:
         """
@@ -196,20 +197,24 @@ class KindMarker(Marker):
         return item.get_closest_marker(f"{self.name}_test") is not None
 
     @property
+    def flag_name(self) -> str:
+        return self.name.replace("_", "-")
+
+    @property
     def only_flag(self) -> str:
-        return f"--{self.name}-tests"
+        return f"--{self.flag_name}-tests"
 
     @property
     def include_flag(self) -> str:
         if not self.default_skip:
             raise AttributeError(f"'{self.name}' tests run by default, no include flag")
-        return f"--run-{self.name}"
+        return f"--run-{self.flag_name}"
 
     @property
     def exclude_flag(self) -> str:
         if self.default_skip:
             raise AttributeError(f"'{self.name}' tests are skipped by default, no exclude flag")
-        return f"--no-{self.name}"
+        return f"--no-{self.flag_name}"
 
     def configure(self, config: pytest.Config):
         self._validate_options(config)

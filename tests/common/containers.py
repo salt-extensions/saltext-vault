@@ -211,7 +211,7 @@ def container_targets(config: pytest.Config) -> tuple[ContainerImage, ...]:
 
 require_vault_bin = pytest.mark.skip_if_binaries_missing("vault")
 # Only run the test against a single container image (the first target)
-internal_logic_mark = pytest.mark.internal_logic
+internal_logic_mark = pytest.mark.internal_logic_test
 
 
 FIXTURE_KWARGS = {

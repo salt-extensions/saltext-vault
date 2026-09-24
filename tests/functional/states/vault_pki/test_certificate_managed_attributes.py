@@ -1281,7 +1281,7 @@ def test_ca_certificate_managed_name_constraints(vault_pki, ca_cert_args, contai
 
 
 @pytest.mark.usefixtures("issuer_setup", "roles_setup")
-@pytest.mark.internal_logic
+@pytest.mark.internal_logic_test
 def test_certificate_managed_csr_ignored_warnings(
     vault_pki, cert_args, caplog, testrole, private_key
 ):
