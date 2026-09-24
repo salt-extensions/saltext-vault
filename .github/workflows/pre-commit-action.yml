@@ -8,6 +8,11 @@ on:
         required: true
         type: string
         description: JSON string containing information about changed files
+      use-caches:
+        required: false
+        type: boolean
+        default: true
+        description: Whether dependency caches may be used. Disabled for release builds.
 
 permissions:
   contents: read
@@ -27,6 +32,15 @@ jobs:
           git config --global --add safe.directory "$(pwd)"
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Cache Pre-Commit Environments
+        # Release builds must not use cached environments
+        if: ${{ inputs.use-caches && !startsWith(github.ref, 'refs/tags/') }}
+        # renovate:
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
 
       - name: Install Pre-Commit
         run: |
