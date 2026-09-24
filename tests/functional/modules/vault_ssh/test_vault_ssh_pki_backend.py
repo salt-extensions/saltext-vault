@@ -12,16 +12,9 @@ from tests.support.vault import vault_get_role_id
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write
 
-pytestmark = genmarks("ca_setup", "roles_setup", mounts="ssh", policies="ssh_admin")
-
-
-@pytest.fixture(scope="module", autouse=True)
-def _check_ssh_pki_available(loaders):
-    try:
-        loaders.states.ssh_pki
-    except AttributeError:
-        # Salt < 3008
-        pytest.skip("ssh_pki modules are not available")
+pytestmark = genmarks("ca_setup", "roles_setup", mounts="ssh", policies="ssh_admin") + [
+    pytest.mark.requires_salt(3008)
+]
 
 
 @pytest.fixture(scope="module")

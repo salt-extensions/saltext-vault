@@ -16,17 +16,9 @@ pytestmark = genmarks(
     mounts="ssh",
     policies=True,
     _check_cryptography="40.0",
-)
+) + [pytest.mark.requires_salt(3008)]
 
 log = logging.getLogger(__name__)
-
-
-@pytest.fixture(scope="module", autouse=True)
-def _check_ssh_pki_available(minion):
-    ret = minion.salt_call_cli().run("-d", "ssh_pki.create_private_key")
-    if not ret.stdout:
-        # Salt < 3008
-        pytest.skip("ssh_pki modules are not available")
 
 
 @pytest.fixture(scope="module", autouse=True)
