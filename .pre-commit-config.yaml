@@ -162,4 +162,11 @@ repos:
         language: python
         pass_filenames: false
         files: ^(tests/|src/|noxfile\.py|pyproject\.toml)
+
+      - id: check-wrapper-modules
+        name: Verify SSH wrapper modules mirror execution modules
+        entry: python .pre-commit-hooks/check-wrapper-modules.py
+        language: python
+        pass_filenames: false
+        files: ^src/saltext/vault/(modules|wrapper)/
   # <---- Code Analysis --------------------------------------------------------------------------

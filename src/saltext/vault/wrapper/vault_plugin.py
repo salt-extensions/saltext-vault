@@ -24,6 +24,8 @@ from saltext.vault.modules.vault_plugin import reload_named
 from saltext.vault.modules.vault_plugin import unpin
 from saltext.vault.utils.functools import namespaced_function
 
+__func_alias__ = {"list_": "list"}
+
 globals_dict = globals()
 
 _check_type = namespaced_function(_check_type, globals_dict)
