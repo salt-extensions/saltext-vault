@@ -75,6 +75,10 @@ jobs:
     needs:
       - get_version_tag
     uses: ./.github/workflows/ci.yml
+    with:
+      # Release builds must not use cached environments (redundant with
+      # the tag ref check in the cache steps, but explicit is better)
+      use-caches: false
     permissions:
       contents: read
       id-token: write

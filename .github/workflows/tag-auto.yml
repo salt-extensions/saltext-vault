@@ -99,6 +99,9 @@ jobs:
     needs:
       - get_version_pr
     uses: ./.github/workflows/ci.yml
+    with:
+      # Release builds must not use cached environments
+      use-caches: false
     permissions:
       contents: read
       id-token: write

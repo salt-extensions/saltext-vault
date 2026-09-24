@@ -3,6 +3,12 @@ name: CI
 
 on:
   workflow_call:
+    inputs:
+      use-caches:
+        required: false
+        type: boolean
+        default: true
+        description: Whether dependency caches may be used. Disabled for release builds.
 
 jobs:
   get-changed-files:
@@ -19,6 +25,7 @@ jobs:
     uses: ./.github/workflows/pre-commit-action.yml
     with:
       changed-files: ${{ needs.get-changed-files.outputs.changed-files }}
+      use-caches: ${{ inputs.use-caches }}
     permissions:
       contents: read
 
@@ -30,6 +37,7 @@ jobs:
     uses: ./.github/workflows/test-action.yml
     with:
       changed-files: ${{ needs.get-changed-files.outputs.changed-files-json }}
+      use-caches: ${{ inputs.use-caches }}
 
   docs:
     name: Docs
