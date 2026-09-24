@@ -8,6 +8,7 @@ require a full run, e.g. ``pytest_make_parametrize_id`` (test IDs must
 stay consistent for test selection), belong in the root conftest.
 """
 
+import dataclasses
 import fnmatch
 import json
 import os
@@ -134,16 +135,46 @@ def pytest_addoption(parser):
         )
 
 
-@pytest.hookimpl(tryfirst=True)
+def _suppress_single_param_ids(metafunc):
+    """
+    Patch ``metafunc.parametrize`` to request an empty ID component for
+    single-param parametrizations (unless IDs are specified explicitly).
+    All later ``pytest_generate_tests`` impls (parametrize marks, fixture
+    ``params`` defaults, nested conftest hooks) go through this method.
+    The empty components are scrubbed after all impls have run.
+    """
+    parametrize = metafunc.parametrize
+
+    def suppressing_parametrize(argnames, argvalues, indirect=False, ids=None, scope=None, **kw):
+        argvalues = list(argvalues)
+        if ids is None and len(argvalues) == 1:
+            ids = ("",)
+        return parametrize(argnames, argvalues, indirect=indirect, ids=ids, scope=scope, **kw)
+
+    metafunc.parametrize = suppressing_parametrize
+
+
+@pytest.hookimpl(tryfirst=True, wrapper=True)
 def pytest_generate_tests(metafunc):
-    # tryfirst ensures the container param is recorded before all others,
-    # so its `cnt=` component leads the test IDs consistently.
-    if "container" not in metafunc.fixturenames:
-        return
-    targets = container_targets(metafunc.config)
-    if metafunc.definition.get_closest_marker("internal_logic") is not None:
-        targets = targets[:1]
-    metafunc.parametrize("container", targets, indirect=True, scope="session")
+    # tryfirst + wrapper ensures the container param is recorded before
+    # all others, so its `cnt=` component leads the test IDs consistently.
+    # It is also exempted from single-param ID suppression on purpose:
+    # the container matrix varies per invocation, unlike static params.
+    if "container" in metafunc.fixturenames:
+        targets = container_targets(metafunc.config)
+        if metafunc.definition.get_closest_marker("internal_logic") is not None:
+            targets = targets[:1]
+        metafunc.parametrize("container", targets, indirect=True, scope="session")
+    _suppress_single_param_ids(metafunc)
+    res = yield
+    # Scrub empty ID components, which hide single-param parametrizations
+    # from test IDs. Note: This uses an internal API. might break!
+    for i, callspec in enumerate(metafunc._calls):
+        if "" in callspec._idlist:
+            metafunc._calls[i] = dataclasses.replace(
+                callspec, _idlist=tuple(seg for seg in callspec._idlist if seg)
+            )
+    return res
 
 
 @pytest.hookimpl(trylast=True, wrapper=True)
