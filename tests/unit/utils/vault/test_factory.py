@@ -1242,12 +1242,14 @@ class TestQueryMaster:
                 yield runner
 
     @pytest.fixture(autouse=True, scope="class")
-    def b64encode_sig(self):
+    @classmethod
+    def b64encode_sig(cls):
         with patch("base64.b64encode", Mock(return_value="signature")):
             yield
 
     @pytest.fixture(autouse=True, scope="class")
-    def salt_crypt(self):
+    @classmethod
+    def salt_crypt(cls):
         with patch("salt.crypt.sign_message", Mock(return_value="signature")):
             yield
 

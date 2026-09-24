@@ -121,6 +121,9 @@ def test_read_secret(key, expected):
 
 @pytest.mark.usefixtures("read_kv_not_found", "list_kv_not_found")
 @pytest.mark.parametrize("func", ["read_secret", "list_secrets"])
+@pytest.mark.filterwarnings(
+    "ignore:In version 2, this function will return the list of secret keys:DeprecationWarning"
+)
 def test_read_list_secret_with_default(func):
     """
     Ensure read_secret and list_secrets with defaults set return those
@@ -133,6 +136,9 @@ def test_read_list_secret_with_default(func):
 
 @pytest.mark.usefixtures("read_kv_not_found", "list_kv_not_found")
 @pytest.mark.parametrize("func", ["read_secret", "list_secrets"])
+@pytest.mark.filterwarnings(
+    "ignore:In version 2, this function will return the list of secret keys:DeprecationWarning"
+)
 def test_read_list_secret_without_default(func):
     """
     Ensure read_secret and list_secrets without defaults set raise
@@ -442,6 +448,9 @@ def test_query_raises_errors(query):
         pytest.param("clear_token_cache", {}, "clear_cache", id="clear_token_cache"),
         pytest.param("update_config", {}, "update_config", id="update_config"),
     ],
+)
+@pytest.mark.filterwarnings(
+    "ignore:In version 2, this function will return the list of secret keys:DeprecationWarning"
 )
 def test_func_converts_errors(func, kwargs, target):
     """

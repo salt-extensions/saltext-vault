@@ -49,6 +49,9 @@ def read_kv_err(read_kv):
         ("path/to/foo?bar", "path/to/foo"),
     ],
 )
+@pytest.mark.filterwarnings(
+    "ignore:Beginning with version 2, the Vault SDB module will partially update:DeprecationWarning"
+)
 def test_set(write_kv, key, exp_path, data):
     """
     Test salt.sdb.vault.set_ with current and old (question mark) syntax.
@@ -59,6 +62,9 @@ def test_set(write_kv, key, exp_path, data):
 
 
 @pytest.mark.usefixtures("write_kv_err")
+@pytest.mark.filterwarnings(
+    "ignore:Beginning with version 2, the Vault SDB module will partially update:DeprecationWarning"
+)
 def test_set_err():
     """
     Test that salt.sdb.vault.set_ raises CommandExecutionError from other exceptions
