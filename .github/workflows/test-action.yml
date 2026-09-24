@@ -12,6 +12,7 @@ on:
 jobs:
 
   Linux:
+    name: Linux (${{ matrix.salt-version }}, ${{ matrix.python-version }}, ${{ matrix.container-image }}:${{ matrix.container-tag }}${{ matrix.internal-logic && ' [internal logic]' || '' }})
     runs-on: ubuntu-24.04
     timeout-minutes: 80
     strategy:
@@ -19,13 +20,33 @@ jobs:
       max-parallel: 4
       matrix:
         include:
-          - {salt-version: "3006.27", python-version: "3.11", testing-container: "hashicorp/vault:1.14.8", internal-logic: false}
-          - {salt-version: "3008.2", python-version: "3.10", testing-container: "openbao/openbao:latest", internal-logic: false}
-          - {salt-version: "3008.2", python-version: "3.14", testing-container: "hashicorp/vault:latest", internal-logic: false}
-          - {salt-version: "3008.2", python-version: "3.14", testing-container: "hashicorp/vault:latest", internal-logic: true}
+          - salt-version: "3006.27"
+            python-version: "3.11"
+            container-image: vault
+            # Intentionally old release, must not be updated by renovate
+            container-tag: "1.14.8"
+            internal-logic: false
+          - salt-version: "3008.2"
+            python-version: "3.10"
+            container-image: openbao
+            # renovate: datasource=docker depName=openbao/openbao
+            container-tag: "2.7.0"
+            internal-logic: false
+          - salt-version: "3008.2"
+            python-version: "3.14"
+            container-image: vault
+            # renovate: datasource=docker depName=hashicorp/vault
+            container-tag: "2.1.1"
+            internal-logic: false
+          - salt-version: "3008.2"
+            python-version: "3.14"
+            container-image: vault
+            # renovate: datasource=docker depName=hashicorp/vault
+            container-tag: "2.1.1"
+            internal-logic: true
 
     env:
-      TESTING_CONTAINER: ${{ matrix.testing-container }}
+      TESTING_CONTAINER: ${{ matrix.container-image }}:${{ matrix.container-tag }}
 
     steps:
       - name: Generate Run ID
