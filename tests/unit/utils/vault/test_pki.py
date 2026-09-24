@@ -262,17 +262,20 @@ def test_compare_ca_chain_with_same_diff_len(existing_pki):
 @pytest.mark.parametrize(
     "sans,expected",
     [
-        (
+        pytest.param(
             ["dns:foo.example.com", "DNS:bar.example.com", "ip:198.51.100.1"],
             {"DNS": ["foo.example.com", "bar.example.com"], "IP": ["198.51.100.1"]},
+            id="list_input",
         ),
-        (
+        pytest.param(
             {"dns": ["foo.example.com"], "email": "user@example.com"},
             {"DNS": ["foo.example.com"], "EMAIL": ["user@example.com"]},
+            id="dict_input",
         ),
-        (
+        pytest.param(
             ["1.3.6.1.4.1.311.20.2.3:user@example.com"],
             {"1.3.6.1.4.1.311.20.2.3": ["user@example.com"]},
+            id="oid_type",
         ),
     ],
 )
@@ -284,7 +287,13 @@ def test_norm_sans(sans, expected):
     assert pki.norm_sans(sans) == expected
 
 
-@pytest.mark.parametrize("sans", [["foo:bar"], {"foo": "bar"}])
+@pytest.mark.parametrize(
+    "sans",
+    [
+        pytest.param(["foo:bar"], id="list_input"),
+        pytest.param({"foo": "bar"}, id="dict_input"),
+    ],
+)
 def test_norm_sans_invalid_type(sans):
     """
     Ensure SAN types that are neither known nor a valid OID are rejected

@@ -12,7 +12,16 @@ def current_version():
         yield
 
 
-@pytest.mark.parametrize("version", ["3.0.0", 3.0, 3, (3, 0, 0), ["3", "0"]])
+@pytest.mark.parametrize(
+    "version",
+    [
+        "3.0.0",
+        3.0,
+        3,
+        pytest.param((3, 0, 0), id="version_tuple"),
+        pytest.param(["3", "0"], id="version_list"),
+    ],
+)
 def test_warn_until_warns(version):
     """
     Ensure a warning is emitted when the current version is below the

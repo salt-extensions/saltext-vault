@@ -156,7 +156,12 @@ def test_present_token_strictly_bind_ip_change(vault_approle, roleargs, approle_
 
 @pytest.mark.usefixtures("roles_setup")
 @pytest.mark.parametrize(
-    "testrole", ({"token_num_uses": 42, "token_period": "1h"}, {}), indirect=True
+    "testrole",
+    (
+        pytest.param({"token_num_uses": 42, "token_period": "1h"}, id="conflicting_params_set"),
+        pytest.param({}, id="conflicting_params_unset"),
+    ),
+    indirect=True,
 )  # These must not be set when setting batch token type
 def test_present_token_type_batch_change(vault_approle, roleargs, approle_auth, testmode, testrole):
     was_set = "token_num_uses" in testrole

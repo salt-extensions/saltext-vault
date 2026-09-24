@@ -46,12 +46,21 @@ def deregister():
 @pytest.mark.parametrize(
     "func,kwargs,err_mock",
     (
-        ("registered", {}, "get_config"),
-        ("version_registered", {"version": "v1.0.0"}, "get_config"),
-        ("unregistered", {}, "get_config"),
-        ("version_unregistered", {"version": "v1.0.0"}, "list_detailed"),
-        ("version_pinned", {"version": "v1.0.0"}, "pinned_version"),
-        ("version_unpinned", {}, "pinned_version"),
+        pytest.param("registered", {}, "get_config", id="registered"),
+        pytest.param(
+            "version_registered", {"version": "v1.0.0"}, "get_config", id="version_registered"
+        ),
+        pytest.param("unregistered", {}, "get_config", id="unregistered"),
+        pytest.param(
+            "version_unregistered",
+            {"version": "v1.0.0"},
+            "list_detailed",
+            id="version_unregistered",
+        ),
+        pytest.param(
+            "version_pinned", {"version": "v1.0.0"}, "pinned_version", id="version_pinned"
+        ),
+        pytest.param("version_unpinned", {}, "pinned_version", id="version_unpinned"),
     ),
 )
 def test_errors_are_reported(func, kwargs, err_mock, err, request):

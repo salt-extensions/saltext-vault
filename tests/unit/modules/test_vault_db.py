@@ -34,25 +34,29 @@ def _conn_absent():
 @pytest.mark.parametrize(
     "func,kwargs",
     (
-        ("list_connections", {}),
-        ("fetch_connection", {"name": "foo"}),
-        ("write_connection", {"name": "foo", "plugin": "custom"}),
-        ("delete_connection", {"name": "foo"}),
-        ("reset_connection", {"name": "foo"}),
-        ("rotate_root", {"name": "foo"}),
-        ("list_roles", {}),
-        ("fetch_role", {"name": "foo"}),
-        (
+        pytest.param("list_connections", {}, id="list_connections"),
+        pytest.param("fetch_connection", {"name": "foo"}, id="fetch_connection"),
+        pytest.param(
+            "write_connection", {"name": "foo", "plugin": "custom"}, id="write_connection"
+        ),
+        pytest.param("delete_connection", {"name": "foo"}, id="delete_connection"),
+        pytest.param("reset_connection", {"name": "foo"}, id="reset_connection"),
+        pytest.param("rotate_root", {"name": "foo"}, id="rotate_root"),
+        pytest.param("list_roles", {}, id="list_roles"),
+        pytest.param("fetch_role", {"name": "foo"}, id="fetch_role"),
+        pytest.param(
             "write_static_role",
             {"name": "foo", "connection": "bar", "username": "baz", "rotation_period": 42},
+            id="write_static_role",
         ),
-        (
+        pytest.param(
             "write_role",
             {"name": "foo", "connection": "bar", "creation_statements": "thou shall exist"},
+            id="write_role",
         ),
-        ("delete_role", {"name": "foo"}),
-        ("get_creds", {"name": "foo", "cache": False}),
-        ("rotate_static_role", {"name": "foo"}),
+        pytest.param("delete_role", {"name": "foo"}, id="delete_role"),
+        pytest.param("get_creds", {"name": "foo", "cache": False}, id="get_creds"),
+        pytest.param("rotate_static_role", {"name": "foo"}, id="rotate_static_role"),
     ),
 )
 def test_func_converts_errors(func, kwargs, query, request):
@@ -145,17 +149,19 @@ def test_write_role_payload(query):
 @pytest.mark.parametrize(
     "typ,vals,expected",
     (
-        (None, None, True),
-        (None, {"password_policy": "yolo"}, True),
-        (None, {"password_police": "??"}, False),
-        (None, {"key_bits": 1}, False),
-        ("password", {"password_policy": "yolo"}, True),
-        ("password", {"password_alice": "257"}, False),
-        ("password", {"key_bits": 1}, False),
-        ("rsa_private_key", {"key_bits": 1, "format": "red"}, True),
-        ("rsa_private_key", {"key_fits": 0}, False),
-        ("rsa_private_key", {"password_policy": "yolo"}, False),
-        ("unknown", {"something": "else"}, True),
+        pytest.param(None, None, True, id="no_config"),
+        pytest.param(None, {"password_policy": "yolo"}, True, id="default_type_valid"),
+        pytest.param(None, {"password_police": "??"}, False, id="default_type_invalid_key"),
+        pytest.param(None, {"key_bits": 1}, False, id="default_type_rsa_config"),
+        pytest.param("password", {"password_policy": "yolo"}, True, id="password_valid"),
+        pytest.param("password", {"password_alice": "257"}, False, id="password_invalid_key"),
+        pytest.param("password", {"key_bits": 1}, False, id="password_rsa_config"),
+        pytest.param("rsa_private_key", {"key_bits": 1, "format": "red"}, True, id="rsa_valid"),
+        pytest.param("rsa_private_key", {"key_fits": 0}, False, id="rsa_invalid_key"),
+        pytest.param(
+            "rsa_private_key", {"password_policy": "yolo"}, False, id="rsa_password_config"
+        ),
+        pytest.param("unknown", {"something": "else"}, True, id="unknown_type_unvalidated"),
     ),
 )
 @pytest.mark.usefixtures("query")

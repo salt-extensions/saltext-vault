@@ -23,19 +23,19 @@ def configure_loader_modules():
 @pytest.mark.parametrize(
     "func,kwargs",
     (
-        ("list_", {"plugin_type": "auth"}),
-        ("list_versions", {"plugin_type": "auth", "name": "foo"}),
-        ("list_detailed", {}),
-        ("list_pins", {}),
-        ("pinned_version", {"plugin_type": "auth", "name": "foo"}),
-        ("pin", {"plugin_type": "auth", "name": "foo", "version": "v1.0.0"}),
-        ("unpin", {"plugin_type": "auth", "name": "foo"}),
-        ("get_config", {"plugin_type": "auth", "name": "foo"}),
-        ("register", {"plugin_type": "auth", "name": "foo"}),
-        ("deregister", {"plugin_type": "auth", "name": "foo"}),
-        ("reload", {"plugin_type": "auth", "name": "foo"}),
-        ("reload_named", {"name": "foo"}),
-        ("reload_mounts", {"mounts": "foo"}),
+        pytest.param("list_", {"plugin_type": "auth"}, id="list_"),
+        pytest.param("list_versions", {"plugin_type": "auth", "name": "foo"}, id="list_versions"),
+        pytest.param("list_detailed", {}, id="list_detailed"),
+        pytest.param("list_pins", {}, id="list_pins"),
+        pytest.param("pinned_version", {"plugin_type": "auth", "name": "foo"}, id="pinned_version"),
+        pytest.param("pin", {"plugin_type": "auth", "name": "foo", "version": "v1.0.0"}, id="pin"),
+        pytest.param("unpin", {"plugin_type": "auth", "name": "foo"}, id="unpin"),
+        pytest.param("get_config", {"plugin_type": "auth", "name": "foo"}, id="get_config"),
+        pytest.param("register", {"plugin_type": "auth", "name": "foo"}, id="register"),
+        pytest.param("deregister", {"plugin_type": "auth", "name": "foo"}, id="deregister"),
+        pytest.param("reload", {"plugin_type": "auth", "name": "foo"}, id="reload"),
+        pytest.param("reload_named", {"name": "foo"}, id="reload_named"),
+        pytest.param("reload_mounts", {"mounts": "foo"}, id="reload_mounts"),
     ),
 )
 def test_func_converts_errors(func, kwargs, query):
@@ -47,17 +47,17 @@ def test_func_converts_errors(func, kwargs, query):
 @pytest.mark.parametrize(
     "func,kwargs",
     (
-        ("list_", {}),
-        ("list_versions", {"name": "foo"}),
-        ("list_detailed", {}),
-        ("list_pins", {}),
-        ("pinned_version", {"name": "foo"}),
-        ("pin", {"name": "foo", "version": "v1.0.0"}),
-        ("unpin", {"name": "foo"}),
-        ("get_config", {"name": "foo"}),
-        ("register", {"name": "foo"}),
-        ("deregister", {"name": "foo"}),
-        ("reload", {"name": "foo"}),
+        pytest.param("list_", {}, id="list_"),
+        pytest.param("list_versions", {"name": "foo"}, id="list_versions"),
+        pytest.param("list_detailed", {}, id="list_detailed"),
+        pytest.param("list_pins", {}, id="list_pins"),
+        pytest.param("pinned_version", {"name": "foo"}, id="pinned_version"),
+        pytest.param("pin", {"name": "foo", "version": "v1.0.0"}, id="pin"),
+        pytest.param("unpin", {"name": "foo"}, id="unpin"),
+        pytest.param("get_config", {"name": "foo"}, id="get_config"),
+        pytest.param("register", {"name": "foo"}, id="register"),
+        pytest.param("deregister", {"name": "foo"}, id="deregister"),
+        pytest.param("reload", {"name": "foo"}, id="reload"),
     ),
 )
 def test_func_validates_plugin_type(func, kwargs, query):
@@ -70,22 +70,25 @@ def test_func_validates_plugin_type(func, kwargs, query):
     "kwargs,expected_payload",
     (
         # command defaults to the plugin name
-        ({}, {"command": "foo"}),
-        ({"command": "run-foo"}, {"command": "run-foo"}),
+        pytest.param({}, {"command": "foo"}, id="default_command"),
+        pytest.param({"command": "run-foo"}, {"command": "run-foo"}, id="explicit_command"),
         # with an OCI image, there is no command default
-        (
+        pytest.param(
             {"oci_image": "example.com/foo:1", "runtime": "runsc"},
             {"oci_image": "example.com/foo:1", "runtime": "runsc"},
+            id="oci_image_runtime",
         ),
-        (
+        pytest.param(
             {"oci_image": "example.com/foo:1"},
             {"oci_image": "example.com/foo:1"},
+            id="oci_image",
         ),
-        (
+        pytest.param(
             {"oci_image": "example.com/foo:1", "command": "run-foo"},
             {"oci_image": "example.com/foo:1", "command": "run-foo"},
+            id="oci_image_command",
         ),
-        ({"download": True}, {"command": "foo", "download": True}),
+        pytest.param({"download": True}, {"command": "foo", "download": True}, id="download"),
     ),
 )
 def test_register_payload(query, kwargs, expected_payload):
@@ -103,8 +106,8 @@ def test_register_payload(query, kwargs, expected_payload):
 @pytest.mark.parametrize(
     "catalog_response",
     (
-        vault.VaultException("listing failed as well"),
-        {"data": {"detailed": []}},
+        pytest.param(vault.VaultException("listing failed as well"), id="listing_fails"),
+        pytest.param({"data": {"detailed": []}}, id="empty_catalog"),
     ),
 )
 def test_get_config_version_fallback_failure(query, catalog_response):

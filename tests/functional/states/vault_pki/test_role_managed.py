@@ -43,15 +43,29 @@ def test_role_managed_correct_issuer(vault_pki, issuer_ref, testmode):
 @pytest.mark.parametrize(
     "params",
     [
-        {
-            "allow_localhost": False,
-            "allow_bare_domains": True,
-            "allowed_domains": ["www.example.com", "www.acme.com"],
-            "allow_subdomains": True,
-            "allow_glob_domains": True,
-        },
-        {"server_flag": False, "client_flag": False, "no_store": True},
-        {"organization": ["Salt"], "country": ["US"], "locality": ["Seattle"], "require_cn": False},
+        pytest.param(
+            {
+                "allow_localhost": False,
+                "allow_bare_domains": True,
+                "allowed_domains": ["www.example.com", "www.acme.com"],
+                "allow_subdomains": True,
+                "allow_glob_domains": True,
+            },
+            id="domain_restrictions",
+        ),
+        pytest.param(
+            {"server_flag": False, "client_flag": False, "no_store": True},
+            id="usage_flags",
+        ),
+        pytest.param(
+            {
+                "organization": ["Salt"],
+                "country": ["US"],
+                "locality": ["Seattle"],
+                "require_cn": False,
+            },
+            id="subject_attrs",
+        ),
     ],
 )
 def test_role_managed_payload(vault_pki, params, testmode):

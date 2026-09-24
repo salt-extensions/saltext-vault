@@ -203,11 +203,14 @@ def test_secret_id_funcs_require_secret_id_or_accessor(approle_api, client, func
 @pytest.mark.parametrize(
     "aliases",
     [
-        [],
-        [
-            {"mount_accessor": "test-accessor", "id": "test-entity-alias-id"},
-            {"mount_accessor": "other-accessor", "id": "other-entity-alias-id"},
-        ],
+        pytest.param([], id="create_new"),
+        pytest.param(
+            [
+                {"mount_accessor": "test-accessor", "id": "test-entity-alias-id"},
+                {"mount_accessor": "other-accessor", "id": "other-entity-alias-id"},
+            ],
+            id="update_existing",
+        ),
     ],
 )
 def test_write_entity_alias(client, aliases, entity_fetch_response, identity_api):

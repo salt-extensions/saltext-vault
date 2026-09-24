@@ -223,9 +223,9 @@ def test_certificate_managed_exclude_cn_from_sans(cert_typ, existing_cert):
 @pytest.mark.parametrize(
     "existing_cert",
     (
-        {"common_name": "foo.bar.baz"},
-        {"common_name": "foo@bar.baz"},
-        {"common_name": "Neither an email nor a domain"},
+        pytest.param({"common_name": "foo.bar.baz"}, id="dns_cn"),
+        pytest.param({"common_name": "foo@bar.baz"}, id="email_cn"),
+        pytest.param({"common_name": "Neither an email nor a domain"}, id="invalid_cn"),
     ),
     indirect=True,
 )
@@ -282,9 +282,9 @@ def test_certificate_managed_subject_attr_comparison(vault_pki, cert_args, exist
 @pytest.mark.parametrize(
     "existing_cert",
     (
-        {"user_ids": "foo", "serial_number": "foobar"},
-        {"user_ids": "foo,bar"},
-        {"user_ids": ["bar", "foo"]},
+        pytest.param({"user_ids": "foo", "serial_number": "foobar"}, id="single_with_serial"),
+        pytest.param({"user_ids": "foo,bar"}, id="comma_separated"),
+        pytest.param({"user_ids": ["bar", "foo"]}, id="list"),
     ),
     indirect=True,
 )
@@ -700,7 +700,7 @@ def test_ca_certificate_managed_san_from_csr(vault_pki, ca_cert_args, empty):
 @pytest.mark.parametrize(
     "aia_urls,issuer_setup",
     (
-        (
+        pytest.param(
             {
                 "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
                 "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
@@ -711,8 +711,9 @@ def test_ca_certificate_managed_san_from_csr(vault_pki, ca_cert_args, empty):
                 "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
             },
             {},
+            id="mount_config_only",
         ),
-        (
+        pytest.param(
             {},
             {
                 "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
@@ -723,8 +724,9 @@ def test_ca_certificate_managed_san_from_csr(vault_pki, ca_cert_args, empty):
                 ],
                 "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
             },
+            id="issuer_config_only",
         ),
-        (
+        pytest.param(
             {
                 "issuing_certificates": [
                     "https://one.root-general.ca",
@@ -749,8 +751,9 @@ def test_ca_certificate_managed_san_from_csr(vault_pki, ca_cert_args, empty):
                 ],
                 "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
             },
+            id="issuer_overrides_mount",
         ),
-        (
+        pytest.param(
             {
                 "issuing_certificates": [
                     "https://one.root-general.ca",
@@ -760,6 +763,7 @@ def test_ca_certificate_managed_san_from_csr(vault_pki, ca_cert_args, empty):
             {
                 "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
             },
+            id="partial_issuer_disables_mount",
         ),
     ),
     indirect=True,
@@ -1356,9 +1360,12 @@ def test_certificate_managed_csr_ignored_warnings(
 @pytest.mark.parametrize(
     "existing_cert",
     (
-        {"sign_verbatim": True, "user_ids": "foo"},
-        {"sign_verbatim": True, "user_ids": "foo,bar", "serial_number": "foobar"},
-        {"sign_verbatim": True, "user_ids": ["bar", "foo"]},
+        pytest.param({"sign_verbatim": True, "user_ids": "foo"}, id="single"),
+        pytest.param(
+            {"sign_verbatim": True, "user_ids": "foo,bar", "serial_number": "foobar"},
+            id="comma_separated_with_serial",
+        ),
+        pytest.param({"sign_verbatim": True, "user_ids": ["bar", "foo"]}, id="list"),
     ),
     indirect=True,
 )
@@ -1605,7 +1612,14 @@ def test_certificate_managed_changed_cn(vault_pki, cert_args, testmode):
 
 
 @pytest.mark.usefixtures("issuer_setup", "roles_setup", "testrole")
-@pytest.mark.parametrize("testrole", ({}, {"use_csr_common_name": False}), indirect=True)
+@pytest.mark.parametrize(
+    "testrole",
+    (
+        pytest.param({}, id="use_csr_cn"),
+        pytest.param({"use_csr_common_name": False}, id="ignore_csr_cn"),
+    ),
+    indirect=True,
+)
 def test_certificate_managed_use_csr_common_name(vault_pki, cert_args):
     cert_args["CN"] = (
         "cn.saltproject.io"  # Ensure this parameter for create_csr is synchronized with the common_name one
@@ -1626,12 +1640,12 @@ def test_certificate_managed_use_csr_common_name(vault_pki, cert_args):
 @pytest.mark.parametrize(
     "attr,replace",
     [
-        ({"L": "Boston"}, {"L": "Moscow"}),
-        ({"C": "US"}, {"C": "RU"}),
-        ({"ST": "That Street"}, {"ST": "Other Street"}),
-        ({"O": "Salt Project"}, {"O": "Salt"}),
-        ({"OU": "Salt Extensions"}, {"OU": "Extensions"}),
-        (
+        pytest.param({"L": "Boston"}, {"L": "Moscow"}, id="locality"),
+        pytest.param({"C": "US"}, {"C": "RU"}, id="country"),
+        pytest.param({"ST": "That Street"}, {"ST": "Other Street"}, id="state"),
+        pytest.param({"O": "Salt Project"}, {"O": "Salt"}, id="organization"),
+        pytest.param({"OU": "Salt Extensions"}, {"OU": "Extensions"}, id="org_unit"),
+        pytest.param(
             {
                 "L": "Boston",
                 "C": "US",
@@ -1646,6 +1660,7 @@ def test_certificate_managed_use_csr_common_name(vault_pki, cert_args):
                 "O": "Salt",
                 "OU": "Extensions",
             },
+            id="all_attrs",
         ),
     ],
 )

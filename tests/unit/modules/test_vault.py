@@ -103,7 +103,13 @@ def query():
 
 
 @pytest.mark.usefixtures("read_kv")
-@pytest.mark.parametrize("key,expected", [(None, {"foo": "bar"}), ("foo", "bar")])
+@pytest.mark.parametrize(
+    "key,expected",
+    [
+        pytest.param(None, {"foo": "bar"}, id="full_data"),
+        pytest.param("foo", "bar", id="single_key"),
+    ],
+)
 def test_read_secret(key, expected):
     """
     Ensure read_secret works as expected without and with specified key.
@@ -141,8 +147,8 @@ def test_read_list_secret_without_default(func):
 @pytest.mark.parametrize(
     "keys_only,expected",
     [
-        (False, {"keys": ["foo"]}),
-        (True, ["foo"]),
+        pytest.param(False, {"keys": ["foo"]}, id="wrapped_dict"),
+        pytest.param(True, ["foo"], id="keys_only"),
     ],
 )
 def test_list_secrets(keys_only, expected):
@@ -218,7 +224,13 @@ def test_patch_secret_err(data, caplog):
         assert "Failed to patch secret! VaultPermissionDeniedError: damn" in caplog.messages
 
 
-@pytest.mark.parametrize("args", [[], [1, 2]])
+@pytest.mark.parametrize(
+    "args",
+    [
+        pytest.param([], id="no_versions"),
+        pytest.param([1, 2], id="versions"),
+    ],
+)
 def test_delete_secret(delete_kv, args):
     """
     Ensure delete_secret works as expected
@@ -232,7 +244,13 @@ def test_delete_secret(delete_kv, args):
 
 
 @pytest.mark.usefixtures("delete_kv_err")
-@pytest.mark.parametrize("args", [[], [1, 2]])
+@pytest.mark.parametrize(
+    "args",
+    [
+        pytest.param([], id="no_versions"),
+        pytest.param([1, 2], id="versions"),
+    ],
+)
 def test_delete_secret_err(args, caplog):
     """
     Ensure delete_secret handles exceptions as expected
@@ -243,7 +261,14 @@ def test_delete_secret_err(args, caplog):
         assert "Failed to delete secret! VaultPermissionDeniedError: damn" in caplog.messages
 
 
-@pytest.mark.parametrize("args", [[], [1], [1, 2]])
+@pytest.mark.parametrize(
+    "args",
+    [
+        pytest.param([], id="no_versions"),
+        pytest.param([1], id="one_version"),
+        pytest.param([1, 2], id="two_versions"),
+    ],
+)
 def test_destroy_secret(destroy_kv, args):
     """
     Ensure destroy_secret works as expected
@@ -257,7 +282,13 @@ def test_destroy_secret(destroy_kv, args):
 
 
 @pytest.mark.usefixtures("destroy_kv_err")
-@pytest.mark.parametrize("args", [[1], [1, 2]])
+@pytest.mark.parametrize(
+    "args",
+    [
+        pytest.param([1], id="one_version"),
+        pytest.param([1, 2], id="two_versions"),
+    ],
+)
 def test_destroy_secret_err(caplog, args):
     """
     Ensure destroy_secret handles exceptions as expected
@@ -299,10 +330,10 @@ def test_policy_fetch_not_found(query):
 @pytest.mark.parametrize(
     "func,args",
     [
-        ("policy_fetch", []),
-        ("policy_write", ["rule"]),
-        ("policy_delete", []),
-        ("policies_list", None),
+        pytest.param("policy_fetch", [], id="policy_fetch"),
+        pytest.param("policy_write", ["rule"], id="policy_write"),
+        pytest.param("policy_delete", [], id="policy_delete"),
+        pytest.param("policies_list", None, id="policies_list"),
     ],
 )
 def test_policy_functions_raise_errors(query, func, args):
@@ -368,7 +399,9 @@ def test_policies_list(query, policies_list_response):
 
 
 @pytest.mark.parametrize("method", ["POST", "DELETE"])
-@pytest.mark.parametrize("payload", [None, {"data": {"foo": "bar"}}])
+@pytest.mark.parametrize(
+    "payload", [None, pytest.param({"data": {"foo": "bar"}}, id="with_payload")]
+)
 def test_query(query, method, payload):
     """
     Ensure query wraps the utility function properly
@@ -394,18 +427,20 @@ def test_query_raises_errors(query):
 @pytest.mark.parametrize(
     "func,kwargs,target",
     [
-        ("read_secret", {"path": "some/path"}, "read_kv"),
-        ("list_secrets", {"path": "some/path"}, "list_kv"),
-        ("restore_secret", {"path": "some/path"}, "restore_kv"),
-        ("policy_fetch", {"policy": "test-policy"}, "query"),
-        ("policy_write", {"policy": "test-policy", "rules": "rule"}, "query"),
-        ("policy_delete", {"policy": "test-policy"}, "query"),
-        ("policies_list", {}, "query"),
-        ("query", {"method": "GET", "endpoint": "test/endpoint"}, "query"),
-        ("get_server_config", {}, "get_authd_client"),
-        ("clear_cache", {}, "clear_cache"),
-        ("clear_token_cache", {}, "clear_cache"),
-        ("update_config", {}, "update_config"),
+        pytest.param("read_secret", {"path": "some/path"}, "read_kv", id="read_secret"),
+        pytest.param("list_secrets", {"path": "some/path"}, "list_kv", id="list_secrets"),
+        pytest.param("restore_secret", {"path": "some/path"}, "restore_kv", id="restore_secret"),
+        pytest.param("policy_fetch", {"policy": "test-policy"}, "query", id="policy_fetch"),
+        pytest.param(
+            "policy_write", {"policy": "test-policy", "rules": "rule"}, "query", id="policy_write"
+        ),
+        pytest.param("policy_delete", {"policy": "test-policy"}, "query", id="policy_delete"),
+        pytest.param("policies_list", {}, "query", id="policies_list"),
+        pytest.param("query", {"method": "GET", "endpoint": "test/endpoint"}, "query", id="query"),
+        pytest.param("get_server_config", {}, "get_authd_client", id="get_server_config"),
+        pytest.param("clear_cache", {}, "clear_cache", id="clear_cache"),
+        pytest.param("clear_token_cache", {}, "clear_cache", id="clear_token_cache"),
+        pytest.param("update_config", {}, "update_config", id="update_config"),
     ],
 )
 def test_func_converts_errors(func, kwargs, target):
@@ -421,9 +456,13 @@ def test_func_converts_errors(func, kwargs, target):
 @pytest.mark.parametrize(
     "func,kwargs,target",
     [
-        ("read_secret_meta", {"path": "some/path"}, "read_kv_meta"),
-        ("patch_raw", {"path": "some/path", "raw": {"foo": "bar"}}, "patch_kv"),
-        ("wipe_secret", {"path": "some/path"}, "wipe_kv"),
+        pytest.param(
+            "read_secret_meta", {"path": "some/path"}, "read_kv_meta", id="read_secret_meta"
+        ),
+        pytest.param(
+            "patch_raw", {"path": "some/path", "raw": {"foo": "bar"}}, "patch_kv", id="patch_raw"
+        ),
+        pytest.param("wipe_secret", {"path": "some/path"}, "wipe_kv", id="wipe_secret"),
     ],
 )
 def test_func_swallows_errors(func, kwargs, target, caplog):

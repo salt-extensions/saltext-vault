@@ -59,8 +59,8 @@ def wipe_secret():
 @pytest.mark.parametrize(
     "func,kwargs",
     (
-        ("present", {"values": {"foo": "bar"}}),
-        ("absent", {}),
+        pytest.param("present", {"values": {"foo": "bar"}}, id="present"),
+        pytest.param("absent", {}, id="absent"),
     ),
 )
 def test_errors_are_reported(read_secret, func, kwargs):

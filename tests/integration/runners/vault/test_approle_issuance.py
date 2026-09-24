@@ -216,8 +216,8 @@ def test_cache_is_used_on_the_minion(ckey, salt_call_cli, minion_conn_cachedir):
 @pytest.mark.parametrize(
     "suffix,ckeys",
     (
-        ("/session", ("__token",)),
-        ("", ("config", "secret_id")),
+        pytest.param("/session", ("__token",), id="session_cache"),
+        pytest.param("", ("config", "secret_id"), id="connection_cache"),
     ),
 )
 def test_cache_is_used_on_the_impersonating_master(suffix, ckeys, salt_run_cli, minion):

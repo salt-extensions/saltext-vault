@@ -69,8 +69,8 @@ def store_multi(store, lease, lease_renewed_response):
 @pytest.mark.parametrize(
     "creation_time",
     [
-        1661188581,
-        "1661188581",
+        pytest.param(1661188581, id="timestamp_int"),
+        pytest.param("1661188581", id="timestamp_str"),
         "2022-08-22T17:16:21.473219641+00:00",
         "2022-08-22T17:16:21.47321964+00:00",
         "2022-08-22T17:16:21.4732196+00:00",
@@ -348,7 +348,13 @@ class TestLeaseStore:
         store_valid.expire_events.assert_not_called()
 
     @pytest.mark.parametrize(
-        "lease", ({}, {"renew_increment": 1999}, {"renew_increment": 2001}), indirect=True
+        "lease",
+        (
+            pytest.param({}, id="unset"),
+            pytest.param({"renew_increment": 1999}, id="lower_than_requested"),
+            pytest.param({"renew_increment": 2001}, id="higher_than_requested"),
+        ),
+        indirect=True,
     )
     def test_get_valid_renew_increment(self, store_valid, lease):
         """
@@ -463,7 +469,14 @@ class TestLeaseStore:
         store_valid.cache.store.assert_called_with("test", ret)
         store_valid.expire_events.assert_not_called()
 
-    @pytest.mark.parametrize("lease", ({}, {"meta": {"foo": "bar"}}), indirect=True)
+    @pytest.mark.parametrize(
+        "lease",
+        (
+            pytest.param({}, id="no_meta"),
+            pytest.param({"meta": {"foo": "bar"}}, id="with_meta"),
+        ),
+        indirect=True,
+    )
     def test_get_valid_not_renew(self, store_valid, lease):
         """
         Currently valid leases should not be returned if they undercut
@@ -484,7 +497,13 @@ class TestLeaseStore:
         )
 
     @pytest.mark.parametrize(
-        "lease", ({}, {"revoke_delay": 1200}, {"revoke_delay": 1400}), indirect=True
+        "lease",
+        (
+            pytest.param({}, id="no_delay"),
+            pytest.param({"revoke_delay": 1200}, id="delay_1200"),
+            pytest.param({"revoke_delay": 1400}, id="delay_1400"),
+        ),
+        indirect=True,
     )
     @pytest.mark.parametrize("revoke", (None, 1100, 1500))
     def test_get_valid_revoke(self, store_valid, lease, revoke):
@@ -598,8 +617,8 @@ class TestLeaseStore:
     @pytest.mark.parametrize(
         "err,expected",
         [
-            ("invalid lease", vault.VaultNotFoundError),
-            ("permission denied", vault.VaultInvocationError),
+            pytest.param("invalid lease", vault.VaultNotFoundError, id="expired_lease"),
+            pytest.param("permission denied", vault.VaultInvocationError, id="permission_denied"),
         ],
     )
     def test_lookup_invalid_lease(self, store, lease, err, expected):
@@ -656,8 +675,8 @@ class TestLeaseStore:
     @pytest.mark.parametrize(
         "err,expected",
         [
-            ("lease not found", vault.VaultNotFoundError),
-            ("permission denied", vault.VaultInvocationError),
+            pytest.param("lease not found", vault.VaultNotFoundError, id="expired_lease"),
+            pytest.param("permission denied", vault.VaultInvocationError, id="permission_denied"),
         ],
     )
     def test_renew_invalid_lease(self, store, lease, err, expected):
@@ -850,7 +869,13 @@ class TestLeaseStore:
             "sys/leases/renew", payload={"lease_id": lease["id"]}
         )
 
-    @pytest.mark.parametrize("exc", (vault.VaultNotFoundError, vault.VaultPermissionDeniedError))
+    @pytest.mark.parametrize(
+        "exc",
+        (
+            pytest.param(vault.VaultNotFoundError, id="not_found"),
+            pytest.param(vault.VaultPermissionDeniedError, id="permission_denied"),
+        ),
+    )
     def test_renew_cached_exception(self, store_multi, exc, lease_renewed_response, lease):
         """
         Ensure that exceptions are reraised after everything has been processed.

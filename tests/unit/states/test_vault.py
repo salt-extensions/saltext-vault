@@ -96,8 +96,8 @@ def test_policy_absent_no_changes(policy_fetch, test):
 @pytest.mark.parametrize(
     "func,kwargs",
     [
-        ("policy_present", {"rules": "test-rules"}),
-        ("policy_absent", {}),
+        pytest.param("policy_present", {"rules": "test-rules"}, id="policy_present"),
+        pytest.param("policy_absent", {}, id="policy_absent"),
     ],
 )
 def test_policy_fetch_errors_are_reported(policy_fetch, func, kwargs):

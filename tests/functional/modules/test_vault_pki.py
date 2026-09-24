@@ -76,7 +76,13 @@ def test_delete_role(vault_pki):
 
 
 @pytest.mark.usefixtures("clean_pki_roles")
-@pytest.mark.parametrize("key_usage", ("DigitalSignature", ["DigitalSignature", "KeyAgreement"]))
+@pytest.mark.parametrize(
+    "key_usage",
+    (
+        pytest.param("DigitalSignature", id="scalar"),
+        pytest.param(["DigitalSignature", "KeyAgreement"], id="list"),
+    ),
+)
 def test_write_role(vault_pki, key_usage):
     assert vault_pki.write_role("testrole2", ttl="360h", key_usage=key_usage) is True
     assert "testrole2" in vault_list("pki/roles")

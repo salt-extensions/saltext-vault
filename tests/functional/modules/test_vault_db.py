@@ -286,10 +286,10 @@ def test_get_creds_cached_with_cached_min_ttl(vault_db, _cached_creds):
 @pytest.mark.parametrize(
     "_cached_creds,new",
     (
-        ({"valid_for": 240}, {"valid_for": 360}),
-        ({"revoke_delay": 240}, {"revoke_delay": 15}),
-        ({"renew_increment": 240}, {"renew_increment": 15}),
-        ({"meta": {"foo": "bar"}}, {"meta": {"bar": "baz"}}),
+        pytest.param({"valid_for": 240}, {"valid_for": 360}, id="valid_for"),
+        pytest.param({"revoke_delay": 240}, {"revoke_delay": 15}, id="revoke_delay"),
+        pytest.param({"renew_increment": 240}, {"renew_increment": 15}, id="renew_increment"),
+        pytest.param({"meta": {"foo": "bar"}}, {"meta": {"bar": "baz"}}, id="meta"),
     ),
     indirect=("_cached_creds",),
 )
