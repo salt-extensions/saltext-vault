@@ -103,7 +103,14 @@ def test_vault_client_request_raw_headers_additional(header, client, req):
         assert actual_header == "changed"
 
 
-@pytest.mark.parametrize("add_headers", ["X-Custom-Header", ["X-Custom-Header"], 42])
+@pytest.mark.parametrize(
+    "add_headers",
+    [
+        pytest.param("X-Custom-Header", id="str"),
+        pytest.param(["X-Custom-Header"], id="list"),
+        pytest.param(42, id="int"),
+    ],
+)
 def test_vault_client_request_raw_headers_additional_invalid(add_headers, client, req):
     """
     Test that invalid additional headers are ignored instead of crashing the request
@@ -140,16 +147,16 @@ def test_vault_client_request_raw_does_not_raise_http_exception(client):
 @pytest.mark.parametrize(
     "req_failed,expected",
     [
-        (400, vault.VaultInvocationError),
-        (403, vault.VaultPermissionDeniedError),
-        (404, vault.VaultNotFoundError),
-        (405, vault.VaultUnsupportedOperationError),
-        (412, vault.VaultPreconditionFailedError),
-        (429, vault.VaultRateLimitExceededError),
-        (500, vault.VaultServerError),
-        (502, vault.VaultServerError),
-        (503, vault.VaultUnavailableError),
-        (401, requests.exceptions.HTTPError),
+        pytest.param(400, vault.VaultInvocationError, id="bad_request"),
+        pytest.param(403, vault.VaultPermissionDeniedError, id="permission_denied"),
+        pytest.param(404, vault.VaultNotFoundError, id="not_found"),
+        pytest.param(405, vault.VaultUnsupportedOperationError, id="unsupported_operation"),
+        pytest.param(412, vault.VaultPreconditionFailedError, id="precondition_failed"),
+        pytest.param(429, vault.VaultRateLimitExceededError, id="rate_limit_exceeded"),
+        pytest.param(500, vault.VaultServerError, id="server_error"),
+        pytest.param(502, vault.VaultServerError, id="bad_gateway"),
+        pytest.param(503, vault.VaultUnavailableError, id="unavailable"),
+        pytest.param(401, requests.exceptions.HTTPError, id="unauthorized"),
     ],
     indirect=["req_failed"],
 )
@@ -251,7 +258,12 @@ def test_vault_client_token_revoke_other(client, by):
 
 @pytest.mark.parametrize("client", ["valid_token"], indirect=True)
 @pytest.mark.parametrize(
-    "err", (vault.VaultPermissionDeniedError, vault.VaultNotFoundError, vault.VaultAuthExpired)
+    "err",
+    (
+        pytest.param(vault.VaultPermissionDeniedError, id="permission_denied"),
+        pytest.param(vault.VaultNotFoundError, id="not_found"),
+        pytest.param(vault.VaultAuthExpired, id="auth_expired"),
+    ),
 )
 @pytest.mark.parametrize("by", (None, "token", "accessor"))
 def test_vault_client_token_revoke_invalid_token(client, by, err):
@@ -483,11 +495,11 @@ def test_vault_client_unwrap_should_default_to_token_header_before_payload(
 @pytest.mark.parametrize(
     "req_failed,expected",
     [
-        (400, vault.VaultInvocationError),
-        (403, vault.VaultPermissionDeniedError),
-        (404, vault.VaultNotFoundError),
-        (502, vault.VaultServerError),
-        (401, requests.exceptions.HTTPError),
+        pytest.param(400, vault.VaultInvocationError, id="bad_request"),
+        pytest.param(403, vault.VaultPermissionDeniedError, id="permission_denied"),
+        pytest.param(404, vault.VaultNotFoundError, id="not_found"),
+        pytest.param(502, vault.VaultServerError, id="server_error"),
+        pytest.param(401, requests.exceptions.HTTPError, id="unauthorized"),
     ],
     indirect=["req_failed"],
 )
@@ -507,9 +519,11 @@ def test_vault_client_unwrap_should_raise_appropriate_errors(func, expected, cli
 @pytest.mark.parametrize(
     "path",
     [
-        "auth/approle/role/test-minion/role-id",
-        "auth/approle/role/[^/]+/role-id",
-        ["incorrect/path", "[^a]+", "auth/approle/role/[^/]+/role-id"],
+        pytest.param("auth/approle/role/test-minion/role-id", id="exact"),
+        pytest.param("auth/approle/role/[^/]+/role-id", id="regex"),
+        pytest.param(
+            ["incorrect/path", "[^a]+", "auth/approle/role/[^/]+/role-id"], id="list_with_match"
+        ),
     ],
 )
 def test_vault_client_unwrap_should_match_check_expected_creation_path(
@@ -527,9 +541,11 @@ def test_vault_client_unwrap_should_match_check_expected_creation_path(
 @pytest.mark.parametrize(
     "path",
     [
-        "auth/other_mount/role/test-minion/role-id",
-        "auth/approle/role/[^tes/]+/role-id",
-        ["incorrect/path", "[^a]+", "auth/approle/role/[^/]/role-id"],
+        pytest.param("auth/other_mount/role/test-minion/role-id", id="wrong_mount"),
+        pytest.param("auth/approle/role/[^tes/]+/role-id", id="regex_no_match"),
+        pytest.param(
+            ["incorrect/path", "[^a]+", "auth/approle/role/[^/]/role-id"], id="list_no_match"
+        ),
     ],
 )
 def test_vault_client_unwrap_should_fail_on_unexpected_creation_path(path, client):
@@ -763,28 +779,34 @@ def test_vault_client_token_renew_increment_is_honored(
 @pytest.mark.parametrize(
     "secret,config,expected",
     [
-        ("token", None, r"auth/token/create(/[^/]+)?"),
-        ("secret_id", None, r"auth/[^/]+/role/[^/]+/secret\-id"),
-        ("role_id", None, r"auth/[^/]+/role/[^/]+/role\-id"),
-        (
+        pytest.param("token", None, r"auth/token/create(/[^/]+)?", id="token"),
+        pytest.param(
+            "secret_id", None, r"auth/[^/]+/role/[^/]+/secret\-id", id="secret_id_default"
+        ),
+        pytest.param("role_id", None, r"auth/[^/]+/role/[^/]+/role\-id", id="role_id_default"),
+        pytest.param(
             "secret_id",
             {"auth": {"approle_mount": "test_mount", "approle_name": "test_minion"}},
             r"auth/test_mount/role/test_minion/secret\-id",
+            id="secret_id_custom_mount",
         ),
-        (
+        pytest.param(
             "role_id",
             {"auth": {"approle_mount": "test_mount", "approle_name": "test_minion"}},
             r"auth/test_mount/role/test_minion/role\-id",
+            id="role_id_custom_mount",
         ),
-        (
+        pytest.param(
             "secret_id",
             {"auth": {"approle_mount": "te$t-mount", "approle_name": "te$t-minion"}},
             r"auth/te\$t\-mount/role/te\$t\-minion/secret\-id",
+            id="secret_id_escaped",
         ),
-        (
+        pytest.param(
             "role_id",
             {"auth": {"approle_mount": "te$t-mount", "approle_name": "te$t-minion"}},
             r"auth/te\$t\-mount/role/te\$t\-minion/role\-id",
+            id="role_id_escaped",
         ),
     ],
 )
@@ -863,14 +885,20 @@ def test_vault_api_adapter_timeout_override(server_config, _send_mock):
 @pytest.mark.parametrize(
     "server_config",
     [
-        {
-            "url": "https://127.0.0.1:8200",
-            "verify": False,
-        },
-        {
-            "url": "https://127.0.0.1:8200",
-            "verify": "/some/path",
-        },
+        pytest.param(
+            {
+                "url": "https://127.0.0.1:8200",
+                "verify": False,
+            },
+            id="verify_false",
+        ),
+        pytest.param(
+            {
+                "url": "https://127.0.0.1:8200",
+                "verify": "/some/path",
+            },
+            id="verify_path",
+        ),
     ],
     indirect=True,
 )
@@ -939,17 +967,19 @@ def req_mock(request):
 @pytest.mark.parametrize(
     "req_mock,cnt,slept,respect_retry_after",
     (
-        ({"status": 200}, 1, 0, True),
-        ({"status": 204}, 1, 0, True),
-        ({"status": 412}, 6, 5, True),
-        ({"status": 429}, 6, 5, True),
-        ({"status": 500}, 6, 5, True),
-        ({"status": 502}, 6, 5, True),
-        ({"status": 503}, 6, 5, True),
-        ({"status": 504}, 6, 5, True),
-        ({"err": urllib3.exceptions.ConnectTimeoutError}, 6, 4, True),
-        ({"err": urllib3.exceptions.ProtocolError}, 6, 4, True),
-        (
+        pytest.param({"status": 200}, 1, 0, True, id="200"),
+        pytest.param({"status": 204}, 1, 0, True, id="204"),
+        pytest.param({"status": 412}, 6, 5, True, id="412"),
+        pytest.param({"status": 429}, 6, 5, True, id="429"),
+        pytest.param({"status": 500}, 6, 5, True, id="500"),
+        pytest.param({"status": 502}, 6, 5, True, id="502"),
+        pytest.param({"status": 503}, 6, 5, True, id="503"),
+        pytest.param({"status": 504}, 6, 5, True, id="504"),
+        pytest.param(
+            {"err": urllib3.exceptions.ConnectTimeoutError}, 6, 4, True, id="connect_timeout"
+        ),
+        pytest.param({"err": urllib3.exceptions.ProtocolError}, 6, 4, True, id="protocol_error"),
+        pytest.param(
             {
                 "err": urllib3.exceptions.ReadTimeoutError(
                     MagicMock(), "http://127.0.0.1/v1/test", "foo"
@@ -958,18 +988,43 @@ def req_mock(request):
             6,
             4,
             True,
+            id="read_timeout",
         ),
-        ({"status": 200, "retry_after": "1234"}, 1, 0, True),
-        ({"status": 204, "retry_after": "1234"}, 1, 0, True),
-        ({"status": 412, "retry_after": "1234"}, 6, 5, False),
-        ({"status": 429, "retry_after": "1234"}, 6, 5, False),
-        ({"status": 500, "retry_after": "1234"}, 6, 5, False),
-        ({"status": 502, "retry_after": "1234"}, 6, 5, False),
-        ({"status": 503, "retry_after": "1234"}, 6, 5, False),
-        ({"status": 504, "retry_after": "1234"}, 6, 5, False),
-        ({"err": urllib3.exceptions.ConnectTimeoutError}, 6, 4, False),
-        ({"err": urllib3.exceptions.ProtocolError}, 6, 4, False),
-        (
+        pytest.param({"status": 200, "retry_after": "1234"}, 1, 0, True, id="200_retry_after"),
+        pytest.param({"status": 204, "retry_after": "1234"}, 1, 0, True, id="204_retry_after"),
+        pytest.param(
+            {"status": 412, "retry_after": "1234"}, 6, 5, False, id="412_ignore_retry_after"
+        ),
+        pytest.param(
+            {"status": 429, "retry_after": "1234"}, 6, 5, False, id="429_ignore_retry_after"
+        ),
+        pytest.param(
+            {"status": 500, "retry_after": "1234"}, 6, 5, False, id="500_ignore_retry_after"
+        ),
+        pytest.param(
+            {"status": 502, "retry_after": "1234"}, 6, 5, False, id="502_ignore_retry_after"
+        ),
+        pytest.param(
+            {"status": 503, "retry_after": "1234"}, 6, 5, False, id="503_ignore_retry_after"
+        ),
+        pytest.param(
+            {"status": 504, "retry_after": "1234"}, 6, 5, False, id="504_ignore_retry_after"
+        ),
+        pytest.param(
+            {"err": urllib3.exceptions.ConnectTimeoutError},
+            6,
+            4,
+            False,
+            id="connect_timeout_ignore_retry_after",
+        ),
+        pytest.param(
+            {"err": urllib3.exceptions.ProtocolError},
+            6,
+            4,
+            False,
+            id="protocol_error_ignore_retry_after",
+        ),
+        pytest.param(
             {
                 "err": urllib3.exceptions.ReadTimeoutError(
                     MagicMock(), "http://127.0.0.1/v1/test", "foo"
@@ -978,6 +1033,7 @@ def req_mock(request):
             6,
             4,
             False,
+            id="read_timeout_ignore_retry_after",
         ),
     ),
     indirect=("req_mock",),
@@ -1001,12 +1057,12 @@ def test_vault_retry(server_config, cnt, slept, respect_retry_after, req_mock, s
 @pytest.mark.parametrize(
     "req_mock",
     (
-        {"status": 412, "retry_after": "42"},
-        {"status": 429, "retry_after": "42"},
-        {"status": 500, "retry_after": "42"},
-        {"status": 502, "retry_after": "42"},
-        {"status": 503, "retry_after": "42"},
-        {"status": 504, "retry_after": "42"},
+        pytest.param({"status": 412, "retry_after": "42"}, id="412"),
+        pytest.param({"status": 429, "retry_after": "42"}, id="429"),
+        pytest.param({"status": 500, "retry_after": "42"}, id="500"),
+        pytest.param({"status": 502, "retry_after": "42"}, id="502"),
+        pytest.param({"status": 503, "retry_after": "42"}, id="503"),
+        pytest.param({"status": 504, "retry_after": "42"}, id="504"),
     ),
     indirect=True,
 )
@@ -1025,12 +1081,12 @@ def test_vault_retry_retry_after(server_config, req_mock, sleep_mock):
 @pytest.mark.parametrize(
     "req_mock",
     (
-        {"status": 412, "retry_after": "9999999999"},
-        {"status": 429, "retry_after": "9999999999"},
-        {"status": 500, "retry_after": "9999999999"},
-        {"status": 502, "retry_after": "9999999999"},
-        {"status": 503, "retry_after": "9999999999"},
-        {"status": 504, "retry_after": "9999999999"},
+        pytest.param({"status": 412, "retry_after": "9999999999"}, id="412"),
+        pytest.param({"status": 429, "retry_after": "9999999999"}, id="429"),
+        pytest.param({"status": 500, "retry_after": "9999999999"}, id="500"),
+        pytest.param({"status": 502, "retry_after": "9999999999"}, id="502"),
+        pytest.param({"status": 503, "retry_after": "9999999999"}, id="503"),
+        pytest.param({"status": 504, "retry_after": "9999999999"}, id="504"),
     ),
     indirect=True,
 )
@@ -1056,22 +1112,23 @@ def test_vault_retry_retry_after_max(server_config, disabled, req_mock, sleep_mo
 @pytest.mark.parametrize(
     "req_mock,slept",
     (
-        ({"err": urllib3.exceptions.ConnectTimeoutError}, 4),
-        ({"err": urllib3.exceptions.ProtocolError}, 4),
-        (
+        pytest.param({"err": urllib3.exceptions.ConnectTimeoutError}, 4, id="connect_timeout"),
+        pytest.param({"err": urllib3.exceptions.ProtocolError}, 4, id="protocol_error"),
+        pytest.param(
             {
                 "err": urllib3.exceptions.ReadTimeoutError(
                     MagicMock(), "http://127.0.0.1/v1/test", "foo"
                 )
             },
             4,
+            id="read_timeout",
         ),
-        ({"status": 412}, 5),
-        ({"status": 429}, 5),
-        ({"status": 500}, 5),
-        ({"status": 502}, 5),
-        ({"status": 503}, 5),
-        ({"status": 504}, 5),
+        pytest.param({"status": 412}, 5, id="412"),
+        pytest.param({"status": 429}, 5, id="429"),
+        pytest.param({"status": 500}, 5, id="500"),
+        pytest.param({"status": 502}, 5, id="502"),
+        pytest.param({"status": 503}, 5, id="503"),
+        pytest.param({"status": 504}, 5, id="504"),
     ),
     indirect=("req_mock",),
 )
@@ -1091,22 +1148,23 @@ def test_vault_retry_backoff_factor(server_config, slept, req_mock, sleep_mock):
 @pytest.mark.parametrize(
     "req_mock,slept",
     (
-        ({"err": urllib3.exceptions.ConnectTimeoutError}, 4),
-        ({"err": urllib3.exceptions.ProtocolError}, 4),
-        (
+        pytest.param({"err": urllib3.exceptions.ConnectTimeoutError}, 4, id="connect_timeout"),
+        pytest.param({"err": urllib3.exceptions.ProtocolError}, 4, id="protocol_error"),
+        pytest.param(
             {
                 "err": urllib3.exceptions.ReadTimeoutError(
                     MagicMock(), "http://127.0.0.1/v1/test", "foo"
                 )
             },
             4,
+            id="read_timeout",
         ),
-        ({"status": 412}, 5),
-        ({"status": 429}, 5),
-        ({"status": 500}, 5),
-        ({"status": 502}, 5),
-        ({"status": 503}, 5),
-        ({"status": 504}, 5),
+        pytest.param({"status": 412}, 5, id="412"),
+        pytest.param({"status": 429}, 5, id="429"),
+        pytest.param({"status": 500}, 5, id="500"),
+        pytest.param({"status": 502}, 5, id="502"),
+        pytest.param({"status": 503}, 5, id="503"),
+        pytest.param({"status": 504}, 5, id="504"),
     ),
     indirect=("req_mock",),
 )
@@ -1129,22 +1187,23 @@ def test_vault_retry_backoff_max(server_config, slept, req_mock, sleep_mock):
 @pytest.mark.parametrize(
     "req_mock,slept",
     (
-        ({"err": urllib3.exceptions.ConnectTimeoutError}, -1),
-        ({"err": urllib3.exceptions.ProtocolError}, -1),
-        (
+        pytest.param({"err": urllib3.exceptions.ConnectTimeoutError}, -1, id="connect_timeout"),
+        pytest.param({"err": urllib3.exceptions.ProtocolError}, -1, id="protocol_error"),
+        pytest.param(
             {
                 "err": urllib3.exceptions.ReadTimeoutError(
                     MagicMock(), "http://127.0.0.1/v1/test", "foo"
                 )
             },
             -1,
+            id="read_timeout",
         ),
-        ({"status": 412}, 0),
-        ({"status": 429}, 0),
-        ({"status": 500}, 0),
-        ({"status": 502}, 0),
-        ({"status": 503}, 0),
-        ({"status": 504}, 0),
+        pytest.param({"status": 412}, 0, id="412"),
+        pytest.param({"status": 429}, 0, id="429"),
+        pytest.param({"status": 500}, 0, id="500"),
+        pytest.param({"status": 502}, 0, id="502"),
+        pytest.param({"status": 503}, 0, id="503"),
+        pytest.param({"status": 504}, 0, id="504"),
     ),
     indirect=("req_mock",),
 )
@@ -1223,7 +1282,7 @@ def test_vault_safe_to_retry(server_config, method, req_mock):
 
 
 @pytest.mark.usefixtures("sleep_mock")
-@pytest.mark.parametrize("statuses", ((412,), None))
+@pytest.mark.parametrize("statuses", (pytest.param((412,), id="custom"), None))
 def test_vault_retry_status(server_config, statuses, req_mock):
     """
     Ensure retry_status can be set and HTTP 429 is retried

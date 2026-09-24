@@ -327,7 +327,11 @@ def validate_signature():
 @pytest.mark.usefixtures("policies", "metadata")
 @pytest.mark.parametrize(
     "config",
-    [{}, {"issue:token:role_name": "test-role"}, {"issue:wrap": False}],
+    [
+        pytest.param({}, id="default"),
+        pytest.param({"issue:token:role_name": "test-role"}, id="role_name"),
+        pytest.param({"issue:wrap": False}, id="no_wrap"),
+    ],
     indirect=True,
 )
 def test_generate_token(
@@ -377,7 +381,14 @@ def test_generate_token_no_policies_denied():
 
 @pytest.mark.parametrize("ttl", [None, 1337])
 @pytest.mark.parametrize("uses", [None, 1, 30])
-@pytest.mark.parametrize("config", [{}, {"issue:type": "approle"}], indirect=True)
+@pytest.mark.parametrize(
+    "config",
+    [
+        pytest.param({}, id="issue_token"),
+        pytest.param({"issue:type": "approle"}, id="issue_approle"),
+    ],
+    indirect=True,
+)
 def test_generate_token_deprecated(ttl, uses, token_serialized, config, validate_signature, caplog):
     """
     Ensure the deprecated generate_token function returns data in the old format
@@ -413,13 +424,19 @@ def test_generate_token_deprecated(ttl, uses, token_serialized, config, validate
 @pytest.mark.parametrize(
     "config",
     [
-        {},
-        {"issue:wrap": False},
-        {"server:url_alts": ["http://test-vault:8200", "http://alt-vault:8200"]},
+        pytest.param({}, id="default"),
+        pytest.param({"issue:wrap": False}, id="no_wrap"),
+        pytest.param(
+            {"server:url_alts": ["http://test-vault:8200", "http://alt-vault:8200"]},
+            id="url_alts",
+        ),
     ],
     indirect=True,
 )
-@pytest.mark.parametrize("issue_params", [None, {"explicit_max_ttl": 120, "num_uses": 3}])
+@pytest.mark.parametrize(
+    "issue_params",
+    [None, pytest.param({"explicit_max_ttl": 120, "num_uses": 3}, id="custom_params")],
+)
 def test_generate_new_token(
     issue_params, config, validate_signature, token_serialized, wrapped_serialized
 ):
@@ -470,13 +487,19 @@ def test_generate_new_token_refuses_if_not_configured():
 @pytest.mark.parametrize(
     "config",
     [
-        {},
-        {"issue:wrap": False},
-        {"server:url_alts": ["http://test-vault:8200", "http://alt-vault:8200"]},
+        pytest.param({}, id="default"),
+        pytest.param({"issue:wrap": False}, id="no_wrap"),
+        pytest.param(
+            {"server:url_alts": ["http://test-vault:8200", "http://alt-vault:8200"]},
+            id="url_alts",
+        ),
     ],
     indirect=True,
 )
-@pytest.mark.parametrize("issue_params", [None, {"explicit_max_ttl": 120, "num_uses": 3}])
+@pytest.mark.parametrize(
+    "issue_params",
+    [None, pytest.param({"explicit_max_ttl": 120, "num_uses": 3}, id="custom_params")],
+)
 def test_get_config_token(
     config, validate_signature, token_serialized, wrapped_serialized, issue_params
 ):
@@ -535,13 +558,19 @@ def test_get_config_token(
 @pytest.mark.parametrize(
     "config",
     [
-        {"issue:type": "approle"},
-        {
-            "issue:type": "approle",
-            "issue:wrap": False,
-            "issue:approle:mount": "test-mount",
-        },
-        {"issue:type": "approle", "issue:approle:params:bind_secret_id": False},
+        pytest.param({"issue:type": "approle"}, id="default"),
+        pytest.param(
+            {
+                "issue:type": "approle",
+                "issue:wrap": False,
+                "issue:approle:mount": "test-mount",
+            },
+            id="no_wrap_custom_mount",
+        ),
+        pytest.param(
+            {"issue:type": "approle", "issue:approle:params:bind_secret_id": False},
+            id="no_secret_id",
+        ),
     ],
     indirect=True,
 )
@@ -549,8 +578,8 @@ def test_get_config_token(
     "issue_params",
     [
         None,
-        {"token_explicit_max_ttl": 120, "token_num_uses": 3},
-        {"secret_id_num_uses": 2, "secret_id_ttl": 120},
+        pytest.param({"token_explicit_max_ttl": 120, "token_num_uses": 3}, id="token_params"),
+        pytest.param({"secret_id_num_uses": 2, "secret_id_ttl": 120}, id="secret_id_params"),
     ],
 )
 def test_get_config_approle(config, validate_signature, wrapped_serialized, issue_params):
@@ -599,12 +628,15 @@ def test_get_config_approle(config, validate_signature, wrapped_serialized, issu
 @pytest.mark.parametrize(
     "config",
     [
-        {"issue:type": "approle"},
-        {"issue:type": "approle", "issue:wrap": False},
-        {
-            "issue:type": "approle",
-            "server:url_alts": ["http://test-vault:8200", "http://alt-vault:8200"],
-        },
+        pytest.param({"issue:type": "approle"}, id="default"),
+        pytest.param({"issue:type": "approle", "issue:wrap": False}, id="no_wrap"),
+        pytest.param(
+            {
+                "issue:type": "approle",
+                "server:url_alts": ["http://test-vault:8200", "http://alt-vault:8200"],
+            },
+            id="url_alts",
+        ),
     ],
     indirect=True,
 )
@@ -612,8 +644,8 @@ def test_get_config_approle(config, validate_signature, wrapped_serialized, issu
     "issue_params",
     [
         None,
-        {"token_explicit_max_ttl": 120, "token_num_uses": 3},
-        {"secret_id_num_uses": 2, "secret_id_ttl": 120},
+        pytest.param({"token_explicit_max_ttl": 120, "token_num_uses": 3}, id="token_params"),
+        pytest.param({"secret_id_num_uses": 2, "secret_id_ttl": 120}, id="secret_id_params"),
     ],
 )
 def test_get_role_id(config, validate_signature, wrapped_serialized, issue_params):
@@ -695,7 +727,10 @@ class TestGetRoleId:
 
     @pytest.mark.parametrize(
         "config",
-        [{"issue:type": "approle"}, {"issue:type": "approle", "issue:wrap": False}],
+        [
+            pytest.param({"issue:type": "approle"}, id="wrap"),
+            pytest.param({"issue:type": "approle", "issue:wrap": False}, id="no_wrap"),
+        ],
         indirect=True,
     )
     def test_get_role_id(
@@ -730,13 +765,20 @@ class TestGetRoleId:
     @pytest.mark.parametrize(
         "config",
         [
-            {"issue:type": "approle"},
-            {"issue:type": "approle", "issue:allow_minion_override_params": True},
+            pytest.param({"issue:type": "approle"}, id="default"),
+            pytest.param(
+                {"issue:type": "approle", "issue:allow_minion_override_params": True},
+                id="allow_override",
+            ),
         ],
         indirect=True,
     )
     @pytest.mark.parametrize(
-        "issue_params", [None, {"token_explicit_max_ttl": 120, "token_num_uses": 3}]
+        "issue_params",
+        [
+            None,
+            pytest.param({"token_explicit_max_ttl": 120, "token_num_uses": 3}, id="custom_params"),
+        ],
     )
     def test_get_role_id_generate_new(
         self,
@@ -782,12 +824,15 @@ class TestGetRoleId:
 @pytest.mark.parametrize(
     "config",
     [
-        {"issue:type": "approle"},
-        {"issue:type": "approle", "issue:wrap": False},
-        {
-            "issue:type": "approle",
-            "server:url_alts": ["http://test-vault:8200", "http://alt-vault:8200"],
-        },
+        pytest.param({"issue:type": "approle"}, id="default"),
+        pytest.param({"issue:type": "approle", "issue:wrap": False}, id="no_wrap"),
+        pytest.param(
+            {
+                "issue:type": "approle",
+                "server:url_alts": ["http://test-vault:8200", "http://alt-vault:8200"],
+            },
+            id="url_alts",
+        ),
     ],
     indirect=True,
 )
@@ -897,10 +942,15 @@ def test_generate_secret_id_refuses_if_not_configured():
 @pytest.mark.parametrize(
     "func,config,patched",
     (
-        ("generate_new_token", {}, "_generate_token"),
-        ("get_config", {}, "_generate_token"),
-        ("get_role_id", {"issue:type": "approle"}, "_get_role_id"),
-        ("generate_secret_id", {"issue:type": "approle"}, "_lookup_approle_cached"),
+        pytest.param("generate_new_token", {}, "_generate_token", id="generate_new_token"),
+        pytest.param("get_config", {}, "_generate_token", id="get_config"),
+        pytest.param("get_role_id", {"issue:type": "approle"}, "_get_role_id", id="get_role_id"),
+        pytest.param(
+            "generate_secret_id",
+            {"issue:type": "approle"},
+            "_lookup_approle_cached",
+            id="generate_secret_id",
+        ),
     ),
     indirect=("config",),
 )
@@ -1004,12 +1054,12 @@ def test_generate_secret_id_updates_params(
 @pytest.mark.parametrize(
     "func,args",
     (
-        ("sync_approles", ()),
-        ("list_approles", ()),
-        ("sync_entities", ()),
-        ("list_entities", ()),
-        ("show_entity", ("test-minion",)),
-        ("show_approle", ("test-minion",)),
+        pytest.param("sync_approles", (), id="sync_approles"),
+        pytest.param("list_approles", (), id="list_approles"),
+        pytest.param("sync_entities", (), id="sync_entities"),
+        pytest.param("list_entities", (), id="list_entities"),
+        pytest.param("show_entity", ("test-minion",), id="show_entity"),
+        pytest.param("show_approle", ("test-minion",), id="show_approle"),
     ),
 )
 def test_approle_funcs_raise_exception_if_not_configured(func, args):
@@ -1028,19 +1078,30 @@ def test_approle_funcs_raise_exception_if_not_configured(func, args):
 @pytest.mark.parametrize(
     "config,expected",
     [
-        ({"policies:assign": ["no-tokens-to-replace"]}, ["no-tokens-to-replace"]),
-        ({"policies:assign": ["single-dict:{minion}"]}, ["single-dict:test-minion"]),
-        (
+        pytest.param(
+            {"policies:assign": ["no-tokens-to-replace"]},
+            ["no-tokens-to-replace"],
+            id="static",
+        ),
+        pytest.param(
+            {"policies:assign": ["single-dict:{minion}"]},
+            ["single-dict:test-minion"],
+            id="minion_id",
+        ),
+        pytest.param(
             {"policies:assign": ["should-not-cause-an-exception,but-result-empty:{foo}"]},
             [],
+            id="undefined_var",
         ),
-        (
+        pytest.param(
             {"policies:assign": ["Case-Should-Be-Lowered:{grains[mixedcase]}"]},
             ["case-should-be-lowered:up-low-up"],
+            id="mixedcase_lowered",
         ),
-        (
+        pytest.param(
             {"policies:assign": ["pillar-rendering:{pillar[role]}"]},
             ["pillar-rendering:test"],
+            id="pillar",
         ),
     ],
     indirect=["config"],
@@ -1065,10 +1126,10 @@ def test_get_policies(expected, grains, pillar):
 @pytest.mark.parametrize(
     "config",
     [
-        {"policies:assign": ["salt_minion_{minion}"]},
-        {"policies:assign": ["salt_grain_{grains[id]}"]},
-        {"policies:assign": ["unset_{foo}"]},
-        {"policies:assign": ["salt_pillar_{pillar[role]}"]},
+        pytest.param({"policies:assign": ["salt_minion_{minion}"]}, id="minion_id"),
+        pytest.param({"policies:assign": ["salt_grain_{grains[id]}"]}, id="grain"),
+        pytest.param({"policies:assign": ["unset_{foo}"]}, id="undefined_var"),
+        pytest.param({"policies:assign": ["salt_pillar_{pillar[role]}"]}, id="pillar"),
     ],
     indirect=True,
 )
@@ -1092,9 +1153,17 @@ def test_get_policies_does_not_render_pillar_unnecessarily(config, grains, pilla
 @pytest.mark.parametrize(
     "config,expected",
     [
-        ({"policies:assign": ["no-tokens-to-replace"]}, ["no-tokens-to-replace"]),
-        ({"policies:assign": ["single-dict:{minion}"]}, ["single-dict:test-minion"]),
-        ({"policies:assign": ["single-grain:{grains[os]}"]}, []),
+        pytest.param(
+            {"policies:assign": ["no-tokens-to-replace"]},
+            ["no-tokens-to-replace"],
+            id="static",
+        ),
+        pytest.param(
+            {"policies:assign": ["single-dict:{minion}"]},
+            ["single-dict:test-minion"],
+            id="minion_id",
+        ),
+        pytest.param({"policies:assign": ["single-grain:{grains[os]}"]}, [], id="grain_no_grains"),
     ],
     indirect=["config"],
 )
@@ -1115,33 +1184,40 @@ def test_get_policies_for_nonexisting_minions(expected):
 @pytest.mark.parametrize(
     "metadata_patterns,expected",
     [
-        (
+        pytest.param(
             {"no-tokens-to-replace": "no-tokens-to-replace"},
             {"no-tokens-to-replace": "no-tokens-to-replace"},
+            id="static",
         ),
-        (
+        pytest.param(
             {"single-dict:{minion}": "single-dict:{minion}"},
             {"single-dict:{minion}": "single-dict:test-minion"},
+            id="minion_id",
         ),
-        (
+        pytest.param(
             {"should-not-cause-an-exception,but-result-empty:{foo}": "empty:{foo}"},
             {"should-not-cause-an-exception,but-result-empty:{foo}": ""},
+            id="undefined_var",
         ),
-        (
+        pytest.param(
             {"Case-Should-Not-Be-Lowered": "Case-Should-Not-Be-Lowered:{pillar[mixedcase]}"},
             {"Case-Should-Not-Be-Lowered": "Case-Should-Not-Be-Lowered:UP-low-UP"},
+            id="case_preserved",
         ),
-        (
+        pytest.param(
             {"pillar-rendering:{pillar[role]}": "pillar-rendering:{pillar[role]}"},
             {"pillar-rendering:{pillar[role]}": "pillar-rendering:test"},
+            id="pillar",
         ),
-        (
+        pytest.param(
             {"list-val": "list-val:{pillar[roles][0]}"},
             {"list-val": "list-val:foo"},
+            id="list_index",
         ),
-        (
+        pytest.param(
             {"list-val-out-of-bounds": "list-val-out-of-bounds:{pillar[roles][10]}"},
             {"list-val-out-of-bounds": ""},
+            id="list_index_out_of_bounds",
         ),
     ],
 )
@@ -1187,8 +1263,8 @@ def test_get_metadata_list():
 @pytest.mark.parametrize(
     "template",
     (
-        "salt_role_{pillar[missing]}",  # KeyError
-        "salt_role_{pillar[roles][10]}",  # IndexError
+        pytest.param("salt_role_{pillar[missing]}", id="key_error"),
+        pytest.param("salt_role_{pillar[roles][10]}", id="index_error"),
     ),
 )
 def test_get_metadata_expansion_failure(template, pillar):
@@ -1224,27 +1300,31 @@ def test_get_metadata_list_conflict():
 @pytest.mark.parametrize(
     "config,issue_params,expected",
     [
-        (
+        pytest.param(
             {"issue:token:params": {"explicit_max_ttl": None, "num_uses": None}},
             None,
             {},
+            id="token_no_params",
         ),
-        (
+        pytest.param(
             {"issue:token:params": {"explicit_max_ttl": 1337, "num_uses": None}},
             None,
             {"explicit_max_ttl": 1337},
+            id="token_ttl_only",
         ),
-        (
+        pytest.param(
             {"issue:token:params": {"explicit_max_ttl": None, "num_uses": 3}},
             None,
             {"num_uses": 3},
+            id="token_uses_only",
         ),
-        (
+        pytest.param(
             {"issue:token:params": {"explicit_max_ttl": 1337, "num_uses": 3}},
             None,
             {"explicit_max_ttl": 1337, "num_uses": 3},
+            id="token_ttl_and_uses",
         ),
-        (
+        pytest.param(
             {
                 "issue:token:params": {
                     "explicit_max_ttl": 1337,
@@ -1254,85 +1334,102 @@ def test_get_metadata_list_conflict():
             },
             None,
             {"explicit_max_ttl": 1337, "num_uses": 3},
+            id="token_invalid_dropped",
         ),
-        (
+        pytest.param(
             {"issue:token:params": {"explicit_max_ttl": None, "num_uses": None}},
             {"num_uses": 42, "explicit_max_ttl": 1338},
             {},
+            id="override_denied_no_config",
         ),
-        (
+        pytest.param(
             {"issue:token:params": {"explicit_max_ttl": 1337, "num_uses": None}},
             {"num_uses": 42, "explicit_max_ttl": 1338},
             {"explicit_max_ttl": 1337},
+            id="override_denied_config_ttl",
         ),
-        (
+        pytest.param(
             {"issue:token:params": {"explicit_max_ttl": None, "num_uses": 3}},
             {"num_uses": 42, "explicit_max_ttl": 1338},
             {"num_uses": 3},
+            id="override_denied_config_uses",
         ),
-        (
+        pytest.param(
             {"issue:token:params": {"explicit_max_ttl": 1337, "num_uses": 3}},
             {"num_uses": 42, "explicit_max_ttl": 1338, "invalid": True},
             {"explicit_max_ttl": 1337, "num_uses": 3},
+            id="override_denied_config_both",
         ),
-        (
+        pytest.param(
             {
                 "issue:token:params": {"explicit_max_ttl": None, "num_uses": None},
                 "issue:allow_minion_override_params": True,
             },
             {"num_uses": None, "explicit_max_ttl": None},
             {},
+            id="override_allowed_all_none",
         ),
-        (
+        pytest.param(
             {
                 "issue:token:params": {"explicit_max_ttl": None, "num_uses": 3},
                 "issue:allow_minion_override_params": True,
             },
             {"num_uses": 42, "explicit_max_ttl": None},
             {"num_uses": 42},
+            id="override_uses",
         ),
-        (
+        pytest.param(
             {
                 "issue:token:params": {"explicit_max_ttl": 1337, "num_uses": None},
                 "issue:allow_minion_override_params": True,
             },
             {"num_uses": None, "explicit_max_ttl": 1338},
             {"explicit_max_ttl": 1338},
+            id="override_ttl",
         ),
-        (
+        pytest.param(
             {
                 "issue:token:params": {"explicit_max_ttl": 1337, "num_uses": None},
                 "issue:allow_minion_override_params": True,
             },
             {"num_uses": 42, "explicit_max_ttl": None},
             {"num_uses": 42, "explicit_max_ttl": 1337},
+            id="override_uses_keep_config_ttl",
         ),
-        (
+        pytest.param(
             {
                 "issue:token:params": {"explicit_max_ttl": None, "num_uses": 3},
                 "issue:allow_minion_override_params": True,
             },
             {"num_uses": None, "explicit_max_ttl": 1338},
             {"num_uses": 3, "explicit_max_ttl": 1338},
+            id="override_ttl_keep_config_uses",
         ),
-        (
+        pytest.param(
             {
                 "issue:token:params": {"explicit_max_ttl": None, "num_uses": None},
                 "issue:allow_minion_override_params": True,
             },
             {"num_uses": 42, "explicit_max_ttl": 1338},
             {"num_uses": 42, "explicit_max_ttl": 1338},
+            id="override_both",
         ),
-        (
+        pytest.param(
             {
                 "issue:token:params": {"explicit_max_ttl": 1337, "num_uses": 3},
                 "issue:allow_minion_override_params": True,
             },
             {"num_uses": 42, "explicit_max_ttl": 1338, "invalid": True},
             {"num_uses": 42, "explicit_max_ttl": 1338},
+            id="override_both_invalid_dropped",
         ),
-        ({"issue:type": "approle", "issue:approle:params": {}}, None, {}),
-        (
+        pytest.param(
+            {"issue:type": "approle", "issue:approle:params": {}},
+            None,
+            {},
+            id="approle_no_params",
+        ),
+        pytest.param(
             {
                 "issue:type": "approle",
                 "issue:approle:params": {
@@ -1349,8 +1446,9 @@ def test_get_metadata_list_conflict():
                 "secret_id_num_uses": 3,
                 "secret_id_ttl": 60,
             },
+            id="approle_config_params",
         ),
-        (
+        pytest.param(
             {
                 "issue:type": "approle",
                 "issue:approle:params": {
@@ -1372,8 +1470,9 @@ def test_get_metadata_list_conflict():
                 "secret_id_num_uses": 3,
                 "secret_id_ttl": 60,
             },
+            id="approle_override_denied",
         ),
-        (
+        pytest.param(
             {
                 "issue:type": "approle",
                 "issue:allow_minion_override_params": True,
@@ -1391,8 +1490,9 @@ def test_get_metadata_list_conflict():
                 "secret_id_num_uses": 42,
                 "secret_id_ttl": 1338,
             },
+            id="approle_override_no_config",
         ),
-        (
+        pytest.param(
             {
                 "issue:type": "approle",
                 "issue:allow_minion_override_params": True,
@@ -1415,6 +1515,7 @@ def test_get_metadata_list_conflict():
                 "secret_id_num_uses": 42,
                 "secret_id_ttl": 1338,
             },
+            id="approle_override_wins",
         ),
     ],
     indirect=["config"],
@@ -1432,28 +1533,32 @@ def test_parse_issue_params(issue_params, expected):
 @pytest.mark.parametrize(
     "config,issue_params,expected",
     [
-        (
+        pytest.param(
             {"issue:type": "approle", "issue:approle:params": {}},
             {"bind_secret_id": False},
             False,
+            id="unset_override_false",
         ),
-        (
+        pytest.param(
             {"issue:type": "approle", "issue:approle:params": {}},
             {"bind_secret_id": True},
             False,
+            id="unset_override_true",
         ),
-        (
+        pytest.param(
             {"issue:type": "approle", "issue:approle:params": {"bind_secret_id": True}},
             {"bind_secret_id": False},
             True,
+            id="config_true_wins",
         ),
-        (
+        pytest.param(
             {
                 "issue:type": "approle",
                 "issue:approle:params": {"bind_secret_id": False},
             },
             {"bind_secret_id": True},
             False,
+            id="config_false_wins",
         ),
     ],
     indirect=["config"],
@@ -1722,11 +1827,11 @@ def test_lazy_pillar_untouched_is_not_compiled(get_pillar, lazy_pillar):
 @pytest.mark.parametrize(
     "access,expected",
     (
-        (lambda pillar: pillar["foo"], "bar"),
+        pytest.param(lambda pillar: pillar["foo"], "bar", id="getitem"),
         # list(pillar) would call __len__ first for preallocation,
         # compiling the pillar before __iter__ runs
-        (lambda pillar: list(iter(pillar)), ["foo", "baz"]),
-        (len, 2),
+        pytest.param(lambda pillar: list(iter(pillar)), ["foo", "baz"], id="iter"),
+        pytest.param(len, 2, id="len"),
     ),
 )
 def test_lazy_pillar_access_compiles_pillar(get_pillar, lazy_pillar, master_opts, access, expected):

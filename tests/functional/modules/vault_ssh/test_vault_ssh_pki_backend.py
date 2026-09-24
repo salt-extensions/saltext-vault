@@ -222,13 +222,16 @@ def _all_principals_defaults_to_all_valid(cert_managed, args, valid):
 @pytest.mark.parametrize(
     "roles_setup",
     (
-        {"userrole": {"allowed_users": "foo,bar,baz"}},
-        {
-            "userrole": {
-                "allowed_users": "foo,{{identity.entity.metadata.bar}},baz",
-                "allowed_users_template": True,
-            }
-        },
+        pytest.param({"userrole": {"allowed_users": "foo,bar,baz"}}, id="static_users"),
+        pytest.param(
+            {
+                "userrole": {
+                    "allowed_users": "foo,{{identity.entity.metadata.bar}},baz",
+                    "allowed_users_template": True,
+                }
+            },
+            id="templated_users",
+        ),
     ),
     indirect=True,
 )
@@ -239,14 +242,25 @@ def test_user_all_principals_defaults_to_all_valid(cert_managed, user_args):
 @pytest.mark.parametrize(
     "roles_setup",
     (
-        {"hostrole": {"allowed_domains": "foo.bar.baz,foo.bar.quux", "allow_bare_domains": True}},
-        {
-            "hostrole": {
-                "allowed_domains": "foo.{{identity.entity.metadata.bar}}.baz,foo.bar.quux",
-                "allow_bare_domains": True,
-                "allowed_domains_template": True,
-            }
-        },
+        pytest.param(
+            {
+                "hostrole": {
+                    "allowed_domains": "foo.bar.baz,foo.bar.quux",
+                    "allow_bare_domains": True,
+                }
+            },
+            id="static_domains",
+        ),
+        pytest.param(
+            {
+                "hostrole": {
+                    "allowed_domains": "foo.{{identity.entity.metadata.bar}}.baz,foo.bar.quux",
+                    "allow_bare_domains": True,
+                    "allowed_domains_template": True,
+                }
+            },
+            id="templated_domains",
+        ),
     ),
     indirect=True,
 )
@@ -264,9 +278,18 @@ def _all_principals_requires_allow_empty_principals(cert_managed, args):
 @pytest.mark.parametrize(
     "roles_setup",
     (
-        {"userrole": {"allowed_users": "*", "default_user": "foo"}},
-        {"userrole": {"allowed_users": "*", "default_user": ""}},
-        {"userrole": {"allowed_users": "", "default_user": ""}},
+        pytest.param(
+            {"userrole": {"allowed_users": "*", "default_user": "foo"}},
+            id="wildcard_users_with_default",
+        ),
+        pytest.param(
+            {"userrole": {"allowed_users": "*", "default_user": ""}},
+            id="wildcard_users_no_default",
+        ),
+        pytest.param(
+            {"userrole": {"allowed_users": "", "default_user": ""}},
+            id="no_users_no_default",
+        ),
     ),
     indirect=True,
 )
@@ -277,8 +300,8 @@ def test_user_all_principals_requires_allow_empty_principals(cert_managed, user_
 @pytest.mark.parametrize(
     "roles_setup",
     (
-        {"hostrole": {"allowed_domains": "*"}},
-        {"hostrole": {"allowed_domains": ""}},
+        pytest.param({"hostrole": {"allowed_domains": "*"}}, id="wildcard_domains"),
+        pytest.param({"hostrole": {"allowed_domains": ""}}, id="no_domains"),
     ),
     indirect=True,
 )
@@ -320,7 +343,7 @@ def test_user_public_key_all_principals(cert_managed, user_args, ec_pub_file):
 @pytest.mark.parametrize(
     "roles_setup,principals",
     (
-        (
+        pytest.param(
             {
                 "userrole": {
                     "allowed_users_template": True,
@@ -328,8 +351,9 @@ def test_user_public_key_all_principals(cert_managed, user_args, ec_pub_file):
                 }
             },
             ("foo", "foo-bar"),
+            id="single_value_template",
         ),
-        (
+        pytest.param(
             {
                 "userrole": {
                     "allowed_users_template": True,
@@ -338,6 +362,7 @@ def test_user_public_key_all_principals(cert_managed, user_args, ec_pub_file):
                 }
             },
             ("foo", "foo-bar", "baz-quux"),
+            id="multi_value_template",
         ),
     ),
     indirect=("roles_setup",),
@@ -371,7 +396,7 @@ def test_user_principal_templated(cert_managed, user_args, principals):
 @pytest.mark.parametrize(
     "roles_setup,principals",
     (
-        (
+        pytest.param(
             {
                 "hostrole": {
                     "allow_bare_domains": True,
@@ -380,8 +405,9 @@ def test_user_principal_templated(cert_managed, user_args, principals):
                 }
             },
             ("foo.bar.baz", "foo.bar.quux"),
+            id="single_value_template",
         ),
-        (
+        pytest.param(
             {
                 "hostrole": {
                     "allow_bare_domains": True,
@@ -391,6 +417,7 @@ def test_user_principal_templated(cert_managed, user_args, principals):
                 }
             },
             ("foo.bar.baz", "foo.bar.bar", "baz.baz.quux"),
+            id="multi_value_template",
         ),
     ),
     indirect=("roles_setup",),
@@ -495,13 +522,29 @@ def _principal_existing_all_invalid(cert_managed, args, expected_msg=None):
 @pytest.mark.parametrize(
     "roles_setup,user_args",
     (
-        ({"userrole": {"allowed_users": "foo"}}, {}),
-        ({"userrole": {"allowed_users": "foo", "default_user": "foo"}}, {}),
-        ({"userrole": {"allowed_users": "foo,bar"}}, {}),
-        ({"userrole": {"allowed_users": "foo,bar"}}, {"valid_principals": ["foo", "bar"]}),
-        ({"userrole": {"allowed_users": "foo,bar", "default_user": "foo"}}, {}),
-        ({"userrole": {"allowed_users": "foo,bar", "default_user": "bar"}}, {}),
-        (
+        pytest.param({"userrole": {"allowed_users": "foo"}}, {}, id="allowed_matches_cert"),
+        pytest.param(
+            {"userrole": {"allowed_users": "foo", "default_user": "foo"}},
+            {},
+            id="default_matches_cert",
+        ),
+        pytest.param({"userrole": {"allowed_users": "foo,bar"}}, {}, id="allowed_exceeds_cert"),
+        pytest.param(
+            {"userrole": {"allowed_users": "foo,bar"}},
+            {"valid_principals": ["foo", "bar"]},
+            id="cert_has_all_allowed",
+        ),
+        pytest.param(
+            {"userrole": {"allowed_users": "foo,bar", "default_user": "foo"}},
+            {},
+            id="multi_allowed_default_matches",
+        ),
+        pytest.param(
+            {"userrole": {"allowed_users": "foo,bar", "default_user": "bar"}},
+            {},
+            id="default_differs_from_cert",
+        ),
+        pytest.param(
             {
                 "userrole": {
                     "allowed_users": "foo,{{identity.entity.metadata.bar}}",
@@ -510,6 +553,7 @@ def _principal_existing_all_invalid(cert_managed, args, expected_msg=None):
                 }
             },
             {},
+            id="templated_default_matches",
         ),
     ),
     indirect=True,
@@ -547,8 +591,12 @@ def test_user_principal_existing_all_invalid(cert_managed, user_args, roles_setu
 @pytest.mark.parametrize(
     "roles_setup,host_args",
     (
-        ({"hostrole": {"allowed_domains": "foo.bar.baz", "allow_bare_domains": True}}, {}),
-        (
+        pytest.param(
+            {"hostrole": {"allowed_domains": "foo.bar.baz", "allow_bare_domains": True}},
+            {},
+            id="allowed_matches_cert",
+        ),
+        pytest.param(
             {
                 "hostrole": {
                     "allowed_domains": "foo.bar.baz,foo.bar.quux",
@@ -556,8 +604,9 @@ def test_user_principal_existing_all_invalid(cert_managed, user_args, roles_setu
                 }
             },
             {},
+            id="allowed_exceeds_cert",
         ),
-        (
+        pytest.param(
             {
                 "hostrole": {
                     "allowed_domains": "foo.bar.baz,foo.bar.quux",
@@ -565,8 +614,9 @@ def test_user_principal_existing_all_invalid(cert_managed, user_args, roles_setu
                 }
             },
             {"valid_principals": ["foo.bar.baz", "foo.bar.quux"]},
+            id="cert_has_all_allowed",
         ),
-        (
+        pytest.param(
             {
                 "hostrole": {
                     "allowed_domains": "foo.bar.baz,foo.bar.quux",
@@ -574,8 +624,9 @@ def test_user_principal_existing_all_invalid(cert_managed, user_args, roles_setu
                 }
             },
             {"valid_principals": ["sub.foo.bar.baz", "sub.foo.bar.quux"]},
+            id="subdomains",
         ),
-        (
+        pytest.param(
             {
                 "hostrole": {
                     "allowed_domains": "foo.{{identity.entity.metadata.bar}}.baz,foo.{{identity.entity.metadata.bar}}.quux",
@@ -584,6 +635,7 @@ def test_user_principal_existing_all_invalid(cert_managed, user_args, roles_setu
                 }
             },
             {"valid_principals": ["foo.bar.baz"]},
+            id="templated_domains",
         ),
     ),
     indirect=True,
@@ -644,7 +696,7 @@ def test_host_principal_override_existing_some_valid(cert_managed, host_args):
 @pytest.mark.parametrize(
     "roles_setup,exp",
     (
-        (
+        pytest.param(
             {
                 "userrole": {
                     "allowed_users": "default_principal",
@@ -652,8 +704,9 @@ def test_host_principal_override_existing_some_valid(cert_managed, host_args):
                 },
             },
             ("default_principal",),
+            id="single_allowed",
         ),
-        (
+        pytest.param(
             {
                 "userrole": {
                     "allowed_users": "default_principal,other_principal,yet_another_principal",
@@ -661,8 +714,9 @@ def test_host_principal_override_existing_some_valid(cert_managed, host_args):
                 }
             },
             ("default_principal",),
+            id="multi_allowed",
         ),
-        (
+        pytest.param(
             {
                 "userrole": {
                     "allowed_users": "default_principal,other_default_principal,yet_another_principal",
@@ -670,6 +724,7 @@ def test_host_principal_override_existing_some_valid(cert_managed, host_args):
                 }
             },
             ("default_principal", "other_default_principal"),
+            id="multi_defaults",
         ),
     ),
     indirect=("roles_setup",),
@@ -688,7 +743,7 @@ def test_user_default_principal(cert_managed, user_args, exp):
 @pytest.mark.parametrize(
     "roles_setup,exp",
     (
-        (
+        pytest.param(
             {
                 "userrole": {
                     "allowed_users": "default_{{identity.entity.metadata.bar}},other_principal,yet_another_principal",
@@ -698,8 +753,9 @@ def test_user_default_principal(cert_managed, user_args, exp):
                 }
             },
             ("default_bar",),
+            id="single_value_template",
         ),
-        (
+        pytest.param(
             {
                 "userrole": {
                     "allowed_users": "default_{{identity.entity.metadata.multi}}_other_default,other_principal,yet_another_principal",
@@ -710,6 +766,7 @@ def test_user_default_principal(cert_managed, user_args, exp):
                 }
             },
             ("default_bar", "baz_other_default"),
+            id="multi_value_template",
         ),
     ),
     indirect=("roles_setup",),
@@ -757,18 +814,24 @@ def test_user_default_principal_change(cert_managed, user_args):
 @pytest.mark.parametrize(
     "roles_setup",
     (
-        {"userrole": {"allowed_users": "default_principal"}},
-        {
-            "userrole": {
-                "allowed_users": "default_principal,other_principal,yet_another_principal",
-            }
-        },
-        {
-            "userrole": {
-                "allowed_users": "default_principal,other_principal,yet_another_principal",
-                "allowed_users_template": True,
-            }
-        },
+        pytest.param({"userrole": {"allowed_users": "default_principal"}}, id="single_allowed"),
+        pytest.param(
+            {
+                "userrole": {
+                    "allowed_users": "default_principal,other_principal,yet_another_principal",
+                }
+            },
+            id="multi_allowed",
+        ),
+        pytest.param(
+            {
+                "userrole": {
+                    "allowed_users": "default_principal,other_principal,yet_another_principal",
+                    "allowed_users_template": True,
+                }
+            },
+            id="templated_allowed",
+        ),
     ),
     indirect=True,
 )
@@ -784,15 +847,37 @@ def test_user_no_default_principal(cert_managed, user_args):
 @pytest.mark.parametrize(
     "roles_setup",
     (
-        {"hostrole": {"allowed_domains": "foo.bar.baz", "allow_bare_domains": True}},
-        {"hostrole": {"allowed_domains": "foo.bar.baz,foo.bar.quux", "allow_bare_domains": True}},
-        {"hostrole": {"allowed_domains": "foo.bar.baz,foo.bar.quux", "allow_subdomains": True}},
-        {
-            "hostrole": {
-                "allowed_domains": "foo.bar.baz,foo.bar.quux",
-                "allowed_domains_template": True,
-            }
-        },
+        pytest.param(
+            {"hostrole": {"allowed_domains": "foo.bar.baz", "allow_bare_domains": True}},
+            id="single_bare_domain",
+        ),
+        pytest.param(
+            {
+                "hostrole": {
+                    "allowed_domains": "foo.bar.baz,foo.bar.quux",
+                    "allow_bare_domains": True,
+                }
+            },
+            id="multi_bare_domains",
+        ),
+        pytest.param(
+            {
+                "hostrole": {
+                    "allowed_domains": "foo.bar.baz,foo.bar.quux",
+                    "allow_subdomains": True,
+                }
+            },
+            id="subdomains",
+        ),
+        pytest.param(
+            {
+                "hostrole": {
+                    "allowed_domains": "foo.bar.baz,foo.bar.quux",
+                    "allowed_domains_template": True,
+                }
+            },
+            id="templated_domains",
+        ),
     ),
     indirect=True,
 )

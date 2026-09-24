@@ -32,14 +32,29 @@ def approle_store():
 @pytest.mark.parametrize(
     "func,method,kwargs",
     (
-        ("list_", "list_approles", {}),
-        ("read", "read_approle", {"name": "foo"}),
-        ("write", "write_approle", {"name": "foo"}),
-        ("delete", "delete_approle", {"name": "foo"}),
-        ("get_role_id", "read_role_id", {"name": "foo"}),
-        ("get_secret_id", "generate_secret_id", {"name": "foo", "cache": False}),
-        ("lookup_secret_id", "read_secret_id", {"name": "foo", "secret_id": "bar"}),
-        ("destroy_secret_id", "destroy_secret_id", {"name": "foo", "secret_id": "bar"}),
+        pytest.param("list_", "list_approles", {}, id="list_"),
+        pytest.param("read", "read_approle", {"name": "foo"}, id="read"),
+        pytest.param("write", "write_approle", {"name": "foo"}, id="write"),
+        pytest.param("delete", "delete_approle", {"name": "foo"}, id="delete"),
+        pytest.param("get_role_id", "read_role_id", {"name": "foo"}, id="get_role_id"),
+        pytest.param(
+            "get_secret_id",
+            "generate_secret_id",
+            {"name": "foo", "cache": False},
+            id="get_secret_id",
+        ),
+        pytest.param(
+            "lookup_secret_id",
+            "read_secret_id",
+            {"name": "foo", "secret_id": "bar"},
+            id="lookup_secret_id",
+        ),
+        pytest.param(
+            "destroy_secret_id",
+            "destroy_secret_id",
+            {"name": "foo", "secret_id": "bar"},
+            id="destroy_secret_id",
+        ),
     ),
 )
 def test_func_converts_errors(func, method, kwargs, approle_api):

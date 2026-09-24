@@ -108,43 +108,57 @@ def _x509v2_mock():
 @pytest.mark.parametrize(
     "func,kwargs",
     (
-        ("list_roles", {}),
-        ("read_role", {"name": "foo"}),
-        ("write_role", {"name": "foo"}),
-        ("delete_role", {"name": "foo"}),
-        ("list_issuers", {}),
-        ("read_issuer", {}),
-        ("update_issuer", {}),
-        ("read_issuer_certificate", {}),
-        ("get_default_issuer", {}),
-        ("set_default_issuer", {"name": "foo"}),
-        ("list_keys", {}),
-        ("generate_key", {"key_type": "internal"}),
-        ("generate_root", {"common_name": "foo"}),
-        ("generate_intermediate_csr", {}),
-        ("delete_key", {"ref": "foo"}),
-        ("delete_issuer", {"ref": "foo"}),
-        ("import_issuer_intermediate", {"cert": "cert", "chain": ["chain"]}),
-        ("import_issuer", {"cert": "cert", "chain": ["chain"]}),
-        ("read_issuer_crl", {}),
-        ("list_revoked_certificates", {}),
-        ("list_certificates", {}),
-        ("read_certificate", {"serial": "00:11:22"}),
-        ("read_certificate_full", {"serial": "00:11:22"}),
-        ("issue_certificate", {"role_name": "foo", "common_name": "foo.example.com"}),
-        (
+        pytest.param("list_roles", {}, id="list_roles"),
+        pytest.param("read_role", {"name": "foo"}, id="read_role"),
+        pytest.param("write_role", {"name": "foo"}, id="write_role"),
+        pytest.param("delete_role", {"name": "foo"}, id="delete_role"),
+        pytest.param("list_issuers", {}, id="list_issuers"),
+        pytest.param("read_issuer", {}, id="read_issuer"),
+        pytest.param("update_issuer", {}, id="update_issuer"),
+        pytest.param("read_issuer_certificate", {}, id="read_issuer_certificate"),
+        pytest.param("get_default_issuer", {}, id="get_default_issuer"),
+        pytest.param("set_default_issuer", {"name": "foo"}, id="set_default_issuer"),
+        pytest.param("list_keys", {}, id="list_keys"),
+        pytest.param("generate_key", {"key_type": "internal"}, id="generate_key"),
+        pytest.param("generate_root", {"common_name": "foo"}, id="generate_root"),
+        pytest.param("generate_intermediate_csr", {}, id="generate_intermediate_csr"),
+        pytest.param("delete_key", {"ref": "foo"}, id="delete_key"),
+        pytest.param("delete_issuer", {"ref": "foo"}, id="delete_issuer"),
+        pytest.param(
+            "import_issuer_intermediate",
+            {"cert": "cert", "chain": ["chain"]},
+            id="import_issuer_intermediate",
+        ),
+        pytest.param("import_issuer", {"cert": "cert", "chain": ["chain"]}, id="import_issuer"),
+        pytest.param("read_issuer_crl", {}, id="read_issuer_crl"),
+        pytest.param("list_revoked_certificates", {}, id="list_revoked_certificates"),
+        pytest.param("list_certificates", {}, id="list_certificates"),
+        pytest.param("read_certificate", {"serial": "00:11:22"}, id="read_certificate"),
+        pytest.param("read_certificate_full", {"serial": "00:11:22"}, id="read_certificate_full"),
+        pytest.param(
+            "issue_certificate",
+            {"role_name": "foo", "common_name": "foo.example.com"},
+            id="issue_certificate",
+        ),
+        pytest.param(
             "sign_certificate",
             {"role_name": "foo", "common_name": "foo.example.com", "csr": "-----BEGIN..."},
+            id="sign_certificate",
         ),
-        (
+        pytest.param(
             "sign_intermediate",
             {"common_name": "foo.example.com", "csr": "-----BEGIN..."},
+            id="sign_intermediate",
         ),
-        ("revoke_certificate", {"serial": "00:11:22"}),
-        ("read_urls", {}),
-        ("write_urls", {"ocsp_servers": ["http://ocsp.example.com"]}),
-        ("read_cluster_config", {}),
-        ("write_cluster_config", {"aia_path": "http://cluster.example.com"}),
+        pytest.param("revoke_certificate", {"serial": "00:11:22"}, id="revoke_certificate"),
+        pytest.param("read_urls", {}, id="read_urls"),
+        pytest.param("write_urls", {"ocsp_servers": ["http://ocsp.example.com"]}, id="write_urls"),
+        pytest.param("read_cluster_config", {}, id="read_cluster_config"),
+        pytest.param(
+            "write_cluster_config",
+            {"aia_path": "http://cluster.example.com"},
+            id="write_cluster_config",
+        ),
     ),
 )
 def test_func_converts_errors(func, kwargs, query, request):
@@ -168,8 +182,11 @@ def test_read_issuer_converts_server_errors(query):
 @pytest.mark.parametrize(
     "side_effect",
     (
-        ({"data": {"usage": "crl-signing"}}, vaultutil.VaultException("booh")),
-        vaultutil.VaultServerError("booh"),
+        pytest.param(
+            ({"data": {"usage": "crl-signing"}}, vaultutil.VaultException("booh")),
+            id="crl_query_fails",
+        ),
+        pytest.param(vaultutil.VaultServerError("booh"), id="server_error"),
     ),
 )
 def test_read_issuer_crl_converts_all_errors(query, side_effect):
@@ -181,10 +198,11 @@ def test_read_issuer_crl_converts_all_errors(query, side_effect):
 @pytest.mark.parametrize(
     "kwargs,match",
     (
-        ({}, "Either `csr` or `private_key` is required"),
-        (
+        pytest.param({}, "Either `csr` or `private_key` is required", id="neither"),
+        pytest.param(
             {"csr": "-----BEGIN...", "private_key": "-----BEGIN..."},
             r"Either `csr` or `private_key` is required \(exclusive\)",
+            id="both",
         ),
     ),
 )
@@ -242,9 +260,9 @@ def test_list_roles(expected):
 @pytest.mark.parametrize(
     "role_name, expected",
     [
-        ("dummy", {"allow_any_name": True}),
-        ("no-subddomains", {"allow_subdomains": False}),
-        ("no-serverflag", {"server_flag": True}),
+        pytest.param("dummy", {"allow_any_name": True}, id="dummy"),
+        pytest.param("no-subddomains", {"allow_subdomains": False}, id="no_subdomains"),
+        pytest.param("no-serverflag", {"server_flag": True}, id="no_serverflag"),
     ],
 )
 def test_read_role(role_name, expected):
@@ -308,7 +326,7 @@ def test_list_roles_return_empty_array_if_not_found():
 @pytest.mark.parametrize(
     "common_name,root_type,kwargs",
     [
-        (
+        pytest.param(
             "root_ca",
             "exported",
             {
@@ -318,16 +336,18 @@ def test_list_roles_return_empty_array_if_not_found():
                 "key_bits": 384,
                 "key_algo": "ec",
             },
+            id="exported_full_opts",
         ),
-        (
+        pytest.param(
             "root_ca",
             "internal",
             {
                 "key_bits": 384,
                 "key_algo": "ec",
             },
+            id="internal_key_opts",
         ),
-        ("root_ca", "internal", {}),
+        pytest.param("root_ca", "internal", {}, id="internal_defaults"),
     ],
 )
 def test_generate_root_payload(query, common_name, root_type, kwargs):
@@ -352,71 +372,79 @@ def test_generate_root_raise_err_with_default_name():
 @pytest.mark.parametrize(
     "verbatim,csr,kwargs,msg,exp,missing",
     (
-        (
+        pytest.param(
             False,
             True,
             {"subject": "CN=foo", "keyUsage": ["cRLSign"]},
             "Got CSR generation parameters when a `csr` was already passed. Ignoring: `subject`, `keyUsage`",
             {},
             {},
+            id="gen_params_with_csr",
         ),
-        (
+        pytest.param(
             False,
             False,
             {"subject": "CN=foo", "keyUsage": ["cRLSign"]},
             "Not signing verbatim, any CSR generation parameters are ignored. Ignoring: `subject`, `keyUsage`",
             {},
             {},
+            id="gen_params_not_verbatim",
         ),
-        (
+        pytest.param(
             True,
             False,
             {"country": "US", "C": "UK"},
             "Received both `country` and `C` parameters. Ignoring `C`.",
             {"subject": "C=US"},
             {"C"},
+            id="country_vs_c",
         ),
-        (
+        pytest.param(
             True,
             False,
             {"CN": "foo", "subject": "CN=bar"},
             "Received both `subject` and `CN` parameters. Ignoring `CN`.",
             {"subject": "CN=bar"},
             {"CN"},
+            id="subject_vs_cn",
         ),
-        (
+        pytest.param(
             True,
             False,
             {"locality": "foo", "subject": "CN=bar"},
             "Received both `subject` and `locality` parameters. Ignoring `locality`.",
             {"subject": "CN=bar"},
             {"L"},
+            id="subject_vs_locality",
         ),
-        (
+        pytest.param(
             True,
             True,
             {"alt_names": ["dns:foo.bar.baz"]},
             "Received both `alt_names` and `csr` parameters for verbatim signing. Ignoring `alt_names`.",
             {},
             {"alt_names"},
+            id="alt_names_with_csr",
         ),
-        (
+        pytest.param(
             True,
             False,
             {"alt_names": ["dns:foo.bar.baz"], "subjectAltName": ["dns:bar.baz"]},
             "Received both `alt_names` and `subjectAltName` parameters for verbatim signing. Ignoring `alt_names`.",
             {"subjectAltName": ["dns:bar.baz"]},
             {"alt_names"},
+            id="alt_names_vs_san",
         ),
-        (
+        pytest.param(
             True,
             True,
             {"permitted_alt_names": ["dns:foo.bar.baz"]},
             "Received `permitted_alt_names`/`excluded_alt_names` in addition to `csr` parameter for verbatim signing. Ignoring `permitted_alt_names`/`excluded_alt_names`.",
             {},
             {"permitted_dns_domains"},
+            id="permitted_alt_names_with_csr",
         ),
-        (
+        pytest.param(
             True,
             False,
             {
@@ -426,22 +454,25 @@ def test_generate_root_raise_err_with_default_name():
             "Received `permitted_alt_names`/`excluded_alt_names` in addition to `nameConstraints` parameter for verbatim signing. Ignoring `permitted_alt_names`/`excluded_alt_names`.",
             {"nameConstraints": {"permitted": ["dns:bar.baz"]}},
             {"permitted_dns_domains"},
+            id="permitted_alt_names_vs_name_constraints",
         ),
-        (
+        pytest.param(
             True,
             True,
             {"key_usage": ["digitalsignature"]},
             "Received both `key_usage` and `csr` parameters for verbatim signing. Ignoring `key_usage`.",
             {},
             {"key_usage"},
+            id="key_usage_with_csr",
         ),
-        (
+        pytest.param(
             True,
             False,
             {"key_usage": ["digitalsignature"], "keyUsage": ["cRLSign", "keyCertSign"]},
             "Received both `key_usage` and `keyUsage` parameters for verbatim signing. Ignoring `key_usage`.",
             {"keyUsage": ["cRLSign", "keyCertSign"]},
             {"key_usage"},
+            id="key_usage_vs_keyusage",
         ),
     ),
 )
@@ -474,14 +505,14 @@ def test_sign_intermediate_warnings(
 @pytest.mark.parametrize(
     "kwargs,exp",
     (
-        ({"C": "US"}, "C=US"),
-        ({"ST": "province"}, "ST=province"),
-        ({"L": "locality"}, "L=locality"),
-        ({"STREET": "street"}, "STREET=street"),
-        ({"O": "organization"}, "O=organization"),
-        ({"OU": "unit"}, "OU=unit"),
-        ({"CN": "foo"}, "CN=foo"),
-        ({"SERIALNUMBER": "foo"}, "2.5.4.5=foo"),
+        pytest.param({"C": "US"}, "C=US", id="country"),
+        pytest.param({"ST": "province"}, "ST=province", id="state"),
+        pytest.param({"L": "locality"}, "L=locality", id="locality"),
+        pytest.param({"STREET": "street"}, "STREET=street", id="street"),
+        pytest.param({"O": "organization"}, "O=organization", id="organization"),
+        pytest.param({"OU": "unit"}, "OU=unit", id="organizational_unit"),
+        pytest.param({"CN": "foo"}, "CN=foo", id="common_name"),
+        pytest.param({"SERIALNUMBER": "foo"}, "2.5.4.5=foo", id="serialnumber"),
     ),
 )
 def test_sign_intermediate_fallback(kwargs, exp, _x509v2_mock):
@@ -735,7 +766,14 @@ def test_read_certificate_full_returns_existing_bundle(query, pki):
 
 
 @pytest.mark.parametrize(
-    "args", [{"serial": "00:11:22:33:44:55", "certificate": "-----BEGIN CERTIFICATE..."}, {}]
+    "args",
+    [
+        pytest.param(
+            {"serial": "00:11:22:33:44:55", "certificate": "-----BEGIN CERTIFICATE..."},
+            id="serial_and_cert",
+        ),
+        pytest.param({}, id="neither"),
+    ],
 )
 def test_revoke_certificate_raise_err(args):
     with pytest.raises(SaltInvocationError):

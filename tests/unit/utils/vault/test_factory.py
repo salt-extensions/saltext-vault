@@ -1301,7 +1301,16 @@ class TestQueryMaster:
             publish_runner.assert_called_once()
             saltutil_runner.assert_not_called()
 
-    @pytest.mark.parametrize("response", [None, False, {}, "f", {"error": "error"}])
+    @pytest.mark.parametrize(
+        "response",
+        [
+            None,
+            False,
+            pytest.param({}, id="empty_response"),
+            "f",
+            pytest.param({"error": "error"}, id="error_response"),
+        ],
+    )
     def test_query_master_validates_response(self, opts, response, publish_runner, saltutil_runner):
         """
         Ensure that falsey return values invalidate config (auth method change)
@@ -1316,7 +1325,11 @@ class TestQueryMaster:
                 vfactory._query_master("func", opts)
 
     @pytest.mark.parametrize(
-        "response", [{"expire_cache": True}, {"error": {"error"}, "expire_cache": True}]
+        "response",
+        [
+            pytest.param({"expire_cache": True}, id="expire_cache_only"),
+            pytest.param({"error": {"error"}, "expire_cache": True}, id="expire_cache_with_error"),
+        ],
     )
     def test_query_master_invalidates_cache_when_requested_by_master(
         self, opts, response, publish_runner, saltutil_runner
@@ -1849,7 +1862,7 @@ def test_clear_cache_clears_client_from_context(ckey, connection, session, clien
 @pytest.mark.parametrize(
     "test_config,expected_config,expected_token",
     [
-        (
+        pytest.param(
             "token",
             {
                 "auth": {
@@ -1891,8 +1904,9 @@ def test_clear_cache_clears_client_from_context(ckey, connection, session, clien
                 },
             },
             "test-token",
+            id="token_embedded",
         ),
-        (
+        pytest.param(
             "approle",
             {
                 "auth": {
@@ -1935,6 +1949,7 @@ def test_clear_cache_clears_client_from_context(ckey, connection, session, clien
                 },
             },
             None,
+            id="approle_no_token",
         ),
     ],
     indirect=["test_config"],
@@ -1953,15 +1968,25 @@ def test_use_local_config(test_config, expected_config, expected_token):
 @pytest.mark.parametrize(
     "config,expected",
     [
-        ({"auth": {"method": "token", "token": "test-token"}}, "server:url"),
-        ({"auth": {"method": "token"}, "server": {"url": "test-url"}}, "auth:token"),
-        (
+        pytest.param(
+            {"auth": {"method": "token", "token": "test-token"}},
+            "server:url",
+            id="missing_server_url",
+        ),
+        pytest.param(
+            {"auth": {"method": "token"}, "server": {"url": "test-url"}},
+            "auth:token",
+            id="missing_token",
+        ),
+        pytest.param(
             {"auth": {"method": "approle"}, "server": {"url": "test-url"}},
             "auth:role_id",
+            id="missing_role_id",
         ),
-        (
+        pytest.param(
             {"auth": {"method": "foo"}, "server": {"url": "test-url"}},
             "not a valid auth method",
+            id="invalid_auth_method",
         ),
     ],
 )
@@ -1976,8 +2001,14 @@ def test_parse_config_ensures_necessary_values(config, expected):
 @pytest.mark.parametrize(
     "opts",
     [
-        {"vault": {"server": {"verify": "/etc/ssl/certs/ca-certificates.crt"}}},
-        {"vault": {"verify": "/etc/ssl/certs/ca-certificates.crt"}},
+        pytest.param(
+            {"vault": {"server": {"verify": "/etc/ssl/certs/ca-certificates.crt"}}},
+            id="server_scope",
+        ),
+        pytest.param(
+            {"vault": {"verify": "/etc/ssl/certs/ca-certificates.crt"}},
+            id="top_level",
+        ),
     ],
 )
 def test_parse_config_respects_local_verify(opts):
@@ -1992,11 +2023,27 @@ def test_parse_config_respects_local_verify(opts):
 @pytest.mark.parametrize(
     "opts,is_allowed",
     [
-        ({"vault": {"server": {"url": "https://vault-alt.company.external"}}}, False),
-        ({"vault": {"server": {"url": "https://vault-alt.company.external"}}}, True),
-        ({"vault": {"url": "https://vault-alt.company.external"}}, False),
-        ({"vault": {"url": "https://vault-alt.company.external"}}, True),
-        (
+        pytest.param(
+            {"vault": {"server": {"url": "https://vault-alt.company.external"}}},
+            False,
+            id="server_scope_denied",
+        ),
+        pytest.param(
+            {"vault": {"server": {"url": "https://vault-alt.company.external"}}},
+            True,
+            id="server_scope_allowed",
+        ),
+        pytest.param(
+            {"vault": {"url": "https://vault-alt.company.external"}},
+            False,
+            id="top_level_denied",
+        ),
+        pytest.param(
+            {"vault": {"url": "https://vault-alt.company.external"}},
+            True,
+            id="top_level_allowed",
+        ),
+        pytest.param(
             {
                 "vault": {
                     "server": {
@@ -2006,6 +2053,7 @@ def test_parse_config_respects_local_verify(opts):
                 }
             },
             False,
+            id="local_url_alts_ignored",
         ),
     ],
 )

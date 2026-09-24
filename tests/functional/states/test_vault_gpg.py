@@ -123,45 +123,50 @@ def test_key_present_regenerate_changes(
 @pytest.mark.parametrize(
     "existing_key, exp",
     (
-        (
+        pytest.param(
             {"real_name": "Elliot Alderson", "email": None, "comment": None},
             {
                 "real_name": {"old": "Elliot Alderson"},
                 "email": {"old": ""},
                 "comment": {"old": ""},
             },
+            id="name_only",
         ),
-        (
+        pytest.param(
             {"real_name": None, "email": "elliot@protonmail.ch", "comment": None},
             {
                 "real_name": {"old": ""},
                 "email": {"old": "elliot@protonmail.ch"},
                 "comment": {"old": ""},
             },
+            id="email_only",
         ),
-        (
+        pytest.param(
             {"real_name": None, "email": None, "comment": "Chaos is a ladder"},
             {
                 "real_name": {"old": ""},
                 "email": {"old": ""},
                 "comment": {"old": "Chaos is a ladder"},
             },
+            id="comment_only",
         ),
-        (
+        pytest.param(
             {"real_name": None, "email": "elliot@protonmail.ch", "comment": "Foo"},
             {
                 "real_name": {"old": ""},
                 "email": {"old": "elliot@protonmail.ch"},
                 "comment": {"old": "Foo"},
             },
+            id="email_and_comment",
         ),
-        (
+        pytest.param(
             {"real_name": "Elliot Alderson", "email": "elliot@protonmail.ch", "comment": None},
             {
                 "real_name": {"old": "Elliot Alderson"},
                 "email": {"old": "elliot@protonmail.ch"},
                 "comment": {"old": ""},
             },
+            id="name_and_email",
         ),
     ),
     indirect=("existing_key",),

@@ -31,26 +31,29 @@ def configure_loader_modules():
 @pytest.mark.parametrize(
     "func,kwargs",
     (
-        ("read_role", {"name": "foo"}),
-        ("write_role_otp", {"name": "foo", "default_user": "bar"}),
-        ("write_role_ca", {"name": "foo", "allow_user_certificates": True}),
-        ("delete_role", {"name": "foo"}),
-        ("list_roles", {}),
-        ("list_roles_ip", {"address": "10.1.0.1"}),
-        ("list_roles_zeroaddr", {}),
-        ("write_zeroaddr_roles", {"roles": ["foo"]}),
-        ("delete_zeroaddr_roles", {}),
-        ("get_creds", {"name": "foo", "address": "10.1.0.1"}),
-        ("create_ca", {}),
-        ("destroy_ca", {}),
-        ("read_ca", {}),
-        ("sign_key", {"name": "foo", "public_key": "ssh-ed25519 yay"}),
-        ("generate_key_cert", {"name": "foo"}),
-        (
+        pytest.param("read_role", {"name": "foo"}, id="read_role"),
+        pytest.param("write_role_otp", {"name": "foo", "default_user": "bar"}, id="write_role_otp"),
+        pytest.param(
+            "write_role_ca", {"name": "foo", "allow_user_certificates": True}, id="write_role_ca"
+        ),
+        pytest.param("delete_role", {"name": "foo"}, id="delete_role"),
+        pytest.param("list_roles", {}, id="list_roles"),
+        pytest.param("list_roles_ip", {"address": "10.1.0.1"}, id="list_roles_ip"),
+        pytest.param("list_roles_zeroaddr", {}, id="list_roles_zeroaddr"),
+        pytest.param("write_zeroaddr_roles", {"roles": ["foo"]}, id="write_zeroaddr_roles"),
+        pytest.param("delete_zeroaddr_roles", {}, id="delete_zeroaddr_roles"),
+        pytest.param("get_creds", {"name": "foo", "address": "10.1.0.1"}, id="get_creds"),
+        pytest.param("create_ca", {}, id="create_ca"),
+        pytest.param("destroy_ca", {}, id="destroy_ca"),
+        pytest.param("read_ca", {}, id="read_ca"),
+        pytest.param("sign_key", {"name": "foo", "public_key": "ssh-ed25519 yay"}, id="sign_key"),
+        pytest.param("generate_key_cert", {"name": "foo"}, id="generate_key_cert"),
+        pytest.param(
             "create_certificate",
             {"signing_policy": "foo", "cert_type": "user", "public_key": "ssh-ed25519 yay"},
+            id="create_certificate",
         ),
-        ("get_signing_policy", {"signing_policy": "foo"}),
+        pytest.param("get_signing_policy", {"signing_policy": "foo"}, id="get_signing_policy"),
     ),
 )
 def test_func_converts_errors(func, kwargs, query):
@@ -225,13 +228,30 @@ def test_read_ca_unauthenticated_fallback_converts_errors(query, query_raw):
 @pytest.mark.parametrize(
     "status_code,json_effect,match",
     (
-        (400, {"errors": ["keys haven't been configured yet"]}, "keys haven't been configured yet"),
-        (404, {"errors": ["missing mount"]}, "VaultNotFoundError: missing mount"),
+        pytest.param(
+            400,
+            {"errors": ["keys haven't been configured yet"]},
+            "keys haven't been configured yet",
+            id="unconfigured_400",
+        ),
+        pytest.param(
+            404,
+            {"errors": ["missing mount"]},
+            "VaultNotFoundError: missing mount",
+            id="missing_mount",
+        ),
         # empty error list means unconfigured keys
-        (404, {"errors": []}, "keys haven't been configured yet"),
+        pytest.param(404, {"errors": []}, "keys haven't been configured yet", id="empty_errors"),
         # unparsable/unexpected error responses are treated the same
-        (404, {"unexpected": "schema"}, "keys haven't been configured yet"),
-        (404, ValueError("not json"), "keys haven't been configured yet"),
+        pytest.param(
+            404,
+            {"unexpected": "schema"},
+            "keys haven't been configured yet",
+            id="unexpected_schema",
+        ),
+        pytest.param(
+            404, ValueError("not json"), "keys haven't been configured yet", id="not_json"
+        ),
     ),
 )
 def test_read_ca_unauthenticated_fallback_not_found(

@@ -198,9 +198,9 @@ def test_sign_key_host(vault_ssh, ec_pub, container):
 @pytest.mark.parametrize(
     "valid_principals,ttl,key_id",
     (
-        (["foobar"], "30m", "testkeyid"),
-        ("foobar", None, "testkeyid"),
-        (None, "30m", None),
+        pytest.param(["foobar"], "30m", "testkeyid", id="principals_list"),
+        pytest.param("foobar", None, "testkeyid", id="principals_str_default_ttl"),
+        pytest.param(None, "30m", None, id="no_principals_default_key_id"),
     ),
 )
 def test_generate_key_cert_user(vault_ssh, container, valid_principals, ttl, key_id):

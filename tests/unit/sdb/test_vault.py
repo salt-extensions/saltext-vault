@@ -74,7 +74,11 @@ def test_set_patch(read_kv, patch_kv):
 
 
 @pytest.mark.parametrize(
-    "exception", (vaultutil.VaultPermissionDeniedError, vaultutil.VaultNotFoundError)
+    "exception",
+    (
+        pytest.param(vaultutil.VaultPermissionDeniedError, id="permission_denied"),
+        pytest.param(vaultutil.VaultNotFoundError, id="not_found"),
+    ),
 )
 def test_set_patch_exception_fallback(patch_kv, write_kv, read_kv, exception):
     patch_kv.side_effect = exception("missing authorization or secret for patch")

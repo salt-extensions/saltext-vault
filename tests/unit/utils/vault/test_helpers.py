@@ -35,12 +35,18 @@ def test_get_salt_run_type(opts_runtype, expected):
 @pytest.mark.parametrize(
     "opts",
     [
-        {"id": "test-minion", "vault": {"config_location": "local"}},
-        {
-            "id": "test-minion",
-            "vault": {"config_location": "master"},
-            "__master_opts__": {"vault": {"server": {"url": "http://vault:8200"}}},
-        },
+        pytest.param(
+            {"id": "test-minion", "vault": {"config_location": "local"}},
+            id="no_master_opts",
+        ),
+        pytest.param(
+            {
+                "id": "test-minion",
+                "vault": {"config_location": "master"},
+                "__master_opts__": {"vault": {"server": {"url": "http://vault:8200"}}},
+            },
+            id="vault_config_present",
+        ),
     ],
 )
 def test_check_salt_ssh_opts_unchanged(opts):
@@ -84,10 +90,14 @@ def test_check_salt_ssh_opts_merges_master_opts(caller_cachedir):
 @pytest.mark.parametrize(
     "pattern,expected",
     [
-        ("no-tokens-to-replace", ["no-tokens-to-replace"]),
-        ("single-dict:{minion}", ["single-dict:{minion}"]),
-        ("single-list:{grains[roles]}", ["single-list:web", "single-list:database"]),
-        (
+        pytest.param("no-tokens-to-replace", ["no-tokens-to-replace"], id="no_tokens"),
+        pytest.param("single-dict:{minion}", ["single-dict:{minion}"], id="dict_token_unchanged"),
+        pytest.param(
+            "single-list:{grains[roles]}",
+            ["single-list:web", "single-list:database"],
+            id="single_list",
+        ),
+        pytest.param(
             "multiple-lists:{grains[roles]}+{grains[aux]}",
             [
                 "multiple-lists:web+foo",
@@ -95,27 +105,31 @@ def test_check_salt_ssh_opts_merges_master_opts(caller_cachedir):
                 "multiple-lists:database+foo",
                 "multiple-lists:database+bar",
             ],
+            id="multiple_lists",
         ),
-        (
+        pytest.param(
             "single-list-with-dicts:{grains[id]}+{grains[roles]}+{grains[id]}",
             [
                 "single-list-with-dicts:{grains[id]}+web+{grains[id]}",
                 "single-list-with-dicts:{grains[id]}+database+{grains[id]}",
             ],
+            id="list_with_dict_tokens",
         ),
-        (
+        pytest.param(
             "deeply-nested-list:{grains[deep][foo][bar][baz]}",
             [
                 "deeply-nested-list:hello",
                 "deeply-nested-list:world",
             ],
+            id="deeply_nested_list",
         ),
-        (
+        pytest.param(
             "dict-keys:{grains[dict][roles]}",
             [
                 "dict-keys:role_a",
                 "dict-keys:role_b",
             ],
+            id="dict_keys",
         ),
     ],
 )
@@ -193,39 +207,63 @@ def test_timestring_map_invalid_time_string(inpt):
 @pytest.mark.parametrize(
     "inpt,now,precision,expected",
     (
-        (td(days=14), False, None, "2 weeks"),
-        (td(days=14), True, None, "in 2 weeks"),
-        (td(days=14), ("expires", "expired"), None, "expires in 2 weeks"),
-        (td(days=-14), False, None, "-(2 weeks)"),
-        (td(days=-14), True, None, "2 weeks ago"),
-        (td(days=-14), ("expires", "expired"), None, "expired 2 weeks ago"),
-        (td(days=4), False, None, "4 days"),
-        (td(hours=1), False, None, "1 hour"),
-        (td(minutes=59), False, None, "59 minutes"),
-        (td(seconds=2), False, None, "2 seconds"),
-        (td(), False, None, "an instant"),
-        (td(microseconds=1), False, None, "an instant"),
-        (td(microseconds=-1), False, None, "-(an instant)"),
-        (td(), True, None, "in an instant"),
-        (td(microseconds=1), True, None, "in an instant"),
-        (td(microseconds=-1), True, None, "an instant ago"),
-        (td(days=15, hours=10, minutes=42, seconds=13), False, None, "2 weeks and 1 day"),
-        (td(hours=-25), False, None, "-(1 day and 1 hour)"),
-        (td(days=13, hours=20, minutes=42, seconds=13), False, None, "2 weeks"),
-        (td(days=13, hours=23, minutes=59, seconds=31), False, "minutes", "2 weeks"),
-        (
+        pytest.param(td(days=14), False, None, "2 weeks", id="plain"),
+        pytest.param(td(days=14), True, None, "in 2 weeks", id="future_now"),
+        pytest.param(
+            td(days=14), ("expires", "expired"), None, "expires in 2 weeks", id="future_verb"
+        ),
+        pytest.param(td(days=-14), False, None, "-(2 weeks)", id="negative_plain"),
+        pytest.param(td(days=-14), True, None, "2 weeks ago", id="past_now"),
+        pytest.param(
+            td(days=-14), ("expires", "expired"), None, "expired 2 weeks ago", id="past_verb"
+        ),
+        pytest.param(td(days=4), False, None, "4 days", id="days"),
+        pytest.param(td(hours=1), False, None, "1 hour", id="singular_hour"),
+        pytest.param(td(minutes=59), False, None, "59 minutes", id="minutes"),
+        pytest.param(td(seconds=2), False, None, "2 seconds", id="seconds"),
+        pytest.param(td(), False, None, "an instant", id="zero"),
+        pytest.param(td(microseconds=1), False, None, "an instant", id="subsecond"),
+        pytest.param(td(microseconds=-1), False, None, "-(an instant)", id="negative_subsecond"),
+        pytest.param(td(), True, None, "in an instant", id="zero_now"),
+        pytest.param(td(microseconds=1), True, None, "in an instant", id="subsecond_now"),
+        pytest.param(
+            td(microseconds=-1), True, None, "an instant ago", id="negative_subsecond_now"
+        ),
+        pytest.param(
+            td(days=15, hours=10, minutes=42, seconds=13),
+            False,
+            None,
+            "2 weeks and 1 day",
+            id="two_units",
+        ),
+        pytest.param(td(hours=-25), False, None, "-(1 day and 1 hour)", id="negative_two_units"),
+        pytest.param(
+            td(days=13, hours=20, minutes=42, seconds=13), False, None, "2 weeks", id="rounds_up"
+        ),
+        pytest.param(
+            td(days=13, hours=23, minutes=59, seconds=31),
+            False,
+            "minutes",
+            "2 weeks",
+            id="minutes_precision_rounds_up",
+        ),
+        pytest.param(
             td(days=13, hours=20, minutes=42, seconds=13),
             False,
             "seconds",
             "1 week, 6 days, 20 hours, 42 minutes and 13 seconds",
+            id="seconds_precision",
         ),
-        (
+        pytest.param(
             td(days=13, hours=20, minutes=42, seconds=13),
             False,
             "hours",
             "1 week, 6 days and 21 hours",
+            id="hours_precision",
         ),
-        (td(minutes=12, seconds=31), False, "weeks", "13 minutes"),
+        pytest.param(
+            td(minutes=12, seconds=31), False, "weeks", "13 minutes", id="precision_above_value"
+        ),
     ),
 )
 def test_pretty_td(inpt, now, precision, expected):
@@ -260,11 +298,11 @@ def test_dec2hex_raise_err(inpt, match):
     "inpt,expected",
     [
         (None, None),
-        ("", []),
-        ("foo", ["foo"]),
-        ("foo,bar,baz", ["foo", "bar", "baz"]),
-        (["foo", "bar"], ["foo", "bar"]),
-        (("foo", "bar"), ["foo", "bar"]),
+        pytest.param("", [], id="empty_string"),
+        pytest.param("foo", ["foo"], id="single_value"),
+        pytest.param("foo,bar,baz", ["foo", "bar", "baz"], id="comma_separated"),
+        pytest.param(["foo", "bar"], ["foo", "bar"], id="list_passthrough"),
+        pytest.param(("foo", "bar"), ["foo", "bar"], id="tuple_to_list"),
     ],
 )
 def test_deserialize_csl(inpt, expected):
@@ -280,17 +318,17 @@ def test_deserialize_csl_invalid_type():
     "inpt,expected",
     [
         # valid base64 string is decoded
-        ("aGVsbG8=", (b"hello", True)),
+        pytest.param("aGVsbG8=", (b"hello", True), id="valid_str"),
         # valid base64 bytes are decoded
-        (b"aGVsbG8=", (b"hello", True)),
+        pytest.param(b"aGVsbG8=", (b"hello", True), id="valid_bytes"),
         # embedded newlines are ignored during validation
-        (b"aGVs\nbG8=", (b"hello", True)),
+        pytest.param(b"aGVs\nbG8=", (b"hello", True), id="embedded_newlines"),
         # decodable, but not canonical base64 (re-encoding differs)
-        ("ab==", (b"ab==", False)),
+        pytest.param("ab==", (b"ab==", False), id="non_canonical"),
         # incorrect padding raises during decoding
-        ("abc", (b"abc", False)),
+        pytest.param("abc", (b"abc", False), id="invalid_padding"),
         # non-ASCII strings cannot be base64
-        ("hëllo", ("hëllo".encode(), False)),
+        pytest.param("hëllo", ("hëllo".encode(), False), id="non_ascii"),
     ],
 )
 def test_try_base64(inpt, expected):
@@ -300,10 +338,15 @@ def test_try_base64(inpt, expected):
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"foo": "set", "bar": None},
-        {"foo": None, "bar": "set"},
-        {"_min": 1, "_max": 2, "foo": "set", "bar": "set", "baz": None},
-        {"_predicate": lambda x: x == "set", "foo": "set", "bar": "unset"},
+        pytest.param({"foo": "set", "bar": None}, id="first_set"),
+        pytest.param({"foo": None, "bar": "set"}, id="second_set"),
+        pytest.param(
+            {"_min": 1, "_max": 2, "foo": "set", "bar": "set", "baz": None}, id="min_max_range"
+        ),
+        pytest.param(
+            {"_predicate": lambda x: x == "set", "foo": "set", "bar": "unset"},
+            id="custom_predicate",
+        ),
     ],
 )
 def test_x_of_valid(kwargs):
@@ -313,33 +356,40 @@ def test_x_of_valid(kwargs):
 @pytest.mark.parametrize(
     "kwargs,expected",
     [
-        (
+        pytest.param(
             {"foo": None},
             "Either `foo` is required",
+            id="single_param_unset",
         ),
-        (
+        pytest.param(
             {"foo": None, "bar": None},
             "Either `foo` or `bar` is required",
+            id="none_set",
         ),
-        (
+        pytest.param(
             {"foo": None, "bar": None, "_reason": "I said so"},
             "Either `foo` or `bar` is required because I said so",
+            id="none_set_with_reason",
         ),
-        (
+        pytest.param(
             {"foo": "set", "bar": "set"},
             "Either `foo` or `bar` is required (exclusive)",
+            id="both_set",
         ),
-        (
+        pytest.param(
             {"foo": "set", "bar": "set", "baz": None},
             "Only specify either `foo`, `bar` or `baz` (exclusive)",
+            id="two_of_three_set",
         ),
-        (
+        pytest.param(
             {"_min": 2, "_max": 3, "foo": "set", "bar": None, "baz": None},
             "At least two of `foo`, `bar` or `baz` must be passed",
+            id="below_min",
         ),
-        (
+        pytest.param(
             {"_min": 1, "_max": 2, "foo": "set", "bar": "set", "baz": "set", "_reason": "your mum"},
             "At most two of `foo`, `bar` or `baz` can be specified because your mum",
+            id="above_max_with_reason",
         ),
     ],
 )
@@ -352,11 +402,16 @@ def test_x_of_invalid(kwargs, expected):
 @pytest.mark.parametrize(
     "kwargs,expected",
     [
-        ({"foo": "set", "bar": None}, None),
-        ({"foo": "set", "bar": "set"}, "Either `foo` or `bar` is required (exclusive)"),
-        (
+        pytest.param({"foo": "set", "bar": None}, None, id="valid"),
+        pytest.param(
+            {"foo": "set", "bar": "set"},
+            "Either `foo` or `bar` is required (exclusive)",
+            id="both_set",
+        ),
+        pytest.param(
             {"foo": "set", "bar": "set", "_reason": "why not"},
             "Either `foo` or `bar` is required (exclusive) because why not",
+            id="both_set_with_reason",
         ),
     ],
 )
@@ -374,9 +429,15 @@ def test_one_of(kwargs, expected):
 @pytest.mark.parametrize(
     "kwargs,expected",
     [
-        ({"foo": "set"}, "`foo` cannot be specified because why not"),
-        ({"foo": None, "bar": None, "baz": None}, None),
-        ({"foo": "set", "bar": None}, "None of `foo` and `bar` can be specified because why not"),
+        pytest.param(
+            {"foo": "set"}, "`foo` cannot be specified because why not", id="single_param_set"
+        ),
+        pytest.param({"foo": None, "bar": None, "baz": None}, None, id="none_set"),
+        pytest.param(
+            {"foo": "set", "bar": None},
+            "None of `foo` and `bar` can be specified because why not",
+            id="one_of_two_set",
+        ),
     ],
 )
 def test_none_of(kwargs, expected):
@@ -391,18 +452,44 @@ def test_none_of(kwargs, expected):
 @pytest.mark.parametrize(
     "valid,kwargs",
     [
-        (("rsa", "ec", "ed25519"), {"algo": "rsa"}),
-        (["rsa", "ec", "ed25519"], {"algo": "rsa"}),
-        ((b"rsa", b"ec", b"ed25519"), {"algo": b"rsa"}),
-        (("rsa", "ec", "ed25519"), {"_multi": True, "algo": "rsa"}),
-        (["rsa", "ec", "ed25519"], {"_multi": True, "algo": "rsa"}),
-        ((b"rsa", b"ec", b"ed25519"), {"_multi": True, "algo": b"rsa"}),
-        (("rsa", "ec", "ed25519"), {"_multi": True, "algo": ["rsa", "ec"]}),
-        (["rsa", "ec", "ed25519"], {"_multi": True, "algo": ["rsa", "ec"]}),
-        ((b"rsa", b"ec", b"ed25519"), {"_multi": True, "algo": [b"rsa", b"ec"]}),
-        (("rsa", "ec", "ed25519"), {"_multi": True, "algo": ("rsa",)}),
-        ((b"rsa", b"ec", b"ed25519"), {"_multi": True, "algo": (b"rsa",)}),
-        ([b"rsa", b"ec", b"ed25519"], {"_multi": True, "algo": (b"rsa",)}),
+        pytest.param(("rsa", "ec", "ed25519"), {"algo": "rsa"}, id="single_str"),
+        pytest.param(["rsa", "ec", "ed25519"], {"algo": "rsa"}, id="single_str_valid_list"),
+        pytest.param((b"rsa", b"ec", b"ed25519"), {"algo": b"rsa"}, id="single_bytes"),
+        pytest.param(
+            ("rsa", "ec", "ed25519"), {"_multi": True, "algo": "rsa"}, id="multi_single_str"
+        ),
+        pytest.param(
+            ["rsa", "ec", "ed25519"],
+            {"_multi": True, "algo": "rsa"},
+            id="multi_single_str_valid_list",
+        ),
+        pytest.param(
+            (b"rsa", b"ec", b"ed25519"), {"_multi": True, "algo": b"rsa"}, id="multi_single_bytes"
+        ),
+        pytest.param(
+            ("rsa", "ec", "ed25519"), {"_multi": True, "algo": ["rsa", "ec"]}, id="multi_str_list"
+        ),
+        pytest.param(
+            ["rsa", "ec", "ed25519"],
+            {"_multi": True, "algo": ["rsa", "ec"]},
+            id="multi_str_list_valid_list",
+        ),
+        pytest.param(
+            (b"rsa", b"ec", b"ed25519"),
+            {"_multi": True, "algo": [b"rsa", b"ec"]},
+            id="multi_bytes_list",
+        ),
+        pytest.param(
+            ("rsa", "ec", "ed25519"), {"_multi": True, "algo": ("rsa",)}, id="multi_str_tuple"
+        ),
+        pytest.param(
+            (b"rsa", b"ec", b"ed25519"), {"_multi": True, "algo": (b"rsa",)}, id="multi_bytes_tuple"
+        ),
+        pytest.param(
+            [b"rsa", b"ec", b"ed25519"],
+            {"_multi": True, "algo": (b"rsa",)},
+            id="multi_bytes_tuple_valid_list",
+        ),
     ],
 )
 def test_in_vals_valid(valid, kwargs):
@@ -419,64 +506,75 @@ def test_in_vals_valid(valid, kwargs):
 @pytest.mark.parametrize(
     "valid,kwargs,expected",
     [
-        (
+        pytest.param(
             ("rsa", "ec", "ed25519"),
             {"algo": "foo"},
             "Invalid value 'foo' for `algo`. Valid: 'rsa', 'ec', 'ed25519'",
+            id="single_str",
         ),
-        (
+        pytest.param(
             ("rsa", "ec", "ed25519"),
             {"algo": None},
             "Invalid value None for `algo`. Valid: 'rsa', 'ec', 'ed25519'",
+            id="single_none",
         ),
-        (
+        pytest.param(
             ["rsa", "ec", "ed25519"],
             {"algo": "foo"},
             "Invalid value 'foo' for `algo`. Valid: 'rsa', 'ec', 'ed25519'",
+            id="single_str_valid_list",
         ),
-        (
+        pytest.param(
             (b"rsa", b"ec", b"ed25519"),
             {"algo": b"foo"},
             "Invalid value b'foo' for `algo`. Valid: b'rsa', b'ec', b'ed25519'",
+            id="single_bytes",
         ),
-        (
+        pytest.param(
             ("rsa", "ec", "ed25519", None),
             {"algo": "foo"},
             "Invalid value 'foo' for `algo`. Valid: 'rsa', 'ec', 'ed25519', None",
+            id="single_str_none_valid",
         ),
         # single values are wrapped in a list with _multi
-        (
+        pytest.param(
             ("rsa", "ec", "ed25519"),
             {"_multi": True, "algo": "foo"},
             "Invalid value for `algo`: 'foo'. Valid: 'rsa', 'ec', 'ed25519'",
+            id="multi_single_str",
         ),
-        (
+        pytest.param(
             ("rsa", "ec", "ed25519"),
             {"_multi": True, "algo": b"rsa"},
             "Invalid value for `algo`: b'rsa'. Valid: 'rsa', 'ec', 'ed25519'",
+            id="multi_single_type_mismatch",
         ),
-        (
+        pytest.param(
             ("rsa", "ec", "ed25519"),
             {"_multi": True, "algo": None},
             "Invalid value for `algo`: None. Valid: 'rsa', 'ec', 'ed25519'",
+            id="multi_single_none",
         ),
         # all passed values are reported, singular/plural depends on the invalid ones
-        (
+        pytest.param(
             ("rsa", "ec", "ed25519"),
             {"_multi": True, "algo": ["rsa", "foo"]},
             "Invalid value for `algo`: 'foo'. Valid: 'rsa', 'ec', 'ed25519'",
+            id="multi_list_one_invalid",
         ),
-        (
+        pytest.param(
             ["rsa", "ec", "ed25519"],
             {"_multi": True, "algo": ["rsa", "foo"]},
             "Invalid value for `algo`: 'foo'. Valid: 'rsa', 'ec', 'ed25519'",
+            id="multi_list_one_invalid_valid_list",
         ),
-        (
+        pytest.param(
             ("rsa", "ec", "ed25519"),
             {"_multi": True, "algo": ("rsa", "foo")},
             "Invalid value for `algo`: 'foo'. Valid: 'rsa', 'ec', 'ed25519'",
+            id="multi_tuple_one_invalid",
         ),
-        (
+        pytest.param(
             ("rsa", "ec", "ed25519"),
             {
                 "_multi": True,
@@ -486,8 +584,9 @@ def test_in_vals_valid(valid, kwargs):
                 ],
             },
             "Invalid values for `algo`: 'foo', 'bar'. Valid: 'rsa', 'ec', 'ed25519'",
+            id="multi_list_all_invalid",
         ),
-        (
+        pytest.param(
             ("rsa", "ec", "ed25519", None),
             {
                 "_multi": True,
@@ -497,8 +596,9 @@ def test_in_vals_valid(valid, kwargs):
                 ],
             },
             "Invalid values for `algo`: 'foo', 'bar'. Valid: 'rsa', 'ec', 'ed25519', None",
+            id="multi_list_all_invalid_none_valid",
         ),
-        (
+        pytest.param(
             ("rsa", "ec", "ed25519"),
             {
                 "_multi": True,
@@ -509,8 +609,9 @@ def test_in_vals_valid(valid, kwargs):
                 ],
             },
             "Invalid values for `algo`: 'foo', None. Valid: 'rsa', 'ec', 'ed25519'",
+            id="multi_list_invalid_with_none",
         ),
-        (
+        pytest.param(
             ("rsa", "ec", "ed25519"),
             {
                 "_multi": True,
@@ -520,13 +621,20 @@ def test_in_vals_valid(valid, kwargs):
                 ),
             },
             "Invalid values for `algo`: 'foo', 'bar'. Valid: 'rsa', 'ec', 'ed25519'",
+            id="multi_tuple_all_invalid",
         ),
-        (
+        pytest.param(
             ("rsa", "ec", "ed25519"),
             {"algo": "rsa", "algo2": "boom"},
             "in_vals() expects exactly one keyword argument",
+            id="two_kwargs",
         ),
-        (("rsa", "ec", "ed25519"), {}, "in_vals() expects exactly one keyword argument"),
+        pytest.param(
+            ("rsa", "ec", "ed25519"),
+            {},
+            "in_vals() expects exactly one keyword argument",
+            id="no_kwargs",
+        ),
     ],
 )
 def test_in_vals_invalid(valid, kwargs, expected):

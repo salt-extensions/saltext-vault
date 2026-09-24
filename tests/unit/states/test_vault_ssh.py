@@ -46,11 +46,15 @@ def write_role_otp():
 @pytest.mark.parametrize(
     "func,kwargs,err_mock",
     (
-        ("ca_present", {}, "read_ca"),
-        ("ca_absent", {}, "read_ca"),
-        ("role_present_otp", {"default_user": "user"}, "read_role"),
-        ("role_present_ca", {"allow_user_certificates": True}, "read_role"),
-        ("role_absent", {}, "delete_role"),
+        pytest.param("ca_present", {}, "read_ca", id="ca_present"),
+        pytest.param("ca_absent", {}, "read_ca", id="ca_absent"),
+        pytest.param(
+            "role_present_otp", {"default_user": "user"}, "read_role", id="role_present_otp"
+        ),
+        pytest.param(
+            "role_present_ca", {"allow_user_certificates": True}, "read_role", id="role_present_ca"
+        ),
+        pytest.param("role_absent", {}, "delete_role", id="role_absent"),
     ),
 )
 def test_errors_are_reported(func, kwargs, err_mock, err, request):
@@ -128,7 +132,13 @@ def test_role_absent_verification_reported_present(read_role, delete_role):
     delete_role.assert_called_once()
 
 
-@pytest.mark.parametrize("port", ("foo", ["22"]))
+@pytest.mark.parametrize(
+    "port",
+    (
+        pytest.param("foo", id="non_numeric_string"),
+        pytest.param(["22"], id="list"),
+    ),
+)
 def test_role_present_otp_invalid_port(read_role, port):
     res = vault_ssh.role_present_otp("foo", "user", port=port)
     assert res["result"] is False

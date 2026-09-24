@@ -27,17 +27,19 @@ def configure_loader_modules():
 @pytest.mark.parametrize(
     "func,kwargs",
     (
-        ("create_key", {"name": "foo"}),
-        ("import_key", {"name": "foo", "text": "dGVzdA=="}),
-        ("list_keys", {}),
-        ("read_key", {"name": "foo"}),
-        ("delete_key", {"name": "foo"}),
-        ("export_private_key", {"name": "foo"}),
-        ("export_public_key", {"name": "foo"}),
-        ("sign", {"name": "foo", "message": "hello"}),
-        ("verify", {"name": "foo", "message": "hello", "sig": "sig"}),
-        ("decrypt", {"name": "foo", "message": "hello"}),
-        ("show_session_key", {"name": "foo", "message": "hello"}),
+        pytest.param("create_key", {"name": "foo"}, id="create_key"),
+        pytest.param("import_key", {"name": "foo", "text": "dGVzdA=="}, id="import_key"),
+        pytest.param("list_keys", {}, id="list_keys"),
+        pytest.param("read_key", {"name": "foo"}, id="read_key"),
+        pytest.param("delete_key", {"name": "foo"}, id="delete_key"),
+        pytest.param("export_private_key", {"name": "foo"}, id="export_private_key"),
+        pytest.param("export_public_key", {"name": "foo"}, id="export_public_key"),
+        pytest.param("sign", {"name": "foo", "message": "hello"}, id="sign"),
+        pytest.param("verify", {"name": "foo", "message": "hello", "sig": "sig"}, id="verify"),
+        pytest.param("decrypt", {"name": "foo", "message": "hello"}, id="decrypt"),
+        pytest.param(
+            "show_session_key", {"name": "foo", "message": "hello"}, id="show_session_key"
+        ),
     ),
 )
 def test_func_converts_errors(func, kwargs, query):
@@ -66,8 +68,10 @@ def test_sign_algorithm_endpoint_fallback_converts_errors(query):
 @pytest.mark.parametrize(
     "func,query_return",
     (
-        ("export_private_key", {"data": {"key": "secret"}}),
-        ("export_public_key", {"data": {"public_key": "public"}}),
+        pytest.param("export_private_key", {"data": {"key": "secret"}}, id="export_private_key"),
+        pytest.param(
+            "export_public_key", {"data": {"public_key": "public"}}, id="export_public_key"
+        ),
     ),
 )
 def test_export_key_gnupg_import_failure(func, query_return, query):
@@ -87,12 +91,13 @@ RAW_B64 = base64.b64encode(b"x" * 72).decode()  # 96 chars, forces line reflowin
     "key,expected",
     (
         # Properly ASCII-armored keys are passed through unmodified
-        (
+        pytest.param(
             f"-----BEGIN {BLOCKTYPE}-----\n\n{RAW_B64}\n-----END {BLOCKTYPE}-----",
             f"-----BEGIN {BLOCKTYPE}-----\n\n{RAW_B64}\n-----END {BLOCKTYPE}-----",
+            id="armored_passthrough",
         ),
         # Raw base64 keys are reflowed to 64 columns and armored
-        (
+        pytest.param(
             RAW_B64,
             "\n".join(
                 (
@@ -104,11 +109,13 @@ RAW_B64 = base64.b64encode(b"x" * 72).decode()  # 96 chars, forces line reflowin
                     f"-----END {BLOCKTYPE}-----",
                 )
             ),
+            id="raw_base64_reflowed",
         ),
         # Everything else is refused
-        (
+        pytest.param(
             "!!! not base64 !!!",
             None,
+            id="invalid_refused",
         ),
     ),
 )

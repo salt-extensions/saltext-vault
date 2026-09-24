@@ -243,7 +243,7 @@ def test_pinned_version(vault_plugin, plugins_pinned, secret_plugin):
 
 
 @pytest.mark.usefixtures("plugins_registered")
-@pytest.mark.parametrize("plugins_registered", ({"db_plugin": ["1.0.0"]}))
+@pytest.mark.parametrize("plugins_registered", ({"db_plugin": ["1.0.0"]},), indirect=True)
 @pytest.mark.requires_backend("vault>=1.16")
 def test_pinned_version_empty(vault_plugin, db_plugin):
     res = vault_plugin.pinned_version("secret", "nonexistent-plugin")
@@ -453,10 +453,10 @@ def _assert_plug(plugin_def):
 @pytest.mark.parametrize(
     "upd",
     (
-        {},
-        {"command": "explicit-cmd"},
-        {"version": "v1.2.3"},
-        {"args": ["foo", "bar"], "env": ["FOO=bar"]},
+        pytest.param({}, id="defaults"),
+        pytest.param({"command": "explicit-cmd"}, id="explicit_command"),
+        pytest.param({"version": "v1.2.3"}, id="versioned"),
+        pytest.param({"args": ["foo", "bar"], "env": ["FOO=bar"]}, id="args_and_env"),
     ),
 )
 def test_plugin_register(vault_plugin, secret_plugin, upd):

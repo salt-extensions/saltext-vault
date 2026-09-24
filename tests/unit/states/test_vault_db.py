@@ -185,10 +185,14 @@ def test_conn_already_present(write_connection_mock):
 @pytest.mark.parametrize(
     "kwargs,param",
     (
-        ({"version": "1.2.3"}, "plugin_version"),
-        ({"allowed_roles": ["*"]}, None),
-        ({"root_rotation_statements": ["rotate"]}, "root_credentials_rotate_statements"),
-        ({"password_policy": "foo"}, None),
+        pytest.param({"version": "1.2.3"}, "plugin_version", id="plugin_version"),
+        pytest.param({"allowed_roles": ["*"]}, None, id="allowed_roles"),
+        pytest.param(
+            {"root_rotation_statements": ["rotate"]},
+            "root_credentials_rotate_statements",
+            id="root_rotation_statements",
+        ),
+        pytest.param({"password_policy": "foo"}, None, id="password_policy"),
     ),
 )
 def test_conn_changes(testmode, write_connection_mock, kwargs, param, _conns):
@@ -330,13 +334,13 @@ def test_role_already_present(write_role_mock):
 @pytest.mark.parametrize(
     "kwargs,param",
     (
-        ({"connection": "conn2"}, "db_name"),
-        ({"creation_statements": ["foo"]}, None),
-        ({"revocation_statements": ["revoke"]}, None),
-        ({"rollback_statements": ["back"]}, None),
-        ({"renew_statements": ["bling"]}, None),
-        ({"default_ttl": 42}, None),
-        ({"max_ttl": 1337}, None),
+        pytest.param({"connection": "conn2"}, "db_name", id="connection"),
+        pytest.param({"creation_statements": ["foo"]}, None, id="creation_statements"),
+        pytest.param({"revocation_statements": ["revoke"]}, None, id="revocation_statements"),
+        pytest.param({"rollback_statements": ["back"]}, None, id="rollback_statements"),
+        pytest.param({"renew_statements": ["bling"]}, None, id="renew_statements"),
+        pytest.param({"default_ttl": 42}, None, id="default_ttl"),
+        pytest.param({"max_ttl": 1337}, None, id="max_ttl"),
     ),
 )
 def test_role_changes(testmode, write_role_mock, kwargs, param, _roles):
@@ -464,12 +468,14 @@ def test_static_role_already_present(write_static_role_mock):
 @pytest.mark.parametrize(
     "kwargs,param",
     (
-        ({"connection": "conn2"}, "db_name"),
-        ({"username": "bar"}, None),
-        ({"rotation_period": 43}, None),
-        ({"rotation_statements": ["do stuff"]}, None),
-        ({"credential_type": "rsa_private_key"}, None),
-        ({"credential_config": {"password_policy": "pass policy"}}, None),
+        pytest.param({"connection": "conn2"}, "db_name", id="connection"),
+        pytest.param({"username": "bar"}, None, id="username"),
+        pytest.param({"rotation_period": 43}, None, id="rotation_period"),
+        pytest.param({"rotation_statements": ["do stuff"]}, None, id="rotation_statements"),
+        pytest.param({"credential_type": "rsa_private_key"}, None, id="credential_type"),
+        pytest.param(
+            {"credential_config": {"password_policy": "pass policy"}}, None, id="credential_config"
+        ),
     ),
 )
 def test_static_role_changes(testmode, write_static_role_mock, kwargs, param, _roles):

@@ -15,7 +15,12 @@ def minion_config_overrides():
 @pytest.mark.usefixtures("_multi_lease")
 @pytest.mark.parametrize("_multi_lease", (False, True), indirect=True)
 @pytest.mark.parametrize(
-    "beacon_config", ({"check_server": False}, {"check_server": True}), indirect=True
+    "beacon_config",
+    (
+        pytest.param({"check_server": False}, id="no_check_server"),
+        pytest.param({"check_server": True}, id="check_server"),
+    ),
+    indirect=True,
 )
 def test_beacon_valid(beacon, beacon_config):
     ret = beacon(beacon_config)
@@ -79,8 +84,12 @@ def test_beacon_revoked_not_check_server(beacon, beacon_config):
 @pytest.mark.parametrize(
     "beacon_config,lease_creation_params",
     (
-        ({"check_server": True}, {}),
-        ({"leases_type": dict, "per_lease_params": {"check_server": True}}, {}),
+        pytest.param({"check_server": True}, {}, id="global_param"),
+        pytest.param(
+            {"leases_type": dict, "per_lease_params": {"check_server": True}},
+            {},
+            id="per_lease_param",
+        ),
     ),
     indirect=True,
 )
@@ -95,11 +104,19 @@ def test_beacon_revoked_check_server(beacon, beacon_config):
 @pytest.mark.parametrize(
     "beacon_config,lease_creation_params",
     (
-        ({"min_ttl": 7000}, {}),
-        ({"leases_type": dict, "per_lease_params": {"min_ttl": 7000}}, {}),
-        ({}, {"valid_for": 7000}),
-        ({"min_ttl": 300}, {"valid_for": 7000}),
-        ({"leases_type": dict, "per_lease_params": {"min_ttl": 300}}, {"valid_for": 7000}),
+        pytest.param({"min_ttl": 7000}, {}, id="global_min_ttl"),
+        pytest.param(
+            {"leases_type": dict, "per_lease_params": {"min_ttl": 7000}},
+            {},
+            id="per_lease_min_ttl",
+        ),
+        pytest.param({}, {"valid_for": 7000}, id="cached_valid_for"),
+        pytest.param({"min_ttl": 300}, {"valid_for": 7000}, id="cached_overrides_global"),
+        pytest.param(
+            {"leases_type": dict, "per_lease_params": {"min_ttl": 300}},
+            {"valid_for": 7000},
+            id="cached_overrides_per_lease",
+        ),
     ),
     indirect=True,
 )
@@ -127,11 +144,19 @@ def test_beacon_not_renew(beacon, beacon_config):
 @pytest.mark.parametrize(
     "beacon_config,lease_creation_params",
     (
-        ({"min_ttl": 8000}, {}),
-        ({"leases_type": dict, "per_lease_params": {"min_ttl": 8000}}, {}),
-        ({}, {"valid_for": 8000}),
-        ({"min_ttl": 300}, {"valid_for": 8000}),
-        ({"leases_type": dict, "per_lease_params": {"min_ttl": 300}}, {"valid_for": 8000}),
+        pytest.param({"min_ttl": 8000}, {}, id="global_min_ttl"),
+        pytest.param(
+            {"leases_type": dict, "per_lease_params": {"min_ttl": 8000}},
+            {},
+            id="per_lease_min_ttl",
+        ),
+        pytest.param({}, {"valid_for": 8000}, id="cached_valid_for"),
+        pytest.param({"min_ttl": 300}, {"valid_for": 8000}, id="cached_overrides_global"),
+        pytest.param(
+            {"leases_type": dict, "per_lease_params": {"min_ttl": 300}},
+            {"valid_for": 8000},
+            id="cached_overrides_per_lease",
+        ),
     ),
     indirect=True,
 )
@@ -151,35 +176,65 @@ def test_beacon_min_ttl_unattainable(beacon, beacon_config):
 @pytest.mark.parametrize(
     "beacon_config,lease_creation_params,expected_meta",
     (
-        ({"meta": "foo.bar"}, {}, "foo.bar"),
-        ({"leases_type": dict, "per_lease_params": {"meta": "foo.bar"}}, {}, "foo.bar"),
-        ({}, {"meta": "foo.bar"}, "foo.bar"),
-        ({"meta": "foo.bar"}, {"meta": "foo.baz"}, "foo.baz"),
-        (
+        pytest.param({"meta": "foo.bar"}, {}, "foo.bar", id="global_str"),
+        pytest.param(
+            {"leases_type": dict, "per_lease_params": {"meta": "foo.bar"}},
+            {},
+            "foo.bar",
+            id="per_lease_str",
+        ),
+        pytest.param({}, {"meta": "foo.bar"}, "foo.bar", id="cached_str"),
+        pytest.param(
+            {"meta": "foo.bar"}, {"meta": "foo.baz"}, "foo.baz", id="cached_overrides_global"
+        ),
+        pytest.param(
             {"leases_type": dict, "per_lease_params": {"meta": "foo.bar"}},
             {"meta": "foo.baz"},
             "foo.baz",
+            id="cached_overrides_per_lease",
         ),
-        ({"meta": "foo.bar"}, {"meta": ["foo.baz"]}, ["foo.baz"]),
-        ({"meta": ["foo.bar"]}, {"meta": "foo.baz"}, "foo.baz"),
-        ({"meta": ["foo.bar"]}, {"meta": {"foo": "baz"}}, {"foo": "baz"}),
-        ({"meta": ["foo.bar"]}, {"meta": ["foo.baz"]}, ["foo.bar", "foo.baz"]),
-        (
+        pytest.param(
+            {"meta": "foo.bar"}, {"meta": ["foo.baz"]}, ["foo.baz"], id="list_overrides_str"
+        ),
+        pytest.param(
+            {"meta": ["foo.bar"]}, {"meta": "foo.baz"}, "foo.baz", id="str_overrides_list"
+        ),
+        pytest.param(
+            {"meta": ["foo.bar"]},
+            {"meta": {"foo": "baz"}},
+            {"foo": "baz"},
+            id="dict_overrides_list",
+        ),
+        pytest.param(
+            {"meta": ["foo.bar"]},
+            {"meta": ["foo.baz"]},
+            ["foo.bar", "foo.baz"],
+            id="lists_merge",
+        ),
+        pytest.param(
             {"meta": {"foo": {"bar": True}}},
             {"meta": {"foo": {"bar": False}}},
             {"foo": {"bar": False}},
+            id="dicts_merge_overlapping",
         ),
-        (
+        pytest.param(
             {"meta": {"foo": {"bar": True}}},
             {"meta": {"foo": {"baz": False}}},
             {"foo": {"bar": True, "baz": False}},
+            id="dicts_merge_distinct",
         ),
-        (
+        pytest.param(
             {"meta": {"foo": {"bar": [True]}}},
             {"meta": {"foo": {"bar": [False]}}},
             {"foo": {"bar": [True, False]}},
+            id="nested_lists_merge",
         ),
-        ({"meta": "foo"}, {"meta": {"foo": {"bar": False}}}, {"foo": {"bar": False}}),
+        pytest.param(
+            {"meta": "foo"},
+            {"meta": {"foo": {"bar": False}}},
+            {"foo": {"bar": False}},
+            id="dict_overrides_str",
+        ),
     ),
     indirect=("beacon_config", "lease_creation_params"),
 )

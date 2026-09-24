@@ -15,21 +15,28 @@ from saltext.vault.utils.vault import kv as vkv
     "data,patch,expected",
     [
         # The following test cases are taken from RFC 7396, appendix A.
-        ({"a": "b"}, {"a": "c"}, {"a": "c"}),
-        ({"a": "b"}, {"b": "c"}, {"a": "b", "b": "c"}),
-        ({"a": "b"}, {"a": None}, {}),
-        ({"a": "b", "b": "c"}, {"a": None}, {"b": "c"}),
-        ({"a": ["b"]}, {"a": "c"}, {"a": "c"}),
-        ({"a": "c"}, {"a": ["b"]}, {"a": ["b"]}),
-        ({"a": {"b": "c"}}, {"a": {"b": "d", "c": None}}, {"a": {"b": "d"}}),
-        ({"a": [{"b": "c"}]}, {"a": [1]}, {"a": [1]}),
-        (["a", "b"], ["c", "d"], ["c", "d"]),
-        ({"a": "b"}, ["c"], ["c"]),
-        ({"a": "foo"}, None, None),
-        ({"a": "foo"}, "bar", "bar"),
-        ({"e": None}, {"a": 1}, {"e": None, "a": 1}),
-        ([1, 2], {"a": "b", "c": None}, {"a": "b"}),
-        ({}, {"a": {"bb": {"ccc": None}}}, {"a": {"bb": {}}}),
+        pytest.param({"a": "b"}, {"a": "c"}, {"a": "c"}, id="replace_value"),
+        pytest.param({"a": "b"}, {"b": "c"}, {"a": "b", "b": "c"}, id="add_key"),
+        pytest.param({"a": "b"}, {"a": None}, {}, id="remove_only_key"),
+        pytest.param({"a": "b", "b": "c"}, {"a": None}, {"b": "c"}, id="remove_one_key"),
+        pytest.param({"a": ["b"]}, {"a": "c"}, {"a": "c"}, id="replace_list_with_value"),
+        pytest.param({"a": "c"}, {"a": ["b"]}, {"a": ["b"]}, id="replace_value_with_list"),
+        pytest.param(
+            {"a": {"b": "c"}},
+            {"a": {"b": "d", "c": None}},
+            {"a": {"b": "d"}},
+            id="nested_merge",
+        ),
+        pytest.param({"a": [{"b": "c"}]}, {"a": [1]}, {"a": [1]}, id="replace_list_wholesale"),
+        pytest.param(["a", "b"], ["c", "d"], ["c", "d"], id="replace_root_list"),
+        pytest.param({"a": "b"}, ["c"], ["c"], id="replace_object_with_list"),
+        pytest.param({"a": "foo"}, None, None, id="replace_with_null"),
+        pytest.param({"a": "foo"}, "bar", "bar", id="replace_with_scalar"),
+        pytest.param({"e": None}, {"a": 1}, {"e": None, "a": 1}, id="null_value_untouched"),
+        pytest.param([1, 2], {"a": "b", "c": None}, {"a": "b"}, id="patch_list_with_object"),
+        pytest.param(
+            {}, {"a": {"bb": {"ccc": None}}}, {"a": {"bb": {}}}, id="nested_remove_nonexistent"
+        ),
     ],
 )
 def test_apply_json_merge_patch(data, patch, expected):
@@ -263,12 +270,12 @@ def kvv2(kvv2_info, kvv2_response, metadata_nocache, kv_list_response):
 @pytest.mark.parametrize(
     "wrapper,param,result",
     [
-        ("read_kv", None, {"foo": "bar"}),
-        ("write_kv", {"foo": "bar"}, True),
-        ("patch_kv", {"foo": "bar"}, True),
-        ("delete_kv", None, True),
-        ("destroy_kv", [0], True),
-        ("list_kv", None, ["foo"]),
+        pytest.param("read_kv", None, {"foo": "bar"}, id="read_kv"),
+        pytest.param("write_kv", {"foo": "bar"}, True, id="write_kv"),
+        pytest.param("patch_kv", {"foo": "bar"}, True, id="patch_kv"),
+        pytest.param("delete_kv", None, True, id="delete_kv"),
+        pytest.param("destroy_kv", [0], True, id="destroy_kv"),
+        pytest.param("list_kv", None, ["foo"], id="list_kv"),
     ],
 )
 @pytest.mark.parametrize("test_remote_config", ["token"], indirect=True)
@@ -304,12 +311,12 @@ def test_kv_wrapper_handles_perm_exceptions(
 @pytest.mark.parametrize(
     "wrapper,param",
     [
-        ("read_kv", None),
-        ("write_kv", {"foo": "bar"}),
-        ("patch_kv", {"foo": "bar"}),
-        ("delete_kv", None),
-        ("destroy_kv", [0]),
-        ("list_kv", None),
+        pytest.param("read_kv", None, id="read_kv"),
+        pytest.param("write_kv", {"foo": "bar"}, id="write_kv"),
+        pytest.param("patch_kv", {"foo": "bar"}, id="patch_kv"),
+        pytest.param("delete_kv", None, id="delete_kv"),
+        pytest.param("destroy_kv", [0], id="destroy_kv"),
+        pytest.param("list_kv", None, id="list_kv"),
     ],
 )
 @pytest.mark.parametrize("test_remote_config", ["token"], indirect=True)
@@ -484,17 +491,21 @@ class TestKVV1:
     @pytest.mark.parametrize(
         "existing,data,expected",
         [
-            ({"foo": "bar"}, {"bar": "baz"}, {"foo": "bar", "bar": "baz"}),
-            ({"foo": "bar"}, {"foo": None}, {}),
-            (
+            pytest.param(
+                {"foo": "bar"}, {"bar": "baz"}, {"foo": "bar", "bar": "baz"}, id="add_key"
+            ),
+            pytest.param({"foo": "bar"}, {"foo": None}, {}, id="remove_key"),
+            pytest.param(
                 {"foo": "bar"},
                 {"foo2": {"bar": {"baz": True}}},
                 {"foo": "bar", "foo2": {"bar": {"baz": True}}},
+                id="add_nested",
             ),
-            (
+            pytest.param(
                 {"foo": {"bar": {"baz": True}}},
                 {"foo": {"bar": {"baz": None}}},
                 {"foo": {"bar": {}}},
+                id="remove_nested",
             ),
         ],
     )
@@ -564,10 +575,10 @@ class TestKVV2:
     @pytest.mark.parametrize(
         "versions,expected",
         [
-            (0, [0]),
-            ("1", [1]),
-            ([2], [2]),
-            (["3"], [3]),
+            pytest.param(0, [0], id="int"),
+            pytest.param("1", [1], id="str"),
+            pytest.param([2], [2], id="int_list"),
+            pytest.param(["3"], [3], id="str_list"),
         ],
     )
     def test_parse_versions(self, kvv2, versions, expected):
@@ -649,7 +660,11 @@ class TestKVV2:
         assert res == kvv2_response["data"]["data"]
 
     @pytest.mark.parametrize(
-        "exc", [vault.VaultPermissionDeniedError, vault.VaultUnsupportedOperationError]
+        "exc",
+        [
+            pytest.param(vault.VaultPermissionDeniedError, id="permission_denied"),
+            pytest.param(vault.VaultUnsupportedOperationError, id="unsupported_operation"),
+        ],
     )
     def test_vault_kv_patch_fallback(self, kvv2, path, paths, exc, caplog):
         """
@@ -701,7 +716,18 @@ class TestKVV2:
             "DELETE", paths["data"], payload=None, safe_to_retry=None
         )
 
-    @pytest.mark.parametrize("versions", [[1, 2], [2], 2, ["1", "2"], ["2"], "2", [1, "2"]])
+    @pytest.mark.parametrize(
+        "versions",
+        [
+            pytest.param([1, 2], id="int_list"),
+            pytest.param([2], id="single_int_list"),
+            pytest.param(2, id="int"),
+            pytest.param(["1", "2"], id="str_list"),
+            pytest.param(["2"], id="single_str_list"),
+            pytest.param("2", id="str"),
+            pytest.param([1, "2"], id="mixed_list"),
+        ],
+    )
     def test_vault_kv_delete_versions(self, kvv2, versions, path, paths):
         """
         Ensure that VaultKV.delete with versions works for KV v2.
@@ -715,7 +741,18 @@ class TestKVV2:
             "POST", paths["delete_versions"], payload={"versions": expected}, safe_to_retry=True
         )
 
-    @pytest.mark.parametrize("versions", [[1, 2], [2], 2, ["1", "2"], ["2"], "2", [1, "2"]])
+    @pytest.mark.parametrize(
+        "versions",
+        [
+            pytest.param([1, 2], id="int_list"),
+            pytest.param([2], id="single_int_list"),
+            pytest.param(2, id="int"),
+            pytest.param(["1", "2"], id="str_list"),
+            pytest.param(["2"], id="single_str_list"),
+            pytest.param("2", id="str"),
+            pytest.param([1, "2"], id="mixed_list"),
+        ],
+    )
     def test_vault_kv_destroy(self, kvv2, versions, path, paths):
         """
         Ensure that VaultKV.destroy works for KV v2.

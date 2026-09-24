@@ -166,16 +166,18 @@ def test_issuer_managed_invalid_days_remaining(func, days_remaining):
 @pytest.mark.parametrize(
     "func,kwargs",
     (
-        (
+        pytest.param(
             "certificate_managed",
             {"common_name": "example.com", "private_key": "pk", "sign_verbatim": True},
+            id="certificate_managed",
         ),
-        (
+        pytest.param(
             "ca_certificate_managed",
             {"common_name": "example.com", "private_key": "pk", "sign_verbatim": True},
+            id="ca_certificate_managed",
         ),
-        ("intermediate_issuer_managed", {}),
-        ("root_issuer_managed", {}),
+        pytest.param("intermediate_issuer_managed", {}, id="intermediate_issuer_managed"),
+        pytest.param("root_issuer_managed", {}, id="root_issuer_managed"),
     ),
 )
 def test_cert_funcs_undercutting_not_after(func, kwargs):

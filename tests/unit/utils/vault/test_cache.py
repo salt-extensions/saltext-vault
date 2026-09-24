@@ -175,7 +175,13 @@ class TestVaultCache:
         if config != "session":
             cached.flush.assert_called_once_with(cbank, None)
 
-    @pytest.mark.parametrize("context", [{}, {"vault/connection": {}}])
+    @pytest.mark.parametrize(
+        "context",
+        [
+            pytest.param({}, id="empty_context"),
+            pytest.param({"vault/connection": {}}, id="existing_cbank"),
+        ],
+    )
     @pytest.mark.parametrize("config", ["session", "other"])
     def test_store(self, config, context, uncached, cbank, ckey, data):
         """
@@ -599,7 +605,14 @@ class TestVaultLeaseCache:
             cache.store("ckey", lease_)
             store.assert_called_once_with("ckey", lease_.to_dict())
 
-    @pytest.mark.parametrize("lease", ({}, {"meta": {"foo": "bar"}}), indirect=True)
+    @pytest.mark.parametrize(
+        "lease",
+        (
+            pytest.param({}, id="without_meta"),
+            pytest.param({"meta": {"foo": "bar"}}, id="with_meta"),
+        ),
+        indirect=True,
+    )
     @pytest.mark.usefixtures("cached_outdated")
     def test_expire_events_with_get(self, events, lease):
         """

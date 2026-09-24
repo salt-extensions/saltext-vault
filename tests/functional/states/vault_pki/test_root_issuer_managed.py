@@ -1,4 +1,3 @@
-
 """
 Tests for the root_issuer_managed state.
 """
@@ -30,25 +29,27 @@ pytestmark = genmarks(mounts="pki")
 @pytest.mark.parametrize(
     "testmode,pathlen,aia_urls",
     (
-        (False, -1, {}),
-        (False, 3, {}),
-        (True, -1, {}),
-        (
+        pytest.param(False, -1, {}, id="defaults"),
+        pytest.param(False, 3, {}, id="pathlen"),
+        pytest.param(True, -1, {}, id="testmode"),
+        pytest.param(
             False,
             -1,
             {
                 "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
                 "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
             },
+            id="aia_only",
         ),
-        (
+        pytest.param(
             False,
             -1,
             {
                 "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
             },
+            id="crl_only",
         ),
-        (
+        pytest.param(
             False,
             -1,
             {
@@ -57,8 +58,9 @@ pytestmark = genmarks(mounts="pki")
                     "https://deltacrl2.root.ca",
                 ],
             },
+            id="deltacrl_only",
         ),
-        (
+        pytest.param(
             False,
             -1,
             {
@@ -70,6 +72,7 @@ pytestmark = genmarks(mounts="pki")
                 ],
                 "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
             },
+            id="all_urls",
         ),
     ),
     indirect=("testmode", "aia_urls"),
@@ -558,35 +561,38 @@ def test_root_issuer_managed_issuer_name_taken_artifact(
 @pytest.mark.parametrize(
     "existing_root",
     (
-        {},
-        {
-            "key_algo": "rsa",  # needed for signature_bits to work
-            "signature_bits": 384,
-            "not_after": "2345-12-31T23:59:59Z",
-            "alt_names": [
-                "dns:test2.root.ca",
-                "ip:1.2.3.4",
-                "uri:https://root.ca",
-                "email:test@root.ca",
-            ],
-            "max_path_length": 2,
-            "key_usage": ["DigitalSignature"],
-            "exclude_cn_from_sans": True,
-            "permitted_alt_names": [  # types other than dns require Vault 1.19+, filtered in existing_root
-                "dns:.foo.bar",
-                "email:.foo.bar",
-                "ip:0.0.0.0/1",
-                "ip:2001:500::/30",
-                "uri:.bar.baz",
-            ],
-            "excluded_alt_names": [  # requires Vault 1.19+, also filtered in existing_root
-                "dns:no.foo.bar",
-                "email:no.foo.bar",
-                "ip:0.0.0.0/24",
-                "ip:2001:500::/32",
-                "uri:no.bar.baz",
-            ],
-        },
+        pytest.param({}, id="defaults"),
+        pytest.param(
+            {
+                "key_algo": "rsa",  # needed for signature_bits to work
+                "signature_bits": 384,
+                "not_after": "2345-12-31T23:59:59Z",
+                "alt_names": [
+                    "dns:test2.root.ca",
+                    "ip:1.2.3.4",
+                    "uri:https://root.ca",
+                    "email:test@root.ca",
+                ],
+                "max_path_length": 2,
+                "key_usage": ["DigitalSignature"],
+                "exclude_cn_from_sans": True,
+                "permitted_alt_names": [  # types other than dns require Vault 1.19+, filtered in existing_root
+                    "dns:.foo.bar",
+                    "email:.foo.bar",
+                    "ip:0.0.0.0/1",
+                    "ip:2001:500::/30",
+                    "uri:.bar.baz",
+                ],
+                "excluded_alt_names": [  # requires Vault 1.19+, also filtered in existing_root
+                    "dns:no.foo.bar",
+                    "email:no.foo.bar",
+                    "ip:0.0.0.0/24",
+                    "ip:2001:500::/32",
+                    "uri:no.bar.baz",
+                ],
+            },
+            id="all_attributes",
+        ),
     ),
     indirect=True,
 )
@@ -1059,14 +1065,20 @@ def test_root_issuer_managed_url_config_denied(vault_pki, root_ca_args):
 @pytest.mark.parametrize(
     "aia_urls",
     (
-        {},
-        {
-            "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
-            "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
-        },
-        {
-            "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
-        },
+        pytest.param({}, id="no_urls"),
+        pytest.param(
+            {
+                "issuing_certificates": ["https://one.root.ca", "https://two.root.ca"],
+                "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
+            },
+            id="aia_only",
+        ),
+        pytest.param(
+            {
+                "crl_distribution_points": ["https://crl1.root.ca", "https://crl2.root.ca"],
+            },
+            id="crl_only",
+        ),
         pytest.param(
             {
                 "delta_crl_distribution_points": [
@@ -1075,6 +1087,7 @@ def test_root_issuer_managed_url_config_denied(vault_pki, root_ca_args):
                 ],
             },
             marks=pytest.mark.requires_backend("vault>=1.20"),
+            id="deltacrl_only",
         ),
         pytest.param(
             {
@@ -1088,6 +1101,7 @@ def test_root_issuer_managed_url_config_denied(vault_pki, root_ca_args):
                 ],
             },
             marks=pytest.mark.requires_backend("vault>=1.20", "openbao"),
+            id="crl_and_deltacrl",
         ),
         pytest.param(
             {
@@ -1100,6 +1114,7 @@ def test_root_issuer_managed_url_config_denied(vault_pki, root_ca_args):
                 "ocsp_servers": ["https://ocsp1.root.ca", "https://ocsp2.root.ca"],
             },
             marks=pytest.mark.requires_backend("vault>=1.20", "openbao"),
+            id="all_urls",
         ),
     ),
     indirect=True,

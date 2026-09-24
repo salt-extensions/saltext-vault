@@ -10,15 +10,15 @@ from saltext.vault.utils.vault import kv as vkv
 
 # Maps the utility functions to the corresponding VaultKV method and arguments
 KV_FUNCS = (
-    ("read_kv", "read", ("secret/path",)),
-    ("read_kv_meta", "read_meta", ("secret/path",)),
-    ("write_kv", "write", ("secret/path", {"foo": "bar"})),
-    ("patch_kv", "patch", ("secret/path", {"foo": "bar"})),
-    ("delete_kv", "delete", ("secret/path",)),
-    ("restore_kv", "restore", ("secret/path",)),
-    ("destroy_kv", "destroy", ("secret/path", [1])),
-    ("wipe_kv", "nuke", ("secret/path",)),
-    ("list_kv", "list", ("secret/path",)),
+    pytest.param("read_kv", "read", ("secret/path",), id="read_kv"),
+    pytest.param("read_kv_meta", "read_meta", ("secret/path",), id="read_kv_meta"),
+    pytest.param("write_kv", "write", ("secret/path", {"foo": "bar"}), id="write_kv"),
+    pytest.param("patch_kv", "patch", ("secret/path", {"foo": "bar"}), id="patch_kv"),
+    pytest.param("delete_kv", "delete", ("secret/path",), id="delete_kv"),
+    pytest.param("restore_kv", "restore", ("secret/path",), id="restore_kv"),
+    pytest.param("destroy_kv", "destroy", ("secret/path", [1]), id="destroy_kv"),
+    pytest.param("wipe_kv", "nuke", ("secret/path",), id="wipe_kv"),
+    pytest.param("list_kv", "list", ("secret/path",), id="list_kv"),
 )
 
 
