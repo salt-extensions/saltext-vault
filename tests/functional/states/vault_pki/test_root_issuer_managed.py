@@ -19,6 +19,7 @@ from tests.common.helpers.vault_pki import _assert_embedded_aia
 from tests.common.helpers.vault_pki import _default_issuer
 from tests.common.helpers.vault_pki import _import_configured_issuer
 from tests.support.vault import vault_list
+from tests.support.vault import vault_patch
 from tests.support.vault import vault_read
 from tests.support.vault import vault_write
 
@@ -307,9 +308,7 @@ def test_root_issuer_managed_rotation_preserves_all_issuer_config_and_reports_im
         any_issuer_changes = condition == "rotate_key"
 
     if condition in ("with_issuer_name", "denied"):
-        vault_write(
-            f"pki/issuer/{existing_root['issuer_id']}", **current_config, issuer_name="foobar"
-        )
+        vault_patch(f"pki/issuer/{existing_root['issuer_id']}", issuer_name="foobar")
         any_issuer_changes = condition == "with_issuer_name"
 
     if condition == "denied_issuer_changes":
