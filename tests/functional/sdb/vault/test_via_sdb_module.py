@@ -9,6 +9,12 @@ pytestmark = genmarks(
     internal_logic=True,
     mounts=[[("kv", "secret-v1", "-version=1"), ("kv", "secret", "-version=2")]],
 )
+pytestmark.append(
+    pytest.mark.filterwarnings(
+        "ignore:Beginning with version 2, the Vault SDB module will partially update"
+        ":DeprecationWarning"
+    )
+)
 
 log = logging.getLogger(__name__)
 

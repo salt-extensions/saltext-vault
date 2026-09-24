@@ -77,7 +77,8 @@ def policies():
 
 
 def test_generate_token(client):
-    result = vault.generate_token("test-minion", "signature")
+    with pytest.deprecated_call(match="vault.generate_token endpoint"):
+        result = vault.generate_token("test-minion", "signature")
     log.debug("generate_token result: %s", result)
     assert isinstance(result, dict)
     assert "error" not in result
@@ -89,7 +90,8 @@ def test_generate_token(client):
 def test_generate_token_uses(client):
     # Test uses
     num_uses = 6
-    result = vault.generate_token("test-minion", "signature", uses=num_uses)
+    with pytest.deprecated_call(match="vault.generate_token endpoint"):
+        result = vault.generate_token("test-minion", "signature", uses=num_uses)
     assert "uses" in result
     assert result["uses"] == num_uses
     json_request = {
@@ -107,7 +109,8 @@ def test_generate_token_uses(client):
 def test_generate_token_ttl(client):
     # Test ttl
     expected_ttl = 21600
-    result = vault.generate_token("test-minion", "signature", ttl=expected_ttl)
+    with pytest.deprecated_call(match="vault.generate_token endpoint"):
+        result = vault.generate_token("test-minion", "signature", ttl=expected_ttl)
     assert result["uses"] == 1
     json_request = {
         "policies": ["saltstack/minion/test-minion", "saltstack/minions"],
@@ -124,7 +127,8 @@ def test_generate_token_ttl(client):
 
 def test_generate_token_permission_denied(client):
     client.post.side_effect = vaultutil.VaultPermissionDeniedError("no reason")
-    result = vault.generate_token("test-minion", "signature")
+    with pytest.deprecated_call(match="vault.generate_token endpoint"):
+        result = vault.generate_token("test-minion", "signature")
     assert isinstance(result, dict)
     assert "error" in result
     assert result["error"] == "VaultPermissionDeniedError: no reason"
@@ -132,7 +136,8 @@ def test_generate_token_permission_denied(client):
 
 def test_generate_token_exception(client):
     client.post.side_effect = Exception("Test Exception Reason")
-    result = vault.generate_token("test-minion", "signature")
+    with pytest.deprecated_call(match="vault.generate_token endpoint"):
+        result = vault.generate_token("test-minion", "signature")
     assert isinstance(result, dict)
     assert "error" in result
     assert result["error"] == "Exception: Test Exception Reason"
@@ -140,7 +145,8 @@ def test_generate_token_exception(client):
 
 def test_generate_token_no_matching_policies(policies):
     policies.return_value = []
-    result = vault.generate_token("test-minion", "signature")
+    with pytest.deprecated_call(match="vault.generate_token endpoint"):
+        result = vault.generate_token("test-minion", "signature")
     assert isinstance(result, dict)
     assert "error" in result
     assert result["error"] == "SaltRunnerError: No policies matched minion."

@@ -413,7 +413,8 @@ def test_generate_token_deprecated(ttl, uses, token_serialized, config, validate
     }
     with patch("saltext.vault.runners.vault._generate_token", autospec=True) as gen:
         gen.return_value = (token_serialized, token_serialized["num_uses"])
-        res = vault.generate_token("test-minion", "sig", ttl=ttl, uses=uses)
+        with pytest.deprecated_call(match="vault.generate_token endpoint"):
+            res = vault.generate_token("test-minion", "sig", ttl=ttl, uses=uses)
         validate_signature.assert_called_once_with("test-minion", "sig", False)
         assert res == expected
         gen.assert_called_once_with("test-minion", issue_params=issue_params or None, wrap=False)

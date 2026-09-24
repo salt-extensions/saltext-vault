@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from unittest.mock import ANY
 
@@ -51,11 +52,15 @@ def test_ext_pillar_handles_other_exceptions(read_kv, caplog):
 @pytest.mark.parametrize("kwarg", (False, True))
 def test_path_required_in_deprecated_config(caplog, kwarg):
     args, kwargs = [], {}
+    deprecation = contextlib.nullcontext()
     if kwarg:
         kwargs["conf"] = "foo=bar bar=baz"
     else:
         args.append("foo=bar bar=baz")
-    with caplog.at_level(logging.ERROR):
+        # Only the positional variant reaches the deprecation warning,
+        # the kwarg one errors out before it is issued.
+        deprecation = pytest.deprecated_call(match="`conf` parameter")
+    with caplog.at_level(logging.ERROR), deprecation:
         res = vault.ext_pillar("test-minion", {}, *args, **kwargs)
     assert res == {}
     assert "is not a valid Vault ext_pillar config" in caplog.text
