@@ -1581,7 +1581,8 @@ def check_int_issuer_cert_for_changes_salt_ca(
     builder, ca = _build_x509v2_cert_with_policy(
         signing_policy_contents,
         **kwargs,
-        public_key=pubkey,
+        # This is involved in a deepcopy later, which requires cryptography >=47 to not crash
+        public_key=x509util.to_pem(pubkey),
         not_after=not_after,
     )
 
