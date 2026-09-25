@@ -15,6 +15,7 @@ from saltfactories.utils import random_string
 
 from tests.common.helpers.vault_pki import DEFAULT_CLUSTER_AIA_PATH
 from tests.common.helpers.vault_pki import DEFAULT_CLUSTER_PATH
+from tests.common.helpers.vault_pki import MOUNT_URL_CONFIG
 from tests.common.helpers.vault_pki import _import_configured_issuer
 from tests.common.helpers.vault_pki import _read_denied
 from tests.common.helpers.vault_pki import _wipe_issuers
@@ -22,6 +23,7 @@ from tests.support.vault import vault_delete
 from tests.support.vault import vault_disable_secret_engine
 from tests.support.vault import vault_enable_secret_engine
 from tests.support.vault import vault_list
+from tests.support.vault import vault_read
 from tests.support.vault import vault_write
 
 
@@ -374,21 +376,51 @@ def issuer_setup_no_pathlen(ca_cert_no_pathlen, ca_key_no_pathlen, request):
         _wipe_issuers()
 
 
+_aia_defaults = {
+    "issuing_certificates": "",
+    "ocsp_servers": "",
+    "crl_distribution_points": "",
+    "delta_crl_distribution_points": "",
+    "enable_templating": False,
+}
+
+
 @pytest.fixture
-def aia_urls(request):
-    urls = deepcopy(getattr(request, "param", {}))
-    vault_write("pki/config/urls", **urls)
+def aia_urls_set(request, container):
+    """
+    Override the default mount AIA URL configuration for a single test.
+    """
+    cur = vault_read("pki/config/urls")["data"]
+    urls = None
+    if hasattr(request, "param"):
+        urls = write_urls = deepcopy(request.param or _aia_defaults)
+        if not request.param:
+            urls = {}
+        if not container.matches("vault>=1.20", "openbao"):
+            urls.pop("delta_crl_distribution_points", None)
+            write_urls.pop("delta_crl_distribution_points", None)
+        vault_write("pki/config/urls", **write_urls)
     try:
         yield urls
     finally:
-        vault_write(
-            "pki/config/urls",
-            issuing_certificates="",
-            ocsp_servers="",
-            crl_distribution_points="",
-            delta_crl_distribution_points="",
-            enable_templating=False,
-        )
+        if urls is not None:
+            vault_write(
+                "pki/config/urls",
+                **cur,
+            )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def aia_urls_default_set(request, container, secret_mounts):  # pylint: disable=unused-argument
+    """
+    Ensure the ``pki`` mount has some default AIA URL config set.
+    Avoids API warnings in logs during testing.
+    """
+    urls = _aia_defaults | deepcopy(getattr(request, "param", MOUNT_URL_CONFIG))
+    if not container.matches("vault>=1.20", "openbao"):
+        urls.pop("delta_crl_distribution_points", None)
+    vault_write("pki/config/urls", **urls)
+    return urls
 
 
 def _cluster_config(secret_mounts):  # pylint: disable=unused-argument

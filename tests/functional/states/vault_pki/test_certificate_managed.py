@@ -290,9 +290,9 @@ def test_certificate_managed_role_read_denied_without_issuer_ref(vault_pki, cert
     assert "PermissionDenied" in ret.comment
 
 
-@pytest.mark.parametrize("aia_urls", (MOUNT_URL_CONFIG,), indirect=True)
 @pytest.mark.usefixtures("issuer_setup", "roles_setup", "url_config_read_denied")
-def test_certificate_managed_url_config_denied(vault_pki, cert_args, aia_urls):
+@pytest.mark.parametrize("aia_urls_set", (MOUNT_URL_CONFIG,), indirect=True)
+def test_certificate_managed_url_config_denied(vault_pki, cert_args, aia_urls_set):
     """
     Ensure a denied URL read access does not cause reissuance, only a note.
     """
@@ -301,7 +301,7 @@ def test_certificate_managed_url_config_denied(vault_pki, cert_args, aia_urls):
     assert "created" in ret.changes
     assert AIA_UNVERIFIED_NOTE not in ret.comment
     cert = load_cert(cert_args["name"])
-    _assert_embedded_aia(cert, aia_urls)
+    _assert_embedded_aia(cert, aia_urls_set)
 
     ret = vault_pki.certificate_managed(**cert_args)
     assert ret.result is True
@@ -311,9 +311,9 @@ def test_certificate_managed_url_config_denied(vault_pki, cert_args, aia_urls):
     assert load_cert(cert_args["name"]).serial_number == cert.serial_number
 
 
-@pytest.mark.parametrize("aia_urls", (MOUNT_URL_CONFIG,), indirect=True)
 @pytest.mark.usefixtures("issuer_setup", "url_config_read_denied")
-def test_ca_certificate_managed_url_config_denied(vault_pki, ca_cert_args, aia_urls):
+@pytest.mark.parametrize("aia_urls_set", (MOUNT_URL_CONFIG,), indirect=True)
+def test_ca_certificate_managed_url_config_denied(vault_pki, ca_cert_args, aia_urls_set):
     """
     Ensure a denied URL read access does not cause reissuance, only a note.
     """
@@ -322,7 +322,7 @@ def test_ca_certificate_managed_url_config_denied(vault_pki, ca_cert_args, aia_u
     assert "created" in ret.changes
     assert AIA_UNVERIFIED_NOTE not in ret.comment
     cert = load_cert(ca_cert_args["name"])
-    _assert_embedded_aia(cert, aia_urls)
+    _assert_embedded_aia(cert, aia_urls_set)
 
     ret = vault_pki.ca_certificate_managed(**ca_cert_args)
     assert ret.result is True

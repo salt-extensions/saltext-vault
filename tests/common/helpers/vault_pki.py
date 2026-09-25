@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from cryptography import x509 as cx509
 from salt.modules.x509_v2 import create_csr
+from salt.utils.immutabletypes import freeze
 from salt.utils.x509 import NAME_ATTRS_OID
 
 from saltext.vault.states.vault_pki import URL_EXTS_UNVERIFIED_NOTE
@@ -69,13 +70,15 @@ def _read_denied(*endpoints):
         yield
 
 
-MOUNT_URL_CONFIG = {
-    "issuing_certificates": ["https://ca.example.com/ca.der"],
-    "crl_distribution_points": ["https://crl.example.com/crl.pem"],
-    # Only supported by OpenBao/recent Vault, ignored by older versions during writes.
-    "delta_crl_distribution_points": ["https://deltacrl.example.com/delta.pem"],
-    "ocsp_servers": ["https://ocsp.example.com"],
-}
+MOUNT_URL_CONFIG = freeze(
+    {
+        "issuing_certificates": ["https://ca.example.com/ca.der"],
+        "crl_distribution_points": ["https://crl.example.com/crl.pem"],
+        # Only supported by OpenBao/recent Vault, ignored by older versions during writes.
+        "delta_crl_distribution_points": ["https://deltacrl.example.com/delta.pem"],
+        "ocsp_servers": ["https://ocsp.example.com"],
+    }
+)
 
 AIA_UNVERIFIED_NOTE = URL_EXTS_UNVERIFIED_NOTE.format(mount="pki")
 

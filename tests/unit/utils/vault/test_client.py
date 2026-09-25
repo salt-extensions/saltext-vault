@@ -183,6 +183,42 @@ def test_vault_client_request_returns_whole_response_data(role_id_response, req,
     assert res == role_id_response
 
 
+@pytest.mark.parametrize(
+    "warn_handler",
+    (
+        pytest.param(False, id="silence"),
+        pytest.param(True, id="log_all"),
+        pytest.param(lambda x: x[0], id="filter_str_ret"),
+        pytest.param(lambda x: [x[0]], id="filter_list_ret"),
+        pytest.param(lambda x: None, id="filter_no_ret"),
+    ),
+)
+def test_vault_client_request_logs_warnings(role_id_response, req, client, warn_handler, caplog):
+    """
+    Warnings returned by the Vault API should be logged (deduplicated
+    since Vault sometimes reports the same warning multiple times).
+    They should be able to be silenced and filtered/handled otherwise.
+    """
+    response = dict(role_id_response, warnings=["some warning", "some warning", "other warning"])
+    req.return_value = _mock_json_response(response)
+    res = client.request("GET", "auth/approle/role/test-minion/role-id", warn_handler=warn_handler)
+    assert res == response
+    warnings = [rec.getMessage() for rec in caplog.records if "Vault API warning" in rec.message]
+    if warn_handler is False:
+        assert not warnings
+    elif warn_handler is True:
+        assert warnings == [
+            "Vault API warning [GET auth/approle/role/test-minion/role-id]: some warning",
+            "Vault API warning [GET auth/approle/role/test-minion/role-id]: other warning",
+        ]
+    elif warn_handler(["foobar"]) is None:
+        assert not warnings
+    else:
+        assert warnings == [
+            "Vault API warning [GET auth/approle/role/test-minion/role-id]: some warning",
+        ]
+
+
 def test_vault_client_request_hydrates_wrapped_response(wrapped_role_id_response, req, client):
     """
     request should detect wrapped responses and return an instance of VaultWrappedResponse

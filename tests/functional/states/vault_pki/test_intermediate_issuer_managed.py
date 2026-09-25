@@ -61,9 +61,9 @@ def test_intermediate_issuer_managed_create(vault_pki, int_ca_args, testmode):
     assert abs((_not_valid_after(cert) - expected_not_after).total_seconds()) < 86400
 
 
-@pytest.mark.usefixtures("existing_intermediate", "aia_urls")
+@pytest.mark.usefixtures("existing_intermediate", "aia_urls_set")
 @pytest.mark.parametrize(
-    "aia_urls",
+    "aia_urls_set",
     (
         {
             "enable_templating": True,
@@ -513,8 +513,8 @@ def test_intermediate_issuer_managed_issuer_ok(vault_pki, int_ca_args, testmode)
 
 
 @pytest.mark.parametrize("int_ca_args", ("vault_ca",), indirect=True)
-@pytest.mark.parametrize("aia_urls", (MOUNT_URL_CONFIG,), indirect=True)
-@pytest.mark.usefixtures("clean_pki_issuers", "aia_urls", "url_config_read_denied")
+@pytest.mark.parametrize("aia_urls_set", (MOUNT_URL_CONFIG,), indirect=True)
+@pytest.mark.usefixtures("clean_pki_issuers", "aia_urls_set", "url_config_read_denied")
 def test_intermediate_issuer_managed_url_config_denied(vault_pki, int_ca_args):
     """
     Ensure a denied URL read access does not cause rotation, only a note.
