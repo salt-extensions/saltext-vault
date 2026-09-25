@@ -915,7 +915,6 @@ def ca_certificate_managed(
             country=country,
             exclude_cn_from_sans=exclude_cn_from_sans,
             excluded_alt_names=excluded_alt_names,
-            expire_tolerance=ttl_remaining,
             key_usage=key_usage,
             locality=locality,
             max_path_length=max_path_length,
@@ -1025,7 +1024,7 @@ def _certificate_file_managed(
         if encoding == "der" and append_ca_chain:
             raise SaltInvocationError(
                 "Cannot append the CA chain to DER-encoded certificates. "
-                "Use pkcs7_der if you need a binary encoding including the chain."
+                "Use pkcs7_der if you need a binary encoding including the chain"
             )
 
         _validate_ttl_params(

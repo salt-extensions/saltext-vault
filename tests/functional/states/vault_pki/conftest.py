@@ -8,7 +8,8 @@ from salt.utils.x509 import load_cert
 from tests.common import gen_minion_opts
 
 # pylint: disable=unused-import
-from tests.common.fixtures.vault_pki import aia_urls
+from tests.common.fixtures.vault_pki import aia_urls_default_set
+from tests.common.fixtures.vault_pki import aia_urls_set
 from tests.common.fixtures.vault_pki import ca2_cert
 from tests.common.fixtures.vault_pki import ca2_key
 from tests.common.fixtures.vault_pki import ca_cert
@@ -81,7 +82,7 @@ def cert_typ(request, vault_pki):
 
 @pytest.fixture
 def existing_cert(
-    issuer_setup, roles_setup, aia_urls, request, modules, vault_pki
+    issuer_setup, roles_setup, aia_urls_set, request, modules, vault_pki
 ):  # pylint: disable=unused-argument
     if "cert_typ" in request.fixturenames:
         cert_managed, cert_args = request.getfixturevalue("cert_typ")
@@ -131,7 +132,7 @@ def int_ca_args(
 
 @pytest.fixture
 def existing_intermediate(
-    vault_pki, int_ca_args, clean_pki_issuers, request, aia_urls, container
+    vault_pki, int_ca_args, clean_pki_issuers, request, aia_urls_set, container
 ):  # pylint: disable=unused-argument
     int_ca_args.update(getattr(request, "param", {}))
     if int_ca_args.get("issuer_ref"):
@@ -175,7 +176,7 @@ def root_ca_args():
 
 @pytest.fixture
 def existing_root(
-    vault_pki, root_ca_args, clean_pki_issuers, request, aia_urls, container
+    vault_pki, root_ca_args, clean_pki_issuers, request, aia_urls_set, container
 ):  # pylint: disable=unused-argument
     root_ca_args.update(getattr(request, "param", {}))
     if "excluded_alt_names" in root_ca_args or any(

@@ -20,6 +20,9 @@ from tests.common import gen_minion_opts
 from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
+from tests.common.fixtures.vault_pki import MOUNT_URL_CONFIG
+from tests.common.fixtures.vault_pki import aia_urls_default_set
+from tests.common.fixtures.vault_pki import aia_urls_set
 from tests.common.fixtures.vault_pki import ca2_cert
 from tests.common.fixtures.vault_pki import ca2_key
 from tests.common.fixtures.vault_pki import ca_cert
@@ -796,19 +799,11 @@ def test_update_issuer_delta_crl_endpoints(vault_pki):
     assert ret["delta_crl_distribution_points"] == ["http://crl.example.com/delta.crl"]
 
 
-def test_read_urls(vault_pki):
-    urls = {
-        "issuing_certificates": ["http://aia.example.com/ca.list"],
-        "crl_distribution_points": ["http://crl.example.com/ca.crl"],
-        "ocsp_servers": ["http://ocsp.example.com"],
-    }
-    try:
-        vault_write("pki/config/urls", **urls)
-        ret = vault_pki.read_urls()
-        for key, val in urls.items():
-            assert ret[key] == val
-    finally:
-        vault_write("pki/config/urls", **{key: [] for key in urls})
+@pytest.mark.parametrize("aia_urls_set", (MOUNT_URL_CONFIG,), indirect=True)
+def test_read_urls(vault_pki, aia_urls_set):
+    ret = vault_pki.read_urls()
+    for key, val in aia_urls_set.items():
+        assert ret[key] == val
 
 
 @pytest.mark.usefixtures("issuer_setup")

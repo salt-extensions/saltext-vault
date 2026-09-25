@@ -5,6 +5,7 @@ High-level utility functions for Vault (or OpenBao) interaction
 import logging
 import re
 import typing
+from collections.abc import Callable
 from collections.abc import Mapping
 
 from saltext.vault.utils.vault import client as vclient
@@ -57,6 +58,7 @@ def query(
     raise_error: bool = True,
     safe_to_retry: bool | None = None,
     is_unauthd: bool = False,
+    warn_handler: bool | Callable[[list[str]], list[str] | None] = True,
     **kwargs,
 ):
     """
@@ -97,6 +99,15 @@ def query(
         Whether the queried endpoint is an unauthenticated one and hence
         does not deduct a token use. Only relevant for endpoints not found
         in ``sys``. Defaults to False.
+
+    warn_handler
+        .. versionadded:: 1.9.0
+
+        Boolean or callable to handle Vault-emitted warnings.
+        Defaults to ``true``, meaning all emitted warnings are logged.
+        Set this to ``false`` to silence any warnings.
+        Set this to a callable that takes a list of warnings and optionally
+        returns a list of warnings to log.
     """
     client, config = get_authd_client(opts, context, get_config=True)
     try:
@@ -108,6 +119,7 @@ def query(
             raise_error=raise_error,
             safe_to_retry=safe_to_retry,
             is_unauthd=is_unauthd,
+            warn_handler=warn_handler,
             **kwargs,
         )
     except VaultPermissionDeniedError:
@@ -125,6 +137,7 @@ def query(
         raise_error=raise_error,
         safe_to_retry=safe_to_retry,
         is_unauthd=is_unauthd,
+        warn_handler=warn_handler,
         **kwargs,
     )
 

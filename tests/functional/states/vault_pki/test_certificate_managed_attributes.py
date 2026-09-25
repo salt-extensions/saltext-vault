@@ -698,7 +698,7 @@ def test_ca_certificate_managed_san_from_csr(vault_pki, ca_cert_args, empty):
 
 @pytest.mark.usefixtures("existing_cert", "roles_setup")
 @pytest.mark.parametrize(
-    "aia_urls,issuer_setup",
+    "aia_urls_set,issuer_setup",
     (
         pytest.param(
             {
@@ -768,7 +768,7 @@ def test_ca_certificate_managed_san_from_csr(vault_pki, ca_cert_args, empty):
     ),
     indirect=True,
 )
-def test_certificate_managed_urls(cert_typ, issuer_setup, aia_urls, container):
+def test_certificate_managed_urls(cert_typ, issuer_setup, aia_urls_set, container):
     """
     Ensure issuer URLs are added to the certificate as intended. If the issuer has any configured URL,
     the mount default URLs are not applied.
@@ -790,7 +790,7 @@ def test_certificate_managed_urls(cert_typ, issuer_setup, aia_urls, container):
         )
     )
     had_crl_config = "crl_distribution_points" in (
-        issuer_setup if not issuer_first_configured else aia_urls
+        issuer_setup if not issuer_first_configured else aia_urls_set
     )
     issuer_id = issuer_setup.pop("issuer_id")
     issuer_setup["ocsp_servers"] = ["https://new-ocsp.root.ca"]
@@ -845,9 +845,9 @@ def test_certificate_managed_urls(cert_typ, issuer_setup, aia_urls, container):
     assert not ret.changes
 
 
-@pytest.mark.usefixtures("issuer_setup", "roles_setup", "cluster_config", "aia_urls")
+@pytest.mark.usefixtures("issuer_setup", "roles_setup", "aia_urls_set")
 @pytest.mark.parametrize(
-    "aia_urls",
+    "aia_urls_set",
     (
         {
             "enable_templating": True,

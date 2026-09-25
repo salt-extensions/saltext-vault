@@ -28,7 +28,7 @@ pytestmark = genmarks(mounts="pki")
 
 @pytest.mark.usefixtures("clean_pki_issuers")
 @pytest.mark.parametrize(
-    "testmode,pathlen,aia_urls",
+    "testmode,pathlen,aia_urls_set",
     (
         pytest.param(False, -1, {}, id="defaults"),
         pytest.param(False, 3, {}, id="pathlen"),
@@ -76,10 +76,10 @@ pytestmark = genmarks(mounts="pki")
             id="all_urls",
         ),
     ),
-    indirect=("testmode", "aia_urls"),
+    indirect=("testmode", "aia_urls_set"),
 )
 def test_root_issuer_managed_create(
-    vault_pki, root_ca_args, testmode, aia_urls, pathlen, container
+    vault_pki, root_ca_args, testmode, aia_urls_set, pathlen, container
 ):
     if pathlen >= 0:
         root_ca_args["max_path_length"] = pathlen
@@ -101,13 +101,13 @@ def test_root_issuer_managed_create(
     assert ret.changes["created"]["key_id"] == issuer_info["key_id"]
 
     cert = load_cert(issuer_info["certificate"])
-    if aia_urls.get("issuing_certificates") or aia_urls.get("ocsp_servers"):
+    if aia_urls_set.get("issuing_certificates") or aia_urls_set.get("ocsp_servers"):
         cert.extensions.get_extension_for_class(cx509.AuthorityInformationAccess)
-    if aia_urls.get("crl_distribution_points"):
+    if aia_urls_set.get("crl_distribution_points"):
         cert.extensions.get_extension_for_class(cx509.CRLDistributionPoints)
-    if aia_urls.get("delta_crl_distribution_points"):
+    if aia_urls_set.get("delta_crl_distribution_points"):
         if container.matches("vault>=1.20") or (
-            container.is_openbao() and aia_urls.get("crl_distribution_points")
+            container.is_openbao() and aia_urls_set.get("crl_distribution_points")
         ):
             cert.extensions.get_extension_for_class(cx509.FreshestCRL)
     basic_constraints = cert.extensions.get_extension_for_class(cx509.BasicConstraints)
@@ -556,11 +556,11 @@ def test_root_issuer_managed_issuer_name_taken_artifact(
     assert ("issuing-certificates" not in collision_info["usage"]) is not testmode
 
 
-@pytest.mark.usefixtures("existing_root", "aia_urls")
+@pytest.mark.usefixtures("existing_root", "aia_urls_set")
 @pytest.mark.parametrize(
-    "existing_root",
+    "existing_root,aia_urls_set",
     (
-        pytest.param({}, id="defaults"),
+        pytest.param({}, {}, id="defaults"),
         pytest.param(
             {
                 "key_algo": "rsa",  # needed for signature_bits to work
@@ -590,6 +590,7 @@ def test_root_issuer_managed_issuer_name_taken_artifact(
                     "uri:no.bar.baz",
                 ],
             },
+            MOUNT_URL_CONFIG,
             id="all_attributes",
         ),
     ),
@@ -630,8 +631,8 @@ def test_root_issuer_managed_ok(vault_pki, root_ca_args, testmode, container):
     # Demonstrate that URL changes don't cause rotation
     vault_write(
         "pki/config/urls",
-        issuing_certificates="https://one.root.ca",
-        ocsp_servers="https://ocsp1.root.ca",
+        issuing_certificates="https://one-alt.root.ca",
+        ocsp_servers="https://ocsp1-alt.root.ca",
     )
     ret = vault_pki.root_issuer_managed(**root_ca_args, test=testmode)
     assert ret.result is True
@@ -930,7 +931,7 @@ def test_root_issuer_managed_changes_existing_key(
 
 @pytest.mark.usefixtures("existing_root")
 @pytest.mark.parametrize(
-    "aia_urls",
+    "aia_urls_set",
     (
         pytest.param({}, id="no_urls"),
         pytest.param(
@@ -1039,8 +1040,8 @@ def test_root_issuer_managed_ok_aia(vault_pki, root_ca_args):  # pragma: no cove
     assert new_info == issuer_info
 
 
-@pytest.mark.parametrize("aia_urls", (MOUNT_URL_CONFIG,), indirect=True)
-@pytest.mark.usefixtures("clean_pki_issuers", "aia_urls", "url_config_read_denied")
+@pytest.mark.usefixtures("clean_pki_issuers", "aia_urls_set", "url_config_read_denied")
+@pytest.mark.parametrize("aia_urls_set", (MOUNT_URL_CONFIG,), indirect=True)
 def test_root_issuer_managed_url_config_denied(vault_pki, root_ca_args):
     """
     Ensure a denied URL read access does not cause rotation, only a note.
@@ -1062,7 +1063,7 @@ def test_root_issuer_managed_url_config_denied(vault_pki, root_ca_args):
 
 @pytest.mark.usefixtures("existing_root")
 @pytest.mark.parametrize(
-    "aia_urls",
+    "aia_urls_set",
     (
         pytest.param({}, id="no_urls"),
         pytest.param(
@@ -1120,17 +1121,17 @@ def test_root_issuer_managed_url_config_denied(vault_pki, root_ca_args):
 )
 @pytest.mark.behavior_test
 def test_root_issuer_managed_changes_aia(
-    vault_pki, root_ca_args, testmode, aia_urls, container
+    vault_pki, root_ca_args, testmode, aia_urls_set, container
 ):  # pragma: no cover
     exp = act = None
-    if not aia_urls:
-        aia_urls, exp, act = (
+    if not aia_urls_set:
+        aia_urls_set, exp, act = (
             {"issuing_certificates": ["https://one.root.ca"]},
             {"authorityInfoAccess"},
             "added",
         )
-    elif len(aia_urls) >= 4:
-        aia_urls, exp, act = (
+    elif len(aia_urls_set) >= 4:
+        aia_urls_set, exp, act = (
             {
                 "issuing_certificates": "",
                 "crl_distribution_points": "",
@@ -1141,33 +1142,33 @@ def test_root_issuer_managed_changes_aia(
             "removed",
         )
         if not container.matches("vault>=1.20", "openbao"):
-            aia_urls.pop("delta_crl_distribution_points")
+            aia_urls_set.pop("delta_crl_distribution_points")
             exp.remove("freshestCRL")
-    elif "issuing_certificates" in aia_urls:
+    elif "issuing_certificates" in aia_urls_set:
         _, exp, act = (
-            aia_urls["issuing_certificates"].append("https://three.root.ca"),
+            aia_urls_set["issuing_certificates"].append("https://three.root.ca"),
             {"authorityInfoAccess"},
             "changed",
         )
-    elif "crl_distribution_points" in aia_urls:
+    elif "crl_distribution_points" in aia_urls_set:
         _, exp, act = (
-            aia_urls["crl_distribution_points"].append("https://crl3.root.ca"),
+            aia_urls_set["crl_distribution_points"].append("https://crl3.root.ca"),
             {"cRLDistributionPoints"},
             "changed",
         )
-    elif "delta_crl_distribution_points" in aia_urls:
+    elif "delta_crl_distribution_points" in aia_urls_set:
         _, exp, act = (
-            aia_urls["delta_crl_distribution_points"].append("https://crl3.root.ca"),
+            aia_urls_set["delta_crl_distribution_points"].append("https://crl3.root.ca"),
             {"freshestCRL"},
             "changed",
         )
-    elif "ocsp_servers" in aia_urls:  # pragma: no cover
+    elif "ocsp_servers" in aia_urls_set:  # pragma: no cover
         _, exp, act = (
-            aia_urls["ocsp_servers"].append("https://ocsp3.root.ca"),
+            aia_urls_set["ocsp_servers"].append("https://ocsp3.root.ca"),
             {"authorityInfoAccess"},
             "changed",
         )
-    vault_write("pki/config/urls", **aia_urls)
+    vault_write("pki/config/urls", **aia_urls_set)
     issuer_info = _default_issuer()
     root_ca_args["days_remaining"] = 10000  # force re-issuance, otherwise changes are not reported
     root_ca_args["days_valid"] = 10001

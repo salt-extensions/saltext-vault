@@ -755,8 +755,7 @@ def reload_mounts(mounts, globally=False):
     except SaltException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
-    if ret.get("warnings") and "no plugins were reloaded" in ret["warnings"]:
-        return False
+    # A missing mount errors, so we don't need to check for unaffected plugins
     return ret["data"]["reload_id"]
 
 
