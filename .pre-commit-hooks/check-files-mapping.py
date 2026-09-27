@@ -180,7 +180,8 @@ def check_all_sources_select(cfm, tracked, test_files):
     for file in tracked:
         if not file.startswith(("src/", "tests/")):
             continue
-        if not (REPO_ROOT / file).read_bytes().strip():
+        if not ((abspath := (REPO_ROOT / file)).exists() and abspath.read_bytes().strip()):
+            # Skip this check if the file is empty or has been deleted (but deletion is not staged yet)
             continue
         sel = selected(cfm, file, test_files)
         if sel is None:
@@ -378,7 +379,7 @@ def print_rule_matches(data, total):
 
 def main():
     tracked = set(
-        subprocess.check_output(["git", "ls-files"], text=True, cwd=REPO_ROOT).splitlines()
+        subprocess.check_output(["git", "ls-files", "-z"], text=True, cwd=REPO_ROOT).split("\x00")
     )
     test_files = sorted(f for f in tracked if re.match(r"tests/.*/test_\w+\.py$", f))
     args = sys.argv[1:]

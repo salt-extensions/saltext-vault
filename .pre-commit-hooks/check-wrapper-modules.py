@@ -18,6 +18,7 @@ module of the same name must exist in ``src/saltext/vault/wrapper`` and
 """
 
 import ast
+import subprocess
 import sys
 from pathlib import Path
 
@@ -122,7 +123,9 @@ def check_module(mod_path):
     for name in sorted(imports):
         if name in wrapper_funcs:
             continue  # imported for reference, but overridden locally
-        if name not in namespaced:
+        if name == "__func_alias__":
+            wrapper_aliases = mod_aliases
+        elif name not in namespaced:
             yield f"{prefix}import '{name}' is not passed through namespaced_function"
 
     for target, arg in sorted(namespaced.items()):
@@ -143,9 +146,12 @@ def check_module(mod_path):
 
 
 def main():
+    tracked = set(
+        subprocess.check_output(["git", "ls-files", "-z"], text=True, cwd=REPO_ROOT).split("\x00")
+    )
     problems = []
     for mod_path in sorted(MODULES_DIR.glob("*.py")):
-        if mod_path.name == "__init__.py":
+        if mod_path.name == "__init__.py" or str(mod_path.relative_to(REPO_ROOT)) not in tracked:
             continue
         problems.extend(check_module(mod_path))
     if problems:

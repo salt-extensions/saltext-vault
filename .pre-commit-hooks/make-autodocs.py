@@ -91,14 +91,20 @@ def make_import_path(path):
     return ".".join(path.relative_to(repo_path / "src").with_suffix("").parts)
 
 
+tracked = set(
+    subprocess.check_output(["git", "ls-files", "-z"], text=True, cwd=repo_path).split("\x00")
+)
+
 for path in src_dir.glob("*/*.py"):
-    if path.name != "__init__.py":
+    if path.name != "__init__.py" and str(path.relative_to(repo_path)) in tracked:
         kind = path.parent.name
         if kind != "utils":
             docs_by_kind.setdefault(kind, set()).add(path)
 
 # Utils can have subdirectories, treat them separately
 for path in (src_dir / "utils").rglob("*.py"):
+    if str(path.relative_to(repo_path)) not in tracked:
+        continue
     if path.name == "__init__.py" and not path.read_text():
         continue
     docs_by_kind.setdefault("utils", set()).add(path)
