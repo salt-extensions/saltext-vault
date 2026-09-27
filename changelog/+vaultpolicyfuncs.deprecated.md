@@ -1,0 +1,1 @@
+Extracted policy-related functions from `vault` modules into separate `vault_policy` ones. The old names still work, but are deprecated and will be removed in the next major (`v2`) release. Please move to the new names.

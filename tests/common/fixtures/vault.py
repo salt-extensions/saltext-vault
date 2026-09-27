@@ -2,17 +2,13 @@
 Shared fixtures for the core vault test suites.
 """
 
-from textwrap import dedent
 from unittest.mock import patch
 
 import pytest
 from saltfactories.utils import random_string
 
-from tests.support.vault import vault_delete_policy
 from tests.support.vault import vault_delete_secret
 from tests.support.vault import vault_destroy_secret
-from tests.support.vault import vault_list_policies
-from tests.support.vault import vault_write_policy
 from tests.support.vault import vault_write_secret
 
 
@@ -112,33 +108,3 @@ def versioned_secret_all_deleted(versioned_secret):
     """
     vault_delete_secret(versioned_secret, versions=[1, 2])
     return versioned_secret
-
-
-@pytest.fixture
-def clean_policies():
-    try:
-        yield
-    finally:
-        # We're explicitly using the vault CLI and not the salt vault module
-        test_policies = [policy for policy in vault_list_policies() if policy.startswith("test_")]
-        for policy in test_policies:
-            vault_delete_policy(policy)
-
-
-@pytest.fixture
-def temp_policy_rules():
-    return dedent("""
-        path "secret/some/thing" {
-            capabilities = ["read"]
-        }
-        """).strip()
-
-
-@pytest.fixture
-def temp_policy(temp_policy_rules, container):  # pylint: disable=unused-argument
-    name = "test_functional_policy"
-    vault_write_policy(name, temp_policy_rules)
-    try:
-        yield name
-    finally:
-        vault_delete_policy(name)

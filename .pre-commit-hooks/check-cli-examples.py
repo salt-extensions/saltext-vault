@@ -6,6 +6,9 @@ import sys
 CODE_ROOT = pathlib.Path(__file__).resolve().parent.parent
 EXECUTION_MODULES_PATH = CODE_ROOT / "src" / "saltext" / "vault" / "modules"
 
+# Map of file names => set of funcs to skip.
+EXCLUDES = {}
+
 
 def check_cli_examples(files):
     """
@@ -26,6 +29,9 @@ def check_cli_examples(files):
         for funcdef in [node for node in module.body if isinstance(node, ast.FunctionDef)]:
             if funcdef.name.startswith("_"):
                 # We're not interested in internal functions
+                continue
+            if funcdef.name in EXCLUDES.get(path.name, ()):
+                # Actively ignored
                 continue
 
             docstring = ast.get_docstring(funcdef, clean=False)
