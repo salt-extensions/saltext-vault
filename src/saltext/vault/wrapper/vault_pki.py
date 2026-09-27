@@ -64,6 +64,7 @@ from saltext.vault.modules.vault_pki import read_urls
 from saltext.vault.modules.vault_pki import revoke_certificate
 from saltext.vault.modules.vault_pki import set_default_issuer
 from saltext.vault.modules.vault_pki import sign_certificate
+from saltext.vault.modules.vault_pki import sign_intermediate
 from saltext.vault.modules.vault_pki import update_issuer
 from saltext.vault.modules.vault_pki import write_cluster_config
 from saltext.vault.modules.vault_pki import write_role
@@ -114,6 +115,7 @@ read_urls = namespaced_function(read_urls, globals_dict)
 revoke_certificate = namespaced_function(revoke_certificate, globals_dict)
 set_default_issuer = namespaced_function(set_default_issuer, globals_dict)
 sign_certificate = namespaced_function(sign_certificate, globals_dict)
+sign_intermediate = namespaced_function(sign_intermediate, globals_dict)
 update_issuer = namespaced_function(update_issuer, globals_dict)
 write_cluster_config = namespaced_function(write_cluster_config, globals_dict)
 write_role = namespaced_function(write_role, globals_dict)

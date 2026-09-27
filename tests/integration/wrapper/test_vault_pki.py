@@ -53,6 +53,9 @@ from tests.functional.modules.test_vault_pki import test_sign_certificate_with_c
 from tests.functional.modules.test_vault_pki import test_sign_certificate_with_der_encoding
 from tests.functional.modules.test_vault_pki import test_sign_certificate_with_private_key
 from tests.functional.modules.test_vault_pki import test_sign_certificate_with_sign_verbatim
+from tests.functional.modules.test_vault_pki import (
+    test_sign_intermediate as _test_sign_intermediate,
+)
 from tests.functional.modules.test_vault_pki import test_update_issuer
 from tests.functional.modules.test_vault_pki import test_update_role
 from tests.functional.modules.test_vault_pki import test_write_cluster_config
@@ -134,3 +137,15 @@ def test_import_issuer_intermediate(vault_pki, salt_call_cli, local_ca):
     assert issuer["key_id"] == csr_resp["key_id"]
     certificate = load_cert(issuer["certificate"])
     assert certificate.subject.rfc4514_string() == "CN=Test Imported Intermediate CA"
+
+
+@pytest.mark.usefixtures("issuer_setup")
+@pytest.mark.parametrize("call_type", ("pk", "csr_verbatim"))
+def test_sign_intermediate(vault_pki, private_key, container, call_type, tmp_path):
+    return _test_sign_intermediate(
+        vault_pki=vault_pki,
+        private_key=private_key,
+        container=container,
+        call_type=call_type,
+        tmp_path=tmp_path,
+    )
