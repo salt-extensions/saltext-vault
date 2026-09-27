@@ -1,133 +1,56 @@
 """
-Statefully manage Vault (or OpenBao) policies.
+Deprecated alias to ``vault_policy``.
 
-.. important::
-    This module requires the general :ref:`Vault setup <vault-setup>`.
+.. deprecated:: 1.9.0
+    This state module was renamed to ``vault_policy``.
+
+    Please adjust your states to use
+    :py:func:`vault_policy.present <saltext.vault.states.vault_policy.present>` and
+    :py:func:`vault_policy.absent <saltext.vault.states.vault_policy.absent>` instead.
 """
 
-import difflib
-import logging
 from typing import TYPE_CHECKING
 
-from salt.exceptions import CommandExecutionError
+from salt.utils.versions import warn_until
 
 if TYPE_CHECKING:
 
-    from saltext.vault.utils._types import SaltContext
-    from saltext.vault.utils._types import SaltFunctions
-    from saltext.vault.utils._types import SaltLogger
-    from saltext.vault.utils._types import SaltOpts
     from saltext.vault.utils._types import SaltStates
 
-    __opts__: SaltOpts
-    __context__: SaltContext
-    __salt__: SaltFunctions
     __states__: SaltStates
-
-log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 
 def policy_present(name, rules):
     """
-    Ensure a Vault policy with the given name and rules is present.
-
-    name
-        Name of the policy
-
-    rules
-        Rules formatted as in-line HCL
-
-
-    .. code-block:: yaml
-
-        demo-policy:
-          vault.policy_present:
-            - name: foo/bar
-            - rules: |
-                path "secret/top-secret/*" {
-                  policy = "deny"
-                }
-                path "secret/not-very-secret/*" {
-                  policy = "write"
-                }
-
+    .. deprecated:: 1.9.0
+        Renamed to :py:func:`vault_policy.present <saltext.vault.states.vault_policy.present>`.
+        Please adjust your states accordingly.
+        This compatibility alias will be dropped in the next major release.
     """
-    ret = {"name": name, "changes": {}, "result": True, "comment": ""}
-
-    try:
-        existing_rules = __salt__["vault.policy_fetch"](name)
-    except CommandExecutionError as err:
-        ret["result"] = False
-        ret["comment"] = f"Failed to read policy: {err}"
-        return ret
-
-    if existing_rules == rules:
-        ret["comment"] = "Policy exists, and has the correct content"
-        return ret
-
-    diff = "".join(
-        difflib.unified_diff((existing_rules or "").splitlines(True), rules.splitlines(True))
+    warn_until(
+        2,
+        (
+            "The `vault.policy_present` state was renamed to `vault_policy.present`. "
+            "Please adjust your states accordingly. "
+            "This compatibility alias will be dropped in version {version}."
+        ),
     )
-
-    ret["changes"] = {name: diff}
-
-    if __opts__["test"]:
-        ret["result"] = None
-        ret["comment"] = "Policy would be " + ("created" if existing_rules is None else "updated")
-        return ret
-
-    try:
-        __salt__["vault.policy_write"](name, rules)
-        ret["comment"] = "Policy has been " + ("created" if existing_rules is None else "updated")
-        return ret
-    except CommandExecutionError as err:
-        return {
-            "name": name,
-            "changes": {},
-            "result": False,
-            "comment": f"Failed to write policy: {err}",
-        }
+    return __states__["vault_policy.present"](name, rules=rules)
 
 
 def policy_absent(name):
     """
-    Ensure a Vault policy with the given name and rules is absent.
-
-    name
-        Name of the policy
+    .. deprecated:: 1.9.0
+        Renamed to :py:func:`vault_policy.absent <saltext.vault.states.vault_policy.absent>`.
+        Please adjust your states accordingly.
+        This compatibility alias will be dropped in the next major release.
     """
-    ret = {"name": name, "changes": {}, "result": True, "comment": ""}
-
-    try:
-        existing_rules = __salt__["vault.policy_fetch"](name)
-    except CommandExecutionError as err:
-        ret["result"] = False
-        ret["comment"] = f"Failed to read policy: {err}"
-        return ret
-
-    if existing_rules is None:
-        ret["comment"] = "Policy is already absent"
-        return ret
-
-    ret["changes"] = {"deleted": name}
-
-    if __opts__["test"]:
-        ret["result"] = None
-        ret["comment"] = "Policy would be deleted"
-        return ret
-
-    try:
-        if not __salt__["vault.policy_delete"](name):
-            raise CommandExecutionError(
-                "Policy was initially reported as existent, but seemed to be "
-                "absent while deleting."
-            )
-        ret["comment"] = "Policy has been deleted"
-        return ret
-    except CommandExecutionError as err:
-        return {
-            "name": name,
-            "changes": {},
-            "result": False,
-            "comment": f"Failed to delete policy: {err}",
-        }
+    warn_until(
+        2,
+        (
+            "The `vault.policy_absent` state was renamed to `vault_policy.absent`. "
+            "Please adjust your states accordingly. "
+            "This compatibility alias will be dropped in version {version}."
+        ),
+    )
+    return __states__["vault_policy.absent"](name)

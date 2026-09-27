@@ -1,0 +1,133 @@
+"""
+Statefully manage Vault (or OpenBao) policies.
+
+.. important::
+    This module requires the general :ref:`Vault setup <vault-setup>`.
+"""
+
+import difflib
+import logging
+from typing import TYPE_CHECKING
+
+from salt.exceptions import CommandExecutionError
+
+if TYPE_CHECKING:
+
+    from saltext.vault.utils._types import SaltContext
+    from saltext.vault.utils._types import SaltFunctions
+    from saltext.vault.utils._types import SaltLogger
+    from saltext.vault.utils._types import SaltOpts
+    from saltext.vault.utils._types import SaltStates
+
+    __opts__: SaltOpts
+    __context__: SaltContext
+    __salt__: SaltFunctions
+    __states__: SaltStates
+
+log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
+
+
+def present(name, rules):
+    """
+    Ensure a Vault policy with the given name and rules is present.
+
+    name
+        Name of the policy
+
+    rules
+        Rules formatted as in-line HCL
+
+
+    .. code-block:: yaml
+
+        demo-policy:
+          vault.policy_present:
+            - name: foo/bar
+            - rules: |
+                path "secret/top-secret/*" {
+                  policy = "deny"
+                }
+                path "secret/not-very-secret/*" {
+                  policy = "write"
+                }
+
+    """
+    ret = {"name": name, "changes": {}, "result": True, "comment": ""}
+
+    try:
+        existing_rules = __salt__["vault_policy.fetch"](name)
+    except CommandExecutionError as err:
+        ret["result"] = False
+        ret["comment"] = f"Failed to read policy: {err}"
+        return ret
+
+    if existing_rules == rules:
+        ret["comment"] = "Policy exists, and has the correct content"
+        return ret
+
+    diff = "".join(
+        difflib.unified_diff((existing_rules or "").splitlines(True), rules.splitlines(True))
+    )
+
+    ret["changes"] = {name: diff}
+
+    if __opts__["test"]:
+        ret["result"] = None
+        ret["comment"] = "Policy would be " + ("created" if existing_rules is None else "updated")
+        return ret
+
+    try:
+        __salt__["vault_policy.write"](name, rules)
+        ret["comment"] = "Policy has been " + ("created" if existing_rules is None else "updated")
+        return ret
+    except CommandExecutionError as err:
+        return {
+            "name": name,
+            "changes": {},
+            "result": False,
+            "comment": f"Failed to write policy: {err}",
+        }
+
+
+def absent(name):
+    """
+    Ensure a Vault policy with the given name and rules is absent.
+
+    name
+        Name of the policy
+    """
+    ret = {"name": name, "changes": {}, "result": True, "comment": ""}
+
+    try:
+        existing_rules = __salt__["vault_policy.fetch"](name)
+    except CommandExecutionError as err:
+        ret["result"] = False
+        ret["comment"] = f"Failed to read policy: {err}"
+        return ret
+
+    if existing_rules is None:
+        ret["comment"] = "Policy is already absent"
+        return ret
+
+    ret["changes"] = {"deleted": name}
+
+    if __opts__["test"]:
+        ret["result"] = None
+        ret["comment"] = "Policy would be deleted"
+        return ret
+
+    try:
+        if not __salt__["vault_policy.delete"](name):
+            raise CommandExecutionError(
+                "Policy was initially reported as existent, but seemed to be "
+                "absent while deleting."
+            )
+        ret["comment"] = "Policy has been deleted"
+        return ret
+    except CommandExecutionError as err:
+        return {
+            "name": name,
+            "changes": {},
+            "result": False,
+            "comment": f"Failed to delete policy: {err}",
+        }

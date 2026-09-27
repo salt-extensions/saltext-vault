@@ -15,4 +15,5 @@ _________________
     vault_gpg
     vault_pki
     vault_plugin
+    vault_policy
     vault_ssh

@@ -151,11 +151,10 @@ CHANGED_FILES_MAP = (
             "tests/integration/*/vault_lease/test_*.py",
         ),
     ),
-    (  # Core vault fixtures affect kv/policy/cache-related and sdb (via conftest) tests
+    (  # Core vault fixtures affect kv/cache-related and sdb (via conftest) tests
         rf"{TESTS_DIR_REL}/common/fixtures/vault\.py",
         (
             "tests/functional/modules/vault/test_vault_kv.py",
-            "tests/functional/modules/vault/test_vault_policies.py",
             "tests/functional/runners/vault/test_clear_cache_revokes_all_tokens.py",
             "tests/functional/utils/factory/test_clear_cache.py",
             "tests/functional/utils/test_vault_kv.py",

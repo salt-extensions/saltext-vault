@@ -30,6 +30,13 @@ if TYPE_CHECKING:
 log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
 
+ALIAS_WARNING = (
+    "The `vault.{old_name}` function was renamed to `{new_name}`. "
+    "Please adjust your calls accordingly. "
+    "This compatibility alias will be dropped in version {{version}}."
+)
+
+
 def read_secret(path, key=None, metadata=False, default=NOT_SET, version=None):
     """
     Return the value of <key> at <path> in vault, or entire secret.
@@ -607,136 +614,6 @@ def clear_token_cache():
     return clear_cache(connection=True, session=False)
 
 
-def policy_fetch(policy):
-    """
-    .. versionadded:: 1.0.0
-
-    Fetch the rules associated with an ACL policy. Returns ``None`` if the policy
-    does not exist.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt '*' vault.policy_fetch salt_minion
-
-    Required policy:
-
-    .. code-block:: vaultpolicy
-
-        path "sys/policy/<policy>" {
-            capabilities = ["read"]
-        }
-
-    policy
-        Name of the policy to fetch.
-    """
-    # there is also "sys/policies/acl/{policy}"
-    endpoint = f"sys/policy/{policy}"
-
-    try:
-        data = vault.api_get(endpoint, __opts__, __context__)
-        return data["rules"]
-
-    except vault.VaultNotFoundError:
-        return None
-    except SaltException as err:
-        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
-
-
-def policy_write(policy, rules):
-    r"""
-    .. versionadded:: 1.0.0
-
-    Create or update an ACL policy.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt '*' vault.policy_write salt_minion 'path "secret/foo" {...}'
-
-    Required policy:
-
-    .. code-block:: vaultpolicy
-
-        path "sys/policy/<policy>" {
-            capabilities = ["create", "update"]
-        }
-
-    policy
-        Name of the policy to create/update.
-
-    rules
-        Rules to write, formatted as in-line HCL.
-    """
-    endpoint = f"sys/policy/{policy}"
-    payload = {"policy": rules}
-    try:
-        return vault.api_put(endpoint, __opts__, __context__, payload=payload)
-    except SaltException as err:
-        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
-
-
-def policy_delete(policy):
-    """
-    .. versionadded:: 1.0.0
-
-    Delete an ACL policy. Returns False if the policy does not exist.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt '*' vault.policy_delete salt_minion
-
-    Required policy:
-
-    .. code-block:: vaultpolicy
-
-        path "sys/policy/<policy>" {
-            capabilities = ["delete"]
-        }
-
-    policy
-        Name of the policy to delete.
-    """
-    endpoint = f"sys/policy/{policy}"
-
-    try:
-        return vault.api_delete(endpoint, __opts__, __context__)
-    except vault.VaultNotFoundError:
-        return False
-    except SaltException as err:
-        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
-
-
-def policies_list():
-    """
-    .. versionadded:: 1.0.0
-
-    List all ACL policies.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt '*' vault.policies_list
-
-    Required policy:
-
-    .. code-block:: vaultpolicy
-
-        path "sys/policy" {
-            capabilities = ["read"]
-        }
-    """
-    try:
-        return vault.api_get("sys/policy", __opts__, __context__)["policies"]
-    except SaltException as err:
-        raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
-
-
 def query(method, endpoint, payload=None):
     """
     .. versionadded:: 1.0.0
@@ -826,3 +703,124 @@ def get_server_config():
         return client.get_config()
     except SaltException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
+
+
+def policy_fetch(policy):
+    """
+    .. deprecated:: 1.9.0
+        Renamed to :py:func:`vault_policy.fetch <saltext.vault.modules.vault_policy.fetch>`.
+        Please adjust your calls accordingly.
+        This compatibility alias will be dropped in the next major release.
+
+    Fetch the rules associated with an ACL policy. Returns ``None`` if the policy
+    does not exist.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault.policy_fetch salt_minion
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "sys/policy/<policy>" {
+            capabilities = ["read"]
+        }
+
+    policy
+        Name of the policy to fetch.
+    """
+    warn_until(2, ALIAS_WARNING.format(old_name="policy_fetch", new_name="vault_policy.fetch"))
+    return __salt__["vault_policy.fetch"](policy)
+
+
+def policy_write(policy, rules):
+    """
+    .. deprecated:: 1.9.0
+        Renamed to :py:func:`vault_policy.write <saltext.vault.modules.vault_policy.write>`.
+        Please adjust your calls accordingly.
+        This compatibility alias will be dropped in the next major release.
+
+    Create or update an ACL policy.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault.policy_write salt_minion 'path "secret/foo" {...}'
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "sys/policy/<policy>" {
+            capabilities = ["create", "update"]
+        }
+
+    policy
+        Name of the policy to create/update.
+
+    rules
+        Rules to write, formatted as in-line HCL.
+    """
+    warn_until(2, ALIAS_WARNING.format(old_name="policy_write", new_name="vault_policy.write"))
+    return __salt__["vault_policy.write"](policy, rules=rules)
+
+
+def policy_delete(policy):
+    """
+    .. deprecated:: 1.9.0
+        Renamed to :py:func:`vault_policy.delete <saltext.vault.modules.vault_policy.delete>`.
+        Please adjust your calls accordingly.
+        This compatibility alias will be dropped in the next major release.
+
+    Delete an ACL policy. Returns False if the policy does not exist.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault.policy_delete salt_minion
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "sys/policy/<policy>" {
+            capabilities = ["delete"]
+        }
+
+    policy
+        Name of the policy to delete.
+    """
+    warn_until(2, ALIAS_WARNING.format(old_name="policy_delete", new_name="vault_policy.delete"))
+    return __salt__["vault_policy.delete"](policy)
+
+
+def policies_list():
+    """
+    .. deprecated:: 1.9.0
+        Renamed to :py:func:`vault_policy.list <saltext.vault.modules.vault_policy.list_>`.
+        Please adjust your calls accordingly.
+        This compatibility alias will be dropped in the next major release.
+
+    List all ACL policies.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' vault.policies_list
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "sys/policy" {
+            capabilities = ["read"]
+        }
+    """
+    warn_until(2, ALIAS_WARNING.format(old_name="policies_list", new_name="vault_policy.list"))
+    return __salt__["vault_policy.list"]()
