@@ -9,19 +9,6 @@ import salt.exceptions
 import saltext.vault.utils.vault as vaultutil
 from saltext.vault.modules import vault
 
-# pylint: disable=unused-import
-from tests.unit.fixtures.vault import api_delete
-from tests.unit.fixtures.vault import api_get
-from tests.unit.fixtures.vault import api_put
-from tests.unit.fixtures.vault import data
-from tests.unit.fixtures.vault import patch_kv
-from tests.unit.fixtures.vault import query
-from tests.unit.fixtures.vault import read_kv
-from tests.unit.fixtures.vault import write_kv
-from tests.unit.fixtures.vault import write_kv_err
-
-# pylint: enable=unused-import
-
 
 @pytest.fixture
 def vault_policy_mock():
@@ -34,7 +21,30 @@ def vault_policy_mock():
 
 
 @pytest.fixture
-def configure_loader_modules(vault_policy_mock):
+def vault_secret_mock():
+    vsmock = Mock()
+    vsmock.read.return_value = "yup"
+    vsmock.read_meta.return_value = "yup"
+    vsmock.write.return_value = "yup"
+    vsmock.write_raw.return_value = "yup"
+    vsmock.patch.return_value = "yup"
+    vsmock.patch_raw.return_value = "yup"
+    vsmock.list_.return_value = "yup"
+    vsmock.delete.return_value = "yup"
+    vsmock.restore.return_value = "yup"
+    vsmock.destroy.return_value = "yup"
+    vsmock.wipe.return_value = "yup"
+    return vsmock
+
+
+@pytest.fixture
+def query():
+    with patch("saltext.vault.utils.vault.query", autospec=True) as query:
+        yield query
+
+
+@pytest.fixture
+def configure_loader_modules(vault_policy_mock, vault_secret_mock):
     return {
         vault: {
             "__grains__": {"id": "test-minion"},
@@ -43,113 +53,65 @@ def configure_loader_modules(vault_policy_mock):
                 "vault_policy.write": vault_policy_mock.write,
                 "vault_policy.delete": vault_policy_mock.delete,
                 "vault_policy.list": vault_policy_mock.list_,
+                "vault_secret.read": vault_secret_mock.read,
+                "vault_secret.read_meta": vault_secret_mock.read_meta,
+                "vault_secret.write": vault_secret_mock.write,
+                "vault_secret.write_raw": vault_secret_mock.write_raw,
+                "vault_secret.patch": vault_secret_mock.patch,
+                "vault_secret.patch_raw": vault_secret_mock.patch_raw,
+                "vault_secret.list": vault_secret_mock.list_,
+                "vault_secret.delete": vault_secret_mock.delete,
+                "vault_secret.restore": vault_secret_mock.restore,
+                "vault_secret.destroy": vault_secret_mock.destroy,
+                "vault_secret.wipe": vault_secret_mock.wipe,
             },
         },
     }
 
 
-@pytest.fixture
-def data_list():
-    return ["foo"]
-
-
-@pytest.fixture
-def list_kv(data_list):
-    with patch("saltext.vault.utils.vault.list_kv", autospec=True) as _list:
-        _list.return_value = data_list
-        yield _list
-
-
-@pytest.fixture
-def read_kv_not_found(read_kv):
-    read_kv.side_effect = vaultutil.VaultNotFoundError
-    yield read_kv
-
-
-@pytest.fixture
-def list_kv_not_found(list_kv):
-    list_kv.side_effect = vaultutil.VaultNotFoundError
-    yield list_kv
-
-
-@pytest.fixture
-def patch_kv_err(patch_kv):
-    patch_kv.side_effect = vaultutil.VaultPermissionDeniedError("damn")
-    yield patch_kv
-
-
-@pytest.fixture
-def delete_kv():
-    with patch("saltext.vault.utils.vault.delete_kv", autospec=True) as delete_kv:
-        yield delete_kv
-
-
-@pytest.fixture
-def delete_kv_err(delete_kv):
-    delete_kv.side_effect = vaultutil.VaultPermissionDeniedError("damn")
-    yield delete_kv
-
-
-@pytest.fixture
-def destroy_kv():
-    with patch("saltext.vault.utils.vault.destroy_kv", autospec=True) as destroy_kv:
-        yield destroy_kv
-
-
-@pytest.fixture
-def destroy_kv_err(destroy_kv):
-    destroy_kv.side_effect = vaultutil.VaultPermissionDeniedError("damn")
-    yield destroy_kv
-
-
-@pytest.mark.usefixtures("read_kv")
-@pytest.mark.parametrize(
-    "key,expected",
-    [
-        pytest.param(None, {"foo": "bar"}, id="full_data"),
-        pytest.param("foo", "bar", id="single_key"),
-    ],
-)
-def test_read_secret(key, expected):
-    """
-    Ensure read_secret works as expected without and with specified key.
-    KV v1/2 is handled in the utils module.
-    """
-    res = vault.read_secret("some/path", key=key)
-    assert res == expected
-
-
-@pytest.mark.usefixtures("read_kv_not_found", "list_kv_not_found")
 @pytest.mark.parametrize("func", ["read_secret", "list_secrets"])
-@pytest.mark.filterwarnings(
-    "ignore:In version 2, this function will return the list of secret keys:DeprecationWarning"
-)
-def test_read_list_secret_with_default(func):
+@pytest.mark.parametrize("exc", (salt.exceptions.CommandExecutionError, TypeError))
+@pytest.mark.filterwarnings(r"ignore:The `vault\.:DeprecationWarning")
+def test_read_list_secret_with_default(func, exc, vault_secret_mock):
     """
     Ensure read_secret and list_secrets with defaults set return those
-    if the path was not found.
+    if the path was not found, even if the migrated modules would error instead.
     """
+    vault_secret_mock.list_.side_effect = vault_secret_mock.read.side_effect = exc
     tgt = getattr(vault, func)
     res = tgt("some/path", default=["f"])
     assert res == ["f"]
 
 
-@pytest.mark.usefixtures("read_kv_not_found", "list_kv_not_found")
 @pytest.mark.parametrize("func", ["read_secret", "list_secrets"])
-@pytest.mark.filterwarnings(
-    "ignore:In version 2, this function will return the list of secret keys:DeprecationWarning"
-)
-def test_read_list_secret_without_default(func):
+@pytest.mark.parametrize("check", ("caught_err", "uncaught_err", "uncaught_cee_err"))
+@pytest.mark.filterwarnings(r"ignore:The `vault\.:DeprecationWarning")
+def test_read_list_secret_without_default(func, check, vault_secret_mock):
     """
     Ensure read_secret and list_secrets without defaults set raise
     a CommandExecutionError when the path is not found.
     """
+    if func == "read_secret":
+        prefix = "Failed to read secret!"
+        tgt = vault_secret_mock.read
+    else:
+        prefix = "Failed to list secrets!"
+        tgt = vault_secret_mock.list_
+
+    if check == "caught_err":
+        match = f"{prefix} VaultNotFoundError: some/path"
+        tgt.side_effect = salt.exceptions.CommandExecutionError(match)
+    elif check == "uncaught_err":
+        match = f"{prefix} TypeError: booh"
+        tgt.side_effect = TypeError("booh")
+    else:
+        match = f"{prefix} CommandExecutionError: booh"
+        tgt.side_effect = salt.exceptions.CommandExecutionError("booh")
     tgt = getattr(vault, func)
-    with pytest.raises(salt.exceptions.CommandExecutionError, match=".*VaultNotFoundError.*"):
+    with pytest.raises(salt.exceptions.CommandExecutionError, match=f"^{match}$"):
         tgt("some/path")
 
 
-@pytest.mark.usefixtures("list_kv")
 @pytest.mark.parametrize(
     "keys_only,expected",
     [
@@ -157,159 +119,136 @@ def test_read_list_secret_without_default(func):
         pytest.param(True, ["foo"], id="keys_only"),
     ],
 )
-def test_list_secrets(keys_only, expected):
+@pytest.mark.filterwarnings(r"ignore:The `vault\.:DeprecationWarning")
+def test_list_secrets(keys_only, expected, vault_secret_mock):
     """
     Ensure list_secrets works as expected. keys_only=False is default to
     stay backwards-compatible. There should not be a reason to have the
     function return a dict with a single predictable key otherwise.
     """
+    vault_secret_mock.list_.return_value = ["foo"]
     res = vault.list_secrets("some/path", keys_only=keys_only)
     assert res == expected
 
 
-def test_write_secret(data, write_kv):
-    """
-    Ensure write_secret parses kwargs as expected
-    """
-    path = "secret/some/path"
-    res = vault.write_secret(path, **data)
-    assert res
-    write_kv.assert_called_once_with(path, data, opts=ANY, context=ANY)
-
-
-@pytest.mark.usefixtures("write_kv_err")
-def test_write_secret_err(data, caplog):
-    """
-    Ensure write_secret handles exceptions as expected
-    """
-    with caplog.at_level(logging.ERROR):
-        res = vault.write_secret("secret/some/path", **data)
-        assert not res
-        assert "Failed to write secret! VaultPermissionDeniedError: damn" in caplog.messages
-
-
-def test_write_raw(data, write_kv):
-    """
-    Ensure write_secret works as expected
-    """
-    path = "secret/some/path"
-    res = vault.write_raw(path, data)
-    assert res
-    write_kv.assert_called_once_with(path, data, opts=ANY, context=ANY)
-
-
-@pytest.mark.usefixtures("write_kv_err")
-def test_write_raw_err(data, caplog):
-    """
-    Ensure write_raw handles exceptions as expected
-    """
-    with caplog.at_level(logging.ERROR):
-        res = vault.write_raw("secret/some/path", data)
-        assert not res
-        assert "Failed to write secret! VaultPermissionDeniedError: damn" in caplog.messages
-
-
-def test_patch_secret(data, patch_kv):
-    """
-    Ensure patch_secret parses kwargs as expected
-    """
-    path = "secret/some/path"
-    res = vault.patch_secret(path, **data)
-    assert res
-    patch_kv.assert_called_once_with(path, data, opts=ANY, context=ANY)
-
-
-@pytest.mark.usefixtures("patch_kv_err")
-def test_patch_secret_err(data, caplog):
-    """
-    Ensure patch_secret handles exceptions as expected
-    """
-    with caplog.at_level(logging.ERROR):
-        res = vault.patch_secret("secret/some/path", **data)
-        assert not res
-        assert "Failed to patch secret! VaultPermissionDeniedError: damn" in caplog.messages
+@pytest.mark.parametrize(
+    "func,secret_func,kwargs",
+    (
+        pytest.param("read_secret", "read", {"default": "foo"}, id="read_secret"),
+        pytest.param("read_secret_meta", "read_meta", {}, id="read_secret_meta"),
+        pytest.param("write_secret", "write", {"foo": "bar"}, id="write_secret"),
+        pytest.param("write_raw", "write_raw", {"raw": {"foo": "bar"}}, id="write_raw"),
+        pytest.param("patch_secret", "patch", {"foo": "bar"}, id="patch_secret"),
+        pytest.param("patch_raw", "patch_raw", {"raw": {"foo": "bar"}}, id="patch_raw"),
+        pytest.param("list_secrets", "list_", {"default": "foo"}, id="list_secrets"),
+        pytest.param("delete_secret", "delete", {}, id="delete_secret"),
+        pytest.param("destroy_secret", "destroy", {}, id="destroy_secret"),
+        pytest.param("wipe_secret", "wipe", {}, id="wipe_secret"),
+        # restore_secret always raised exceptions
+    ),
+)
+@pytest.mark.parametrize("exc", (TypeError, salt.exceptions.CommandExecutionError))
+def test_func_swallows_errors_and_warns_deprecated(
+    func, secret_func, kwargs, exc, vault_secret_mock, caplog
+):
+    has_default = secret_func in ("read", "list_")
+    if exc is salt.exceptions.CommandExecutionError:
+        # Construct a CommandExecutionError which is already converted
+        if secret_func == "read_meta":
+            msg = "Failed to read secret metadata! TypeError: damn"
+        else:
+            msg = f"Failed to {secret_func.split('_', maxsplit=1)[0]} secret! TypeError: damn"
+    else:
+        msg = "damn"
+    getattr(vault_secret_mock, secret_func).side_effect = exc(msg)
+    with (
+        caplog.at_level(logging.ERROR),
+        pytest.deprecated_call(
+            match=f"`vault.{func}`.*renamed to `vault_secret.{secret_func.rstrip('_')}`"
+        ),
+    ):
+        res = getattr(vault, func)("secret/some/path", **kwargs)
+        if has_default:
+            pass
+        else:
+            if secret_func == "read_meta":
+                assert "Failed to read secret metadata! TypeError: damn" in caplog.messages
+            else:
+                assert (
+                    f"Failed to {secret_func.split('_', maxsplit=1)[0]} secret! TypeError: damn"
+                    in caplog.messages
+                )
+            if exc is salt.exceptions.CommandExecutionError:
+                # avoid duplicate prefixes
+                assert "CommandExecutionError: Failed" not in caplog.messages
+    if has_default:
+        assert res == "foo"
+    else:
+        assert res is False
 
 
 @pytest.mark.parametrize(
-    "args",
-    [
-        pytest.param([], id="no_versions"),
-        pytest.param([1, 2], id="versions"),
-    ],
+    "func,secret_func,kwargs",
+    (
+        pytest.param(
+            "read_secret",
+            "read",
+            {"key": "key", "metadata": False, "version": 1},
+            id="read_secret_key_version",
+        ),
+        pytest.param(
+            "read_secret",
+            "read",
+            {"key": None, "metadata": True, "version": None},
+            id="read_secret_metadata",
+        ),
+        pytest.param(
+            "delete_secret", "delete", {"all_versions": True}, id="delete_secret_all_versions"
+        ),
+        pytest.param(
+            "restore_secret", "restore", {"all_versions": True}, id="restore_secret_all_versions"
+        ),
+        pytest.param(
+            "destroy_secret", "destroy", {"all_versions": True}, id="destroy_secret_all_versions"
+        ),
+    ),
 )
-def test_delete_secret(delete_kv, args):
-    """
-    Ensure delete_secret works as expected
-    """
-    path = "secret/some/path"
-    res = vault.delete_secret(path, *args)
-    assert res
-    delete_kv.assert_called_once_with(
-        path, opts=ANY, context=ANY, versions=args or None, all_versions=False
+@pytest.mark.filterwarnings(r"ignore:The `vault\.:DeprecationWarning")
+def test_func_passes_kwargs(func, secret_func, kwargs, vault_secret_mock):
+    getattr(vault_secret_mock, secret_func).return_value = "yup"
+    res = getattr(vault, func)("secret/some/path", **kwargs)
+    assert res == "yup"
+    if secret_func == "read" and kwargs.get("key", "_not_set") is None:
+        kwargs["key"] = ANY  # None => NOT_SET translation
+    getattr(vault_secret_mock, secret_func).assert_called_once_with("secret/some/path", **kwargs)
+
+
+@pytest.mark.parametrize(
+    "func,secret_func",
+    (
+        pytest.param("delete_secret", "delete", id="delete_secret"),
+        pytest.param("restore_secret", "restore", id="restore_secret"),
+        pytest.param("destroy_secret", "destroy", id="destroy_secret"),
+    ),
+)
+@pytest.mark.filterwarnings(r"ignore:The `vault\.:DeprecationWarning")
+def test_func_passes_args(func, secret_func, vault_secret_mock):
+    getattr(vault_secret_mock, secret_func).return_value = "yup"
+    res = getattr(vault, func)("secret/some/path", 1, 2, 3)
+    assert res == "yup"
+    getattr(vault_secret_mock, secret_func).assert_called_once_with(
+        "secret/some/path", 1, 2, 3, all_versions=False
     )
-
-
-@pytest.mark.usefixtures("delete_kv_err")
-@pytest.mark.parametrize(
-    "args",
-    [
-        pytest.param([], id="no_versions"),
-        pytest.param([1, 2], id="versions"),
-    ],
-)
-def test_delete_secret_err(args, caplog):
-    """
-    Ensure delete_secret handles exceptions as expected
-    """
-    with caplog.at_level(logging.ERROR):
-        res = vault.delete_secret("secret/some/path", *args)
-        assert not res
-        assert "Failed to delete secret! VaultPermissionDeniedError: damn" in caplog.messages
-
-
-@pytest.mark.parametrize(
-    "args",
-    [
-        pytest.param([], id="no_versions"),
-        pytest.param([1], id="one_version"),
-        pytest.param([1, 2], id="two_versions"),
-    ],
-)
-def test_destroy_secret(destroy_kv, args):
-    """
-    Ensure destroy_secret works as expected
-    """
-    path = "secret/some/path"
-    res = vault.destroy_secret(path, *args)
-    assert res
-    destroy_kv.assert_called_once_with(
-        path, args or None, opts=ANY, context=ANY, all_versions=False
-    )
-
-
-@pytest.mark.usefixtures("destroy_kv_err")
-@pytest.mark.parametrize(
-    "args",
-    [
-        pytest.param([1], id="one_version"),
-        pytest.param([1, 2], id="two_versions"),
-    ],
-)
-def test_destroy_secret_err(caplog, args):
-    """
-    Ensure destroy_secret handles exceptions as expected
-    """
-    with caplog.at_level(logging.ERROR):
-        res = vault.destroy_secret("secret/some/path", *args)
-        assert not res
-        assert "Failed to destroy secret! VaultPermissionDeniedError: damn" in caplog.messages
 
 
 def test_clear_token_cache():
     """
     Ensure clear_token_cache wraps the utility function properly
     """
-    with patch("saltext.vault.utils.vault.clear_cache") as cache:
+    with (
+        patch("saltext.vault.utils.vault.clear_cache") as cache,
+        pytest.deprecated_call(match="dropped in version 2"),
+    ):
         vault.clear_token_cache()
         cache.assert_called_once_with(ANY, ANY, connection=True, session=False)
 
@@ -363,9 +302,6 @@ def test_query_raises_errors(query):
 @pytest.mark.parametrize(
     "func,kwargs,target",
     [
-        pytest.param("read_secret", {"path": "some/path"}, "read_kv", id="read_secret"),
-        pytest.param("list_secrets", {"path": "some/path"}, "list_kv", id="list_secrets"),
-        pytest.param("restore_secret", {"path": "some/path"}, "restore_kv", id="restore_secret"),
         pytest.param("query", {"method": "GET", "endpoint": "test/endpoint"}, "query", id="query"),
         pytest.param("get_server_config", {}, "get_authd_client", id="get_server_config"),
         pytest.param("clear_cache", {}, "clear_cache", id="clear_cache"),
@@ -373,9 +309,7 @@ def test_query_raises_errors(query):
         pytest.param("update_config", {}, "update_config", id="update_config"),
     ],
 )
-@pytest.mark.filterwarnings(
-    "ignore:In version 2, this function will return the list of secret keys:DeprecationWarning"
-)
+@pytest.mark.filterwarnings("ignore:.*dropped in version 2:DeprecationWarning")
 def test_func_converts_errors(func, kwargs, target):
     """
     Ensure remote errors are converted into CommandExecutionErrors
@@ -384,27 +318,3 @@ def test_func_converts_errors(func, kwargs, target):
         tgt.side_effect = vaultutil.VaultException("booh")
         with pytest.raises(salt.exceptions.CommandExecutionError, match="booh"):
             getattr(vault, func)(**kwargs)
-
-
-@pytest.mark.parametrize(
-    "func,kwargs,target",
-    [
-        pytest.param(
-            "read_secret_meta", {"path": "some/path"}, "read_kv_meta", id="read_secret_meta"
-        ),
-        pytest.param(
-            "patch_raw", {"path": "some/path", "raw": {"foo": "bar"}}, "patch_kv", id="patch_raw"
-        ),
-        pytest.param("wipe_secret", {"path": "some/path"}, "wipe_kv", id="wipe_secret"),
-    ],
-)
-def test_func_swallows_errors(func, kwargs, target, caplog):
-    """
-    Ensure remote errors result in a False return value for legacy reasons
-    """
-    with patch(f"saltext.vault.utils.vault.{target}", autospec=True) as tgt:
-        tgt.side_effect = vaultutil.VaultException("booh")
-        with caplog.at_level(logging.ERROR):
-            res = getattr(vault, func)(**kwargs)
-    assert res is False
-    assert any("VaultException: booh" in msg for msg in caplog.messages)

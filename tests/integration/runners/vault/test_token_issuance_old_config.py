@@ -47,7 +47,7 @@ def test_minion_can_authenticate(salt_call_cli, caplog):
     Test that the minion can authenticate, even if the master peer_run
     configuration has not been updated.
     """
-    ret = salt_call_cli.run("vault.read_secret", "secret/path/foo")
+    ret = salt_call_cli.run("vault_secret.read", "secret/path/foo")
     assert ret.returncode == 0
     assert ret.data
     assert ret.data.get("success") == "yeehaaw"

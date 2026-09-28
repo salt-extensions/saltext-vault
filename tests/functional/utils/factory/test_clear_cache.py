@@ -34,7 +34,7 @@ def test_clear_cache_revokes_login_token_and_sends_event(modules, _event, connec
     accessor = info["accessor"]
     assert info["ttl"] > 120
     # populate connection cache
-    assert modules.vault.read_secret("secret/foo", "bar") == "hi"
+    assert modules.vault_secret.read("secret/foo", "bar") == "hi"
     # ensure context cache is what we expect
     context = modules.pack["__context__"]
     assert context

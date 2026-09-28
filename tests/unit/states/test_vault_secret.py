@@ -5,7 +5,7 @@ import pytest
 from salt.exceptions import CommandExecutionError
 from salt.exceptions import SaltInvocationError
 
-from saltext.vault.modules import vault as vault_exe
+from saltext.vault.modules import vault_secret as vault_secret_exe
 from saltext.vault.states import vault_secret
 
 
@@ -16,43 +16,43 @@ def configure_loader_modules():
 
 @pytest.fixture
 def read_secret():
-    _read = Mock(spec=vault_exe.read_secret)
-    with patch.dict(vault_secret.__salt__, {"vault.read_secret": _read}):
+    _read = Mock(spec=vault_secret_exe.read)
+    with patch.dict(vault_secret.__salt__, {"vault_secret.read": _read}):
         yield _read
 
 
 @pytest.fixture
 def write_raw():
-    _write = Mock(spec=vault_exe.write_raw, return_value=True)
-    with patch.dict(vault_secret.__salt__, {"vault.write_raw": _write}):
+    _write = Mock(spec=vault_secret_exe.write_raw, return_value=True)
+    with patch.dict(vault_secret.__salt__, {"vault_secret.write_raw": _write}):
         yield _write
 
 
 @pytest.fixture
 def patch_raw():
-    _patch = Mock(spec=vault_exe.patch_raw, return_value=True)
-    with patch.dict(vault_secret.__salt__, {"vault.patch_raw": _patch}):
+    _patch = Mock(spec=vault_secret_exe.patch_raw, return_value=True)
+    with patch.dict(vault_secret.__salt__, {"vault_secret.patch_raw": _patch}):
         yield _patch
 
 
 @pytest.fixture
 def delete_secret():
-    _delete = Mock(spec=vault_exe.delete_secret, return_value=True)
-    with patch.dict(vault_secret.__salt__, {"vault.delete_secret": _delete}):
+    _delete = Mock(spec=vault_secret_exe.delete, return_value=True)
+    with patch.dict(vault_secret.__salt__, {"vault_secret.delete": _delete}):
         yield _delete
 
 
 @pytest.fixture
 def destroy_secret():
-    _destroy = Mock(spec=vault_exe.destroy_secret, return_value=True)
-    with patch.dict(vault_secret.__salt__, {"vault.destroy_secret": _destroy}):
+    _destroy = Mock(spec=vault_secret_exe.destroy, return_value=True)
+    with patch.dict(vault_secret.__salt__, {"vault_secret.destroy": _destroy}):
         yield _destroy
 
 
 @pytest.fixture
 def wipe_secret():
-    _wipe = Mock(spec=vault_exe.wipe_secret, return_value=True)
-    with patch.dict(vault_secret.__salt__, {"vault.wipe_secret": _wipe}):
+    _wipe = Mock(spec=vault_secret_exe.wipe, return_value=True)
+    with patch.dict(vault_secret.__salt__, {"vault_secret.wipe": _wipe}):
         yield _wipe
 
 
@@ -83,10 +83,10 @@ def test_present_write_failures_are_reported(read_secret, write_raw, patch_raw, 
     else:
         read_secret.return_value = {"foo": "bar"}
     mock = write_raw if verb == "write" else patch_raw
-    mock.return_value = False
+    mock.side_effect = CommandExecutionError("Failed to foo secret! VaultServerError: booh")
     res = vault_secret.present("secret/path", {"foo": "baz"})
     assert res["result"] is False
-    assert res["comment"] == f"Failed to {verb} secret, see logs for details"
+    assert res["comment"] == "Failed to foo secret! VaultServerError: booh"
     assert not res["changes"]
 
 
@@ -94,8 +94,10 @@ def test_present_write_failures_are_reported(read_secret, write_raw, patch_raw, 
 @pytest.mark.usefixtures("delete_secret", "destroy_secret", "wipe_secret")
 def test_absent_removal_failures_are_reported(read_secret, operation, request):
     read_secret.return_value = {"foo": "bar"}
-    request.getfixturevalue(f"{operation}_secret").return_value = False
+    request.getfixturevalue(f"{operation}_secret").side_effect = CommandExecutionError(
+        "Failed to foo secret! VaultServerError: booh"
+    )
     res = vault_secret.absent("secret/path", operation=operation)
     assert res["result"] is False
-    assert res["comment"] == f"Failed to {operation} secret, see logs for details"
+    assert res["comment"] == "Failed to foo secret! VaultServerError: booh"
     assert not res["changes"]
