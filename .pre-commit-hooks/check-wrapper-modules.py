@@ -27,11 +27,7 @@ WRAPPER_DIR = REPO_ROOT / "src" / "saltext" / "vault" / "wrapper"
 MODULES_PKG = "saltext.vault.modules"
 
 # Known gaps that need a decision instead of a mechanical fix
-EXCLUDES = {
-    # TODO: Decide whether this needs a local reimplementation handling
-    # file arguments on the master (like import_issuer) or can be namespaced.
-    "vault_pki.py": {"sign_intermediate"},
-}
+EXCLUDES = {}
 
 
 def _parse(path):

@@ -498,7 +498,7 @@ def test_sign_certificate_verbatim_without_role_name(vault_pki, private_key, iss
 @pytest.mark.parametrize(
     "call_type", ("pk", "pk_verbatim", "pk_verbatim_kwargs", "csr", "csr_verbatim")
 )
-def test_sign_intermediate(vault_pki, private_key, container, call_type):
+def test_sign_intermediate(vault_pki, private_key, container, call_type, tmp_path):
     csr = "csr" in call_type
     sign_verbatim = "verbatim" in call_type
     issuer_ref = None
@@ -563,7 +563,11 @@ def test_sign_intermediate(vault_pki, private_key, container, call_type):
         }
     if csr:
         csr_args["CN"] = "foo.example.com"
-        call_args["csr"] = create_csr(private_key=private_key, **csr_args)
+        csr_pem = create_csr(private_key=private_key, **csr_args)
+        # wrapper tests need file
+        csr_file = tmp_path / "csr.pem"
+        csr_file.write_text(csr_pem)
+        call_args["csr"] = str(csr_file)
         csr_args = {}
     else:
         call_args["private_key"] = private_key
