@@ -95,7 +95,7 @@ def test_show_policies_uncached_data_no_pillar_refresh(salt_run_cli, minion):
     (
         {
             "exe_loop": {
-                "vault_sourced_exe": "{{ salt['vault.read_secret']('secret/path/foo', 'vault_sourced') }}",
+                "vault_sourced_exe": "{{ salt['vault_secret.read']('secret/path/foo', 'vault_sourced') }}",
             }
         },
     ),

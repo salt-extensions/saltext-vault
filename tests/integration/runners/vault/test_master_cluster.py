@@ -192,7 +192,7 @@ def salt_cli(
 
 
 def test_minion_can_authenticate(cluster_minion_1, salt_cli):
-    ret = salt_cli.run("vault.read_secret", "secret/path/foo", minion_tgt=cluster_minion_1.id)
+    ret = salt_cli.run("vault_secret.read", "secret/path/foo", minion_tgt=cluster_minion_1.id)
     assert ret.returncode == 0
     assert ret.data
     assert ret.data.get("success") == "yeehaaw"

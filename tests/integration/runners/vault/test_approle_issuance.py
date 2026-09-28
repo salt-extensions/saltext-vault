@@ -82,7 +82,7 @@ def test_minion_can_authenticate(salt_call_cli):
     The master impersonating the minion is already tested in the fixture setup
     (ext_pillar).
     """
-    ret = salt_call_cli.run("vault.read_secret", "secret/path/foo")
+    ret = salt_call_cli.run("vault_secret.read", "secret/path/foo")
     assert ret.returncode == 0
     assert ret.data
     assert ret.data.get("success") == "yeehaaw"
@@ -175,7 +175,7 @@ def test_auth_method_switch_does_not_break_minion_auth(salt_call_cli, caplog):
     Test that after a master configuration switch from another authentication method,
     minions with cached configuration flush it and request a new one.
     """
-    ret = salt_call_cli.run("vault.read_secret", "secret/path/foo")
+    ret = salt_call_cli.run("vault_secret.read", "secret/path/foo")
     assert ret.returncode == 0
     assert ret.data
     assert ret.data.get("success") == "yeehaaw"
@@ -189,7 +189,7 @@ def test_server_switch_does_not_break_minion_auth(salt_call_cli, caplog):
     minions with cached configuration detect the mismatch and request a
     new configuration.
     """
-    ret = salt_call_cli.run("vault.read_secret", "secret/path/foo")
+    ret = salt_call_cli.run("vault_secret.read", "secret/path/foo")
     assert ret.returncode == 0
     assert ret.data
     assert ret.data.get("success") == "yeehaaw"
@@ -208,7 +208,7 @@ def test_cache_is_used_on_the_minion(ckey, salt_call_cli, minion_conn_cachedir):
         if not cache.exists():
             cache.mkdir()
     if f"{ckey}.p" not in os.listdir(cache):
-        ret = salt_call_cli.run("vault.read_secret", "secret/path/foo")
+        ret = salt_call_cli.run("vault_secret.read", "secret/path/foo")
         assert ret.returncode == 0
     assert f"{ckey}.p" in os.listdir(cache)
 

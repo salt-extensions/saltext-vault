@@ -6,27 +6,7 @@ from tests.common.containers import genmarks
 
 # pylint: disable=unused-import
 from tests.common.fixtures.vault import kv_mount
-from tests.common.fixtures.vault import versionable_secret
-from tests.common.fixtures.vault import versioned_secret
-from tests.common.fixtures.vault import versioned_secret_all_deleted
-from tests.common.fixtures.vault import versioned_secret_deleted
-from tests.functional.modules.vault.test_vault_kv import test_delete_secret_all_versions
-from tests.functional.modules.vault.test_vault_kv import test_delete_secret_latest
-from tests.functional.modules.vault.test_vault_kv import test_delete_secret_version
-from tests.functional.modules.vault.test_vault_kv import test_destroy_secret_all_versions
-from tests.functional.modules.vault.test_vault_kv import test_destroy_secret_latest
-from tests.functional.modules.vault.test_vault_kv import test_destroy_secret_versions
-from tests.functional.modules.vault.test_vault_kv import test_list_secrets as _test_list_secrets
-from tests.functional.modules.vault.test_vault_kv import test_patch_raw
-from tests.functional.modules.vault.test_vault_kv import test_patch_secret
 from tests.functional.modules.vault.test_vault_kv import test_read_secret
-from tests.functional.modules.vault.test_vault_kv import test_read_secret_meta
-from tests.functional.modules.vault.test_vault_kv import test_read_secret_version
-from tests.functional.modules.vault.test_vault_kv import test_restore_secret
-from tests.functional.modules.vault.test_vault_kv import test_restore_secret_all_versions
-from tests.functional.modules.vault.test_vault_kv import test_wipe_secret
-from tests.functional.modules.vault.test_vault_kv import test_write_raw
-from tests.functional.modules.vault.test_vault_kv import test_write_secret
 
 # pylint: enable=unused-import
 
@@ -55,11 +35,6 @@ def vault_secrets_defaults():
         "secret/my/secret": {"user": "foo", "password": "bar"},
         "secret/delete/me": {"user": "foo"},
     }
-
-
-@pytest.mark.parametrize("keys_only", (True,))
-def test_list_secrets(vault, keys_only, kv_mount):
-    _test_list_secrets(vault, keys_only=keys_only, kv_mount=kv_mount)
 
 
 def test_clear_cache(salt_ssh_cli):

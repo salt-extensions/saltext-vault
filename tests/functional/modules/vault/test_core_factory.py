@@ -48,6 +48,7 @@ def test_get_server_config(vault, minion):
         assert val == minion.config["vault"]["server"].get(conf, default)
 
 
+@pytest.mark.filterwarnings(r"ignore:The `vault\.:DeprecationWarning")
 def test_clear_cache(vault, minion_cache):
     token_cache = minion_cache / "connection" / "session" / "__token.p"
     metadata_cache = minion_cache / "connection" / "secret_path_metadata.p"

@@ -549,15 +549,15 @@ to understand why the ``roles`` mapping is repeated multiple times.
 Now you can test that the minion is able to read all secrets:
 
 ```console
-[root@master ~]# salt elliott vault.read_secret salt/general/accessible_for_all_minions
+[root@master ~]# salt elliott vault_secret.read salt/general/accessible_for_all_minions
 elliott:
     ----------
     all_foo: bar
-[root@master ~]# salt elliott vault.read_secret salt/roles/db
+[root@master ~]# salt elliott vault_secret.read salt/roles/db
 elliott:
     ----------
     db_foo: baz
-[root@master ~]# salt elliott vault.read_secret salt/minions/elliott
+[root@master ~]# salt elliott vault_secret.read salt/minions/elliott
 elliott:
     ----------
     minion_foo: quux

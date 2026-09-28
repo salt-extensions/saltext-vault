@@ -12,7 +12,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from salt.exceptions import CommandExecutionError
-from salt.exceptions import SaltException
+from salt.exceptions import SaltInvocationError
 
 from saltext.vault.utils.vault import helpers as hlp
 from saltext.vault.utils.vault import kv
@@ -57,9 +57,11 @@ def present(name, values, sync=False):
         "comment": "The secret is already present as specified",
         "changes": {},
     }
+
     try:
+
         try:
-            current = __salt__["vault.read_secret"](name)
+            current = __salt__["vault_secret.read"](name)
         except CommandExecutionError as err:
             # VaultNotFoundError should be subclassed to
             # CommandExecutionError and not re-raised by the
@@ -72,25 +74,27 @@ def present(name, values, sync=False):
                 if current == values:
                     return ret
             else:
-
                 new = kv.apply_json_merge_patch(copy.deepcopy(current), values)
                 if new == current:
                     return ret
+
         verb = "patch" if current is not None and not sync else "write"
         pp = "patched" if verb == "patch" else "written"
         ret["changes"][pp] = name
+
         if __opts__["test"]:
             ret["result"] = None
             ret["comment"] = f"Would have {pp} the secret"
             return ret
-        if not __salt__[f"vault.{verb}_raw"](name, values):
-            # Only read_secret raises exceptions sadly FIXME?
-            raise CommandExecutionError(f"Failed to {verb} secret, see logs for details")
+
+        __salt__[f"vault_secret.{verb}_raw"](name, values)
         ret["comment"] = f"The secret was {pp}"
-    except SaltException as err:
+
+    except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
         ret["comment"] = str(err)
         ret["changes"] = {}
+
     return ret
 
 
@@ -117,24 +121,29 @@ def absent(name, operation="delete"):
         "changes": {},
     }
     pp = "destroyed" if operation == "destroy" else operation + "d"
+
     try:
+
         try:
-            __salt__["vault.read_secret"](name)
+            __salt__["vault_secret.read"](name)
         except CommandExecutionError as err:
             if "VaultNotFoundError" not in str(err):
                 raise
             return ret
+
         ret["changes"][pp] = name
+
         if __opts__["test"]:
             ret["result"] = None
             ret["comment"] = f"Would have {pp} the secret"
             return ret
-        if not __salt__[f"vault.{operation}_secret"](name):
-            # Only read_secret raises exceptions sadly FIXME?
-            raise CommandExecutionError(f"Failed to {operation} secret, see logs for details")
+
+        __salt__[f"vault_secret.{operation}"](name)
         ret["comment"] = f"The secret has been {pp}"
-    except SaltException as err:
+
+    except (CommandExecutionError, SaltInvocationError) as err:
         ret["result"] = False
         ret["comment"] = str(err)
         ret["changes"] = {}
+
     return ret

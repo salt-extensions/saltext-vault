@@ -28,8 +28,8 @@ def pillar_defaults():
             "test": {
                 # Access Vault twice in the same pillar file
                 "foo": "bar",
-                "jvmdump_pubkey": "{{ salt['vault.read_secret']('secret/test/jvmdump/ssh_key', 'public_key') }}",
-                "jenkins_pubkey": "{{ salt['vault.read_secret']('secret/test/jenkins/master/ssh_key', 'public_key') }}",
+                "jvmdump_pubkey": "{{ salt['vault_secret.read']('secret/test/jvmdump/ssh_key', 'public_key') }}",
+                "jenkins_pubkey": "{{ salt['vault_secret.read']('secret/test/jenkins/master/ssh_key', 'public_key') }}",
             }
         }
     }
@@ -45,7 +45,7 @@ def test_vault_read_secret(salt_call_cli):
     Test that the Vault module can fetch a single secret when tokens
     are issued with uses=1.
     """
-    ret = salt_call_cli.run("vault.read_secret", "secret/test/jvmdump/ssh_key")
+    ret = salt_call_cli.run("vault_secret.read", "secret/test/jvmdump/ssh_key")
     assert ret.returncode == 0
     assert ret.data == {"public_key": "yup_dump"}
 

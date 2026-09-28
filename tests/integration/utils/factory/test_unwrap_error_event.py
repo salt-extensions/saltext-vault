@@ -84,7 +84,7 @@ def test_unwrap_error_fires_security_event(
     event that is delivered to the master.
     """
     start_time = time.time()
-    ret = salt_call_cli.run("vault.read_secret", "secret/path/foo")
+    ret = salt_call_cli.run("vault_secret.read", "secret/path/foo")
     assert ret.returncode != 0
     assert "indicates tampering" in ret.stderr
 

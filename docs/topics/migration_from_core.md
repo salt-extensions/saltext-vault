@@ -67,12 +67,6 @@ There are some planned changes not found in any version of Salt core.
 
 ### Deprecated defaults/configuration
 
-#### Execution module
-* [vault.list_secrets](saltext.vault.modules.vault.list_secrets) used to return
-  a single-key dict like `{keys: [a, b]}`.
-  This will be changed to returning the list only in the next major release.
-  Set `keys_only=true` when calling it to migrate early and avoid warnings.
-
 #### SDB module
 * The SDB module used to overwrite the whole secret when writing a single key.
   This behavior can be configured now with the {vconf}`patch <sdb.patch>` profile value.
@@ -102,6 +96,17 @@ There are some planned changes not found in any version of Salt core.
 - [vault.policy_write](saltext.vault.modules.vault.policy_write) (use [vault_policy.write](saltext.vault.modules.vault_policy.write))
 - [vault.policy_delete](saltext.vault.modules.vault.policy_delete) (use [vault_policy.delete](saltext.vault.modules.vault_policy.delete))
 - [vault.policies_list](saltext.vault.modules.vault.policies_list) (use [vault_policy.list](saltext.vault.modules.vault_policy.list_))
+- [vault.read_secret](saltext.vault.modules.vault.read_secret) (use [vault_secret.read](saltext.vault.modules.vault_secret.read))
+- [vault.read_secret_meta](saltext.vault.modules.vault.read_secret_meta) (use [vault_secret.read_meta](saltext.vault.modules.vault_secret.read_meta))
+- [vault.write_secret](saltext.vault.modules.vault.write_secret) (use [vault_secret.write](saltext.vault.modules.vault_secret.write))
+- [vault.write_raw](saltext.vault.modules.vault.write_raw) (use [vault_secret.write_raw](saltext.vault.modules.vault_secret.write_raw))
+- [vault.patch_secret](saltext.vault.modules.vault.patch_secret) (use [vault_secret.patch](saltext.vault.modules.vault_secret.patch))
+- [vault.patch_raw](saltext.vault.modules.vault.patch_raw) (use [vault_secret.patch_raw](saltext.vault.modules.vault_secret.patch_raw))
+- [vault.list_secrets](saltext.vault.modules.vault.list_secrets) (use [vault_secret.list](saltext.vault.modules.vault_secret.list_))
+- [vault.delete_secret](saltext.vault.modules.vault.delete_secret) (use [vault_secret.delete](saltext.vault.modules.vault_secret.delete))
+- [vault.restore_secret](saltext.vault.modules.vault.restore_secret) (use [vault_secret.restore](saltext.vault.modules.vault_secret.restore))
+- [vault.destroy_secret](saltext.vault.modules.vault.destroy_secret) (use [vault_secret.destroy](saltext.vault.modules.vault_secret.destroy))
+- [vault.wipe_secret](saltext.vault.modules.vault.wipe_secret) (use [vault_secret.wipe](saltext.vault.modules.vault_secret.wipe))
 
 ### Deprecated states
 - [vault.policy_present](saltext.vault.states.vault.policy_present) (use [vault_policy.present](saltext.vault.states.vault_policy.present))

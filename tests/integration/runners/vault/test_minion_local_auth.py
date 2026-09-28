@@ -20,7 +20,7 @@ def test_minion_can_authenticate(salt_call_cli):
     Test that salt-call --local works with the Vault module.
     Salt core issue #58580
     """
-    ret = salt_call_cli.run("--local", "vault.read_secret", "secret/path/foo")
+    ret = salt_call_cli.run("--local", "vault_secret.read", "secret/path/foo")
     assert ret.returncode == 0
     assert ret.data
     assert ret.data.get("success") == "yeehaaw"

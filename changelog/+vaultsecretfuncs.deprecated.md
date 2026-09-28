@@ -1,0 +1,1 @@
+Extracted KV-related functions from `vault` modules into separate `vault_secret` ones. Aliases are in place, but result in deprecation warnings and will be removed in the next major (`v2`) release. Please move to the new names.

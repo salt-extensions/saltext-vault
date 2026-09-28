@@ -36,7 +36,7 @@ def test_minion_can_authenticate(salt_call_cli, caplog):
     The master impersonating the minion is already tested in the fixture setup
     (ext_pillar).
     """
-    ret = salt_call_cli.run("vault.read_secret", "secret/path/foo")
+    ret = salt_call_cli.run("vault_secret.read", "secret/path/foo")
     assert ret.returncode == 0
     assert ret.data
     assert ret.data.get("success") == "yeehaaw"
