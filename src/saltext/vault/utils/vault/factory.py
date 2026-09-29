@@ -489,6 +489,10 @@ def _check_upgrade(config: dict[str, typing.Any], pre_flush: bool = False) -> bo
         if not pre_flush:
             return True
         config["client"] = {}
+    if "list_as_get" not in config["client"]:
+        if not pre_flush:
+            return True
+        config["client"]["list_as_get"] = vclient.DEFAULT_LIST_AS_GET
     # introduced in v1.8.0
     if "url_alts" not in config["server"]:
         if not pre_flush:
@@ -1156,6 +1160,7 @@ def parse_config(
             "secret": "ttl",
         },
         "client": {
+            "list_as_get": vclient.DEFAULT_LIST_AS_GET,
             "connect_timeout": vclient.DEFAULT_CONNECT_TIMEOUT,
             "read_timeout": vclient.DEFAULT_READ_TIMEOUT,
             "max_retries": vclient.DEFAULT_MAX_RETRIES,

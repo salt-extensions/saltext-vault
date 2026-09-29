@@ -1,0 +1,1 @@
+Added a `client:list_as_get` option to send Vault list operations as `GET` requests with the `list=true` query parameter for compatibility with HTTP intermediaries that reject the non-standard `LIST` method.

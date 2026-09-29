@@ -373,12 +373,14 @@ class TestBuildAuthdClient:
         """
         Ensure credentials are only requested if necessary.
         """
+        test_remote_config["client"]["list_as_get"] = True
         conn_config.return_value = (test_remote_config, None, Mock())
         (
             client,
             _config,  # pylint: disable=unused-variable
         ) = vfactory._build_authd_client({}, {})
         assert client.token_valid(remote=False)
+        assert client.list_as_get is True
         if test_remote_config["auth"]["method"] == "approle":
             if (
                 test_remote_config["auth"]["secret_id"] is False
@@ -445,6 +447,22 @@ class TestGetConnectionConfig:
         """
         vfactory._get_connection_config("vault", {}, {}, force_local=force_local)
         local.assert_called_once()
+
+    @pytest.mark.parametrize("pre_flush", [False, True])
+    def test_get_connection_config_detects_cached_config_without_list_as_get(
+        self, test_remote_config, pre_flush
+    ):
+        """
+        Old cached client configuration is refreshed normally and safely defaulted pre-flush.
+        """
+        config = copy.deepcopy(test_remote_config)
+        config["client"].pop("list_as_get")
+
+        assert vfactory._check_upgrade(config, pre_flush=pre_flush) is (not pre_flush)
+        if pre_flush:
+            assert config["client"]["list_as_get"] is False
+        else:
+            assert "list_as_get" not in config["client"]
 
     def test_get_connection_config_cached(self, cached, remote, test_remote_config):
         """
@@ -1624,12 +1642,13 @@ class TestQueryMaster:
         ``client`` configuration.
         """
         get_config_response["client"]["retry_post"] = True
+        get_config_response["client"]["list_as_get"] = True
         publish_runner.return_value = saltutil_runner.return_value = get_config_response
         with patch("saltext.vault.utils.vault.client.VaultClient", autospec=True) as client_init:
             client_init.return_value.get_config.return_value = server_config
             vfactory._query_master("get_config", opts)
-        assert "retry_post" in client_init.call_args.kwargs
         assert client_init.call_args.kwargs["retry_post"] is True
+        assert client_init.call_args.kwargs["list_as_get"] is True
 
     @pytest.mark.parametrize(
         "unauthd_client_mock,key",
@@ -1887,6 +1906,7 @@ def test_clear_cache_clears_client_from_context(ckey, connection, session, clien
                     "secret": "ttl",
                 },
                 "client": {
+                    "list_as_get": vclient.DEFAULT_LIST_AS_GET,
                     "connect_timeout": vclient.DEFAULT_CONNECT_TIMEOUT,
                     "read_timeout": vclient.DEFAULT_READ_TIMEOUT,
                     "max_retries": vclient.DEFAULT_MAX_RETRIES,
@@ -1932,6 +1952,7 @@ def test_clear_cache_clears_client_from_context(ckey, connection, session, clien
                     "secret": "ttl",
                 },
                 "client": {
+                    "list_as_get": vclient.DEFAULT_LIST_AS_GET,
                     "connect_timeout": vclient.DEFAULT_CONNECT_TIMEOUT,
                     "read_timeout": vclient.DEFAULT_READ_TIMEOUT,
                     "max_retries": vclient.DEFAULT_MAX_RETRIES,
@@ -2078,6 +2099,16 @@ def test_parse_config_respects_local_url_when_appropriate(opts, is_allowed, capl
     else:
         assert ret["server"]["url"] == oldval
     assert ("Locally configured Vault server URL" in caplog.text) is not is_allowed
+
+
+@pytest.mark.parametrize("configured,expected", [(None, False), (True, True)])
+def test_parse_config_list_as_get(configured, expected):
+    """
+    list_as_get defaults to false and retains an explicitly configured true value.
+    """
+    client_config = {} if configured is None else {"list_as_get": configured}
+    ret = vfactory.parse_config({"client": client_config}, validate=False)
+    assert ret["client"]["list_as_get"] is expected
 
 
 def test_parse_config_respects_local_client():

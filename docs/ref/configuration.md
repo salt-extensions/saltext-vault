@@ -222,6 +222,31 @@ Defaults to `9.2`.
 The number of seconds to wait between packets sent by the server.
 Defaults to `30`.
 
+:::{vconf} client:list_as_get
+:::
+#### list_as_get
+Whether high-level Vault list operations should use a standard `GET` request
+with the `list=true` query parameter instead of the non-standard `LIST` HTTP
+method. Defaults to `False`.
+
+Enable this option for compatibility with proxies, load balancers, web
+application firewalls, or other HTTP intermediaries that reject non-standard
+methods, such as AWS CloudFront:
+
+```yaml
+vault:
+  client:
+    list_as_get: true
+```
+
+This uses Vault's [documented alternative to `LIST`](https://developer.hashicorp.com/vault/api-docs#api-operations).
+The intermediary must forward the `list` query parameter and authentication
+headers to Vault. Disable response caching for the Vault API.
+
+This only affects high-level Vault list operations. Explicit low-level `LIST`
+requests through `request`, `request_raw`, or `vault.query` continue to use the
+literal `LIST` method.
+
 :::{vconf} client:max_retries
 :::
 #### max_retries
@@ -647,6 +672,7 @@ vault:
     max_retries: 5
     connect_timeout: 9.2
     read_timeout: 30
+    list_as_get: false
     backoff_factor: 0.1
     backoff_max: 10
     backoff_jitter: 0.2
