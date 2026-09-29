@@ -455,6 +455,114 @@ def test_vault_client_token_entity_caches(client, req):
     req.assert_called_once()
 
 
+@pytest.mark.parametrize("list_as_get", [None, False])
+def test_vault_client_list_uses_list_by_default(list_as_get, server_config, http_session, req):
+    """
+    High-level list operations use the literal LIST method unless explicitly configured.
+    """
+    kwargs = {} if list_as_get is None else {"list_as_get": list_as_get}
+    client = vclient.VaultClient(**server_config, session=http_session, **kwargs)
+    req.return_value = _mock_json_response({})
+
+    client.list("secret/metadata/test")
+
+    req.assert_called_once_with(
+        "LIST",
+        f"{client.url}/v1/secret/metadata/test",
+        headers=ANY,
+        json=None,
+        params=None,
+    )
+
+
+def test_vault_client_list_as_get_uses_query_parameter(server_config, http_session, req):
+    """
+    list_as_get sends GET with list=true as a query parameter and without a JSON body.
+    """
+    client = vclient.VaultClient(**server_config, session=http_session, list_as_get=True)
+    req.return_value = _mock_json_response({})
+
+    client.list("secret/metadata/test")
+
+    req.assert_called_once_with(
+        "GET",
+        f"{client.url}/v1/secret/metadata/test",
+        headers=ANY,
+        json=None,
+        params={"list": "true"},
+    )
+
+
+def test_vault_client_list_as_get_preserves_payload_without_mutating_caller(
+    server_config, http_session, req
+):
+    """
+    Existing query parameters are retained and a caller-provided list value is overridden.
+    """
+    client = vclient.VaultClient(**server_config, session=http_session, list_as_get=True)
+    req.return_value = _mock_json_response({})
+    payload = {"foo": "bar", "list": "false"}
+
+    client.list("secret/metadata/test", payload=payload)
+
+    assert payload == {"foo": "bar", "list": "false"}
+    assert req.call_args.kwargs["params"] == {"foo": "bar", "list": "true"}
+    assert req.call_args.kwargs["json"] is None
+
+
+@pytest.mark.parametrize("warn_handler", [True, False, lambda warnings: warnings])
+def test_vault_client_list_as_get_forwards_wrapper_arguments(
+    server_config, http_session, warn_handler
+):
+    """
+    The compatibility mode only changes the method and copied request payload.
+    """
+    client = vclient.VaultClient(**server_config, session=http_session, list_as_get=True)
+    headers = {"X-Test": "test"}
+
+    with patch.object(client, "request", autospec=True, return_value={}) as request:
+        client.list(
+            "secret/metadata/test",
+            wrap="1h",
+            raise_error=False,
+            add_headers=headers,
+            safe_to_retry=True,
+            warn_handler=warn_handler,
+        )
+
+    request.assert_called_once_with(
+        "GET",
+        "secret/metadata/test",
+        payload={"list": "true"},
+        wrap="1h",
+        raise_error=False,
+        add_headers=headers,
+        safe_to_retry=True,
+        warn_handler=warn_handler,
+    )
+
+
+@pytest.mark.parametrize("method", ["request", "request_raw"])
+def test_vault_client_list_as_get_does_not_rewrite_explicit_list(
+    method, server_config, http_session, req
+):
+    """
+    Explicit low-level LIST requests remain literal LIST requests.
+    """
+    client = vclient.VaultClient(**server_config, session=http_session, list_as_get=True)
+    req.return_value = _mock_json_response({})
+
+    getattr(client, method)("LIST", "secret/metadata/test", payload={"foo": "bar"})
+
+    req.assert_called_once_with(
+        "LIST",
+        f"{client.url}/v1/secret/metadata/test",
+        headers=ANY,
+        json=None,
+        params={"foo": "bar"},
+    )
+
+
 @pytest.mark.parametrize("func", ["get", "delete", "post", "list"])
 def test_vault_client_wrapper_should_not_require_payload(func, client, req):
     """

@@ -61,6 +61,7 @@ def config_defaults():
             "secret": "ttl",
         },
         "client": {
+            "list_as_get": vclient.DEFAULT_LIST_AS_GET,
             "connect_timeout": vclient.DEFAULT_CONNECT_TIMEOUT,
             "read_timeout": vclient.DEFAULT_READ_TIMEOUT,
             "max_retries": vclient.DEFAULT_MAX_RETRIES,

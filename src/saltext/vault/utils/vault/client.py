@@ -63,6 +63,7 @@ HTTP_TOO_MANY_REQUESTS = 429
 # Default timeout configuration
 DEFAULT_CONNECT_TIMEOUT = 9.2
 DEFAULT_READ_TIMEOUT = 30
+DEFAULT_LIST_AS_GET = False
 
 # Default retry configuration
 DEFAULT_MAX_RETRIES = 5
@@ -131,6 +132,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         session: requests.Session | None = None,
         connect_timeout: float | int = DEFAULT_CONNECT_TIMEOUT,
         read_timeout: float | int = DEFAULT_READ_TIMEOUT,
+        list_as_get: bool = DEFAULT_LIST_AS_GET,
         max_retries: int = DEFAULT_MAX_RETRIES,
         backoff_factor: float | int = DEFAULT_BACKOFF_FACTOR,
         backoff_max: float | int = DEFAULT_BACKOFF_MAX,
@@ -150,6 +152,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
 
         self.connect_timeout = connect_timeout
         self.read_timeout = read_timeout
+        self.list_as_get = bool(list_as_get)
 
         # Cap the retry-backoff values somewhat
         self.max_retries = float(max(0, min(max_retries, MAX_MAX_RETRIES)))
@@ -338,16 +341,26 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
     ) -> typing.Any:
         """
-        Wrapper for client.request("LIST", ...)
-        TODO: configuration to enable GET requests with query parameters for LIST?
+        Wrapper for a logical Vault list operation.
+
+        By default this uses the ``LIST`` HTTP method. When ``list_as_get``
+        is enabled, it uses ``GET`` and adds the ``list=true`` query
+        parameter instead.
 
         ``payload`` is interpreted as query parameters, which are
         URL-encoded automatically.
         """
+        method = "LIST"
+        request_payload = payload
+        if self.list_as_get:
+            method = "GET"
+            request_payload = dict(payload or {})
+            request_payload["list"] = "true"
+
         return self.request(
-            "LIST",
+            method,
             endpoint,
-            payload=payload,
+            payload=request_payload,
             wrap=wrap,
             raise_error=raise_error,
             add_headers=add_headers,
