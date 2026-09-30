@@ -762,6 +762,10 @@ def query(method, endpoint, payload=None):
     method
         HTTP method to use.
 
+        .. note::
+            A literal ``LIST`` is passed through as-is and does not
+            follow the :vconf:`client:list_as_get` option.
+
     endpoint
         Vault API endpoint to issue the request against. Do not include ``/v1/``.
 

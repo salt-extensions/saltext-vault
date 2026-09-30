@@ -231,21 +231,21 @@ method. Defaults to `False`.
 
 Enable this option for compatibility with proxies, load balancers, web
 application firewalls, or other HTTP intermediaries that reject non-standard
-methods, such as AWS CloudFront:
-
-```yaml
-vault:
-  client:
-    list_as_get: true
-```
+methods, such as AWS CloudFront.
 
 This uses Vault's [documented alternative to `LIST`](https://developer.hashicorp.com/vault/api-docs#api-operations).
 The intermediary must forward the `list` query parameter and authentication
 headers to Vault. Disable response caching for the Vault API.
 
-This only affects high-level Vault list operations. Explicit low-level `LIST`
-requests through `request`, `request_raw`, or `vault.query` continue to use the
-literal `LIST` method.
+This only affects high-level Vault list operations, i.e. the
+[api_list](saltext.vault.utils.vault.api_list) utility function and the client's
+[list](saltext.vault.utils.vault.client.VaultClient.list) method, which all
+module list operations are based on. Explicit low-level `LIST` requests through
+the [vault.query](saltext.vault.modules.vault.query) execution module function,
+the [query](saltext.vault.utils.vault.query)/[query_raw](saltext.vault.utils.vault.query_raw)
+utility functions or the client's
+[request](saltext.vault.utils.vault.client.VaultClient.request)/[request_raw](saltext.vault.utils.vault.client.VaultClient.request_raw)
+methods continue to use the literal `LIST` method.
 
 :::{vconf} client:max_retries
 :::

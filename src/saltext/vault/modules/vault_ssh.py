@@ -422,7 +422,7 @@ def list_roles(mount="ssh"):
         Defaults to ``ssh``.
     """
     try:
-        res = vault.query("LIST", f"{mount}/roles", __opts__, __context__)["data"]
+        res = vault.api_list(f"{mount}/roles", __opts__, __context__)["data"]
     except vault.VaultNotFoundError:
         return {}
     except vault.VaultException as err:

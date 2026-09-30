@@ -46,6 +46,12 @@ def query():
 
 
 @pytest.fixture
+def api_list():
+    with patch("saltext.vault.utils.vault.api_list", return_value=True, autospec=True) as _api_list:
+        yield _api_list
+
+
+@pytest.fixture
 def secret_id_response():
     return {
         "request_id": "0e8c388e-2cb6-bcb2-83b7-625127d568bb",
