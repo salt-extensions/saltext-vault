@@ -1,1 +1,1 @@
-Added `vault_pki.intermediate_issuer_managed` state that manages an intermediate issuer as the default issuer on a mount. It signs the certificate either using another Vault issuer or the `x509_v2` modules.
+Added {py:func}`vault_pki.intermediate_issuer_managed <saltext.vault.states.vault_pki.intermediate_issuer_managed>` state that manages an intermediate issuer as the default issuer on a mount. It signs the certificate either using another Vault issuer or the {py:mod}`x509_v2 <salt.modules.x509_v2>` modules.

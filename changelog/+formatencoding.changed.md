@@ -1,1 +1,1 @@
-Renamed the `format` parameter in `vault_pki.(generate_root|issue_certificate)` to `encoding` to align it with all other functions. The previous name still works, but is warned about.
+Renamed the `format` parameter in {py:func}`vault_pki.generate_root <saltext.vault.modules.vault_pki.generate_root>`/{py:func}`vault_pki.issue_certificate <saltext.vault.modules.vault_pki.issue_certificate>` to `encoding` to align it with all other functions. The previous name still works, but is warned about.

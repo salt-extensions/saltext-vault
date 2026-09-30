@@ -1,1 +1,1 @@
-Extracted policy-related functions from `vault` modules into separate `vault_policy` ones. The old names still work, but are deprecated and will be removed in the next major (`v2`) release. Please move to the new names.
+Extracted policy-related functions from {py:mod}`vault <saltext.vault.modules.vault>` modules into separate {py:mod}`vault_policy <saltext.vault.modules.vault_policy>` ones. The old names still work, but are deprecated and will be removed in the next major (`v2`) release. Please move to the new names.

@@ -1,1 +1,1 @@
-Fixed `vault_pki.sign_certificate`/`vault_pki.certificate_managed` requiring a `role_name`, even if `sign_verbatim` was enabled
+Fixed {py:func}`vault_pki.sign_certificate <saltext.vault.modules.vault_pki.sign_certificate>`/{py:func}`vault_pki.certificate_managed <saltext.vault.states.vault_pki.certificate_managed>` requiring a `role_name`, even if `sign_verbatim` was enabled
