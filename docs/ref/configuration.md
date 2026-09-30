@@ -225,6 +225,8 @@ Defaults to `30`.
 :::{vconf} client:list_as_get
 :::
 #### list_as_get
+:::{versionadded} 1.9.0
+:::
 Whether high-level Vault list operations should use a standard `GET` request
 with the `list=true` query parameter instead of the non-standard `LIST` HTTP
 method. Defaults to `False`.
@@ -240,9 +242,10 @@ headers to Vault. Disable response caching for the Vault API.
 This only affects high-level Vault list operations, i.e. the
 [api_list](saltext.vault.utils.vault.api_list) utility function and the client's
 [list](saltext.vault.utils.vault.client.VaultClient.list) method, which all
-module list operations are based on. Explicit low-level `LIST` requests through
-the [vault.query](saltext.vault.modules.vault.query) execution module function,
-the [query](saltext.vault.utils.vault.query)/[query_raw](saltext.vault.utils.vault.query_raw)
+module list operations are based on, including `LIST` queries via the
+[vault.query](saltext.vault.modules.vault.query) execution module function.
+Explicit low-level `LIST` requests through the
+[query](saltext.vault.utils.vault.query)/[query_raw](saltext.vault.utils.vault.query_raw)
 utility functions or the client's
 [request](saltext.vault.utils.vault.client.VaultClient.request)/[request_raw](saltext.vault.utils.vault.client.VaultClient.request_raw)
 methods continue to use the literal `LIST` method.

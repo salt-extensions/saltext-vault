@@ -273,19 +273,36 @@ def test_policy_functions_emit_warnings(func, kwargs):
         assert _func(**kwargs) == "yup"
 
 
-@pytest.mark.parametrize("method", ["POST", "DELETE"])
+@pytest.mark.parametrize(
+    "method,target",
+    [
+        ("GET", "api_get"),
+        ("POST", "api_post"),
+        ("PUT", "api_put"),
+        ("PATCH", "api_patch"),
+        ("DELETE", "api_delete"),
+        ("LIST", "api_list"),
+        ("list", "api_list"),
+        (" list  ", "api_list"),
+        ("HEAD", "query"),
+    ],
+)
 @pytest.mark.parametrize(
     "payload", [None, pytest.param({"data": {"foo": "bar"}}, id="with_payload")]
 )
-def test_query(query, method, payload):
+def test_query(method, target, payload):
     """
-    Ensure query wraps the utility function properly
+    Ensure query dispatches standard verbs as logical operations via the
+    corresponding utility functions and passes other methods through literally
     """
-    query.return_value = True
     endpoint = "test/endpoint"
-    res = vault.query(method, endpoint, payload=payload)
+    with patch(f"saltext.vault.utils.vault.{target}", autospec=True, return_value=True) as tgt:
+        res = vault.query(method, endpoint, payload=payload)
     assert res
-    query.assert_called_once_with(method, endpoint, opts=ANY, context=ANY, payload=payload)
+    if target == "query":
+        tgt.assert_called_once_with(method, endpoint, opts=ANY, context=ANY, payload=payload)
+    else:
+        tgt.assert_called_once_with(endpoint, opts=ANY, context=ANY, payload=payload)
 
 
 def test_query_raises_errors(query):
@@ -296,13 +313,21 @@ def test_query_raises_errors(query):
     with pytest.raises(
         salt.exceptions.CommandExecutionError, match=".*VaultPermissionDeniedError.*"
     ):
-        vault.query("GET", "test/endpoint")
+        vault.query("HEAD", "test/endpoint")
 
 
 @pytest.mark.parametrize(
     "func,kwargs,target",
     [
-        pytest.param("query", {"method": "GET", "endpoint": "test/endpoint"}, "query", id="query"),
+        pytest.param(
+            "query", {"method": "GET", "endpoint": "test/endpoint"}, "api_get", id="query"
+        ),
+        pytest.param(
+            "query",
+            {"method": "HEAD", "endpoint": "test/endpoint"},
+            "query",
+            id="query_passthrough",
+        ),
         pytest.param("get_server_config", {}, "get_authd_client", id="get_server_config"),
         pytest.param("clear_cache", {}, "clear_cache", id="clear_cache"),
         pytest.param("clear_token_cache", {}, "clear_cache", id="clear_token_cache"),
