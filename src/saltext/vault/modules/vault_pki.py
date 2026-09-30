@@ -113,7 +113,7 @@ def read_role(name, mount="pki"):
 
     endpoint = f"{mount}/roles/{name}"
     try:
-        res = vault.query("GET", endpoint, __opts__, __context__)
+        res = vault.api_get(endpoint, __opts__, __context__)
         return res["data"]
     except vault.VaultNotFoundError:
         return None
@@ -210,10 +210,10 @@ def write_role(
     """
 
     endpoint = f"{mount}/roles/{name}"
-    method = "POST"
+    api_write = vault.api_put
 
     if read_role(name, mount=mount) is not None:
-        method = "PATCH"
+        api_write = vault.api_patch
 
     payload = {k: v for k, v in kwargs.items() if not k.startswith("_")}
 
@@ -243,7 +243,7 @@ def write_role(
         payload["require_cn"] = require_cn
 
     try:
-        vault.query(method, endpoint, __opts__, __context__, payload=payload, safe_to_retry=True)
+        api_write(endpoint, __opts__, __context__, payload=payload, safe_to_retry=True)
         return True
     except vault.VaultUnsupportedOperationError as err:  # pragma: no cover
         raise CommandExecutionError(
@@ -283,7 +283,7 @@ def delete_role(name, mount="pki"):
     endpoint = f"{mount}/roles/{name}"
 
     try:
-        vault.query("DELETE", endpoint, __opts__, __context__)
+        vault.api_delete(endpoint, __opts__, __context__)
         return True
     except vault.VaultNotFoundError:
         return False
@@ -396,7 +396,7 @@ def read_issuer(ref="default", mount="pki"):
     endpoint = f"{mount}/issuer/{ref}"
 
     try:
-        return vault.query("GET", endpoint, __opts__, __context__, is_unauthd=True)["data"]
+        return vault.api_get(endpoint, __opts__, __context__, is_unauthd=True)["data"]
     except vault.VaultNotFoundError:
         return None
     except vault.VaultServerError as err:
@@ -527,8 +527,7 @@ def update_issuer(
             payload[param] = val
 
     try:
-        vault.query(
-            "PATCH",
+        vault.api_patch(
             endpoint,
             __opts__,
             __context__,
@@ -628,7 +627,7 @@ def set_default_issuer(name, mount="pki"):
     endpoint = f"{mount}/config/issuers"
     payload = {"default": name}
     try:
-        vault.query("POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True)
+        vault.api_put(endpoint, __opts__, __context__, payload=payload)
         return True
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
@@ -796,7 +795,7 @@ def generate_key(
         }
     )
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -1010,7 +1009,7 @@ def generate_root(
             payload["managed_key_id"] = managed_key_id
 
     try:
-        resp = vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+        resp = vault.api_post(endpoint, __opts__, __context__, payload=payload)["data"]
         ret = {
             "certificate": resp["certificate"],
             "issuer_id": resp["issuer_id"],
@@ -1162,7 +1161,7 @@ def generate_intermediate_csr(
         }
     )
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -1544,7 +1543,7 @@ def delete_key(ref, mount="pki"):
 
     endpoint = f"{mount}/key/{ref}"
     try:
-        vault.query("DELETE", endpoint, __opts__, __context__)
+        vault.api_delete(endpoint, __opts__, __context__)
         return True
     # Don't need to catch VaultNotFoundError, it's not thrown for missing key
     except vault.VaultException as err:
@@ -1591,7 +1590,7 @@ def delete_issuer(ref, mount="pki", include_key=False):
             key_id = issuer_info["key_id"]
 
     try:
-        vault.query("DELETE", endpoint, __opts__, __context__)
+        vault.api_delete(endpoint, __opts__, __context__)
         if key_id:
             delete_key(key_id, mount=mount)
         return True
@@ -1646,7 +1645,7 @@ def import_issuer_intermediate(cert, chain=None, mount="pki"):
         chain = [chain]
     payload = {"certificate": _x509v2("encode_certificate", cert, append_certs=chain)}
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -1711,7 +1710,7 @@ def import_issuer(cert, chain=None, private_key=None, private_key_passphrase=Non
     else:
         endpoint += "cert"
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -1760,9 +1759,7 @@ def read_issuer_crl(ref="default", mount="pki", delta=False):
     # Check if issuer can sign CRLs at all. If not,
     # there is no point to check for CRL as this throws error
     try:
-        issuer = vault.query(
-            "GET", f"{mount}/issuer/{ref}", __opts__, __context__, is_unauthd=False
-        )["data"]
+        issuer = vault.api_get(f"{mount}/issuer/{ref}", __opts__, __context__)["data"]
     except vault.VaultServerError as err:
         if "unable to find PKI issuer" in str(err):
             return None
@@ -1778,7 +1775,7 @@ def read_issuer_crl(ref="default", mount="pki", delta=False):
         endpoint = endpoint + "/delta"
 
     try:
-        return vault.query("GET", endpoint, __opts__, __context__, is_unauthd=True)["data"]["crl"]
+        return vault.api_get(endpoint, __opts__, __context__, is_unauthd=True)["data"]["crl"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -1884,7 +1881,7 @@ def read_certificate(serial, mount="pki"):
     endpoint = f"{mount}/cert/{serial}"
 
     try:
-        return vault.query("GET", endpoint, __opts__, __context__, is_unauthd=True)["data"][
+        return vault.api_get(endpoint, __opts__, __context__, is_unauthd=True)["data"][
             "certificate"
         ]
     except vault.VaultException as err:
@@ -1933,7 +1930,7 @@ def read_certificate_full(serial, mount="pki"):
     endpoint = f"{mount}/cert/{serial}"
 
     try:
-        data = vault.query("GET", endpoint, __opts__, __context__, is_unauthd=True)["data"]
+        data = vault.api_get(endpoint, __opts__, __context__, is_unauthd=True)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -2153,7 +2150,7 @@ def issue_certificate(
         payload["other_sans"] = ",".join(other_sans)
 
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -2450,7 +2447,7 @@ def sign_certificate(
     payload["csr"] = csr
 
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -2789,7 +2786,7 @@ def sign_intermediate(  # pylint: disable=too-many-locals
     payload["csr"] = csr
 
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -2869,7 +2866,7 @@ def revoke_certificate(
                 "encode_private_key", private_key, private_key_passphrase=private_key_passphrase
             )
 
-        vault.query("POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True)
+        vault.api_put(endpoint, __opts__, __context__, payload=payload)
         return True
     except vault.VaultInvocationError:
         return False
@@ -2904,7 +2901,7 @@ def read_urls(mount="pki"):
     endpoint = f"{mount}/config/urls"
 
     try:
-        return vault.query("GET", endpoint, __opts__, __context__)["data"]
+        return vault.api_get(endpoint, __opts__, __context__)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -2978,7 +2975,7 @@ def write_urls(
         raise CommandExecutionError("You need to specify at least one parameter.")
 
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -3012,7 +3009,7 @@ def read_cluster_config(mount="pki"):
     endpoint = f"{mount}/config/cluster"
 
     try:
-        return vault.query("GET", endpoint, __opts__, __context__)["data"]
+        return vault.api_get(endpoint, __opts__, __context__)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -3059,7 +3056,7 @@ def write_cluster_config(path=None, aia_path=None, mount="pki"):
     payload = hlp.filter_unset({"path": path, "aia_path": aia_path})
 
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 

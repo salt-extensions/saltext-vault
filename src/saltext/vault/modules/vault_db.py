@@ -79,7 +79,7 @@ def fetch_connection(name, mount="database"):
     """
     endpoint = f"{mount}/config/{name}"
     try:
-        return vault.query("GET", endpoint, __opts__, __context__)["data"]
+        return vault.api_get(endpoint, __opts__, __context__)["data"]
     except vault.VaultNotFoundError:
         return None
     except vault.VaultException as err:
@@ -189,7 +189,7 @@ def write_connection(
         payload["password_policy"] = password_policy
 
     try:
-        vault.query("POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True)
+        vault.api_put(endpoint, __opts__, __context__, payload=payload)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -218,7 +218,7 @@ def delete_connection(name, mount="database"):
     """
     endpoint = f"{mount}/config/{name}"
     try:
-        return vault.query("DELETE", endpoint, __opts__, __context__)
+        return vault.api_delete(endpoint, __opts__, __context__)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -243,7 +243,7 @@ def reset_connection(name, mount="database"):
     """
     endpoint = f"{mount}/reset/{name}"
     try:
-        return vault.query("POST", endpoint, __opts__, __context__)
+        return vault.api_post(endpoint, __opts__, __context__)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -273,7 +273,7 @@ def rotate_root(name, mount="database"):
     """
     endpoint = f"{mount}/rotate-root/{name}"
     try:
-        return vault.query("POST", endpoint, __opts__, __context__)
+        return vault.api_post(endpoint, __opts__, __context__)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -330,7 +330,7 @@ def fetch_role(name, static=False, mount="database"):
     """
     endpoint = f"{mount}/{'static-' if static else ''}roles/{name}"
     try:
-        return vault.query("GET", endpoint, __opts__, __context__)["data"]
+        return vault.api_get(endpoint, __opts__, __context__)["data"]
     except vault.VaultNotFoundError:
         return None
     except vault.VaultException as err:
@@ -527,9 +527,7 @@ def _write_role(
                 )
         payload["credential_config"] = credential_config
     try:
-        return vault.query(
-            "POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True
-        )
+        return vault.api_put(endpoint, __opts__, __context__, payload=payload)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -558,7 +556,7 @@ def delete_role(name, static=False, mount="database"):
     """
     endpoint = f"{mount}/{'static-' if static else ''}roles/{name}"
     try:
-        return vault.query("DELETE", endpoint, __opts__, __context__)
+        return vault.api_delete(endpoint, __opts__, __context__)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -703,7 +701,7 @@ def get_creds(
             return cached_creds.data
 
     try:
-        res = vault.query("GET", endpoint, __opts__, __context__)
+        res = vault.api_get(endpoint, __opts__, __context__)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -867,6 +865,6 @@ def rotate_static_role(name, mount="database"):
     """
     endpoint = f"{mount}/rotate-role/{name}"
     try:
-        return vault.query("POST", endpoint, __opts__, __context__)
+        return vault.api_post(endpoint, __opts__, __context__)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err

@@ -50,7 +50,7 @@ def _list_all_filtered(
     if version is not None:
         version = version.lstrip("v")
     try:
-        res = vault.query("GET", "sys/plugins/catalog", __opts__, __context__)["data"]
+        res = vault.api_get("sys/plugins/catalog", __opts__, __context__)["data"]
     except SaltException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
     return [
@@ -74,9 +74,7 @@ def _list_pins_filtered(plugin_type=None, name=None, glob=False):
     if plugin_type is not None:
         plugin_type = _check_type(plugin_type)
     try:
-        res = vault.query("GET", "sys/plugins/pins", __opts__, __context__)["data"][
-            "pinned_versions"
-        ]
+        res = vault.api_get("sys/plugins/pins", __opts__, __context__)["data"]["pinned_versions"]
     except SaltException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
     return [
@@ -248,7 +246,7 @@ def pinned_version(plugin_type, name):
     """
     plugin_type = _check_type(plugin_type)
     try:
-        return vault.query("get", f"sys/plugins/pins/{plugin_type}/{name}", __opts__, __context__)[
+        return vault.api_get(f"sys/plugins/pins/{plugin_type}/{name}", __opts__, __context__)[
             "data"
         ]["version"]
     except vault.VaultNotFoundError:
@@ -304,8 +302,8 @@ def pin(plugin_type, name, version, now=False, now_globally=False):
     plugin_type = _check_type(plugin_type)
     payload = {"version": version}
     try:
-        vault.query(
-            "POST", f"sys/plugins/pins/{plugin_type}/{name}", __opts__, __context__, payload=payload
+        vault.api_post(
+            f"sys/plugins/pins/{plugin_type}/{name}", __opts__, __context__, payload=payload
         )
     except SaltException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
@@ -358,7 +356,7 @@ def unpin(plugin_type, name, now=False, now_globally=False):
     """
     plugin_type = _check_type(plugin_type)
     try:
-        vault.query("DELETE", f"sys/plugins/pins/{plugin_type}/{name}", __opts__, __context__)
+        vault.api_delete(f"sys/plugins/pins/{plugin_type}/{name}", __opts__, __context__)
     except SaltException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
     if not now:
@@ -408,8 +406,7 @@ def get_config(plugin_type, name, version=None):
     plugin_type = _check_type(plugin_type)
     endpoint = f"sys/plugins/catalog/{plugin_type}/{name}"
     try:
-        ret = vault.query(
-            "GET",
+        ret = vault.api_get(
             endpoint,
             __opts__,
             __context__,
@@ -454,8 +451,7 @@ def get_config(plugin_type, name, version=None):
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
     try:
-        return vault.query(
-            "GET",
+        return vault.api_get(
             endpoint,
             __opts__,
             __context__,
@@ -565,8 +561,7 @@ def register(
     if download:
         payload["download"] = True
     try:
-        vault.query(
-            "POST",
+        vault.api_post(
             f"sys/plugins/catalog/{plugin_type}/{name}",
             __opts__,
             __context__,
@@ -607,8 +602,7 @@ def deregister(plugin_type, name, version=None):
     plugin_type = _check_type(plugin_type)
     endpoint = f"sys/plugins/catalog/{plugin_type}/{name}"
     try:
-        vault.query(
-            "DELETE",
+        vault.api_delete(
             endpoint,
             __opts__,
             __context__,
@@ -659,8 +653,7 @@ def reload(plugin_type, name, globally=False):
     if globally:
         payload["scope"] = "global"
     try:
-        ret = vault.query(
-            "post",
+        ret = vault.api_post(
             f"sys/plugins/reload/{plugin_type}/{name}",
             __opts__,
             __context__,
@@ -704,7 +697,7 @@ def reload_named(name, globally=False):
     if globally:
         payload["scope"] = "global"
     try:
-        res = vault.query("POST", endpoint, __opts__, __context__, payload=payload)
+        res = vault.api_post(endpoint, __opts__, __context__, payload=payload)
     except vault.VaultInvocationError as err:
         # Make OpenBao behave the same as Vault
         if "plugin not found in the catalog" not in str(err):
@@ -751,7 +744,7 @@ def reload_mounts(mounts, globally=False):
     if globally:
         payload["scope"] = "global"
     try:
-        ret = vault.query("POST", endpoint, __opts__, __context__, payload=payload)
+        ret = vault.api_post(endpoint, __opts__, __context__, payload=payload)
     except SaltException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 

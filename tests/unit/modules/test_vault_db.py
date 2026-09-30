@@ -9,7 +9,11 @@ from saltext.vault.modules import vault_db
 from saltext.vault.utils import vault
 
 # pylint: disable=unused-import
+from tests.unit.fixtures.vault import api_delete
+from tests.unit.fixtures.vault import api_get
 from tests.unit.fixtures.vault import api_list
+from tests.unit.fixtures.vault import api_post
+from tests.unit.fixtures.vault import api_put
 from tests.unit.fixtures.vault import query
 
 # pylint: enable=unused-import
@@ -60,8 +64,12 @@ def _conn_absent():
         pytest.param("rotate_static_role", {"name": "foo"}, id="rotate_static_role"),
     ),
 )
-def test_func_converts_errors(func, kwargs, query, api_list, request):
-    query.side_effect = api_list.side_effect = vault.VaultException("booh")
+def test_func_converts_errors(
+    func, kwargs, query, api_get, api_list, api_post, api_put, api_delete, request
+):
+    query.side_effect = api_get.side_effect = api_list.side_effect = api_post.side_effect = (
+        api_put.side_effect
+    ) = api_delete.side_effect = vault.VaultException("booh")
     if func == "write_connection":
         # otherwise we would test fetch_connection again
         request.getfixturevalue("_conn_absent")
@@ -69,11 +77,11 @@ def test_func_converts_errors(func, kwargs, query, api_list, request):
         getattr(vault_db, func)(**kwargs)
 
 
-@pytest.mark.usefixtures("_conn_absent")
+@pytest.mark.usefixtures("_conn_absent", "api_put", "api_post")
 @pytest.mark.parametrize("plugin", ("mysql", "custom"))
 def test_write_connection_missing_kwargs(plugin):
     if plugin == "custom":
-        ctx = patch("saltext.vault.utils.vault.query", autospec=True)
+        ctx = contextlib.nullcontext()
     else:
         ctx = pytest.raises(SaltInvocationError, match="requires.*additional.*connection_url")
     with ctx:
@@ -81,7 +89,7 @@ def test_write_connection_missing_kwargs(plugin):
 
 
 @pytest.mark.usefixtures("_conn_absent")
-def test_write_connection_payload(query):
+def test_write_connection_payload(api_put):
     kwargs = {
         "version": "1.2.3",
         "verify": True,
@@ -91,8 +99,8 @@ def test_write_connection_payload(query):
         "custom_arg": True,
     }
     assert vault_db.write_connection("foo", "custom", **kwargs, rotate=False, mount="bar") is True
-    endpoint = query.call_args[0][1]
-    payload = query.call_args[1]["payload"]
+    endpoint = api_put.call_args[0][0]
+    payload = api_put.call_args[1]["payload"]
     assert endpoint == "bar/config/foo"
     expected_payload = kwargs.copy()
     expected_payload["plugin_name"] = "custom-database-plugin"
@@ -103,14 +111,15 @@ def test_write_connection_payload(query):
 
 @pytest.mark.usefixtures("_conn_absent")
 @pytest.mark.parametrize("rotate", (False, True))
-def test_write_connection_rotate(query, rotate):
+def test_write_connection_rotate(api_put, api_post, rotate):
     vault_db.write_connection("foo", "custom", rotate=rotate)
-    endpoint = query.call_args[0][1]
-    assert (endpoint == "database/config/foo") is not rotate
-    assert (endpoint == "database/rotate-root/foo") is rotate
+    assert api_put.call_args[0][0] == "database/config/foo"
+    assert api_post.called is rotate
+    if rotate:
+        assert api_post.call_args[0][0] == "database/rotate-root/foo"
 
 
-def test_write_static_role_payload(query):
+def test_write_static_role_payload(api_put):
     kwargs = {
         "rotation_period": 42,
         "rotation_statements": ["rotate!"],
@@ -118,8 +127,8 @@ def test_write_static_role_payload(query):
         "credential_config": {"password_policy": "yolo"},
     }
     assert vault_db.write_static_role("role", "conn", "user", **kwargs, mount="mount") is True
-    endpoint = query.call_args[0][1]
-    payload = query.call_args[1]["payload"]
+    endpoint = api_put.call_args[0][0]
+    payload = api_put.call_args[1]["payload"]
     assert endpoint == "mount/static-roles/role"
     expected_payload = kwargs.copy()
     expected_payload["username"] = "user"
@@ -127,7 +136,7 @@ def test_write_static_role_payload(query):
     assert payload == expected_payload
 
 
-def test_write_role_payload(query):
+def test_write_role_payload(api_put):
     kwargs = {
         "creation_statements": ["cogito ergo sum"],
         "default_ttl": 42,
@@ -139,8 +148,8 @@ def test_write_role_payload(query):
         "credential_config": {"key_bits": 1},
     }
     assert vault_db.write_role("role", "conn", **kwargs, mount="mount") is True
-    endpoint = query.call_args[0][1]
-    payload = query.call_args[1]["payload"]
+    endpoint = api_put.call_args[0][0]
+    payload = api_put.call_args[1]["payload"]
     assert endpoint == "mount/roles/role"
     expected_payload = kwargs.copy()
     expected_payload["db_name"] = "conn"
@@ -165,7 +174,7 @@ def test_write_role_payload(query):
         pytest.param("unknown", {"something": "else"}, True, id="unknown_type_unvalidated"),
     ),
 )
-@pytest.mark.usefixtures("query")
+@pytest.mark.usefixtures("api_put")
 def test_write_role_credential_type_param_verification(typ, vals, expected):
     if expected:
         ctx = contextlib.nullcontext()

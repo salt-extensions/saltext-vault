@@ -635,7 +635,7 @@ def policy_fetch(policy):
     endpoint = f"sys/policy/{policy}"
 
     try:
-        data = vault.query("GET", endpoint, __opts__, __context__)
+        data = vault.api_get(endpoint, __opts__, __context__)
         return data["rules"]
 
     except vault.VaultNotFoundError:
@@ -673,9 +673,7 @@ def policy_write(policy, rules):
     endpoint = f"sys/policy/{policy}"
     payload = {"policy": rules}
     try:
-        return vault.query(
-            "POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True
-        )
+        return vault.api_put(endpoint, __opts__, __context__, payload=payload)
     except SaltException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -706,7 +704,7 @@ def policy_delete(policy):
     endpoint = f"sys/policy/{policy}"
 
     try:
-        return vault.query("DELETE", endpoint, __opts__, __context__)
+        return vault.api_delete(endpoint, __opts__, __context__)
     except vault.VaultNotFoundError:
         return False
     except SaltException as err:
@@ -734,7 +732,7 @@ def policies_list():
         }
     """
     try:
-        return vault.query("GET", "sys/policy", __opts__, __context__)["policies"]
+        return vault.api_get("sys/policy", __opts__, __context__)["policies"]
     except SaltException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 

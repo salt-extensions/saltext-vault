@@ -15,7 +15,12 @@ import saltext.vault.utils.vault as vaultutil
 from saltext.vault.modules import vault_pki
 
 # pylint: disable=unused-import
+from tests.unit.fixtures.vault import api_delete
+from tests.unit.fixtures.vault import api_get
 from tests.unit.fixtures.vault import api_list
+from tests.unit.fixtures.vault import api_patch
+from tests.unit.fixtures.vault import api_post
+from tests.unit.fixtures.vault import api_put
 from tests.unit.fixtures.vault import data
 
 # pylint: enable=unused-import
@@ -59,10 +64,12 @@ def data_roles_list():
 
 
 @pytest.fixture
-def role_not_found(query, api_list):
-    query.side_effect = vaultutil.VaultNotFoundError
+def role_not_found(api_get, api_list, api_put, api_delete):
+    api_get.side_effect = vaultutil.VaultNotFoundError
     api_list.side_effect = vaultutil.VaultNotFoundError
-    yield query
+    api_put.side_effect = vaultutil.VaultNotFoundError
+    api_delete.side_effect = vaultutil.VaultNotFoundError
+    yield api_get
 
 
 @pytest.fixture
@@ -72,22 +79,9 @@ def list_roles(api_list, data_roles_list):
 
 
 @pytest.fixture
-def read_role(data_role, role_name):
-    with patch("saltext.vault.utils.vault.query", autospec=True) as _data:
-        _data.return_value = data_role[role_name]
-        yield _data
-
-
-# @pytest.fixture
-# def delete_role():
-#     with patch("saltext.vault.utils.vault.query", autospec=True) as delete_role:
-#         yield delete_role
-
-
-@pytest.fixture
-def query():
-    with patch("saltext.vault.utils.vault.query", autospec=True) as _query:
-        yield _query
+def read_role(data_role, role_name, api_get):
+    api_get.return_value = data_role[role_name]
+    return api_get
 
 
 @pytest.fixture
@@ -162,8 +156,12 @@ def _x509v2_mock():
         ),
     ),
 )
-def test_func_converts_errors(func, kwargs, query, api_list, request):
-    query.side_effect = api_list.side_effect = vaultutil.VaultException("booh")
+def test_func_converts_errors(
+    func, kwargs, api_get, api_list, api_post, api_put, api_patch, api_delete, request
+):
+    err = vaultutil.VaultException("booh")
+    api_get.side_effect = api_list.side_effect = api_post.side_effect = err
+    api_put.side_effect = api_patch.side_effect = api_delete.side_effect = err
     if func == "write_role":
         # otherwise we would test read_role again
         request.getfixturevalue("_role_absent")
@@ -174,8 +172,8 @@ def test_func_converts_errors(func, kwargs, query, api_list, request):
         getattr(vault_pki, func)(**kwargs)
 
 
-def test_read_issuer_converts_server_errors(query):
-    query.side_effect = vaultutil.VaultServerError("booh")
+def test_read_issuer_converts_server_errors(api_get):
+    api_get.side_effect = vaultutil.VaultServerError("booh")
     with pytest.raises(CommandExecutionError, match="booh"):
         vault_pki.read_issuer("foo")
 
@@ -190,8 +188,8 @@ def test_read_issuer_converts_server_errors(query):
         pytest.param(vaultutil.VaultServerError("booh"), id="server_error"),
     ),
 )
-def test_read_issuer_crl_converts_all_errors(query, side_effect):
-    query.side_effect = side_effect
+def test_read_issuer_crl_converts_all_errors(api_get, side_effect):
+    api_get.side_effect = side_effect
     with pytest.raises(CommandExecutionError, match="booh"):
         vault_pki.read_issuer_crl()
 
@@ -207,10 +205,10 @@ def test_read_issuer_crl_converts_all_errors(query, side_effect):
         ),
     ),
 )
-def test_sign_certificate_requires_exactly_one_of_csr_private_key(query, kwargs, match):
+def test_sign_certificate_requires_exactly_one_of_csr_private_key(api_post, kwargs, match):
     with pytest.raises(SaltInvocationError, match=match):
         vault_pki.sign_certificate("role", "example.com", **kwargs)
-    query.assert_not_called()
+    api_post.assert_not_called()
 
 
 @pytest.fixture
@@ -228,13 +226,14 @@ def create_csr_othername_failure():
 
 @pytest.mark.usefixtures("create_csr_othername_failure")
 @pytest.mark.parametrize("sign_verbatim", (False, True))
-def test_sign_certificate_othername_sans_fallback(query, sign_verbatim):
+def test_sign_certificate_othername_sans_fallback(api_post, sign_verbatim):
     """
     When the salt-native CSR creation does not support otherName SANs,
     the module checks whether we're signing verbatim or not.
     The latter also takes SANs from request parameters, even when
     the role does not disable use_csr_sans, when the CSR misses them.
     """
+    api_post.return_value = {"data": {}}
     vault_pki.sign_certificate(
         "role",
         "example.com",
@@ -242,7 +241,7 @@ def test_sign_certificate_othername_sans_fallback(query, sign_verbatim):
         alt_names={"1.3.6.1.4.1.311.20.2.3": "user@example.com"},
         sign_verbatim=sign_verbatim,
     )
-    payload = query.call_args[1]["payload"]
+    payload = api_post.call_args[1]["payload"]
     assert "csr" in payload
     assert "without SANs" in payload["csr"]
 
@@ -271,8 +270,9 @@ def test_read_role(role_name, expected):
     assert ret == expected
 
 
+@pytest.mark.usefixtures("_role_absent")
 @pytest.mark.parametrize("issuer", [None, "default", "someother"])
-def test_write_role_payload(query, issuer):
+def test_write_role_payload(api_put, issuer):
     args = {
         "ttl": "300h",
         "max_ttl": "360h",
@@ -285,8 +285,8 @@ def test_write_role_payload(query, issuer):
     }
 
     assert vault_pki.write_role("role", mount="mount", issuer_ref=issuer, **args) is True
-    endpoint = query.call_args[0][1]
-    payload = query.call_args[1]["payload"]
+    endpoint = api_put.call_args[0][0]
+    payload = api_put.call_args[1]["payload"]
     assert endpoint == "mount/roles/role"
     expected_payload = args.copy()
     if issuer is not None:
@@ -294,9 +294,9 @@ def test_write_role_payload(query, issuer):
     assert payload == expected_payload
 
 
-def test_delete_role_payload(query):
+def test_delete_role_payload(api_delete):
     assert vault_pki.delete_role("role", mount="mount") is True
-    endpoint = query.call_args[0][1]
+    endpoint = api_delete.call_args[0][0]
     assert endpoint == "mount/roles/role"
 
 
@@ -351,11 +351,19 @@ def test_list_roles_return_empty_array_if_not_found():
         pytest.param("root_ca", "internal", {}, id="internal_defaults"),
     ],
 )
-def test_generate_root_payload(query, common_name, root_type, kwargs):
+def test_generate_root_payload(api_post, common_name, root_type, kwargs):
+    api_post.return_value = {
+        "data": {
+            "certificate": "cert",
+            "issuer_id": "issuer",
+            "key_id": "key",
+            "private_key": "priv",
+        }
+    }
     vault_pki.generate_root(common_name=common_name, key_type=root_type, mount="mount", **kwargs)
 
-    endpoint = query.call_args[0][1]
-    payload = query.call_args[1]["payload"]
+    endpoint = api_post.call_args[0][0]
+    payload = api_post.call_args[1]["payload"]
     assert endpoint == f"mount/root/generate/{root_type}"
     expected_payload = payload.copy()
     expected_payload["common_name"] = common_name
@@ -478,8 +486,9 @@ def test_generate_root_raise_err_with_default_name():
     ),
 )
 def test_sign_intermediate_warnings(
-    query, caplog, kwargs, msg, csr, verbatim, exp, missing, _x509v2_mock
+    api_post, caplog, kwargs, msg, csr, verbatim, exp, missing, _x509v2_mock
 ):
+    api_post.return_value = {"data": {}}
     if csr:
         kwargs["csr"] = "csr"
     else:
@@ -491,18 +500,17 @@ def test_sign_intermediate_warnings(
         assert msg in caplog.text
     if exp:
         if csr:
-            args = query.call_args[1]["payload"]
+            args = api_post.call_args[1]["payload"]
         else:
             args = _x509v2_mock.call_args[1]
         for param, val in exp.items():
             assert param in args
             assert args[param] == val
     if missing:
-        args = query.call_args[1]["payload"]
+        args = api_post.call_args[1]["payload"]
         assert not set(args).intersection(missing)
 
 
-@pytest.mark.usefixtures("query")
 @pytest.mark.parametrize(
     "kwargs,exp",
     (
@@ -516,7 +524,8 @@ def test_sign_intermediate_warnings(
         pytest.param({"SERIALNUMBER": "foo"}, "2.5.4.5=foo", id="serialnumber"),
     ),
 )
-def test_sign_intermediate_fallback(kwargs, exp, _x509v2_mock):
+def test_sign_intermediate_fallback(api_post, kwargs, exp, _x509v2_mock):
+    api_post.return_value = {"data": {}}
     vault_pki.sign_intermediate(private_key="pk", sign_verbatim=True, **kwargs)
     args = _x509v2_mock.call_args[1]
     assert "subject" in args
@@ -597,10 +606,10 @@ def _issuer_entry(cert, parent=None, revoked=False):
     return entry
 
 
-def _mock_pki_query(query, api_list, cert_data, issuers=None, default=None):
+def _mock_pki_query(api_get, api_list, cert_data, issuers=None, default=None):
     issuers = issuers or {}
 
-    def _dispatch(_method, endpoint, *_args, **_kwargs):
+    def _dispatch(endpoint, *_args, **_kwargs):
         if endpoint.startswith("pki/cert/"):
             return {"data": cert_data}
         if endpoint == "pki/issuers":
@@ -614,18 +623,15 @@ def _mock_pki_query(query, api_list, cert_data, issuers=None, default=None):
             return {"data": {"issuer_id": ref, **issuers[ref]}}
         raise AssertionError(f"unexpected endpoint: {endpoint}")
 
-    query.side_effect = _dispatch
-    api_list.side_effect = lambda endpoint, *args, **kwargs: _dispatch(
-        "LIST", endpoint, *args, **kwargs
-    )
+    api_get.side_effect = api_list.side_effect = _dispatch
 
 
-def test_read_certificate_full_resolves_issuer_via_aki(query, api_list, pki):
+def test_read_certificate_full_resolves_issuer_via_aki(api_get, api_list, pki):
     # a stale ca_chain in the certificate read response is replaced with the
     # resolved issuer's chain and a missing trailing newline is restored
     cert_data = {"certificate": pki["leaf"].rstrip("\n"), "ca_chain": ["stale"]}
     _mock_pki_query(
-        query,
+        api_get,
         api_list,
         cert_data,
         issuers={
@@ -638,13 +644,13 @@ def test_read_certificate_full_resolves_issuer_via_aki(query, api_list, pki):
 
     assert ret["certificate"] == pki["leaf"]
     assert ret["ca_chain"] == [pki["int_a"], pki["root_a"]]
-    assert query.call_args_list[0][0][1] == "pki/cert/00:11:22"
+    assert api_get.call_args_list[0][0][0] == "pki/cert/00:11:22"
 
 
-def test_read_certificate_full_prefers_issuer_id(query):
+def test_read_certificate_full_prefers_issuer_id(api_get):
     certificate = "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
     issuer = "-----BEGIN CERTIFICATE-----\nissuer\n-----END CERTIFICATE-----\n"
-    query.side_effect = [
+    api_get.side_effect = [
         {"data": {"certificate": certificate, "issuer_id": "abc-123"}},
         {"data": {"certificate": issuer, "ca_chain": [issuer]}},
     ]
@@ -652,11 +658,11 @@ def test_read_certificate_full_prefers_issuer_id(query):
     ret = vault_pki.read_certificate_full("00:11:22", mount="mount")
 
     assert ret["ca_chain"] == [issuer]
-    assert query.call_args_list[1][0][1] == "mount/issuer/abc-123"
+    assert api_get.call_args_list[1][0][0] == "mount/issuer/abc-123"
 
 
-def test_read_certificate_full_fallback_issuer_missing(query, pki):
-    query.side_effect = [
+def test_read_certificate_full_fallback_issuer_missing(api_get, pki):
+    api_get.side_effect = [
         {"data": {"certificate": pki["leaf"], "issuer_id": "abc-123"}},
         vaultutil.VaultNotFoundError(),
     ]
@@ -665,10 +671,10 @@ def test_read_certificate_full_fallback_issuer_missing(query, pki):
         vault_pki.read_certificate_full("00:11:22")
 
 
-def test_read_certificate_full_issuer_undeterminable(query, api_list, pki):
+def test_read_certificate_full_issuer_undeterminable(api_get, api_list, pki):
     # no configured issuer matches the leaf's AKI: no fallback to default
     _mock_pki_query(
-        query,
+        api_get,
         api_list,
         {"certificate": pki["leaf"]},
         issuers={"root-b": _issuer_entry(pki["root_b"])},
@@ -678,11 +684,11 @@ def test_read_certificate_full_issuer_undeterminable(query, api_list, pki):
         vault_pki.read_certificate_full("00:11:22")
 
 
-def test_read_certificate_full_cross_signed_prefers_unrevoked(query, api_list, pki):
+def test_read_certificate_full_cross_signed_prefers_unrevoked(api_get, api_list, pki):
     # both cross-signed entries match the leaf's AKI, but one is revoked;
     # the valid sibling must win, even when the revoked one is the default
     _mock_pki_query(
-        query,
+        api_get,
         api_list,
         {"certificate": pki["leaf"]},
         issuers={
@@ -697,9 +703,9 @@ def test_read_certificate_full_cross_signed_prefers_unrevoked(query, api_list, p
     assert ret["ca_chain"] == [pki["int_b"], pki["root_b"]]
 
 
-def test_read_certificate_full_cross_signed_prefers_unexpired(query, api_list, pki):
+def test_read_certificate_full_cross_signed_prefers_unexpired(api_get, api_list, pki):
     _mock_pki_query(
-        query,
+        api_get,
         api_list,
         {"certificate": pki["leaf"]},
         issuers={
@@ -716,10 +722,10 @@ def test_read_certificate_full_cross_signed_prefers_unexpired(query, api_list, p
 
 @pytest.mark.parametrize("default", ["int-a", "int-b"])
 def test_read_certificate_full_cross_signed_tie_break_via_default_issuer(
-    query, api_list, pki, default
+    api_get, api_list, pki, default
 ):
     _mock_pki_query(
-        query,
+        api_get,
         api_list,
         {"certificate": pki["leaf"]},
         issuers={
@@ -735,10 +741,10 @@ def test_read_certificate_full_cross_signed_tie_break_via_default_issuer(
     assert ret["ca_chain"][1] == expected_root
 
 
-def test_read_certificate_full_all_candidates_revoked_still_returns_chain(query, api_list, pki):
+def test_read_certificate_full_all_candidates_revoked_still_returns_chain(api_get, api_list, pki):
     # revoked issuers are only deprioritized, never filtered to nothing
     _mock_pki_query(
-        query,
+        api_get,
         api_list,
         {"certificate": pki["leaf"]},
         issuers={
@@ -753,11 +759,11 @@ def test_read_certificate_full_all_candidates_revoked_still_returns_chain(query,
     assert ret["ca_chain"] == [pki["int_b"], pki["root_b"]]
 
 
-def test_read_certificate_full_forged_ski_is_rejected(query, api_list, pki):
+def test_read_certificate_full_forged_ski_is_rejected(api_get, api_list, pki):
     # SKI matching alone is insufficient: an issuer carrying the true
     # intermediate's SKI but a different key must fail signature verification
     _mock_pki_query(
-        query,
+        api_get,
         api_list,
         {"certificate": pki["leaf"]},
         issuers={
@@ -772,9 +778,9 @@ def test_read_certificate_full_forged_ski_is_rejected(query, api_list, pki):
     assert ret["ca_chain"] == [pki["int_b"], pki["root_b"]]
 
 
-def test_read_certificate_full_returns_existing_bundle(query, pki):
+def test_read_certificate_full_returns_existing_bundle(api_get, pki):
     bundle = pki["leaf"] + pki["int_a"] + pki["root_a"]
-    query.side_effect = [
+    api_get.side_effect = [
         {"data": {"certificate": bundle, "issuer_id": "int-a"}},
         {"data": {"certificate": pki["int_a"], "ca_chain": [pki["int_a"], pki["root_a"]]}},
     ]

@@ -59,14 +59,14 @@ def _read_denied(*endpoints):
     Simulate a policy denying read access to specific endpoint prefixes
     by patching the shared query helper.
     """
-    real_query = vaultutil.query
+    real_get = vaultutil.api_get
 
-    def query(method, endpoint, *args, **kwargs):
-        if method == "GET" and endpoint.startswith(endpoints):
+    def _get(endpoint, *args, **kwargs):
+        if endpoint.startswith(endpoints):
             raise vaultutil.VaultPermissionDeniedError("permission denied")
-        return real_query(method, endpoint, *args, **kwargs)
+        return real_get(endpoint, *args, **kwargs)
 
-    with patch("saltext.vault.utils.vault.query", query):
+    with patch("saltext.vault.utils.vault.api_get", _get):
         yield
 
 

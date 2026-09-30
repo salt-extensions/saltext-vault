@@ -10,8 +10,10 @@ from saltext.vault.modules import vault_gpg
 from saltext.vault.utils import vault
 
 # pylint: disable=unused-import
+from tests.unit.fixtures.vault import api_delete
+from tests.unit.fixtures.vault import api_get
 from tests.unit.fixtures.vault import api_list
-from tests.unit.fixtures.vault import query
+from tests.unit.fixtures.vault import api_post
 
 # pylint: enable=unused-import
 
@@ -43,27 +45,29 @@ def configure_loader_modules():
         ),
     ),
 )
-def test_func_converts_errors(func, kwargs, query, api_list):
-    query.side_effect = api_list.side_effect = vault.VaultException("booh")
+def test_func_converts_errors(func, kwargs, api_get, api_list, api_post, api_delete):
+    api_get.side_effect = api_list.side_effect = api_post.side_effect = api_delete.side_effect = (
+        vault.VaultException("booh")
+    )
     with pytest.raises(CommandExecutionError, match="booh"):
         getattr(vault_gpg, func)(**kwargs)
 
 
-def test_sign_algorithm_endpoint_fallback_converts_errors(query):
+def test_sign_algorithm_endpoint_fallback_converts_errors(api_post):
     """
     When signing is denied, possibly because the policy only allows the
     algorithm-specific endpoint, the request is retried against it.
     Ensure errors of this backup query are converted as well.
     """
-    query.side_effect = (
+    api_post.side_effect = (
         vault.VaultPermissionDeniedError("nope"),
         vault.VaultException("booh"),
     )
     with pytest.raises(CommandExecutionError, match="booh"):
         vault_gpg.sign("foo", message="hello", algorithm="sha2-512")
-    assert query.call_count == 2
-    assert query.call_args[0][1] == "gpg/sign/foo/sha2-512"
-    assert "algorithm" not in query.call_args[1]["payload"]
+    assert api_post.call_count == 2
+    assert api_post.call_args[0][0] == "gpg/sign/foo/sha2-512"
+    assert "algorithm" not in api_post.call_args[1]["payload"]
 
 
 @pytest.mark.parametrize(
@@ -75,8 +79,8 @@ def test_sign_algorithm_endpoint_fallback_converts_errors(query):
         ),
     ),
 )
-def test_export_key_gnupg_import_failure(func, query_return, query):
-    query.return_value = query_return
+def test_export_key_gnupg_import_failure(func, query_return, api_get):
+    api_get.return_value = query_return
     gpg_import = MagicMock(return_value={"res": False, "message": "booh"})
     with patch.dict(vault_gpg.__salt__, {"gpg.import_key": gpg_import}):
         with pytest.raises(CommandExecutionError, match="booh"):
