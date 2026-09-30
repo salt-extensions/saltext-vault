@@ -46,9 +46,43 @@ def query():
 
 
 @pytest.fixture
+def api_get():
+    with patch("saltext.vault.utils.vault.api_get", return_value=True, autospec=True) as _api_get:
+        yield _api_get
+
+
+@pytest.fixture
 def api_list():
     with patch("saltext.vault.utils.vault.api_list", return_value=True, autospec=True) as _api_list:
         yield _api_list
+
+
+@pytest.fixture
+def api_post():
+    with patch("saltext.vault.utils.vault.api_post", return_value=True, autospec=True) as _api_post:
+        yield _api_post
+
+
+@pytest.fixture
+def api_put():
+    with patch("saltext.vault.utils.vault.api_put", return_value=True, autospec=True) as _api_put:
+        yield _api_put
+
+
+@pytest.fixture
+def api_patch():
+    with patch(
+        "saltext.vault.utils.vault.api_patch", return_value=True, autospec=True
+    ) as _api_patch:
+        yield _api_patch
+
+
+@pytest.fixture
+def api_delete():
+    with patch(
+        "saltext.vault.utils.vault.api_delete", return_value=True, autospec=True
+    ) as _api_delete:
+        yield _api_delete
 
 
 @pytest.fixture

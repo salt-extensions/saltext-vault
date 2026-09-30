@@ -73,7 +73,7 @@ def read_role(name, mount="ssh"):
         Defaults to ``ssh``.
     """
     try:
-        return vault.query("GET", f"{mount}/roles/{name}", __opts__, __context__)["data"]
+        return vault.api_get(f"{mount}/roles/{name}", __opts__, __context__)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -361,9 +361,7 @@ def _write_role(name, key_type, mount="ssh", **kwargs):
         elif val is not None:
             payload[param] = val
     try:
-        return vault.query(
-            "POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True
-        )
+        return vault.api_put(endpoint, __opts__, __context__, payload=payload)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -394,7 +392,7 @@ def delete_role(name, mount="ssh"):
         Defaults to ``ssh``.
     """
     try:
-        return vault.query("DELETE", f"{mount}/roles/{name}", __opts__, __context__)
+        return vault.api_delete(f"{mount}/roles/{name}", __opts__, __context__)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -463,9 +461,7 @@ def list_roles_ip(address, mount="ssh"):
     endpoint = f"{mount}/lookup"
     payload = {"ip": address}
     try:
-        res = vault.query(
-            "POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True
-        )
+        res = vault.api_put(endpoint, __opts__, __context__, payload=payload)
         # Recent versions return null instead of an error when no roles matched
         return res["data"].get("roles") or []
     except vault.VaultInvocationError as err:
@@ -501,9 +497,7 @@ def list_roles_zeroaddr(mount="ssh"):
         Defaults to ``ssh``.
     """
     try:
-        return vault.query("GET", f"{mount}/config/zeroaddress", __opts__, __context__)["data"][
-            "roles"
-        ]
+        return vault.api_get(f"{mount}/config/zeroaddress", __opts__, __context__)["data"]["roles"]
     except vault.VaultNotFoundError:
         return []
     except vault.VaultException as err:
@@ -539,9 +533,7 @@ def write_zeroaddr_roles(roles, mount="ssh"):
     endpoint = f"{mount}/config/zeroaddress"
     payload = {"roles": roles}
     try:
-        return vault.query(
-            "POST", endpoint, __opts__, __context__, payload=payload, safe_to_retry=True
-        )
+        return vault.api_put(endpoint, __opts__, __context__, payload=payload)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -570,7 +562,7 @@ def delete_zeroaddr_roles(mount="ssh"):
         Defaults to ``ssh``.
     """
     try:
-        return vault.query("DELETE", f"{mount}/config/zeroaddress", __opts__, __context__)
+        return vault.api_delete(f"{mount}/config/zeroaddress", __opts__, __context__)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -613,7 +605,7 @@ def get_creds(name, address, username="", mount="ssh"):
     payload = {"ip": address, "username": username}
     # TODO: cache lease!
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -687,7 +679,7 @@ def create_ca(
         }
 
     try:
-        res = vault.query("POST", endpoint, __opts__, __context__, payload=payload)
+        res = vault.api_post(endpoint, __opts__, __context__, payload=payload)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
     try:
@@ -720,7 +712,7 @@ def destroy_ca(mount="ssh"):
         Defaults to ``ssh``.
     """
     try:
-        return vault.query("DELETE", f"{mount}/config/ca", __opts__, __context__)
+        return vault.api_delete(f"{mount}/config/ca", __opts__, __context__)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -750,7 +742,7 @@ def read_ca(mount="ssh"):
         Defaults to ``ssh``.
     """
     try:
-        return vault.query("GET", f"{mount}/config/ca", __opts__, __context__)["data"]["public_key"]
+        return vault.api_get(f"{mount}/config/ca", __opts__, __context__)["data"]["public_key"]
     except vault.VaultPermissionDeniedError:
         log.info("Permission denied for the authenticated endpoint, trying unauthenticated one")
     except vault.VaultException as err:
@@ -862,7 +854,7 @@ def sign_key(
             }
 
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -964,7 +956,7 @@ def generate_key_cert(
             }
 
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 

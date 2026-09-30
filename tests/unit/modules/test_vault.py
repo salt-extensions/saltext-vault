@@ -9,8 +9,12 @@ import saltext.vault.utils.vault as vaultutil
 from saltext.vault.modules import vault
 
 # pylint: disable=unused-import
+from tests.unit.fixtures.vault import api_delete
+from tests.unit.fixtures.vault import api_get
+from tests.unit.fixtures.vault import api_put
 from tests.unit.fixtures.vault import data
 from tests.unit.fixtures.vault import patch_kv
+from tests.unit.fixtures.vault import query
 from tests.unit.fixtures.vault import read_kv
 from tests.unit.fixtures.vault import write_kv
 from tests.unit.fixtures.vault import write_kv_err
@@ -94,12 +98,6 @@ def destroy_kv():
 def destroy_kv_err(destroy_kv):
     destroy_kv.side_effect = vaultutil.VaultPermissionDeniedError("damn")
     yield destroy_kv
-
-
-@pytest.fixture
-def query():
-    with patch("saltext.vault.utils.vault.query", autospec=True) as query:
-        yield query
 
 
 @pytest.mark.usefixtures("read_kv")
@@ -314,21 +312,21 @@ def test_clear_token_cache():
         cache.assert_called_once_with(ANY, ANY, connection=True, session=False)
 
 
-def test_policy_fetch(query, policy_response):
+def test_policy_fetch(api_get, policy_response):
     """
     Ensure policy_fetch returns rules only and calls the API as expected
     """
-    query.return_value = policy_response
+    api_get.return_value = policy_response
     res = vault.policy_fetch("test-policy")
     assert res == policy_response["rules"]
-    query.assert_called_once_with("GET", "sys/policy/test-policy", opts=ANY, context=ANY)
+    api_get.assert_called_once_with("sys/policy/test-policy", opts=ANY, context=ANY)
 
 
-def test_policy_fetch_not_found(query):
+def test_policy_fetch_not_found(api_get):
     """
     Ensure policy_fetch returns None when the policy was not found
     """
-    query.side_effect = vaultutil.VaultNotFoundError
+    api_get.side_effect = vaultutil.VaultNotFoundError
     res = vault.policy_fetch("test-policy")
     assert res is None
 
@@ -342,11 +340,13 @@ def test_policy_fetch_not_found(query):
         pytest.param("policies_list", None, id="policies_list"),
     ],
 )
-def test_policy_functions_raise_errors(query, func, args):
+def test_policy_functions_raise_errors(api_get, api_put, api_delete, func, args):
     """
     Ensure policy functions raise CommandExecutionErrors
     """
-    query.side_effect = vaultutil.VaultPermissionDeniedError
+    api_get.side_effect = api_put.side_effect = api_delete.side_effect = (
+        vaultutil.VaultPermissionDeniedError
+    )
     func = getattr(vault, func)
     with pytest.raises(
         salt.exceptions.CommandExecutionError, match=".*VaultPermissionDeniedError.*"
@@ -357,51 +357,47 @@ def test_policy_functions_raise_errors(query, func, args):
             func("test-policy", *args)
 
 
-def test_policy_write(query, policy_response):
+def test_policy_write(api_put, policy_response):
     """
     Ensure policy_write calls the API as expected
     """
-    query.return_value = True
     res = vault.policy_write("test-policy", policy_response["rules"])
     assert res
-    query.assert_called_once_with(
-        "POST",
+    api_put.assert_called_once_with(
         "sys/policy/test-policy",
         opts=ANY,
         context=ANY,
         payload={"policy": policy_response["rules"]},
-        safe_to_retry=True,
     )
 
 
-def test_policy_delete(query):
+def test_policy_delete(api_delete):
     """
     Ensure policy_delete calls the API as expected
     """
-    query.return_value = True
     res = vault.policy_delete("test-policy")
     assert res
-    query.assert_called_once_with("DELETE", "sys/policy/test-policy", opts=ANY, context=ANY)
+    api_delete.assert_called_once_with("sys/policy/test-policy", opts=ANY, context=ANY)
 
 
-def test_policy_delete_handles_not_found(query):
+def test_policy_delete_handles_not_found(api_delete):
     """
     Ensure policy_delete returns False instead of raising CommandExecutionError
     when a policy was absent already.
     """
-    query.side_effect = vaultutil.VaultNotFoundError
+    api_delete.side_effect = vaultutil.VaultNotFoundError
     res = vault.policy_delete("test-policy")
     assert not res
 
 
-def test_policies_list(query, policies_list_response):
+def test_policies_list(api_get, policies_list_response):
     """
     Ensure policies_list returns policy list only and calls the API as expected
     """
-    query.return_value = policies_list_response
+    api_get.return_value = policies_list_response
     res = vault.policies_list()
     assert res == policies_list_response["policies"]
-    query.assert_called_once_with("GET", "sys/policy", opts=ANY, context=ANY)
+    api_get.assert_called_once_with("sys/policy", opts=ANY, context=ANY)
 
 
 @pytest.mark.parametrize("method", ["POST", "DELETE"])
@@ -436,12 +432,12 @@ def test_query_raises_errors(query):
         pytest.param("read_secret", {"path": "some/path"}, "read_kv", id="read_secret"),
         pytest.param("list_secrets", {"path": "some/path"}, "list_kv", id="list_secrets"),
         pytest.param("restore_secret", {"path": "some/path"}, "restore_kv", id="restore_secret"),
-        pytest.param("policy_fetch", {"policy": "test-policy"}, "query", id="policy_fetch"),
+        pytest.param("policy_fetch", {"policy": "test-policy"}, "api_get", id="policy_fetch"),
         pytest.param(
-            "policy_write", {"policy": "test-policy", "rules": "rule"}, "query", id="policy_write"
+            "policy_write", {"policy": "test-policy", "rules": "rule"}, "api_put", id="policy_write"
         ),
-        pytest.param("policy_delete", {"policy": "test-policy"}, "query", id="policy_delete"),
-        pytest.param("policies_list", {}, "query", id="policies_list"),
+        pytest.param("policy_delete", {"policy": "test-policy"}, "api_delete", id="policy_delete"),
+        pytest.param("policies_list", {}, "api_get", id="policies_list"),
         pytest.param("query", {"method": "GET", "endpoint": "test/endpoint"}, "query", id="query"),
         pytest.param("get_server_config", {}, "get_authd_client", id="get_server_config"),
         pytest.param("clear_cache", {}, "clear_cache", id="clear_cache"),

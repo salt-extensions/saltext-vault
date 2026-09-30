@@ -101,7 +101,7 @@ def create_key(
         }
     )
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -206,7 +206,7 @@ def import_key(
         }
     )
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -269,7 +269,7 @@ def read_key(name, mount="gpg"):
     """
     endpoint = f"{mount}/keys/{name}"
     try:
-        return vault.query("GET", endpoint, __opts__, __context__)["data"]
+        return vault.api_get(endpoint, __opts__, __context__)["data"]
     except vault.VaultNotFoundError:
         return None
     except vault.VaultException as err:
@@ -302,7 +302,7 @@ def delete_key(name, mount="gpg"):
     """
     endpoint = f"{mount}/keys/{name}"
     try:
-        return vault.query("DELETE", endpoint, __opts__, __context__)
+        return vault.api_delete(endpoint, __opts__, __context__)
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -362,7 +362,7 @@ def export_private_key(
     """
     endpoint = f"{mount}/export/{name}"
     try:
-        key = vault.query("GET", endpoint, __opts__, __context__)["data"]["key"]
+        key = vault.api_get(endpoint, __opts__, __context__)["data"]["key"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -512,14 +512,12 @@ def sign(
         }
     )
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"][
-            "signature"
-        ]
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)["data"]["signature"]
     except vault.VaultPermissionDeniedError:
         algorithm = payload.pop("algorithm", "sha2-256")
         endpoint = f"{mount}/sign/{name}/{algorithm}"
         try:
-            return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"][
+            return vault.api_post(endpoint, __opts__, __context__, payload=payload)["data"][
                 "signature"
             ]
         except vault.VaultException as err:
@@ -594,9 +592,7 @@ def verify(
         }
     )
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"][
-            "valid"
-        ]
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)["data"]["valid"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 
@@ -844,7 +840,7 @@ def _decrypt_cmd(
         }
     )
     try:
-        return vault.query("POST", endpoint, __opts__, __context__, payload=payload)["data"]
+        return vault.api_post(endpoint, __opts__, __context__, payload=payload)["data"]
     except vault.VaultException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err
 

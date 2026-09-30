@@ -10,8 +10,11 @@ from saltext.vault.modules import vault_ssh
 from saltext.vault.utils import vault
 
 # pylint: disable=unused-import
+from tests.unit.fixtures.vault import api_delete
+from tests.unit.fixtures.vault import api_get
 from tests.unit.fixtures.vault import api_list
-from tests.unit.fixtures.vault import query
+from tests.unit.fixtures.vault import api_post
+from tests.unit.fixtures.vault import api_put
 
 # pylint: enable=unused-import
 
@@ -57,25 +60,28 @@ def configure_loader_modules():
         pytest.param("get_signing_policy", {"signing_policy": "foo"}, id="get_signing_policy"),
     ),
 )
-def test_func_converts_errors(func, kwargs, query, api_list):
-    query.side_effect = api_list.side_effect = vault.VaultException("booh")
+def test_func_converts_errors(func, kwargs, api_get, api_list, api_post, api_put, api_delete):
+    api_get.side_effect = api_list.side_effect = api_post.side_effect = api_put.side_effect = (
+        api_delete.side_effect
+    ) = vault.VaultException("booh")
     with pytest.raises(CommandExecutionError, match="booh"):
         getattr(vault_ssh, func)(**kwargs)
 
 
-def test_create_certificate_requires_signing_policy(query):
+def test_create_certificate_requires_signing_policy(api_get, api_post):
     with pytest.raises(SaltInvocationError, match="Need 'signing_policy' specified"):
         vault_ssh.create_certificate(public_key="ssh-ed25519 yay", cert_type="user")
-    query.assert_not_called()
+    api_get.assert_not_called()
+    api_post.assert_not_called()
 
 
 @pytest.mark.parametrize("allow", (False, True))
-def test_create_certificate_requires_determinable_cert_type(query, allow):
+def test_create_certificate_requires_determinable_cert_type(api_get, allow):
     """
     When cert_type is not passed and the role either disallows or allows
     both user and host certificates, it cannot be inferred.
     """
-    query.return_value = {
+    api_get.return_value = {
         "data": {
             "key_type": "ca",
             "allow_user_certificates": allow,
@@ -86,8 +92,9 @@ def test_create_certificate_requires_determinable_cert_type(query, allow):
         vault_ssh.create_certificate(signing_policy="foo", public_key="ssh-ed25519 yay")
 
 
-def test_create_certificate_ignores_incompatible_params(query, caplog):
-    query.side_effect = ({"data": {"key_type": "ca"}}, {"data": {"signed_key": "yay"}})
+def test_create_certificate_ignores_incompatible_params(api_get, api_post, caplog):
+    api_get.return_value = {"data": {"key_type": "ca"}}
+    api_post.return_value = {"data": {"signed_key": "yay"}}
     ignored = {
         "signing_private_key": "key",
         "signing_private_key_passphrase": "hunter2",
@@ -110,34 +117,34 @@ def test_create_certificate_ignores_incompatible_params(query, caplog):
     assert res == "yay"
     for param in ignored:
         assert f"Ignoring '{param}'" in caplog.text
-    payload = query.call_args[1]["payload"]
+    payload = api_post.call_args[1]["payload"]
     assert not set(payload) & set(ignored)
 
 
-def test_write_role_ca_requires_cert_type(query):
+def test_write_role_ca_requires_cert_type(api_put):
     with pytest.raises(
         SaltInvocationError, match="Either allow_user_certificates or allow_host_certificates"
     ):
         vault_ssh.write_role_ca("foo")
-    query.assert_not_called()
+    api_put.assert_not_called()
 
 
 @pytest.mark.parametrize(
     "param", ("default_critical_options", "default_extensions", "allowed_user_key_lengths")
 )
-def test_write_role_ca_validates_mapping_params(query, param):
+def test_write_role_ca_validates_mapping_params(api_put, param):
     with pytest.raises(SaltInvocationError, match=f"'{param}' must be specified as a mapping"):
         vault_ssh.write_role_ca("foo", allow_user_certificates=True, **{param: ["no-mapping"]})
-    query.assert_not_called()
+    api_put.assert_not_called()
 
 
-def test_get_signing_policy_default_extensions_template_render_failure(query, caplog):
+def test_get_signing_policy_default_extensions_template_render_failure(api_get, caplog):
     """
     When rendering default extension templates fails, e.g. because the
     token is not allowed to read its associated entity, the default
     extensions should be reported as empty instead of crashing.
     """
-    query.side_effect = (
+    api_get.side_effect = (
         {
             "data": {
                 "key_type": "ca",
@@ -195,32 +202,32 @@ def query_raw():
         yield _query_raw
 
 
-def test_read_ca_authenticated(query, query_raw):
+def test_read_ca_authenticated(api_get, query_raw):
     """
     Ensure the authenticated endpoint is preferred when accessible
     """
-    query.return_value = {"data": {"public_key": "ssh-rsa authd"}}
+    api_get.return_value = {"data": {"public_key": "ssh-rsa authd"}}
     assert vault_ssh.read_ca() == "ssh-rsa authd"
     query_raw.assert_not_called()
 
 
-def test_read_ca_unauthenticated_fallback(query, query_raw):
+def test_read_ca_unauthenticated_fallback(api_get, query_raw):
     """
     Ensure permission errors on the authenticated endpoint cause a
     fallback to the unauthenticated one
     """
-    query.side_effect = vault.VaultPermissionDeniedError("permission denied")
+    api_get.side_effect = vault.VaultPermissionDeniedError("permission denied")
     assert vault_ssh.read_ca() == "ssh-rsa unauthd"
     query_raw.assert_called_once()
     assert query_raw.call_args[0][1] == "ssh/public_key"
     assert query_raw.call_args[1]["is_unauthd"] is True
 
 
-def test_read_ca_unauthenticated_fallback_converts_errors(query, query_raw):
+def test_read_ca_unauthenticated_fallback_converts_errors(api_get, query_raw):
     """
     Ensure exceptions during the unauthenticated request are converted
     """
-    query.side_effect = vault.VaultPermissionDeniedError("permission denied")
+    api_get.side_effect = vault.VaultPermissionDeniedError("permission denied")
     query_raw.side_effect = vault.VaultServerError("internal error")
     with pytest.raises(CommandExecutionError, match="VaultServerError: internal error"):
         vault_ssh.read_ca()
@@ -256,13 +263,13 @@ def test_read_ca_unauthenticated_fallback_converts_errors(query, query_raw):
     ),
 )
 def test_read_ca_unauthenticated_fallback_not_found(
-    query, query_raw, status_code, json_effect, match
+    api_get, query_raw, status_code, json_effect, match
 ):
     """
     Ensure that 400/404 responses to the unauthenticated query are reported
     as not found, with a fallback message when errors are empty/unparsable
     """
-    query.side_effect = vault.VaultPermissionDeniedError("permission denied")
+    api_get.side_effect = vault.VaultPermissionDeniedError("permission denied")
     query_raw.return_value.status_code = status_code
     if isinstance(json_effect, Exception):
         query_raw.return_value.json.side_effect = json_effect
@@ -272,24 +279,24 @@ def test_read_ca_unauthenticated_fallback_not_found(
         vault_ssh.read_ca()
 
 
-def test_read_ca_unauthenticated_fallback_unexpected_status(query, query_raw):
+def test_read_ca_unauthenticated_fallback_unexpected_status(api_get, query_raw):
     """
     Ensure unexpected response statuses to the unauthenticated query
     are reported with their body
     """
-    query.side_effect = vault.VaultPermissionDeniedError("permission denied")
+    api_get.side_effect = vault.VaultPermissionDeniedError("permission denied")
     query_raw.return_value.status_code = 502
     query_raw.return_value.text = "bad gateway"
     with pytest.raises(CommandExecutionError, match="Unexpected response status 502.*bad gateway"):
         vault_ssh.read_ca()
 
 
-def test_list_roles_ip_no_roles(query):
-    query.side_effect = vault.VaultInvocationError("Missing roles")
+def test_list_roles_ip_no_roles(api_put):
+    api_put.side_effect = vault.VaultInvocationError("Missing roles")
     assert vault_ssh.list_roles_ip("10.1.0.1") == []
 
 
-def test_list_roles_ip_converts_invocation_errors(query):
-    query.side_effect = vault.VaultInvocationError("booh")
+def test_list_roles_ip_converts_invocation_errors(api_put):
+    api_put.side_effect = vault.VaultInvocationError("booh")
     with pytest.raises(CommandExecutionError, match="booh"):
         vault_ssh.list_roles_ip("10.1.0.1")

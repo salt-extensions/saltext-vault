@@ -3079,7 +3079,7 @@ def _get_urls(issuer_info: Mapping[str, typing.Any] | None, mount: str) -> "pki.
         url_configs = issuer_info
 
     urls: pki.URLConfigs | None = {
-        url: hlp.deserialize_csl(url_configs.get(url, [])) for url in url_config_keys
+        url: hlp.deserialize_csl(url_configs.get(url) or []) for url in url_config_keys
     }
     if enable_templating:
         urls = _render_aia_templating(
