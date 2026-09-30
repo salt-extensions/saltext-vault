@@ -1,0 +1,1 @@
+Fixed `LIST` requests never being retried on retryable error responses or read errors unless {vconf}`client:retry_post` was enabled: the non-standard HTTP method was missing from the default set of retryable (idempotent) methods, which only includes standard ones. It is now retried like `GET`.

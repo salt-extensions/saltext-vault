@@ -76,6 +76,8 @@ DEFAULT_RETRY_AFTER_MAX = 60
 # https://developer.hashicorp.com/vault/api-docs#http-status-codes
 # 412: eventually consistent data is still missing (Enterprise)
 DEFAULT_RETRY_STATUS = (412, 500, 502, 503, 504)
+# LIST is not a standard HTTP method and thus not present in the default retryable methods
+DEFAULT_ALLOWED_METHODS = frozenset(("HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE", "LIST"))
 
 # Caps for retry configuration
 MAX_MAX_RETRIES = 10
@@ -174,7 +176,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
             backoff_jitter=self.backoff_jitter,
             respect_retry_after_header=self.respect_retry_after,
             retry_after_max=self.retry_after_max,
-            allowed_methods=None if retry_post else requests.adapters.Retry.DEFAULT_ALLOWED_METHODS,
+            allowed_methods=None if retry_post else DEFAULT_ALLOWED_METHODS,
             raise_on_status=False,
             status_forcelist=self.retry_status,
         )
