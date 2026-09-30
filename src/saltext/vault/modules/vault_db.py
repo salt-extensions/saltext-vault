@@ -52,7 +52,7 @@ def list_connections(mount="database"):
     """
     endpoint = f"{mount}/config"
     try:
-        return vault.query("LIST", endpoint, __opts__, __context__)["data"]["keys"]
+        return vault.api_list(endpoint, __opts__, __context__)["data"]["keys"]
     except vault.VaultNotFoundError:
         return []
     except vault.VaultException as err:
@@ -299,7 +299,7 @@ def list_roles(static=False, mount="database"):
     """
     endpoint = f"{mount}/{'static-' if static else ''}roles"
     try:
-        return vault.query("LIST", endpoint, __opts__, __context__)["data"]["keys"]
+        return vault.api_list(endpoint, __opts__, __context__)["data"]["keys"]
     except vault.VaultNotFoundError:
         return []
     except vault.VaultException as err:

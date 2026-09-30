@@ -234,7 +234,7 @@ def list_keys(mount="gpg"):
     """
     endpoint = f"{mount}/keys"
     try:
-        return vault.query("LIST", endpoint, __opts__, __context__)["data"]["keys"]
+        return vault.api_list(endpoint, __opts__, __context__)["data"]["keys"]
     except vault.VaultNotFoundError:
         return []
     except vault.VaultException as err:

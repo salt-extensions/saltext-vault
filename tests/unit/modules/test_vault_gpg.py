@@ -10,6 +10,7 @@ from saltext.vault.modules import vault_gpg
 from saltext.vault.utils import vault
 
 # pylint: disable=unused-import
+from tests.unit.fixtures.vault import api_list
 from tests.unit.fixtures.vault import query
 
 # pylint: enable=unused-import
@@ -42,8 +43,8 @@ def configure_loader_modules():
         ),
     ),
 )
-def test_func_converts_errors(func, kwargs, query):
-    query.side_effect = vault.VaultException("booh")
+def test_func_converts_errors(func, kwargs, query, api_list):
+    query.side_effect = api_list.side_effect = vault.VaultException("booh")
     with pytest.raises(CommandExecutionError, match="booh"):
         getattr(vault_gpg, func)(**kwargs)
 

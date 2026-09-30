@@ -15,6 +15,7 @@ import saltext.vault.utils.vault as vaultutil
 from saltext.vault.modules import vault_pki
 
 # pylint: disable=unused-import
+from tests.unit.fixtures.vault import api_list
 from tests.unit.fixtures.vault import data
 
 # pylint: enable=unused-import
@@ -58,16 +59,16 @@ def data_roles_list():
 
 
 @pytest.fixture
-def role_not_found(query):
+def role_not_found(query, api_list):
     query.side_effect = vaultutil.VaultNotFoundError
+    api_list.side_effect = vaultutil.VaultNotFoundError
     yield query
 
 
 @pytest.fixture
-def list_roles(data_roles_list):
-    with patch("saltext.vault.utils.vault.query", autospec=True) as _list:
-        _list.return_value = data_roles_list
-        yield _list
+def list_roles(api_list, data_roles_list):
+    api_list.return_value = data_roles_list
+    return api_list
 
 
 @pytest.fixture
@@ -161,8 +162,8 @@ def _x509v2_mock():
         ),
     ),
 )
-def test_func_converts_errors(func, kwargs, query, request):
-    query.side_effect = vaultutil.VaultException("booh")
+def test_func_converts_errors(func, kwargs, query, api_list, request):
+    query.side_effect = api_list.side_effect = vaultutil.VaultException("booh")
     if func == "write_role":
         # otherwise we would test read_role again
         request.getfixturevalue("_role_absent")
@@ -596,10 +597,10 @@ def _issuer_entry(cert, parent=None, revoked=False):
     return entry
 
 
-def _mock_pki_query(cert_data, issuers=None, default=None):
+def _mock_pki_query(query, api_list, cert_data, issuers=None, default=None):
     issuers = issuers or {}
 
-    def query(_method, endpoint, *_args, **_kwargs):
+    def _dispatch(_method, endpoint, *_args, **_kwargs):
         if endpoint.startswith("pki/cert/"):
             return {"data": cert_data}
         if endpoint == "pki/issuers":
@@ -613,14 +614,19 @@ def _mock_pki_query(cert_data, issuers=None, default=None):
             return {"data": {"issuer_id": ref, **issuers[ref]}}
         raise AssertionError(f"unexpected endpoint: {endpoint}")
 
-    return query
+    query.side_effect = _dispatch
+    api_list.side_effect = lambda endpoint, *args, **kwargs: _dispatch(
+        "LIST", endpoint, *args, **kwargs
+    )
 
 
-def test_read_certificate_full_resolves_issuer_via_aki(query, pki):
+def test_read_certificate_full_resolves_issuer_via_aki(query, api_list, pki):
     # a stale ca_chain in the certificate read response is replaced with the
     # resolved issuer's chain and a missing trailing newline is restored
     cert_data = {"certificate": pki["leaf"].rstrip("\n"), "ca_chain": ["stale"]}
-    query.side_effect = _mock_pki_query(
+    _mock_pki_query(
+        query,
+        api_list,
         cert_data,
         issuers={
             "root-a": _issuer_entry(pki["root_a"]),
@@ -659,9 +665,11 @@ def test_read_certificate_full_fallback_issuer_missing(query, pki):
         vault_pki.read_certificate_full("00:11:22")
 
 
-def test_read_certificate_full_issuer_undeterminable(query, pki):
+def test_read_certificate_full_issuer_undeterminable(query, api_list, pki):
     # no configured issuer matches the leaf's AKI: no fallback to default
-    query.side_effect = _mock_pki_query(
+    _mock_pki_query(
+        query,
+        api_list,
         {"certificate": pki["leaf"]},
         issuers={"root-b": _issuer_entry(pki["root_b"])},
     )
@@ -670,10 +678,12 @@ def test_read_certificate_full_issuer_undeterminable(query, pki):
         vault_pki.read_certificate_full("00:11:22")
 
 
-def test_read_certificate_full_cross_signed_prefers_unrevoked(query, pki):
+def test_read_certificate_full_cross_signed_prefers_unrevoked(query, api_list, pki):
     # both cross-signed entries match the leaf's AKI, but one is revoked;
     # the valid sibling must win, even when the revoked one is the default
-    query.side_effect = _mock_pki_query(
+    _mock_pki_query(
+        query,
+        api_list,
         {"certificate": pki["leaf"]},
         issuers={
             "int-a": _issuer_entry(pki["int_a"], pki["root_a"], revoked=True),
@@ -687,8 +697,10 @@ def test_read_certificate_full_cross_signed_prefers_unrevoked(query, pki):
     assert ret["ca_chain"] == [pki["int_b"], pki["root_b"]]
 
 
-def test_read_certificate_full_cross_signed_prefers_unexpired(query, pki):
-    query.side_effect = _mock_pki_query(
+def test_read_certificate_full_cross_signed_prefers_unexpired(query, api_list, pki):
+    _mock_pki_query(
+        query,
+        api_list,
         {"certificate": pki["leaf"]},
         issuers={
             "int-a": _issuer_entry(pki["int_a_expired"], pki["root_a"]),
@@ -703,8 +715,12 @@ def test_read_certificate_full_cross_signed_prefers_unexpired(query, pki):
 
 
 @pytest.mark.parametrize("default", ["int-a", "int-b"])
-def test_read_certificate_full_cross_signed_tie_break_via_default_issuer(query, pki, default):
-    query.side_effect = _mock_pki_query(
+def test_read_certificate_full_cross_signed_tie_break_via_default_issuer(
+    query, api_list, pki, default
+):
+    _mock_pki_query(
+        query,
+        api_list,
         {"certificate": pki["leaf"]},
         issuers={
             "int-a": _issuer_entry(pki["int_a"], pki["root_a"]),
@@ -719,9 +735,11 @@ def test_read_certificate_full_cross_signed_tie_break_via_default_issuer(query, 
     assert ret["ca_chain"][1] == expected_root
 
 
-def test_read_certificate_full_all_candidates_revoked_still_returns_chain(query, pki):
+def test_read_certificate_full_all_candidates_revoked_still_returns_chain(query, api_list, pki):
     # revoked issuers are only deprioritized, never filtered to nothing
-    query.side_effect = _mock_pki_query(
+    _mock_pki_query(
+        query,
+        api_list,
         {"certificate": pki["leaf"]},
         issuers={
             "int-a": _issuer_entry(pki["int_a_expired"], pki["root_a"], revoked=True),
@@ -735,10 +753,12 @@ def test_read_certificate_full_all_candidates_revoked_still_returns_chain(query,
     assert ret["ca_chain"] == [pki["int_b"], pki["root_b"]]
 
 
-def test_read_certificate_full_forged_ski_is_rejected(query, pki):
+def test_read_certificate_full_forged_ski_is_rejected(query, api_list, pki):
     # SKI matching alone is insufficient: an issuer carrying the true
     # intermediate's SKI but a different key must fail signature verification
-    query.side_effect = _mock_pki_query(
+    _mock_pki_query(
+        query,
+        api_list,
         {"certificate": pki["leaf"]},
         issuers={
             "int-forged": _issuer_entry(pki["int_forged_ski"], pki["root_a"]),

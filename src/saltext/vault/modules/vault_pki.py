@@ -77,7 +77,7 @@ def list_roles(mount="pki"):
     """
     endpoint = f"{mount}/roles"
     try:
-        return vault.query("LIST", endpoint, __opts__, __context__)["data"]["keys"]
+        return vault.api_list(endpoint, __opts__, __context__)["data"]["keys"]
     except vault.VaultNotFoundError:
         return []
     except vault.VaultException as err:
@@ -319,9 +319,7 @@ def list_issuers(mount="pki"):
     endpoint = f"{mount}/issuers"
 
     try:
-        return vault.query("LIST", endpoint, __opts__, __context__, is_unauthd=True)["data"][
-            "key_info"
-        ]
+        return vault.api_list(endpoint, __opts__, __context__, is_unauthd=True)["data"]["key_info"]
     except vault.VaultNotFoundError:
         return {}
     except vault.VaultException as err:
@@ -691,7 +689,7 @@ def list_keys(mount="pki"):
         Mount path the PKI backend is mounted to. Defaults to ``pki``.
     """
     try:
-        res = vault.query("LIST", f"{mount}/keys", __opts__, __context__)["data"]
+        res = vault.api_list(f"{mount}/keys", __opts__, __context__)["data"]
     except vault.VaultNotFoundError:
         return {}
     except vault.VaultException as err:
@@ -1811,7 +1809,7 @@ def list_revoked_certificates(mount="pki"):
     endpoint = f"{mount}/certs/revoked"
 
     try:
-        return vault.query("LIST", endpoint, __opts__, __context__)["data"]["keys"]
+        return vault.api_list(endpoint, __opts__, __context__)["data"]["keys"]
     except vault.VaultNotFoundError:
         return []
     except vault.VaultException as err:
@@ -1844,7 +1842,7 @@ def list_certificates(mount="pki"):
     endpoint = f"{mount}/certs"
 
     try:
-        return vault.query("LIST", endpoint, __opts__, __context__)["data"]["keys"]
+        return vault.api_list(endpoint, __opts__, __context__)["data"]["keys"]
     except vault.VaultNotFoundError:
         return []
     except vault.VaultException as err:

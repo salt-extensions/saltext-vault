@@ -9,6 +9,7 @@ from saltext.vault.modules import vault_db
 from saltext.vault.utils import vault
 
 # pylint: disable=unused-import
+from tests.unit.fixtures.vault import api_list
 from tests.unit.fixtures.vault import query
 
 # pylint: enable=unused-import
@@ -59,8 +60,8 @@ def _conn_absent():
         pytest.param("rotate_static_role", {"name": "foo"}, id="rotate_static_role"),
     ),
 )
-def test_func_converts_errors(func, kwargs, query, request):
-    query.side_effect = vault.VaultException("booh")
+def test_func_converts_errors(func, kwargs, query, api_list, request):
+    query.side_effect = api_list.side_effect = vault.VaultException("booh")
     if func == "write_connection":
         # otherwise we would test fetch_connection again
         request.getfixturevalue("_conn_absent")
