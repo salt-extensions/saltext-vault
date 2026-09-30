@@ -58,19 +58,30 @@ def query(method, endpoint, payload=None):
         vault read -output-policy auth/token/lookup-self
 
     method
-        HTTP method to use.
+        HTTP method to use. Standard methods and ``LIST`` are dispatched
+        as logical operations via the corresponding ``api_*`` :py:mod:`utility functions <saltext.vault.utils.vault>`,
+        other methods are passed through to the API literally.
 
-        .. note::
-            A literal ``LIST`` is passed through as-is and does not
-            follow the :vconf:`client:list_as_get` option.
+        .. versionchanged:: 1.9.0
+            ``LIST`` now follows the :vconf:`client:list_as_get` option.
+            ``PUT`` is now issued as an equivalent ``POST`` request that
+            is marked as idempotent (safe to retry, without enabling :vconf:`client:retry_post`).
+
+            See the `general Vault API docs <https://developer.hashicorp.com/vault/api-docs#api-operations>`__
+            for details.
 
     endpoint
-        Vault API endpoint to issue the request against. Do not include ``/v1/``.
+        Vault API endpoint to issue the request against. Omit ``/v1/``.
 
     payload
-        Optional dictionary to use as JSON payload.
+        Optional dictionary to use as JSON payload (``POST``/``PUT``/``PATCH``)
+        or query parameters (``GET``/``DELETE``/``LIST``).
     """
     try:
+        if (func := getattr(vault, f"api_{method.lower().strip()}", None)) is not None:
+            return func(  # pylint: disable=not-callable
+                endpoint, __opts__, __context__, payload=payload
+            )
         return vault.query(method, endpoint, __opts__, __context__, payload=payload)
     except SaltException as err:
         raise CommandExecutionError(f"{type(err).__name__}: {err}") from err

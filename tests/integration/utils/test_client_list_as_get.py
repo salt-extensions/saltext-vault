@@ -100,3 +100,17 @@ def test_list_operation_with_master_configured_list_as_get(
     assert list(ret.data) == [ssh_role]
     assert ("GET", "/v1/ssh/roles?list=true") in request_log
     assert not any(method == "LIST" for method, _ in request_log)
+
+
+def test_query_list_with_master_configured_list_as_get(salt_call_cli, ssh_role, intercepting_proxy):
+    """
+    Ensure ``LIST`` queries via the ``vault.query`` execution module function
+    are dispatched as logical list operations, hence follow
+    ``client:list_as_get`` as well.
+    """
+    _, request_log = intercepting_proxy
+    ret = salt_call_cli.run("vault.query", "LIST", "ssh/roles")
+    assert ret.returncode == 0
+    assert ret.data["data"]["keys"] == [ssh_role]
+    assert ("GET", "/v1/ssh/roles?list=true") in request_log
+    assert not any(method == "LIST" for method, _ in request_log)
