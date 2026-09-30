@@ -68,6 +68,12 @@ def query(
     method
         HTTP verb to use.
 
+        .. note::
+            A literal ``LIST`` is passed through as-is and does not
+            follow the :vconf:`client:list_as_get` option. Use
+            :func:`api_list` for logical list operations that
+            respect it.
+
     endpoint
         API path to call (without leading ``/v1/``).
 
@@ -109,27 +115,10 @@ def query(
         Set this to a callable that takes a list of warnings and optionally
         returns a list of warnings to log.
     """
-    client, config = get_authd_client(opts, context, get_config=True)
-    try:
-        return client.request(
-            method,
-            endpoint,
-            payload=payload,
-            wrap=wrap,
-            raise_error=raise_error,
-            safe_to_retry=safe_to_retry,
-            is_unauthd=is_unauthd,
-            warn_handler=warn_handler,
-            **kwargs,
-        )
-    except VaultPermissionDeniedError:
-        if not _check_clear(config, client):
-            raise
-
-    # in case policies have changed
-    clear_cache(opts, context)
-    client = get_authd_client(opts, context)
-    return client.request(
+    return _query_client(
+        "request",
+        opts,
+        context,
         method,
         endpoint,
         payload=payload,
@@ -161,6 +150,10 @@ def query_raw(
 
     method
         HTTP verb to use.
+
+        .. note::
+            A literal ``LIST`` is passed through as-is and does not
+            follow the :vconf:`client:list_as_get` option.
 
     endpoint
         API path to call (without leading ``/v1/``).
@@ -232,9 +225,453 @@ def query_raw(
     return res
 
 
+def api_get(
+    endpoint: str,
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    payload: dict[typing.Any, typing.Any] | None = None,
+    *,
+    wrap: str | typing.Literal[False] = False,
+    raise_error: bool = True,
+    safe_to_retry: bool | None = None,
+    is_unauthd: bool = False,
+    warn_handler: bool | Callable[[list[str]], list[str] | None] = True,
+    **kwargs,
+):
+    """
+    Query the Vault API using a ``GET`` request. Supplemental arguments
+    to ``requests.request`` can be passed as kwargs.
+
+    .. versionadded:: 1.9.0
+
+    endpoint
+        API path to call (without leading ``/v1/``).
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
+
+    payload
+        Dictionary of query parameters to send, if any.
+        They are URL-encoded automatically.
+
+    wrap
+        Whether to request response wrapping. Should be a time string
+        like ``30s`` or False (default).
+
+    raise_error
+        Whether to inspect the response code and raise exceptions.
+        Defaults to True.
+
+    safe_to_retry
+        A boolean indicating whether this request is safe to retry (idempotent) or not.
+        If not provided, defaults to guessing based on the HTTP method.
+        Unsafe requests are not retried, unless :vconf:`client:retry_post` is enabled.
+
+    is_unauthd
+        Whether the queried endpoint is an unauthenticated one and hence
+        does not deduct a token use. Only relevant for endpoints not found
+        in ``sys``. Defaults to False.
+
+    warn_handler
+        Boolean or callable to handle Vault-emitted warnings.
+        Defaults to ``true``, meaning all emitted warnings are logged.
+        Set this to ``false`` to silence any warnings.
+        Set this to a callable that takes a list of warnings and optionally
+        returns a list of warnings to log.
+    """
+    return _query_client(
+        "get",
+        opts,
+        context,
+        endpoint,
+        payload=payload,
+        wrap=wrap,
+        raise_error=raise_error,
+        safe_to_retry=safe_to_retry,
+        is_unauthd=is_unauthd,
+        warn_handler=warn_handler,
+        **kwargs,
+    )
+
+
+def api_list(
+    endpoint: str,
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    payload: dict[typing.Any, typing.Any] | None = None,
+    *,
+    wrap: str | typing.Literal[False] = False,
+    raise_error: bool = True,
+    safe_to_retry: bool | None = None,
+    is_unauthd: bool = False,
+    warn_handler: bool | Callable[[list[str]], list[str] | None] = True,
+    **kwargs,
+):
+    """
+    Query the Vault API using a logical list operation. Supplemental
+    arguments to ``requests.request`` can be passed as kwargs.
+
+    By default, this uses the ``LIST`` HTTP method. When
+    :vconf:`client:list_as_get` is enabled, it issues a ``GET`` request
+    with the ``list=true`` query parameter instead.
+
+    .. versionadded:: 1.9.0
+
+    endpoint
+        API path to call (without leading ``/v1/``).
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
+
+    payload
+        Dictionary of query parameters to send, if any.
+        They are URL-encoded automatically.
+
+    wrap
+        Whether to request response wrapping. Should be a time string
+        like ``30s`` or False (default).
+
+    raise_error
+        Whether to inspect the response code and raise exceptions.
+        Defaults to True.
+
+    safe_to_retry
+        A boolean indicating whether this request is safe to retry (idempotent) or not.
+        If not provided, defaults to guessing based on the HTTP method.
+        Unsafe requests are not retried, unless :vconf:`client:retry_post` is enabled.
+
+    is_unauthd
+        Whether the queried endpoint is an unauthenticated one and hence
+        does not deduct a token use. Only relevant for endpoints not found
+        in ``sys``. Defaults to False.
+
+    warn_handler
+        Boolean or callable to handle Vault-emitted warnings.
+        Defaults to ``true``, meaning all emitted warnings are logged.
+        Set this to ``false`` to silence any warnings.
+        Set this to a callable that takes a list of warnings and optionally
+        returns a list of warnings to log.
+    """
+    return _query_client(
+        "list",
+        opts,
+        context,
+        endpoint,
+        payload=payload,
+        wrap=wrap,
+        raise_error=raise_error,
+        safe_to_retry=safe_to_retry,
+        is_unauthd=is_unauthd,
+        warn_handler=warn_handler,
+        **kwargs,
+    )
+
+
+def api_post(
+    endpoint: str,
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    payload: dict[typing.Any, typing.Any] | None = None,
+    *,
+    wrap: str | typing.Literal[False] = False,
+    raise_error: bool = True,
+    safe_to_retry: bool | None = None,
+    is_unauthd: bool = False,
+    warn_handler: bool | Callable[[list[str]], list[str] | None] = True,
+    **kwargs,
+):
+    """
+    Query the Vault API using a ``POST`` request. Supplemental arguments
+    to ``requests.request`` can be passed as kwargs.
+
+    .. versionadded:: 1.9.0
+
+    endpoint
+        API path to call (without leading ``/v1/``).
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
+
+    payload
+        Dictionary of payload values to send as the JSON request body, if any.
+
+    wrap
+        Whether to request response wrapping. Should be a time string
+        like ``30s`` or False (default).
+
+    raise_error
+        Whether to inspect the response code and raise exceptions.
+        Defaults to True.
+
+    safe_to_retry
+        A boolean indicating whether this request is safe to retry (idempotent) or not.
+        If not provided, defaults to guessing based on the HTTP method.
+        Unsafe requests are not retried, unless :vconf:`client:retry_post` is enabled.
+
+    is_unauthd
+        Whether the queried endpoint is an unauthenticated one and hence
+        does not deduct a token use. Only relevant for endpoints not found
+        in ``sys``. Defaults to False.
+
+    warn_handler
+        Boolean or callable to handle Vault-emitted warnings.
+        Defaults to ``true``, meaning all emitted warnings are logged.
+        Set this to ``false`` to silence any warnings.
+        Set this to a callable that takes a list of warnings and optionally
+        returns a list of warnings to log.
+    """
+    return _query_client(
+        "post",
+        opts,
+        context,
+        endpoint,
+        payload=payload,
+        wrap=wrap,
+        raise_error=raise_error,
+        safe_to_retry=safe_to_retry,
+        is_unauthd=is_unauthd,
+        warn_handler=warn_handler,
+        **kwargs,
+    )
+
+
+def api_put(
+    endpoint: str,
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    payload: dict[typing.Any, typing.Any] | None = None,
+    *,
+    wrap: str | typing.Literal[False] = False,
+    raise_error: bool = True,
+    safe_to_retry: bool = True,
+    is_unauthd: bool = False,
+    warn_handler: bool | Callable[[list[str]], list[str] | None] = True,
+    **kwargs,
+):
+    """
+    Query the Vault API using a ``POST`` request that is marked as safe
+    to retry by default (idempotent). Vault considers ``POST`` and ``PUT``
+    to be synonymous, this is the only difference to :py:func:`api_post`.
+    Supplemental arguments to ``requests.request`` can be passed as kwargs.
+
+    .. versionadded:: 1.9.0
+
+    endpoint
+        API path to call (without leading ``/v1/``).
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
+
+    payload
+        Dictionary of payload values to send as the JSON request body, if any.
+
+    wrap
+        Whether to request response wrapping. Should be a time string
+        like ``30s`` or False (default).
+
+    raise_error
+        Whether to inspect the response code and raise exceptions.
+        Defaults to True.
+
+    safe_to_retry
+        A boolean indicating whether this request is safe to retry (idempotent) or not.
+        Defaults to True.
+        Unsafe requests are not retried, unless :vconf:`client:retry_post` is enabled.
+
+    is_unauthd
+        Whether the queried endpoint is an unauthenticated one and hence
+        does not deduct a token use. Only relevant for endpoints not found
+        in ``sys``. Defaults to False.
+
+    warn_handler
+        Boolean or callable to handle Vault-emitted warnings.
+        Defaults to ``true``, meaning all emitted warnings are logged.
+        Set this to ``false`` to silence any warnings.
+        Set this to a callable that takes a list of warnings and optionally
+        returns a list of warnings to log.
+    """
+    return _query_client(
+        "put",
+        opts,
+        context,
+        endpoint,
+        payload=payload,
+        wrap=wrap,
+        raise_error=raise_error,
+        safe_to_retry=safe_to_retry,
+        is_unauthd=is_unauthd,
+        warn_handler=warn_handler,
+        **kwargs,
+    )
+
+
+def api_patch(
+    endpoint: str,
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    payload: dict[typing.Any, typing.Any],
+    *,
+    wrap: str | typing.Literal[False] = False,
+    raise_error: bool = True,
+    safe_to_retry: bool | None = None,
+    is_unauthd: bool = False,
+    warn_handler: bool | Callable[[list[str]], list[str] | None] = True,
+    **kwargs,
+):
+    """
+    Query the Vault API using a ``PATCH`` request. Supplemental arguments
+    to ``requests.request`` can be passed as kwargs.
+
+    .. versionadded:: 1.9.0
+
+    endpoint
+        API path to call (without leading ``/v1/``).
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
+
+    payload
+        Dictionary of payload values to send as the JSON merge patch body.
+
+    wrap
+        Whether to request response wrapping. Should be a time string
+        like ``30s`` or False (default).
+
+    raise_error
+        Whether to inspect the response code and raise exceptions.
+        Defaults to True.
+
+    safe_to_retry
+        A boolean indicating whether this request is safe to retry (idempotent) or not.
+        If not provided, defaults to guessing based on the HTTP method.
+        Unsafe requests are not retried, unless :vconf:`client:retry_post` is enabled.
+
+    is_unauthd
+        Whether the queried endpoint is an unauthenticated one and hence
+        does not deduct a token use. Only relevant for endpoints not found
+        in ``sys``. Defaults to False.
+
+    warn_handler
+        Boolean or callable to handle Vault-emitted warnings.
+        Defaults to ``true``, meaning all emitted warnings are logged.
+        Set this to ``false`` to silence any warnings.
+        Set this to a callable that takes a list of warnings and optionally
+        returns a list of warnings to log.
+    """
+    return _query_client(
+        "patch",
+        opts,
+        context,
+        endpoint,
+        payload=payload,
+        wrap=wrap,
+        raise_error=raise_error,
+        safe_to_retry=safe_to_retry,
+        is_unauthd=is_unauthd,
+        warn_handler=warn_handler,
+        **kwargs,
+    )
+
+
+def api_delete(
+    endpoint: str,
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    payload: dict[typing.Any, typing.Any] | None = None,
+    *,
+    wrap: str | typing.Literal[False] = False,
+    raise_error: bool = True,
+    safe_to_retry: bool | None = None,
+    is_unauthd: bool = False,
+    warn_handler: bool | Callable[[list[str]], list[str] | None] = True,
+    **kwargs,
+):
+    """
+    Query the Vault API using a ``DELETE`` request. Supplemental arguments
+    to ``requests.request`` can be passed as kwargs.
+
+    .. versionadded:: 1.9.0
+
+    endpoint
+        API path to call (without leading ``/v1/``).
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
+
+    payload
+        Dictionary of query parameters to send, if any.
+        They are URL-encoded automatically.
+
+    wrap
+        Whether to request response wrapping. Should be a time string
+        like ``30s`` or False (default).
+
+    raise_error
+        Whether to inspect the response code and raise exceptions.
+        Defaults to True.
+
+    safe_to_retry
+        A boolean indicating whether this request is safe to retry (idempotent) or not.
+        If not provided, defaults to guessing based on the HTTP method.
+        Unsafe requests are not retried, unless :vconf:`client:retry_post` is enabled.
+
+    is_unauthd
+        Whether the queried endpoint is an unauthenticated one and hence
+        does not deduct a token use. Only relevant for endpoints not found
+        in ``sys``. Defaults to False.
+
+    warn_handler
+        Boolean or callable to handle Vault-emitted warnings.
+        Defaults to ``true``, meaning all emitted warnings are logged.
+        Set this to ``false`` to silence any warnings.
+        Set this to a callable that takes a list of warnings and optionally
+        returns a list of warnings to log.
+    """
+    return _query_client(
+        "delete",
+        opts,
+        context,
+        endpoint,
+        payload=payload,
+        wrap=wrap,
+        raise_error=raise_error,
+        safe_to_retry=safe_to_retry,
+        is_unauthd=is_unauthd,
+        warn_handler=warn_handler,
+        **kwargs,
+    )
+
+
 def is_v2(path: str, opts: dict[str, typing.Any], context: dict[typing.Any, typing.Any]):
     """
     Determines if a given secret path is KV v1 or v2.
+
+    path
+        Path to the secret, including mount.
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
     """
     kv = get_kv(opts, context)
     return kv.is_v2(path)
@@ -249,6 +686,22 @@ def read_kv(
 ):
     """
     Read secret at <path>.
+
+    path
+        Path to the secret, including mount.
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
+
+    metadata
+        If ``path`` is on a KV v2 backend, display full results, including metadata.
+        Defaults to False.
+
+    version
+        Version to read. If unset, reads the latest one.
     """
     kv, config = get_kv(opts, context, get_config=True)
     try:
@@ -269,6 +722,15 @@ def read_kv_meta(path: str, opts: dict[str, typing.Any], context: dict[typing.An
     Requires KV v2.
 
     .. versionadded:: 1.2.0
+
+    path
+        Path to the secret, including mount.
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
     """
     kv, config = get_kv(opts, context, get_config=True)
     try:
@@ -291,6 +753,18 @@ def write_kv(
 ):
     """
     Write secret <data> to <path>.
+
+    path
+        Path to the secret, including mount.
+
+    data
+        Secret data to write to <path>. Has to be a mapping.
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
     """
     kv, config = get_kv(opts, context, get_config=True)
     try:
@@ -313,6 +787,19 @@ def patch_kv(
 ):
     """
     Patch secret <data> at <path>.
+
+    path
+        Path to the secret, including mount.
+
+    data
+        Secret data to patch into <path>. Has to be a mapping.
+        Keys set to ``null`` (JSON/YAML)/``None`` (Python) are deleted.
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
     """
     kv, config = get_kv(opts, context, get_config=True)
     try:
@@ -342,6 +829,22 @@ def delete_kv(
     """
     Delete secret at <path>. For KV v2, versions can be specified,
     which is soft-deleted.
+
+    path
+        Path to the secret, including mount.
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
+
+    versions
+        List of versions to soft-delete. If no version is specified,
+        deletes the most recent one.
+
+    all_versions
+        Delete all versions of the secret for KV v2. Defaults to false.
     """
     kv, config = get_kv(opts, context, get_config=True)
     try:
@@ -365,6 +868,22 @@ def restore_kv(
 ):
     """
     Restore secret versions at <path>. Requires KV v2.
+
+    path
+        Path to the secret, including mount.
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
+
+    versions
+        List of versions to restore. If no version is specified,
+        restores the most recent one.
+
+    all_versions
+        Restore all versions of the secret for KV v2. Defaults to false.
     """
     kv, config = get_kv(opts, context, get_config=True)
     try:
@@ -388,6 +907,18 @@ def destroy_kv(
 ):
     """
     Destroy secret <versions> at <path>. Requires KV v2.
+
+    path
+        Path to the secret, including mount.
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
+
+    all_versions
+        Restore all versions of the secret for KV v2. Defaults to false.
     """
     kv, config = get_kv(opts, context, get_config=True)
     try:
@@ -408,6 +939,15 @@ def wipe_kv(path: str, opts: dict[str, typing.Any], context: dict[typing.Any, ty
     Requires KV v2.
 
     .. versionadded:: 1.2.0
+
+    path
+        Path to the secret, including mount.
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
     """
     kv, config = get_kv(opts, context, get_config=True)
     try:
@@ -425,6 +965,15 @@ def wipe_kv(path: str, opts: dict[str, typing.Any], context: dict[typing.Any, ty
 def list_kv(path: str, opts: dict[str, typing.Any], context: dict[typing.Any, typing.Any]):
     """
     List secrets at <path>.
+
+    path
+        Path to the secret, including mount.
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
     """
     kv, config = get_kv(opts, context, get_config=True)
     try:
@@ -437,6 +986,39 @@ def list_kv(path: str, opts: dict[str, typing.Any], context: dict[typing.Any, ty
     clear_cache(opts, context)
     kv = get_kv(opts, context)
     return kv.list(path)
+
+
+def render_identity_template(
+    tpl: str, opts: dict[str, typing.Any], context: dict[typing.Any, typing.Any]
+) -> str | None:
+    """
+    Render an identity template based on the currently active token.
+    Example: ``foo/{{identity.entity.metadata.bar}}``.
+
+    tpl
+        (Possible) template string.
+
+    opts
+        Pass ``__opts__`` from the module.
+
+    context
+        Pass ``__context__`` from the module.
+    """
+    if not _has_identity_template(tpl):
+        return tpl
+
+    # Intentionally use the same client for all requests and crash if auth expires
+    client = get_authd_client(opts, context)
+    ctx = LazyIdentityContext(client)
+
+    def _sub_id(match):
+        tgt = match.group(1).strip()
+        return str(ctx[tgt])
+
+    try:
+        return ACL_TEMPLATING_REGEX.sub(_sub_id, tpl)
+    except (KeyError, RuntimeError):
+        return None
 
 
 class LazyIdentityContext(Mapping[str, str]):
@@ -565,44 +1147,36 @@ class LazyIdentityContext(Mapping[str, str]):
         return sum(1 for _ in self)
 
 
-def render_identity_template(
-    tpl: str, opts: dict[str, typing.Any], context: dict[typing.Any, typing.Any]
-) -> str | None:
-    """
-    Render an identity template based on the currently active token.
-    Example: ``foo/{{identity.entity.metadata.bar}}``.
-
-    tpl
-        (Possible) template string.
-
-    opts
-        Pass ``__opts__`` from the module.
-
-    context
-        Pass ``__context__`` from the module.
-    """
-    if not _has_identity_template(tpl):
-        return tpl
-
-    # Intentionally use the same client for all requests and crash if auth expires
-    client = get_authd_client(opts, context)
-    ctx = LazyIdentityContext(client)
-
-    def _sub_id(match):
-        tgt = match.group(1).strip()
-        return str(ctx[tgt])
-
-    try:
-        return ACL_TEMPLATING_REGEX.sub(_sub_id, tpl)
-    except (KeyError, RuntimeError):
-        return None
-
-
 def _has_identity_template(tpl: str) -> bool:
     """
     Check whether a string contains an identity template.
     """
     return bool(ACL_TEMPLATING_REGEX.search(tpl))
+
+
+def _query_client(
+    func: str,
+    opts: dict[str, typing.Any],
+    context: dict[typing.Any, typing.Any],
+    *args: typing.Any,
+    **kwargs: typing.Any,
+):
+    """
+    Call a request method of the authenticated client, retrying with
+    a new client after clearing the cache in case permission was denied
+    and the cached authentication data might be outdated.
+    """
+    client, config = get_authd_client(opts, context, get_config=True)
+    try:
+        return getattr(client, func)(*args, **kwargs)
+    except VaultPermissionDeniedError:
+        if not _check_clear(config, client):
+            raise
+
+    # in case policies have changed
+    clear_cache(opts, context)
+    client = get_authd_client(opts, context)
+    return getattr(client, func)(*args, **kwargs)
 
 
 def _check_clear(config: dict[str, typing.Any], client: vclient.AuthenticatedVaultClient) -> bool:

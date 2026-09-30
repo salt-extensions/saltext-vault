@@ -21,6 +21,17 @@ KV_FUNCS = (
     pytest.param("list_kv", "list", ("secret/path",), id="list_kv"),
 )
 
+# Maps the API request helpers to the corresponding client method
+# and its default value for ``safe_to_retry``
+API_FUNCS = (
+    pytest.param("api_get", "get", None, id="api_get"),
+    pytest.param("api_list", "list", None, id="api_list"),
+    pytest.param("api_post", "post", None, id="api_post"),
+    pytest.param("api_put", "put", True, id="api_put"),
+    pytest.param("api_patch", "patch", None, id="api_patch"),
+    pytest.param("api_delete", "delete", None, id="api_delete"),
+)
+
 
 @pytest.fixture
 def config():
@@ -181,6 +192,65 @@ def test_query_raw_retry_can_be_disabled(client, clear_cache):
     assert res is denied
     client.request_raw.assert_called_once()
     client.token_valid.assert_not_called()
+    clear_cache.assert_not_called()
+
+
+@pytest.mark.usefixtures("get_authd_client")
+@pytest.mark.parametrize("func,method,safe_to_retry", API_FUNCS)
+def test_api_funcs_delegate_to_client_method(client, func, method, safe_to_retry):
+    """
+    The ``api_*`` helpers should call the corresponding client method
+    with matching defaults instead of issuing a literal verb via ``request``.
+    This ensures ``api_list`` respects ``client:list_as_get``.
+    """
+    payload = {"foo": "bar"}
+    client_method = getattr(client, method)
+    res = getattr(vault, func)("secret/path", {}, {}, payload)
+    client_method.assert_called_once_with(
+        "secret/path",
+        payload=payload,
+        wrap=False,
+        raise_error=True,
+        safe_to_retry=safe_to_retry,
+        is_unauthd=False,
+        warn_handler=True,
+    )
+    assert res is client_method.return_value
+    client.request.assert_not_called()
+
+
+def test_api_funcs_retry_with_cleared_cache(get_authd_client, client, clear_cache):
+    """
+    A permission denied error should cause the ``api_*`` helpers to clear
+    the cache and retry with a new client, like ``query``.
+    """
+    opts = {"conf": "opts"}
+    context = {"conf": "context"}
+    client.list.side_effect = (
+        vault.VaultPermissionDeniedError("permission denied"),
+        {"data": {"keys": ["foo"]}},
+    )
+    res = vault.api_list("secret/metadata", opts, context)
+    assert res == {"data": {"keys": ["foo"]}}
+    clear_cache.assert_called_once_with(opts, context)
+    assert client.list.call_count == 2
+    assert client.list.call_args_list[0] == client.list.call_args_list[1]
+    assert get_authd_client.call_count == 2
+
+
+@pytest.mark.usefixtures("get_authd_client")
+def test_api_funcs_raise_permission_denied(client, config, clear_cache):
+    """
+    A permission denied error should be raised by the ``api_*`` helpers when
+    ``clear_on_unauthorized`` is unset and the current token is
+    still reported as valid.
+    """
+    config["cache"]["clear_on_unauthorized"] = False
+    client.list.side_effect = vault.VaultPermissionDeniedError("permission denied")
+    with pytest.raises(vault.VaultPermissionDeniedError, match="permission denied"):
+        vault.api_list("secret/metadata", {}, {})
+    client.token_valid.assert_called_once_with(remote=True)
+    client.list.assert_called_once()
     clear_cache.assert_not_called()
 
 

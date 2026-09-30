@@ -809,6 +809,18 @@ def test_vault_client_request_raw_does_not_increase_use_count_with_unauthd_endpo
     client.auth.used.assert_not_called()
 
 
+@pytest.mark.usefixtures("req_any")
+@pytest.mark.parametrize("client", ["valid_token"], indirect=True)
+@pytest.mark.parametrize("func", ["get", "list", "post", "put", "patch", "delete"])
+def test_vault_client_wrappers_forward_supplemental_kwargs(func, client):
+    """
+    The convenience wrappers accept supplemental kwargs like ``request``
+    does, e.g. ``is_unauthd``, which is consumed by the authenticated client.
+    """
+    getattr(client, func)("pki/cert/ca", {"foo": "bar"}, is_unauthd=True)
+    client.auth.used.assert_not_called()
+
+
 @pytest.mark.parametrize("client", ["valid_token"], indirect=True)
 def test_vault_client_token_lookup_self_possible(client, req_any):
     """

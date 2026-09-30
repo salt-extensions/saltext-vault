@@ -212,6 +212,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool | None = None,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> typing.Any: ...
     @typing.overload
     def delete(
@@ -224,6 +225,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool | None = None,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> leases.VaultWrappedResponse: ...
     def delete(
         self,
@@ -235,6 +237,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool | None = None,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> typing.Any:
         """
         Wrapper for client.request("DELETE", ...)
@@ -251,6 +254,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
             add_headers=add_headers,
             safe_to_retry=safe_to_retry,
             warn_handler=warn_handler,
+            **kwargs,
         )
 
     @typing.overload
@@ -264,6 +268,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool | None = None,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> typing.Any: ...
     @typing.overload
     def get(
@@ -276,6 +281,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool | None = None,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> leases.VaultWrappedResponse: ...
     def get(
         self,
@@ -287,6 +293,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool | None = None,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> typing.Any:
         """
         Wrapper for client.request("GET", ...)
@@ -303,6 +310,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
             add_headers=add_headers,
             safe_to_retry=safe_to_retry,
             warn_handler=warn_handler,
+            **kwargs,
         )
 
     @typing.overload
@@ -316,6 +324,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool | None = None,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> typing.Any: ...
     @typing.overload
     def list(
@@ -328,6 +337,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool | None = None,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> leases.VaultWrappedResponse: ...
     def list(
         self,
@@ -339,6 +349,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool | None = None,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> typing.Any:
         """
         Wrapper for a logical Vault list operation.
@@ -366,6 +377,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
             add_headers=add_headers,
             safe_to_retry=safe_to_retry,
             warn_handler=warn_handler,
+            **kwargs,
         )
 
     @typing.overload
@@ -379,6 +391,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool | None = None,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> typing.Any: ...
     @typing.overload
     def post(
@@ -391,6 +404,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool | None = None,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> leases.VaultWrappedResponse: ...
     def post(
         self,
@@ -402,6 +416,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool | None = None,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> typing.Any:
         """
         Wrapper for client.request("POST", ...)
@@ -415,6 +430,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
             add_headers=add_headers,
             safe_to_retry=safe_to_retry,
             warn_handler=warn_handler,
+            **kwargs,
         )
 
     @typing.overload
@@ -428,6 +444,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool = True,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> typing.Any: ...
     @typing.overload
     def put(
@@ -440,6 +457,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool = True,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> leases.VaultWrappedResponse: ...
     def put(
         self,
@@ -451,6 +469,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool = True,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> leases.VaultWrappedResponse | typing.Any:
         """
         Also a wrapper for client.request("POST", ...)
@@ -466,6 +485,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
             add_headers=add_headers,
             safe_to_retry=safe_to_retry,
             warn_handler=warn_handler,
+            **kwargs,
         )
 
     @typing.overload
@@ -479,6 +499,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool | None = None,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> typing.Any: ...
     @typing.overload
     def patch(
@@ -491,6 +512,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool | None = None,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> leases.VaultWrappedResponse: ...
     def patch(
         self,
@@ -502,6 +524,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         add_headers: dict[str, str] | None = None,
         safe_to_retry: bool | None = None,
         warn_handler: bool | Callable[[List[str]], List[str] | None] = True,
+        **kwargs,
     ) -> typing.Any:
         """
         Wrapper for client.request("PATCH", ...)
@@ -515,6 +538,7 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
             add_headers=add_headers,
             safe_to_retry=safe_to_retry,
             warn_handler=warn_handler,
+            **kwargs,
         )
 
     @typing.overload
