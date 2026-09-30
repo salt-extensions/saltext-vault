@@ -94,7 +94,7 @@ def existing_cert(
         cert_managed, cert_args = vault_pki.certificate_managed, request.getfixturevalue(
             "cert_args"
         )
-    overrides = getattr(request, "param", {})
+    overrides = getattr(request, "param", {}).copy()  # don't mutate global parametrize dicts
     generate_csr = overrides.pop("generate_csr", False)
     cert_args.update(overrides)
     if generate_csr:
