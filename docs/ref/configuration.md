@@ -367,6 +367,20 @@ The new URL must be listed in the master's {vconf}`url_alts <server:url_alts>` t
 :::
 ::::
 
+:::{important}
+OpenBao supports horizontal scaling, where standby nodes serve read requests.
+In versions before 2.6.2, response-wrapped requests were not forwarded to the
+active node and failed on standby nodes with `internal error` or
+`cannot write to readonly storage`. This extension relies on response wrapping
+during credential issuance by default ({vconf}`issue:wrap`), which makes such
+setups fail in seemingly random ways.
+
+When running affected versions in a horizontally scaled cluster, ensure this
+URL points directly at the active (leader) node, not at a load balancer that
+routes requests to standby nodes.
+See [openbao#3026](https://github.com/openbao/openbao/issues/3026) for details.
+:::
+
 :::{vconf} server:url_alts
 :::
 #### url_alts
