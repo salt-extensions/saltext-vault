@@ -205,12 +205,12 @@ CHANGED_FILES_MAP = (
         rf"{TESTS_DIR_REL}/common/files/.*",
         ("*",),
     ),
-    (  # wrapper test modules reuse the functional execution module tests
+    (  # wrapper/runner test modules reuse the functional execution module tests
         rf"{TESTS_DIR_REL}/functional/modules/(?:(?P<pkg>\w+)/)?test_(?P<name>\w+)\.py",
         (
             "tests/functional/modules/{pkg}*test_{name}.py",  # the changed file itself
             "tests/functional/runners/{pkg}*test_{name}.py",  # same-named runner module
-            "tests/functional/runners/test_{pkg}.py",  # e.g. vault/test_vault_kv.py -> wrapper/test_vault.py
+            "tests/functional/runners/test_{pkg}.py",  # e.g. vault/test_vault_kv.py -> runners/test_vault.py
             "tests/integration/wrapper/{pkg}*test_{name}.py",  # same-named wrapper module
             "tests/integration/wrapper/test_{pkg}.py",  # e.g. vault/test_vault_kv.py -> wrapper/test_vault.py
         ),

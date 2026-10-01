@@ -4,6 +4,7 @@ SSH wrapper for the :py:mod:`vault_approle <saltext.vault.modules.vault_approle>
 .. versionadded:: 1.8.0
 """
 
+from saltext.vault.modules.vault_approle import __func_alias__  # pylint: disable=unused-import
 from saltext.vault.modules.vault_approle import clear_cached
 from saltext.vault.modules.vault_approle import delete
 from saltext.vault.modules.vault_approle import destroy_secret_id
@@ -15,8 +16,6 @@ from saltext.vault.modules.vault_approle import lookup_secret_id
 from saltext.vault.modules.vault_approle import read
 from saltext.vault.modules.vault_approle import write
 from saltext.vault.utils.functools import namespaced_function
-
-__func_alias__ = {"list_": "list"}
 
 globals_dict = globals()
 

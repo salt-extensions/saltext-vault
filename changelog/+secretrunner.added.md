@@ -1,1 +1,0 @@
-Added a `vault_secret` {py:mod}`runner <saltext.vault.runners.vault_secret>` equivalent of the {py:mod}`execution module <saltext.vault.modules.vault_secret>`. It authenticates with the actual master token, making KV secret management available in a master context, e.g. during orchestration or from the reactor system.
