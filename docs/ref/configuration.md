@@ -138,7 +138,7 @@ as well.
 :::
 #### clear_attempt_revocation
 When flushing still valid cached tokens and leases, attempt to have them
-revoked after a (short) delay. Defaults to `60`.
+revoked after a (short) delay. Defaults to `60` (seconds).
 Set this to false to disable revocation (not recommended).
 
 :::{vconf} cache:clear_on_unauthorized
@@ -180,8 +180,8 @@ Defaults to false.
 :::{vconf} cache:kv_metadata
 :::
 #### kv_metadata
-The time in seconds to cache KV metadata used to determine if a path
-is using version 1/2 for. Defaults to `connection`, which clears
+The time in seconds to cache the KV metadata that is used to determine
+whether a path uses KV version 1 or 2. Defaults to `connection`, which clears
 the metadata cache once a new configuration is requested from the
 master. Setting this to `null` keeps the information
 indefinitely until the cache is cleared manually using
@@ -201,8 +201,8 @@ is requested from the master.
 :::
 
 Configures Vault API client behavior. By default,
-the client retries requests with a backoff strategy,
-unless the response includes a `Retry-After` header, which is respected.
+the client retries requests with a backoff strategy;
+if the response includes a `Retry-After` header, that is respected instead.
 Connection errors as well as responses with the status codes
 `412`, `429`, `500`, `502`, `503`, `504` are retried.
 
@@ -324,7 +324,7 @@ Defaults to `[412, 500, 502, 503, 504]`.
 
 :::{note}
 HTTP 429 is always retried, regardless of HTTP verb and whether it is present
-in this list. It is recommended to ensure the `Retry-After` header is sent by Vault to optimize the spent resources.
+in this list. It is recommended to ensure the `Retry-After` header is sent by Vault to avoid wasting resources.
 See {vconf}`respect_retry_after <client:respect_retry_after>` for details.
 :::
 
@@ -428,7 +428,7 @@ Configures authentication data issued by the master to minions.
 The type of authentication to issue to minions. Can be `token` or `approle`.
 Defaults to `token`.
 
-To be able to issue AppRoles to minions, the master needs to be able to
+To issue AppRoles to minions, the master needs to be able to
 create new AppRoles on the configured auth mount.
 It is strongly encouraged to create a separate mount dedicated to minions.
 
@@ -470,7 +470,7 @@ role_name
 params
     : Configures the tokens the master issues to minions.
       See the [Vault Token API docs][] for details. To make full use of multi-use tokens,
-      you should configure a {vconf}`cache <cache:backend>` that survives a single session
+      you should configure a {vconf}`cache <cache:backend>` that persists across sessions
       (e.g. `disk`).
 
       :::{important}
@@ -500,7 +500,7 @@ Usually, you don't want to enable this.
 :::
 #### wrap
 The time a minion has to unwrap a wrapped secret issued by the master.
-Set this to false to disable wrapping, otherwise a time string like `30s`
+Set this to false to disable wrapping; otherwise a time string like `30s`
 can be used. Defaults to `30s`.
 
 :::{vconf} keys
@@ -611,7 +611,7 @@ refreshing pillar data, make sure the relevant values are not sourced
 from Vault (ext_pillar, sdb) or from a pillar sls file that uses the vault
 execution/sdb module. Although this often works when cached pillar data is
 available, if the master needs to compile the pillar data during policy rendering,
-all Vault modules are broken to prevent an infinite loop.
+all Vault modules are disabled to prevent an infinite loop.
 :::
 
 ## Minion-only configuration
@@ -733,7 +733,7 @@ vault:
     cache_time: 60
     refresh_pillar: null
   server:
-    url: <required, e. g. https://vault.example.com:8200>
+    url: <required, e.g. https://vault.example.com:8200>
     url_alts: []
     namespace: null
     verify: null

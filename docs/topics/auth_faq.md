@@ -11,7 +11,7 @@ Masters and minions (opt-in via {vconf}`config_location`) can be configured stat
 (auth-tradeoff-target)=
 ### Token vs AppRole
 Tokens are the basic entity of authentication. They carry metadata regarding validity, renewal and authorization (policies).
-Any other authentication method results in the generation of a token. Configuring a token directly gives simple and minute
+Any other authentication method results in the generation of a token. Configuring a token directly gives simple and fine-grained
 control over its properties. If the configured token becomes invalid, e.g. because it was not renewed in time, you need to
 update the daemon configuration with a new valid one and restart it.
 
@@ -22,7 +22,7 @@ the daemon can re-authenticate using its credentials and obtain a fresh token. I
 via AppRoles can thus be considered more stable. When the configured SecretID becomes invalid, you still need to update
 the daemon configuration with a new valid one and restart it, but missing token renewals is usually a non-issue.
 
-The general recommendation is to use AppRoles for manually configured authentication, which generally means the master.
+The general recommendation is to use AppRoles for manually configured authentication, which usually means the master.
 
 ### Caching
 
@@ -36,7 +36,8 @@ writes tokens (in plaintext) to the daemon's `cachedir`. This reduces token proc
 
 ### Renewal
 
-Active tokens are renewed any time this extension is invoked. You can configure the {vconf}`minimum validity <auth:token_lifecycle:minimum_ttl>`
+Token validity is checked any time this extension is invoked and renewals are triggered as needed.
+You can configure the {vconf}`minimum validity <auth:token_lifecycle:minimum_ttl>`
 that triggers renewals and the {vconf}`renewal increment <auth:token_lifecycle:renew_increment>` that is requested
 when renewing a token.
 
@@ -50,8 +51,8 @@ When configured, it is invoked regularly and renews the token, until its maximum
 Statically configured tokens or SecretIDs should be valid for many uses over a long time since they need to be
 refreshed manually when expired.
 
-Consider setting ``secret_id_num_uses`` (for SecretIDs)/``num_uses`` (for tokens) to ``0``.
-``secret_id_ttl``/``token_max_ttl`` should follow a custom assessment, e.g. ``30d``.
+Consider setting `secret_id_num_uses` (for SecretIDs)/`num_uses` (for tokens) to `0`.
+`secret_id_ttl`/`token_max_ttl` should follow a custom assessment, e.g. `30d`.
 
 
 ## Automatically issued minion auth
@@ -65,11 +66,11 @@ The decision whether to issue tokens or AppRoles should be made based on the fol
 
 1. **Is a compromised master outside of your threat model or is your Vault namespace/server dedicated solely to Salt?**
 
-   Issuing tokens allows to restrict which policies the master is able to assign to minions via a [Token Role](token-role-target)'s
-   ``allowed_policies``/``allowed_policies_glob``. There is no simple equivalent when issuing AppRoles,
+   Issuing tokens allows restricting which policies the master is able to assign to minions via a [Token Role](token-role-target)'s
+   `allowed_policies`/`allowed_policies_glob`. There is no simple equivalent when issuing AppRoles,
    meaning a compromised master can usually assign arbitrary policies.
 
-   If you answered both questions with ``no``, consider issuing tokens.
+   If you answered both parts of this question with `no`, consider issuing tokens.
 
 2. **Do you need a large set of dynamically named policies and want to reduce their management overhead, e.g.
    when using minion roles or minion ID-specific secrets?**
@@ -79,7 +80,7 @@ The decision whether to issue tokens or AppRoles should be made based on the fol
    meaning you need to create a separate regular policy on the Vault server for each of the
    {vconf}`assigned policies <policies:assign>`.
 
-   If you answered ``yes``, consider issuing AppRoles.
+   If you answered `yes`, consider issuing AppRoles.
 
 (pillar-impersonation-target)=
 ## Pillar impersonation
@@ -89,8 +90,8 @@ must respect configured Vault policies when distributing secrets to minions.
 In order to verify that a minion has access to a secret, the master issues minion-specific credentials to itself,
 authenticates to Vault using these and requests the secret.
 
-This means the **master token does not need access to pillar secret paths**, the **minion tokens do**.
+This means the **master token does not need access to pillar secret paths** – the **minion tokens do**.
 
-This impersonation also happens when any Vault execution module is invoked via ``salt-ssh`` (i.e. with {doc}`Wrapper modules </ref/wrapper/index>`).
+This impersonation also happens when any Vault execution module is invoked via `salt-ssh` (i.e. with {doc}`Wrapper modules </ref/wrapper/index>`).
 
 If the master cannot issue valid credentials to minions, this impersonation fails.
