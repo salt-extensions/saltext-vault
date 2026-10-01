@@ -128,6 +128,7 @@ exclude_patterns = [
     ".gitlab-ci",
     ".gitignore",
     "sitevars.rst",
+    "topics/includes",
 ]
 
 autosummary_generate = False
