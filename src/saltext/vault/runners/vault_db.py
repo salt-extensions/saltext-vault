@@ -1,7 +1,39 @@
 """
-SSH wrapper for the :py:mod:`vault_db <saltext.vault.modules.vault_db>` execution module.
+Runner module equivalent to the :py:mod:`vault_db <saltext.vault.modules.vault_db>` execution module.
 
-.. versionadded:: 1.1.0
+Uses the actual master token to authenticate, not the master-minion one like :py:func:`salt.cmd <salt.runners.salt.cmd>` would use.
+
+.. versionadded:: 1.9.0
+
+.. important::
+    This module requires the general :ref:`Vault setup <vault-setup>`.
+
+Lease renewal
+-------------
+Leases requested with ``cache`` enabled are stored in the master's own lease store,
+which :py:func:`list_cached <saltext.vault.runners.vault_db.list_cached>`,
+:py:func:`renew_cached <saltext.vault.runners.vault_db.renew_cached>` and
+:py:func:`clear_cached <saltext.vault.runners.vault_db.clear_cached>` operate on.
+
+Unlike on minions, where the :py:mod:`vault_lease <saltext.vault.beacons.vault_lease>`
+beacon module can renew cached leases automatically, there is no beacon support
+on the master. Expired cached leases are discarded and replaced with newly issued
+credentials transparently during :py:func:`get_creds <saltext.vault.runners.vault_db.get_creds>`
+calls, so renewal is only necessary when the issued credentials themselves need
+to stay valid, e.g. because they have been passed to Vault-unaware software.
+
+In this case, you can employ the master scheduler, which executes runner functions:
+
+.. code-block:: yaml
+
+    # in the master configuration
+    schedule:
+      vault_db_lease_renewal:
+        function: vault_db.renew_cached
+        minutes: 10
+
+Note that in contrast to the beacon module, this does not send expiry events for
+leases that cannot be renewed further.
 """
 
 from saltext.vault.modules.vault_db import _write_role

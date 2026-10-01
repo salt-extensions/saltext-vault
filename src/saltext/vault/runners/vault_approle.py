@@ -1,7 +1,12 @@
 """
-SSH wrapper for the :py:mod:`vault_approle <saltext.vault.modules.vault_approle>` execution module.
+Runner module equivalent to the :py:mod:`vault_approle <saltext.vault.modules.vault_approle>` execution module.
 
-.. versionadded:: 1.8.0
+Uses the actual master token to authenticate, not the master-minion one like :py:func:`salt.cmd <salt.runners.salt.cmd>` would use.
+
+.. versionadded:: 1.9.0
+
+.. important::
+    This module requires the general :ref:`Vault setup <vault-setup>`.
 """
 
 from saltext.vault.modules.vault_approle import clear_cached

@@ -1,8 +1,6 @@
 """
 SSH wrapper for the :py:mod:`vault_gpg <saltext.vault.modules.vault_gpg>` execution module.
 
-See there for documentation.
-
 .. versionadded:: 1.8.0
 """
 

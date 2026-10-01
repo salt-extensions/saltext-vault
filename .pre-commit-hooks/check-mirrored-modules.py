@@ -1,5 +1,5 @@
 """
-Verify the salt-ssh wrapper modules mirror their execution modules.
+Verify the runner modules and salt-ssh wrapper modules mirror their execution modules.
 
 For each execution module in ``src/saltext/vault/modules``, a wrapper
 module of the same name must exist in ``src/saltext/vault/wrapper`` and
@@ -15,6 +15,9 @@ module of the same name must exist in ``src/saltext/vault/wrapper`` and
  4. mirror the execution module's ``__func_alias__`` entries -
     otherwise, aliased functions are exposed under their unaliased
     names and calls to the aliased ones bypass the wrapper silently.
+
+The same is assured for runner modules, with the exception that they
+are not required to exist.
 """
 
 import ast
@@ -24,11 +27,21 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MODULES_DIR = REPO_ROOT / "src" / "saltext" / "vault" / "modules"
+RUNNERS_DIR = REPO_ROOT / "src" / "saltext" / "vault" / "runners"
 WRAPPER_DIR = REPO_ROOT / "src" / "saltext" / "vault" / "wrapper"
 MODULES_PKG = "saltext.vault.modules"
 
-# Known gaps that need a decision instead of a mechanical fix
-EXCLUDES = {}
+# Known runner gaps. Mapping of module names to set of function names.
+RUNNER_EXCLUDES = {
+    "vault.py": {"*"},  # Different modules
+    "vault_ssh.py": {  # Compatibility layer for the ssh_pki.certificate_managed state
+        "create_certificate",
+        "get_signing_policy",
+    },
+}
+
+# Known wrapper gaps. Mapping of module names to set of function names.
+WRAPPER_EXCLUDES = {}
 
 
 def _parse(path):
@@ -91,20 +104,29 @@ def _namespaced(tree):
 
 
 def check_module(mod_path):
-    wrapper_path = WRAPPER_DIR / mod_path.name
-    prefix = f"{mod_path.relative_to(REPO_ROOT)}: "
-    if not wrapper_path.exists():
-        yield f"{prefix}missing wrapper module at {wrapper_path.relative_to(REPO_ROOT)}"
-        return
+    exemod = _parse(mod_path)
+    for mirror_path, must_exist, ignores in (
+        (WRAPPER_DIR / mod_path.name, True, WRAPPER_EXCLUDES),
+        (RUNNERS_DIR / mod_path.name, False, RUNNER_EXCLUDES),
+    ):
+        if "*" in ignores.get(mirror_path.name, ()):
+            continue
+        if not mirror_path.exists():
+            if must_exist:
+                prefix = f"{mod_path.relative_to(REPO_ROOT)}: "
+                yield f"{prefix}missing wrapper module at {mirror_path.relative_to(REPO_ROOT)}"
+            return
+        yield from _check_module(exemod, mirror_path, ignores)
 
-    mod = _parse(mod_path)
-    wrapper = _parse(wrapper_path)
-    prefix = f"{wrapper_path.relative_to(REPO_ROOT)}: "
+
+def _check_module(mod, mirror_path, ignores):
+    wrapper = _parse(mirror_path)
+    prefix = f"{mirror_path.relative_to(REPO_ROOT)}: "
 
     public = {
         name
         for name in _top_level_functions(mod)
-        if not name.startswith("_") and name not in EXCLUDES.get(mod_path.name, ())
+        if not name.startswith("_") and name not in ignores.get(mirror_path.name, ())
     }
     mod_aliases = _func_alias(mod)
     wrapper_funcs = _top_level_functions(wrapper)
@@ -155,7 +177,7 @@ def main():
             continue
         problems.extend(check_module(mod_path))
     if problems:
-        print("The salt-ssh wrapper modules are out of sync:")
+        print("The runner/salt-ssh wrapper modules are out of sync:")
         for problem in problems:
             print(f"  * {problem}")
         return 1

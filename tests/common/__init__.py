@@ -53,6 +53,7 @@ def gen_master_opts(
     policies: str | Sequence[str] | None = None,
     policy_cache_time: int | None = None,
     url: str | None = None,
+    x509v2: bool = False,
 ) -> dict[str, typing.Any]:
     """
     Generate master config without typing all nested dicts.
@@ -88,6 +89,7 @@ def gen_master_opts(
         backend=backend,
         expire_events=expire_events,
         url=url,
+        x509v2=x509v2,
     )
     if pillars is not None:
         opts.setdefault("ext_pillar", []).extend(

@@ -1,0 +1,1 @@
+Added a `vault_pki` {py:mod}`runner <saltext.vault.runners.vault_pki>` equivalent of the {py:mod}`execution module <saltext.vault.modules.vault_pki>`. It authenticates with the actual master token, making the PKI functionality available in a master context, e.g. during orchestration or from the reactor system.

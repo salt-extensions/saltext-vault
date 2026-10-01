@@ -112,11 +112,13 @@ CHANGED_FILES_MAP = (
             "tests/functional/test_argspec_works.py",
         ),
     ),
-    (  # execution module changes affect states and wrappers
+    (  # execution module changes affect states, runners and wrappers
         rf"{PACKAGE_ROOT_REL}/modules/(?P<mod_name>\w+?)\.py",
         (
             "tests/*/modules/test_{mod_name}.py",
             "tests/*/modules/{mod_name}/test_*.py",
+            "tests/*/runners/test_{mod_name}.py",
+            "tests/*/runners/{mod_name}/test_*.py",
             "tests/*/states/test_{mod_name}.py",
             "tests/*/states/{mod_name}/test_*.py",
             "tests/*/wrapper/test_{mod_name}.py",
@@ -157,6 +159,8 @@ CHANGED_FILES_MAP = (
         (
             "tests/*/modules/test_vault_secret.py",
             "tests/*/modules/vault_secret/test_*.py",
+            "tests/*/runners/test_vault_secret.py",
+            "tests/*/runners/vault_secret/test_*.py",
             "tests/*/sdb/vault/test_*.py",
             "tests/*/states/test_vault_secret.py",
             "tests/*/states/vault_secret/test_*.py",
@@ -205,6 +209,8 @@ CHANGED_FILES_MAP = (
         rf"{TESTS_DIR_REL}/functional/modules/(?:(?P<pkg>\w+)/)?test_(?P<name>\w+)\.py",
         (
             "tests/functional/modules/{pkg}*test_{name}.py",  # the changed file itself
+            "tests/functional/runners/{pkg}*test_{name}.py",  # same-named runner module
+            "tests/functional/runners/test_{pkg}.py",  # e.g. vault/test_vault_kv.py -> wrapper/test_vault.py
             "tests/integration/wrapper/{pkg}*test_{name}.py",  # same-named wrapper module
             "tests/integration/wrapper/test_{pkg}.py",  # e.g. vault/test_vault_kv.py -> wrapper/test_vault.py
         ),

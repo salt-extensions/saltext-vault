@@ -1,7 +1,7 @@
 """
 SSH wrapper for the :py:mod:`vault_pki <saltext.vault.modules.vault_pki>` execution module.
 
-See there for documentation.
+.. versionadded:: 1.9.0
 
 Setup notes
 -----------
@@ -142,7 +142,7 @@ def import_issuer_intermediate(cert, chain=None, mount="pki"):
 
     .. code-block:: bash
 
-        salt '*' vault_pki.import_issuer_intermediate /etc/tls/my_intermediate_cert.pem
+        salt-ssh '*' vault_pki.import_issuer_intermediate /etc/tls/my_intermediate_cert.pem
 
     cert
         Certificate to import. Any input accepted by the :py:mod:`x509_v2 modules <salt.modules.x509_v2>` is accepted.
@@ -196,8 +196,8 @@ def import_issuer(cert, chain=None, private_key=None, private_key_passphrase=Non
 
     .. code-block:: bash
 
-        salt '*' vault_pki.import_issuer /etc/tls/my_intermediate_cert.pem
-        salt '*' vault_pki.import_issuer /etc/tls/my_intermediate_cert.pem private_key=/etc/tls/my_intermediate.key
+        salt-ssh '*' vault_pki.import_issuer /etc/tls/my_intermediate_cert.pem
+        salt-ssh '*' vault_pki.import_issuer /etc/tls/my_intermediate_cert.pem private_key=/etc/tls/my_intermediate.key
 
     cert
         Certificate to import. Any input accepted by the :py:mod:`x509_v2 modules <salt.modules.x509_v2>` is accepted.

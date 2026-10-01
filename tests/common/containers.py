@@ -251,7 +251,7 @@ def genmarks(
         Set this to true to auto-derive the necessary policies from the master config.
         Set this to a name or a sequence of names to ensure they are present.
 
-    secret_mounts
+    mounts
         Ensure specific secret engine mounts are present.
         Set this to true to enable one KVv2 mount at ``secrets``.
         Set this to a string (e. g. ``pki``) to enable the same-named secret engine
@@ -260,7 +260,7 @@ def genmarks(
         the second item is the mount name, and the optional third item a string or
         sequence of strings of options to pass to the mount command.
 
-    vault_secrets
+    secrets
         Ensure specific secrets are present on all KV (!) mounts defined in ``secret_mounts``.
         Define the values that should be written in a module-scoped ``vault_secrets_defaults`` fixture
         that returns a mapping of "<vault path>" to a dictionary of secret data.

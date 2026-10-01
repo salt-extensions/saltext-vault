@@ -163,8 +163,8 @@ def get_server_config():
     .. versionadded:: 1.0.0
 
     Return the server connection configuration that's currently in use by Salt.
-    Contains :vconf:`url <server:url>`, :vconf:`verify <server:verify>`
-    and :vconf:`namespace <server:namespace>`.
+    Contains :vconf:`url <server:url>`, :vconf:`verify <server:verify>`,
+    :vconf:`namespace <server:namespace>` and :vconf:`url_alts <server:url_alts>`.
 
     CLI Example:
 

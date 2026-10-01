@@ -1,7 +1,5 @@
 """
 SSH wrapper for the :py:mod:`vault <saltext.vault.modules.vault>` execution module.
-
-See there for documentation.
 """
 
 from saltext.vault.modules.vault import clear_cache
