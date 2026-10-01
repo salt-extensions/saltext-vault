@@ -11,7 +11,7 @@ from these older modules, there is a single necessary change to make:
 
 ## `peer_run`
 This extension uses different endpoints for configuration and credential
-distribution. While it provides a fallback for legacy config to keep working,
+distribution. While it provides a fallback that keeps legacy configurations working,
 this requires unnecessary roundtrips and will be removed in some future release.
 
 What was previously
@@ -36,7 +36,7 @@ improvements versus the previous Salt core <3007 modules.
 ## Changed config structure
 Since there were many additions and changes, a new configuration structure
 was introduced. The old one is still recognized, but deprecated.
-Please take measures to migrate to the new structure at your discretion.
+Please migrate to the new structure at your convenience.
 The compatibility layer will be removed in some future release.
 
 ### Renamed
@@ -63,7 +63,7 @@ The compatibility layer will be removed in some future release.
 
 (3007-changes)=
 ## Changes versus the 3007 release
-There are some planned changes not found in any version of Salt core.
+This extension carries some deprecations that were never part of a Salt core release.
 
 ### Deprecated defaults/configuration
 
@@ -88,7 +88,7 @@ There are some planned changes not found in any version of Salt core.
     - vault:
         path: secret/salt2
   ```
-  Please update your configuration, the previous method will stop working
+  Please update your configuration; the previous method will stop working
   in the next major release.
 
 ### Deprecated functions

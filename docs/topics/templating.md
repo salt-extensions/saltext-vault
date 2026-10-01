@@ -25,7 +25,7 @@ Generally available template variables are:
       Pillar values sourced from Vault should never be referenced here:
 
       * In the general case, they are undefined to prevent circular references.
-        If you use the Vault integration during rendering of some your regular pillar
+        If you use the Vault integration during rendering of some of your regular pillar
         `sls` files, all values originating from these are undefined, even the ones that do not
         depend on Vault. It is thus highly encouraged to avoid calling the Vault modules
         during pillar rendering if you rely on pillar templating in this extension.
@@ -38,8 +38,8 @@ Generally available template variables are:
         {vconf}`policies:refresh_pillar <policies:refresh_pillar>` to `true`.
 
       Pillar values originating from previously rendered pillars can be used to template
-      [Vault Pillar](saltext.vault.pillar.vault) paths. Using pillar values to template
-      Vault pillar paths requires them to be defined before the Vault ext_pillar is called.
+      [Vault Pillar](saltext.vault.pillar.vault) paths, as long as they are defined
+      before the Vault ext_pillar is called.
       Especially consider the significance of the
       {conf_master}`ext_pillar_first <ext_pillar_first>` master config setting.
       :::
@@ -68,7 +68,7 @@ Metadata configuration values additionally provide:
     : The user the Salt daemon issuing the secret was running as.
 
 ## Rendering
-In general, the templating works like regular Python ``str.format()``.
+In general, the templating works like regular Python `str.format()`.
 
 :::{note}
 Policies are lowercased automatically.
@@ -114,7 +114,7 @@ A general solution to this involves templating {vconf}`policies:assign` and crea
 :::{versionadded} 1.3.0
 :::
 This extension supports an inelegant workaround though,
-which allows to rely on templated ACL policies even when composite values are in play.
+which makes it possible to rely on templated ACL policies even when composite values are in play.
 
 Assuming the following master configuration:
 
@@ -140,7 +140,7 @@ roles__0: db
 roles__1: web
 ```
 
-To make use of this in a templated ACL policy, repeat each definition for as many times
+To make use of this in a templated ACL policy, repeat each definition as many times
 as the number of items you want to support for the composite template variable,
 only changing the metadata key index:
 
