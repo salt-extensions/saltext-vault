@@ -24,7 +24,10 @@ from salt.exceptions import SaltInvocationError
 from salt.exceptions import SaltRunnerError
 from salt.utils import immutabletypes
 
+from saltext.vault.modules.vault import get_server_config
+from saltext.vault.modules.vault import query
 from saltext.vault.utils import vault
+from saltext.vault.utils.functools import namespaced_function
 from saltext.vault.utils.vault import cache as vcache
 from saltext.vault.utils.vault import factory
 from saltext.vault.utils.vault import helpers
@@ -86,6 +89,10 @@ NO_OVERRIDE_PARAMS = immutabletypes.freeze(
     }
 )
 
+globals_dict = globals()
+query = namespaced_function(query, globals_dict, versionadded="1.9.0")
+get_server_config = namespaced_function(get_server_config, globals_dict, versionadded="1.9.0")
+
 
 def auth_info():
     """
@@ -124,94 +131,387 @@ def auth_info():
     return info
 
 
-def generate_token(
-    minion_id,
-    signature,
-    impersonated_by_master=False,
-    ttl=None,
-    uses=None,
-    upgrade_request=False,
-):
+def show_policies(minion_id, refresh_pillar=NOT_SET, expire=None):
     """
-    .. deprecated:: 1.0.0
-
-    Generate a Vault token for minion <minion_id>.
+    Show the Vault policies that are applied to tokens for the given minion.
 
     minion_id
-        ID of the minion that requests a token.
+        ID of the minion to show policies for.
 
-    signature
-        Cryptographic signature which validates that the request is indeed sent
-        by the minion (or the master, see impersonated_by_master).
+    refresh_pillar
+        Whether to refresh the pillar data when rendering templated policies.
+        None only refreshes when the cached data is unavailable, boolean values
+        force one behavior always.
+        Defaults to :vconf:`policies:refresh_pillar` or None.
 
-    impersonated_by_master
-        If the master needs to create a token on behalf of the minion, this is
-        True. This happens when the master generates minion pillars.
+    expire
+        Policy computation can be heavy in case pillar data is used in templated policies and
+        it has not been cached. Therefore, a short-lived cache specifically for rendered policies
+        is used. This specifies the expiration timeout in seconds.
+        Defaults to :vconf:`policies:cache_time` or 60.
 
-    ttl
-        Token time to live in seconds, 1m minutes, or 2h hrs
+    .. note::
 
-    uses
-        Number of times a token can be used
+        When issuing AppRoles to minions, the shown policies are read from Vault
+        configuration for the minion's AppRole and thus refresh_pillar/expire
+        is not honored.
 
-    upgrade_request
-        In case the new runner endpoints have not been whitelisted for peer running,
-        this endpoint serves as a gateway to :func:`vault.get_config <get_config>`.
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt-run vault.show_policies myminion
+    """
+    if _config("issue:type") == "approle":
+        meta = _lookup_approle(minion_id)
+        if not meta:
+            raise SaltRunnerError(
+                f"AppRole for minion `{minion_id}` has not been created yet. "
+                "You can use `vault.sync_approles` to force its creation."
+            )
+        return meta["token_policies"]
+
+    if refresh_pillar == NOT_SET:
+        refresh_pillar = _config("policies:refresh_pillar")
+    expire = expire if expire is not None else _config("policies:cache_time")
+    return _get_policies_cached(minion_id, refresh_pillar=refresh_pillar, expire=expire)
+
+
+def sync_approles(minions=None, up=False, down=False):
+    """
+    .. versionadded:: 1.0.0
+
+    Sync minion AppRole parameters with current settings, including associated
+    token policies.
+
+    .. note::
+        Only updates existing AppRoles. They are issued during the first request
+        for one by the minion.
+        Running this resets minion overrides, which are reapplied automatically
+        during the next request for authentication details.
+
+    .. note::
+        Unlike when issuing tokens, AppRole-associated policies are not regularly
+        refreshed automatically. It is advised to schedule regular runs of this function.
+
+    If no parameter is specified, tries to sync AppRoles for all known minions.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt-run vault.sync_approles
+        salt-run vault.sync_approles ecorp
+
+    minions
+        (List of) ID(s) of the minion(s) to update the AppRole for.
+        Defaults to None.
+
+    up
+        Find all minions that are up and update their AppRoles.
+        Defaults to False.
+
+    down
+        Find all minions that are down and update their AppRoles.
         Defaults to False.
     """
-    if upgrade_request:
-        log.warning(
-            "Detected minion fallback to old vault.generate_token peer run function. "
-            "Please update your master peer_run configuration."
-        )
-        issue_params = {"explicit_max_ttl": ttl, "num_uses": uses}
-        return get_config(minion_id, signature, impersonated_by_master, issue_params=issue_params)
+    if _config("issue:type") != "approle":
+        raise SaltRunnerError("Master does not issue AppRoles to minions.")
+    if minions is not None:
+        if not isinstance(minions, list):
+            minions = [minions]
+    elif up or down:
+        minions = []
+        if up:
+            minions.extend(__salt__["manage.list_state"]())
+        if down:
+            minions.extend(__salt__["manage.list_not_state"]())
+    else:
+        minions = _list_all_known_minions()
 
-    log.debug(
-        "Token generation request for %s (impersonated by master: %s)",
-        minion_id,
-        impersonated_by_master,
-    )
-    _validate_signature(minion_id, signature, impersonated_by_master)
-    try:
-        warn_until(
-            2,
-            (
-                "The vault.generate_token endpoint is deprecated and will be removed "
-                "in version {version}. Please ensure your minions are running the "
-                "Vault Salt extension as well."
-            ),
-        )
+    for minion in set(minions) & set(list_approles()):
+        _manage_approle(minion, issue_params=None)
+        _lookup_approle_cached(minion, refresh=True)
+        # Running multiple pillar renders in a loop would otherwise
+        # falsely report a cyclic dependency (same loader context?)
+        __opts__.pop("_vault_runner_is_compiling_pillar_templates", None)
+    return True
 
-        if _config("issue:type") != "token":
-            log.warning(
-                "Master is not configured to issue tokens. Since the minion uses "
-                "this deprecated endpoint, issuing token anyways."
-            )
 
-        issue_params = {}
-        if ttl is not None:
-            issue_params["explicit_max_ttl"] = ttl
-        if uses is not None:
-            issue_params["num_uses"] = uses
+def list_approles():
+    """
+    .. versionadded:: 1.0.0
 
-        token, _ = _generate_token(minion_id, issue_params=issue_params or None, wrap=False)
-        ret = {
-            "token": token["client_token"],
-            "lease_duration": token["lease_duration"],
-            "renewable": token["renewable"],
-            "issued": token["creation_time"],
-            "url": _config("server:url"),
-            "verify": _config("server:verify"),
-            "token_backend": _config("cache:backend"),
-            "namespace": _config("server:namespace"),
+    List all AppRoles that have been created by the Salt master.
+    They are named after the minions.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt-run vault.list_approles
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "auth/<mount>/role" {
+            capabilities = ["list"]
         }
-        if token["num_uses"] >= 0:
-            ret["uses"] = token["num_uses"]
+    """
+    if _config("issue:type") != "approle":
+        raise SaltRunnerError("Master does not issue AppRoles to minions.")
+    api = _get_approle_api()
+    return api.list_approles(mount=_config("issue:approle:mount"))
 
-        return ret
-    except Exception as err:  # pylint: disable=broad-except
-        return {"error": f"{type(err).__name__}: {str(err)}"}
+
+def show_approle(minion_id):
+    """
+    .. versionadded:: 1.0.0
+
+    Show AppRole configuration for <minion_id>.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt-run vault.show_approle db1
+    """
+    if _config("issue:type") != "approle":
+        raise SaltRunnerError("Master does not issue AppRoles to minions.")
+    api = _get_approle_api()
+    return api.read_approle(minion_id, mount=_config("issue:approle:mount"))
+
+
+def sync_entities(minions=None, up=False, down=False):
+    """
+    .. versionadded:: 1.0.0
+
+    Sync minion entities with current settings. Only updates entities for minions
+    with existing AppRoles.
+
+    .. note::
+        This updates associated metadata only. Entities are created only
+        when issuing AppRoles to minions (:vconf:`issue:type` == ``approle``).
+
+    If no parameter is specified, tries to sync entities for all known minions.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt-run vault.sync_entities
+
+    minions
+        (List of) ID(s) of the minion(s) to update the entity for.
+        Defaults to None.
+
+    up
+        Find all minions that are up and update their associated entities.
+        Defaults to False.
+
+    down
+        Find all minions that are down and update their associated entities.
+        Defaults to False.
+    """
+    if _config("issue:type") != "approle":
+        raise SaltRunnerError(
+            "Master is not configured to issue AppRoles to minions, which is a "
+            "requirement to use managed entities with Salt."
+        )
+    if minions is not None:
+        if not isinstance(minions, list):
+            minions = [minions]
+    elif up or down:
+        minions = []
+        if up:
+            minions.extend(__salt__["manage.list_state"]())
+        if down:
+            minions.extend(__salt__["manage.list_not_state"]())
+    else:
+        minions = _list_all_known_minions()
+
+    for minion in set(minions) & set(list_approles()):
+        _manage_entity(minion)
+        # Running multiple pillar renders in a loop would otherwise
+        # falsely report a cyclic dependency (same loader context?)
+        __opts__.pop("_vault_runner_is_compiling_pillar_templates", None)
+        entity = _lookup_entity_by_alias(minion)
+        if not entity or entity["name"] != f"salt_minion_{minion}":
+            log.info("Fixing association of minion AppRole to minion entity for %s.", minion)
+            _manage_entity_alias(minion)
+    return True
+
+
+def list_entities():
+    """
+    .. versionadded:: 1.0.0
+
+    List all entities that have been created by the Salt master.
+    They are named ``salt_minion_{minion_id}``.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt-run vault.list_entities
+
+    Required policy:
+
+    .. code-block:: vaultpolicy
+
+        path "identity/entity/name" {
+            capabilities = ["list"]
+        }
+    """
+    if _config("issue:type") != "approle":
+        raise SaltRunnerError("Master does not issue AppRoles to minions.")
+    api = _get_identity_api()
+    entities = api.list_entities()
+    return [x for x in entities if x.startswith("salt_minion_")]
+
+
+def show_entity(minion_id):
+    """
+    .. versionadded:: 1.0.0
+
+    Show entity metadata for <minion_id>.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt-run vault.show_entity db1
+    """
+    if _config("issue:type") != "approle":
+        raise SaltRunnerError("Master does not issue AppRoles to minions.")
+    api = _get_identity_api()
+    return api.read_entity(f"salt_minion_{minion_id}")["metadata"]
+
+
+def unseal():
+    """
+    Unseal the Vault server. Uses keys from the master config :vconf:`keys` .
+
+    .. note::
+        This function sends unseal keys until the API returns success.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt-run vault.unseal
+    """
+    config = factory.parse_config(__opts__.get("vault", {}))
+    client = VaultClient(**config["server"], **config["client"])
+
+    for key in __opts__["vault"]["keys"]:
+        ret = client.put("sys/unseal", payload={"key": key})
+        # Return immediately after Vault is unsealed. No need to go over all the keys
+        if ret["sealed"] is False:
+            return True
+    return False
+
+
+def cleanup_auth():
+    """
+    .. versionadded:: 1.0.0
+
+    Removes AppRoles and entities associated with unknown minion IDs.
+    Can only clean up entities if the AppRole still exists.
+
+    .. warning::
+        Make absolutely sure that the configured minion approle issue mount is
+        exclusively dedicated to the Salt master, otherwise you might lose data
+        by using this function! (:vconf:`issue:approle:mount`)
+
+        This detects unknown existing AppRoles by listing all roles on the
+        configured minion AppRole mount and deducting known minions from the
+        returned list.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt-run vault.cleanup_auth
+    """
+    ret = {"approles": [], "entities": []}
+
+    for minion in set(list_approles()) - set(_list_all_known_minions()):
+        if _fetch_entity_by_name(minion):
+            _delete_entity(minion)
+            ret["entities"].append(minion)
+        _delete_approle(minion)
+        ret["approles"].append(minion)
+    return {"deleted": ret}
+
+
+def clear_cache(master=True, minions=True):
+    """
+    .. versionadded:: 1.0.0
+
+    Clears master cache of Vault-specific data. This can include:
+
+    - AppRole metadata
+    - rendered policies
+    - cached authentication credentials for impersonated minions
+    - cached KV metadata for impersonated minions
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt-run vault.clear_cache
+        salt-run vault.clear_cache minions=false
+        salt-run vault.clear_cache master=false minions='[minion1, minion2]'
+
+    master
+        Clear cached data for the master context.
+        Includes cached master authentication data and KV metadata.
+        Defaults to true.
+
+    minions
+        Clear cached data for minions on the master.
+        Can include cached authentication credentials and KV metadata
+        for pillar compilation as well as AppRole metadata and
+        rendered policies for credential issuance.
+        Defaults to true. Set this to a list of minion IDs to only clear
+        cached data pertaining to these minions.
+    """
+    # We need the config to know which backend needs to be cleared
+    # for pillar compilation.
+    config, _, _ = factory._get_connection_config("vault", __opts__, __context__, force_local=True)
+    # Regular cache used by all client contexts. Can be the one in __opts__["cache"] or "localfs" or None (just context)
+    client_cache = vcache._get_cache_backend(config, __opts__)
+
+    if master and client_cache:
+        log.debug("Clearing master client Vault cache")
+        vault.clear_cache(__opts__, __context__, force_local=True)
+
+    if not minions:
+        return True
+
+    if client_cache:
+        # First, clear cached config/auth/KV metadata per impersonated minion.
+        # Using vault.clear_cache ensures tokens are revoked and the context is cleared.
+        for minion in client_cache.list("minions"):
+            if minions is True or (isinstance(minions, list) and minion in minions):
+                log.debug(f"Clearing master client Vault cache for minion {minion}")
+                minion_opts = __opts__.copy()
+                minion_opts["minion_id"] = minion
+                minion_opts["grains"] = {"id": minion}
+                # Clear the whole cache. This might already get rid of the runner cache.
+                vault.clear_cache(minion_opts, __context__, connection=False)
+
+    # Cache of AppRole metadata and rendered policies.
+    # Might already be cleared if it's the same backend as the client one.
+    runner_cache = salt.cache.factory(__opts__)
+    for minion in runner_cache.list("minions"):
+        if minions is True or (isinstance(minions, list) and minion in minions):
+            log.debug(f"Clearing master Vault cache for minion {minion}")
+            runner_cache.flush(f"minions/{minion}/vault")
+
+    return True
 
 
 def generate_new_token(minion_id, signature, impersonated_by_master=False, issue_params=None):
@@ -550,389 +850,6 @@ def generate_secret_id(minion_id, signature, impersonated_by_master=False, issue
         }
     except Exception as err:  # pylint: disable=broad-except
         return {"error": f"{type(err).__name__}: {str(err)}"}
-
-
-def unseal():
-    """
-    Unseal the Vault server. Uses keys from the master config :vconf:`keys` .
-
-    .. note::
-        This function sends unseal keys until the API returns success.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt-run vault.unseal
-    """
-    config = factory.parse_config(__opts__.get("vault", {}))
-    client = VaultClient(**config["server"], **config["client"])
-
-    for key in __opts__["vault"]["keys"]:
-        ret = client.put("sys/unseal", payload={"key": key})
-        # Return immediately after Vault is unsealed. No need to go over all the keys
-        if ret["sealed"] is False:
-            return True
-    return False
-
-
-def show_policies(minion_id, refresh_pillar=NOT_SET, expire=None):
-    """
-    Show the Vault policies that are applied to tokens for the given minion.
-
-    minion_id
-        ID of the minion to show policies for.
-
-    refresh_pillar
-        Whether to refresh the pillar data when rendering templated policies.
-        None only refreshes when the cached data is unavailable, boolean values
-        force one behavior always.
-        Defaults to :vconf:`policies:refresh_pillar` or None.
-
-    expire
-        Policy computation can be heavy in case pillar data is used in templated policies and
-        it has not been cached. Therefore, a short-lived cache specifically for rendered policies
-        is used. This specifies the expiration timeout in seconds.
-        Defaults to :vconf:`policies:cache_time` or 60.
-
-    .. note::
-
-        When issuing AppRoles to minions, the shown policies are read from Vault
-        configuration for the minion's AppRole and thus refresh_pillar/expire
-        is not honored.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt-run vault.show_policies myminion
-    """
-    if _config("issue:type") == "approle":
-        meta = _lookup_approle(minion_id)
-        if not meta:
-            raise SaltRunnerError(
-                f"AppRole for minion `{minion_id}` has not been created yet. "
-                "You can use `vault.sync_approles` to force its creation."
-            )
-        return meta["token_policies"]
-
-    if refresh_pillar == NOT_SET:
-        refresh_pillar = _config("policies:refresh_pillar")
-    expire = expire if expire is not None else _config("policies:cache_time")
-    return _get_policies_cached(minion_id, refresh_pillar=refresh_pillar, expire=expire)
-
-
-def sync_approles(minions=None, up=False, down=False):
-    """
-    .. versionadded:: 1.0.0
-
-    Sync minion AppRole parameters with current settings, including associated
-    token policies.
-
-    .. note::
-        Only updates existing AppRoles. They are issued during the first request
-        for one by the minion.
-        Running this resets minion overrides, which are reapplied automatically
-        during the next request for authentication details.
-
-    .. note::
-        Unlike when issuing tokens, AppRole-associated policies are not regularly
-        refreshed automatically. It is advised to schedule regular runs of this function.
-
-    If no parameter is specified, tries to sync AppRoles for all known minions.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt-run vault.sync_approles
-        salt-run vault.sync_approles ecorp
-
-    minions
-        (List of) ID(s) of the minion(s) to update the AppRole for.
-        Defaults to None.
-
-    up
-        Find all minions that are up and update their AppRoles.
-        Defaults to False.
-
-    down
-        Find all minions that are down and update their AppRoles.
-        Defaults to False.
-    """
-    if _config("issue:type") != "approle":
-        raise SaltRunnerError("Master does not issue AppRoles to minions.")
-    if minions is not None:
-        if not isinstance(minions, list):
-            minions = [minions]
-    elif up or down:
-        minions = []
-        if up:
-            minions.extend(__salt__["manage.list_state"]())
-        if down:
-            minions.extend(__salt__["manage.list_not_state"]())
-    else:
-        minions = _list_all_known_minions()
-
-    for minion in set(minions) & set(list_approles()):
-        _manage_approle(minion, issue_params=None)
-        _lookup_approle_cached(minion, refresh=True)
-        # Running multiple pillar renders in a loop would otherwise
-        # falsely report a cyclic dependency (same loader context?)
-        __opts__.pop("_vault_runner_is_compiling_pillar_templates", None)
-    return True
-
-
-def list_approles():
-    """
-    .. versionadded:: 1.0.0
-
-    List all AppRoles that have been created by the Salt master.
-    They are named after the minions.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt-run vault.list_approles
-
-    Required policy:
-
-    .. code-block:: vaultpolicy
-
-        path "auth/<mount>/role" {
-            capabilities = ["list"]
-        }
-    """
-    if _config("issue:type") != "approle":
-        raise SaltRunnerError("Master does not issue AppRoles to minions.")
-    api = _get_approle_api()
-    return api.list_approles(mount=_config("issue:approle:mount"))
-
-
-def sync_entities(minions=None, up=False, down=False):
-    """
-    .. versionadded:: 1.0.0
-
-    Sync minion entities with current settings. Only updates entities for minions
-    with existing AppRoles.
-
-    .. note::
-        This updates associated metadata only. Entities are created only
-        when issuing AppRoles to minions (:vconf:`issue:type` == ``approle``).
-
-    If no parameter is specified, tries to sync entities for all known minions.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt-run vault.sync_entities
-
-    minions
-        (List of) ID(s) of the minion(s) to update the entity for.
-        Defaults to None.
-
-    up
-        Find all minions that are up and update their associated entities.
-        Defaults to False.
-
-    down
-        Find all minions that are down and update their associated entities.
-        Defaults to False.
-    """
-    if _config("issue:type") != "approle":
-        raise SaltRunnerError(
-            "Master is not configured to issue AppRoles to minions, which is a "
-            "requirement to use managed entities with Salt."
-        )
-    if minions is not None:
-        if not isinstance(minions, list):
-            minions = [minions]
-    elif up or down:
-        minions = []
-        if up:
-            minions.extend(__salt__["manage.list_state"]())
-        if down:
-            minions.extend(__salt__["manage.list_not_state"]())
-    else:
-        minions = _list_all_known_minions()
-
-    for minion in set(minions) & set(list_approles()):
-        _manage_entity(minion)
-        # Running multiple pillar renders in a loop would otherwise
-        # falsely report a cyclic dependency (same loader context?)
-        __opts__.pop("_vault_runner_is_compiling_pillar_templates", None)
-        entity = _lookup_entity_by_alias(minion)
-        if not entity or entity["name"] != f"salt_minion_{minion}":
-            log.info("Fixing association of minion AppRole to minion entity for %s.", minion)
-            _manage_entity_alias(minion)
-    return True
-
-
-def list_entities():
-    """
-    .. versionadded:: 1.0.0
-
-    List all entities that have been created by the Salt master.
-    They are named ``salt_minion_{minion_id}``.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt-run vault.list_entities
-
-    Required policy:
-
-    .. code-block:: vaultpolicy
-
-        path "identity/entity/name" {
-            capabilities = ["list"]
-        }
-    """
-    if _config("issue:type") != "approle":
-        raise SaltRunnerError("Master does not issue AppRoles to minions.")
-    api = _get_identity_api()
-    entities = api.list_entities()
-    return [x for x in entities if x.startswith("salt_minion_")]
-
-
-def show_entity(minion_id):
-    """
-    .. versionadded:: 1.0.0
-
-    Show entity metadata for <minion_id>.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt-run vault.show_entity db1
-    """
-    if _config("issue:type") != "approle":
-        raise SaltRunnerError("Master does not issue AppRoles to minions.")
-    api = _get_identity_api()
-    return api.read_entity(f"salt_minion_{minion_id}")["metadata"]
-
-
-def show_approle(minion_id):
-    """
-    .. versionadded:: 1.0.0
-
-    Show AppRole configuration for <minion_id>.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt-run vault.show_approle db1
-    """
-    if _config("issue:type") != "approle":
-        raise SaltRunnerError("Master does not issue AppRoles to minions.")
-    api = _get_approle_api()
-    return api.read_approle(minion_id, mount=_config("issue:approle:mount"))
-
-
-def cleanup_auth():
-    """
-    .. versionadded:: 1.0.0
-
-    Removes AppRoles and entities associated with unknown minion IDs.
-    Can only clean up entities if the AppRole still exists.
-
-    .. warning::
-        Make absolutely sure that the configured minion approle issue mount is
-        exclusively dedicated to the Salt master, otherwise you might lose data
-        by using this function! (:vconf:`issue:approle:mount`)
-
-        This detects unknown existing AppRoles by listing all roles on the
-        configured minion AppRole mount and deducting known minions from the
-        returned list.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt-run vault.cleanup_auth
-    """
-    ret = {"approles": [], "entities": []}
-
-    for minion in set(list_approles()) - set(_list_all_known_minions()):
-        if _fetch_entity_by_name(minion):
-            _delete_entity(minion)
-            ret["entities"].append(minion)
-        _delete_approle(minion)
-        ret["approles"].append(minion)
-    return {"deleted": ret}
-
-
-def clear_cache(master=True, minions=True):
-    """
-    .. versionadded:: 1.0.0
-
-    Clears master cache of Vault-specific data. This can include:
-
-    - AppRole metadata
-    - rendered policies
-    - cached authentication credentials for impersonated minions
-    - cached KV metadata for impersonated minions
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt-run vault.clear_cache
-        salt-run vault.clear_cache minions=false
-        salt-run vault.clear_cache master=false minions='[minion1, minion2]'
-
-    master
-        Clear cached data for the master context.
-        Includes cached master authentication data and KV metadata.
-        Defaults to true.
-
-    minions
-        Clear cached data for minions on the master.
-        Can include cached authentication credentials and KV metadata
-        for pillar compilation as well as AppRole metadata and
-        rendered policies for credential issuance.
-        Defaults to true. Set this to a list of minion IDs to only clear
-        cached data pertaining to these minions.
-    """
-    # We need the config to know which backend needs to be cleared
-    # for pillar compilation.
-    config, _, _ = factory._get_connection_config("vault", __opts__, __context__, force_local=True)
-    # Regular cache used by all client contexts. Can be the one in __opts__["cache"] or "localfs" or None (just context)
-    client_cache = vcache._get_cache_backend(config, __opts__)
-
-    if master and client_cache:
-        log.debug("Clearing master client Vault cache")
-        vault.clear_cache(__opts__, __context__, force_local=True)
-
-    if not minions:
-        return True
-
-    if client_cache:
-        # First, clear cached config/auth/KV metadata per impersonated minion.
-        # Using vault.clear_cache ensures tokens are revoked and the context is cleared.
-        for minion in client_cache.list("minions"):
-            if minions is True or (isinstance(minions, list) and minion in minions):
-                log.debug(f"Clearing master client Vault cache for minion {minion}")
-                minion_opts = __opts__.copy()
-                minion_opts["minion_id"] = minion
-                minion_opts["grains"] = {"id": minion}
-                # Clear the whole cache. This might already get rid of the runner cache.
-                vault.clear_cache(minion_opts, __context__, connection=False)
-
-    # Cache of AppRole metadata and rendered policies.
-    # Might already be cleared if it's the same backend as the client one.
-    runner_cache = salt.cache.factory(__opts__)
-    for minion in runner_cache.list("minions"):
-        if minions is True or (isinstance(minions, list) and minion in minions):
-            log.debug(f"Clearing master Vault cache for minion {minion}")
-            runner_cache.flush(f"minions/{minion}/vault")
-
-    return True
 
 
 def _config(key=None, default=vault.VaultException):
@@ -1375,3 +1292,93 @@ class LazyPillar(Mapping[typing.Any, typing.Any]):
         if pillar is None:
             pillar = self._load()
         return len(pillar)
+
+
+def generate_token(
+    minion_id,
+    signature,
+    impersonated_by_master=False,
+    ttl=None,
+    uses=None,
+    upgrade_request=False,
+):
+    """
+    .. deprecated:: 1.0.0
+
+    Generate a Vault token for minion <minion_id>.
+
+    minion_id
+        ID of the minion that requests a token.
+
+    signature
+        Cryptographic signature which validates that the request is indeed sent
+        by the minion (or the master, see impersonated_by_master).
+
+    impersonated_by_master
+        If the master needs to create a token on behalf of the minion, this is
+        True. This happens when the master generates minion pillars.
+
+    ttl
+        Token time to live in seconds, 1m minutes, or 2h hrs
+
+    uses
+        Number of times a token can be used
+
+    upgrade_request
+        In case the new runner endpoints have not been whitelisted for peer running,
+        this endpoint serves as a gateway to :func:`vault.get_config <get_config>`.
+        Defaults to False.
+    """
+    if upgrade_request:
+        log.warning(
+            "Detected minion fallback to old vault.generate_token peer run function. "
+            "Please update your master peer_run configuration."
+        )
+        issue_params = {"explicit_max_ttl": ttl, "num_uses": uses}
+        return get_config(minion_id, signature, impersonated_by_master, issue_params=issue_params)
+
+    log.debug(
+        "Token generation request for %s (impersonated by master: %s)",
+        minion_id,
+        impersonated_by_master,
+    )
+    _validate_signature(minion_id, signature, impersonated_by_master)
+    try:
+        warn_until(
+            2,
+            (
+                "The vault.generate_token endpoint is deprecated and will be removed "
+                "in version {version}. Please ensure your minions are running the "
+                "Vault Salt extension as well."
+            ),
+        )
+
+        if _config("issue:type") != "token":
+            log.warning(
+                "Master is not configured to issue tokens. Since the minion uses "
+                "this deprecated endpoint, issuing token anyways."
+            )
+
+        issue_params = {}
+        if ttl is not None:
+            issue_params["explicit_max_ttl"] = ttl
+        if uses is not None:
+            issue_params["num_uses"] = uses
+
+        token, _ = _generate_token(minion_id, issue_params=issue_params or None, wrap=False)
+        ret = {
+            "token": token["client_token"],
+            "lease_duration": token["lease_duration"],
+            "renewable": token["renewable"],
+            "issued": token["creation_time"],
+            "url": _config("server:url"),
+            "verify": _config("server:verify"),
+            "token_backend": _config("cache:backend"),
+            "namespace": _config("server:namespace"),
+        }
+        if token["num_uses"] >= 0:
+            ret["uses"] = token["num_uses"]
+
+        return ret
+    except Exception as err:  # pylint: disable=broad-except
+        return {"error": f"{type(err).__name__}: {str(err)}"}

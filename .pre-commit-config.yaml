@@ -163,10 +163,10 @@ repos:
         pass_filenames: false
         files: ^(tests/|src/|noxfile\.py|pyproject\.toml)
 
-      - id: check-wrapper-modules
-        name: Verify SSH wrapper modules mirror execution modules
-        entry: python .pre-commit-hooks/check-wrapper-modules.py
+      - id: check-mirrored-modules
+        name: Verify SSH wrapper/runner modules mirror execution modules
+        entry: python .pre-commit-hooks/check-mirrored-modules.py
         language: python
         pass_filenames: false
-        files: ^src/saltext/vault/(modules|wrapper)/
+        files: ^src/saltext/vault/(modules|runners|wrapper)/
   # <---- Code Analysis --------------------------------------------------------------------------

@@ -1,0 +1,1 @@
+Added a `vault_approle` {py:mod}`runner <saltext.vault.runners.vault_approle>` equivalent of the {py:mod}`execution module <saltext.vault.modules.vault_approle>`. It authenticates with the actual master token, making AppRole management available in a master context, e.g. during orchestration or from the reactor system.

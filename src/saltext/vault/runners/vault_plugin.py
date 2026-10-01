@@ -1,9 +1,15 @@
 """
-SSH wrapper for the :py:mod:`vault_plugin <saltext.vault.modules.vault_plugin>` execution module.
+Runner module equivalent to the :py:mod:`vault_plugin <saltext.vault.modules.vault_plugin>` execution module.
 
-.. versionadded:: 1.8.0
+Uses the actual master token to authenticate, not the master-minion one like :py:func:`salt.cmd <salt.runners.salt.cmd>` would use.
+
+.. versionadded:: 1.9.0
+
+.. important::
+    This module requires the general :ref:`Vault setup <vault-setup>`.
 """
 
+from saltext.vault.modules.vault_plugin import __func_alias__  # pylint: disable=unused-import
 from saltext.vault.modules.vault_plugin import _check_type
 from saltext.vault.modules.vault_plugin import _list_all_filtered
 from saltext.vault.modules.vault_plugin import _list_pins_filtered
@@ -21,8 +27,6 @@ from saltext.vault.modules.vault_plugin import reload_mounts
 from saltext.vault.modules.vault_plugin import reload_named
 from saltext.vault.modules.vault_plugin import unpin
 from saltext.vault.utils.functools import namespaced_function
-
-__func_alias__ = {"list_": "list"}
 
 globals_dict = globals()
 

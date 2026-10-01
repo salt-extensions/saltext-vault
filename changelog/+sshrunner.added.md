@@ -1,0 +1,1 @@
+Added a `vault_ssh` {py:mod}`runner <saltext.vault.runners.vault_ssh>` equivalent of the {py:mod}`execution module <saltext.vault.modules.vault_ssh>`. It authenticates with the actual master token, making SSH secret engine management and key signing available in a master context, e.g. during orchestration or from the reactor system.

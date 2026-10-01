@@ -1506,8 +1506,13 @@ def generate_intermediate(
             )["ca_chain"]
         )
     else:
-        cert = __salt__["x509.create_certificate"](
-            **sign_kwargs, csr=csr, encoding="pem", days_valid=days_valid, not_after=not_after
+        cert = _x509v2(
+            "create_certificate",
+            **sign_kwargs,
+            csr=csr,
+            encoding="pem",
+            days_valid=days_valid,
+            not_after=not_after,
         )
         # Appended chain certificates are automatically imported by import_issuer_intermediate
     return import_issuer_intermediate(cert, mount=mount)
@@ -2434,7 +2439,8 @@ def sign_certificate(
             _, _, _, other_sans = pki.split_sans(norm_sans)
             # sign-verbatim does not document, but still respects this
             payload["other_sans"] = ",".join(other_sans)
-            csr = __salt__["x509.create_csr"](
+            csr = _x509v2(
+                "create_csr",
                 private_key=private_key,
                 private_key_passphrase=private_key_passphrase,
                 digest=digest,
@@ -2776,7 +2782,8 @@ def sign_intermediate(  # pylint: disable=too-many-locals
             _, _, _, other_sans = pki.split_sans(norm_sans)
             # Still respected when signing verbatim (others are not)
             payload["other_sans"] = ",".join(other_sans)
-            csr = __salt__["x509.create_csr"](
+            csr = _x509v2(
+                "create_csr",
                 private_key=private_key,
                 private_key_passphrase=private_key_passphrase,
                 digest=digest,

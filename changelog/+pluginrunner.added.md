@@ -1,0 +1,1 @@
+Added a `vault_plugin` {py:mod}`runner <saltext.vault.runners.vault_plugin>` equivalent of the {py:mod}`execution module <saltext.vault.modules.vault_plugin>`. It authenticates with the actual master token, making Vault plugin administration available in a master context, e.g. during orchestration or from the reactor system.
