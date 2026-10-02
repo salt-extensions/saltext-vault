@@ -1,1 +1,0 @@
-Added `vault_policy` {py:mod}`execution <saltext.vault.modules.vault_policy>`, {py:mod}`state <saltext.vault.states.vault_policy>` and {py:mod}`wrapper <saltext.vault.wrapper.vault_policy>` modules. They contain pre-existing logic refactored into a separate module.

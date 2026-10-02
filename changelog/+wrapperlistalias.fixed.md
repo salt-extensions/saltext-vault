@@ -1,1 +1,0 @@
-Fixed {py:func}`vault_approle.list <saltext.vault.modules.vault_approle.list_>` and {py:func}`vault_plugin.list <saltext.vault.modules.vault_plugin.list_>` silently bypassing their Salt-SSH wrapper modules

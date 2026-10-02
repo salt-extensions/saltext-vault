@@ -1,1 +1,0 @@
-Extracted KV-related functions from {py:mod}`vault <saltext.vault.modules.vault>` modules into separate {py:mod}`vault_secret <saltext.vault.modules.vault_secret>` ones. Aliases are in place, but result in deprecation warnings and will be removed in the next major (`v2`) release. Please move to the new names.

@@ -1,1 +1,0 @@
-Added {py:func}`vault_pki.read_cluster_config <saltext.vault.modules.vault_pki.read_cluster_config>`/{py:func}`vault_pki.write_cluster_config <saltext.vault.modules.vault_pki.write_cluster_config>` to manage performance cluster configuration/AIA url templating variables
