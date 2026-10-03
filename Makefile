@@ -1,10 +1,13 @@
 GREEN  := $(shell tput -Txterm setaf 2)
 YELLOW := $(shell tput -Txterm setaf 3)
+CYAN   := $(shell tput -Txterm setaf 6)
 BOLD   := $(shell tput -Txterm bold)
 ULINE  := $(shell tput -Txterm smul)
 RESET  := $(shell tput -Txterm sgr0)
 
 .DEFAULT_GOAL:=help
+
+VENV_SH = sh -c '. .venv/bin/activate && exec "$$@"' _
 
 
 .PHONY: help
@@ -32,27 +35,23 @@ clean: ## Remove: project/nox venvs, built docs
 
 ## Docs
 
-.PHONY: docs
+.PHONY: changelog
 changelog: dev ## Render changelog. Requires VERSION parameter.
 	@if [ -z "$(VERSION)" ]; then \
 		echo "Missing VERSION parameter. Example: make changelog VERSION=1.0.0" >&2; exit 1; \
-	fi; \
-    source .venv/bin/activate; \
-	towncrier build --yes --version='$(VERSION)'
+	fi
+	@$(VENV_SH) towncrier build --yes --version='$(VERSION)'
 
 .PHONY: docs
 docs: dev ## Build docs
-	@source .venv/bin/activate; \
-	  nox -e docs --extra-pythons=3.14 --python=3.14
+	@$(VENV_SH) nox -e docs --extra-pythons=3.14 --python=3.14
 
 .PHONY: docs-dev
 docs-dev: dev ## Build docs, serve them and refresh on changes
-	@source .venv/bin/activate; \
-	  nox -e docs-dev --extra-pythons=3.14 --python=3.14
+	@$(VENV_SH) nox -e docs-dev --extra-pythons=3.14 --python=3.14
 
 ## Tests
 
 .PHONY: tests
 tests: dev ## Run tests
-	@source .venv/bin/activate; \
-	  nox -e tests-3.10
+	@$(VENV_SH) nox -e tests-3.11

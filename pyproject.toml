@@ -9,6 +9,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools_scm]
 write_to = "src/saltext/vault/version.py"
 write_to_template = "__version__ = \"{version}\"\n"
+fallback_version = "0.0.0"
 
 [project]
 name = "saltext.vault"
@@ -25,7 +26,6 @@ classifiers = [
     "Programming Language :: Cython",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -33,8 +33,13 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: BSD :: FreeBSD",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: BSD :: OpenBSD",
+    "Operating System :: Microsoft :: Windows",
 ]
-requires-python = ">= 3.10"
+requires-python = ">= 3.11"
 dynamic = ["version"]
 dependencies = [
     "salt>=3006",
@@ -52,7 +57,7 @@ Source = "https://github.com/salt-extensions/saltext-vault"
 Tracker = "https://github.com/salt-extensions/saltext-vault/issues"
 
 [project.optional-dependencies]
-changelog = ["towncrier==25.8.0"]
+changelog = ["towncrier==26.9.0"]
 dev = [
     "nox[uv]>=2024.3,!=2025.05.01",
     "pre-commit>=2.21.0",
@@ -63,15 +68,15 @@ dev = [
 # `--extras` to install them automatically.
 dev_extra = [
     "black==26.5.1",
-    "isort==8.0.1",
-    "coverage==7.14.3",
+    "isort==9.0.2",
+    "coverage==7.16.2",
 ]
 docs = [
   "sphinx",
   "sphinx-prompt",
   "sphinxcontrib-spelling",
   "sphinx-copybutton",
-  "towncrier==25.8.0",
+  "towncrier==26.9.0",
   "sphinxcontrib-towncrier",
   "myst_parser",
   "furo",
@@ -80,7 +85,7 @@ docs = [
 ]
 docsauto = ["sphinx-autobuild"]
 lint = [
-    "pylint==4.0.6",
+    "pylint==4.0.9",
 ]
 tests = [
     "pytest >= 7.2.0",
@@ -201,6 +206,8 @@ builtins = [
     "__reg__",
     "__executors__",
     "__events__",
+    "__resource__",
+    "__resource_funcs__",
 ]
 
 [tool.ty.rules]

@@ -12,7 +12,7 @@ from salt.exceptions import SaltInvocationError
 from saltext.vault.utils.vault import pki
 
 if typing.TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing import Self
 
 
 class CAFixture:
