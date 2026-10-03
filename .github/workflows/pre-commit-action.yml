@@ -22,16 +22,16 @@ jobs:
     name: Pre-Commit
     runs-on: ubuntu-24.04
     container:
-      image: 'docker.io/library/python:3.11.16-slim-trixie@sha256:e41613d42d4891e4930f79523f93f81bbc7632584ec65e36ab055f41a800b41e'
+      image: 'docker.io/library/python:3.11.17-slim-trixie@sha256:45037981b62b34b44602584fccbc4d884d5f7dc92c7ee86bb38a698a79fe1e51'
 
     steps:
       - name: Install System Deps
         run: |
           apt-get update
-          apt-get install -y enchant-2 git gcc make zlib1g-dev libc-dev libffi-dev g++ libxml2 libxml2-dev libxslt-dev libcurl4-openssl-dev libssl-dev libgnutls28-dev
+          apt-get install -y git gcc libc-dev
           git config --global --add safe.directory "$(pwd)"
 
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Cache Pre-Commit Environments
         # Release builds must not use cached environments
@@ -54,7 +54,8 @@ jobs:
           pre-commit run --show-diff-on-failure --color=always --all-files
 
       - name: Check Changed Files On PR
-        if: github.event_name == 'pull_request' && fromJSON(inputs.changed-files)['repo'] == 'true'
+        # Skip when the previous step already checked all files
+        if: github.event_name == 'pull_request' && fromJSON(inputs.changed-files)['repo'] == 'true' && fromJSON(inputs.changed-files)['pre-commit'] != 'true'
         run: |
           pre-commit run --show-diff-on-failure --color=always --files ${{ fromJSON(inputs.changed-files)['repo_files'] }}
 

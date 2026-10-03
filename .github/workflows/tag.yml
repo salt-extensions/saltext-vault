@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Extract version from tag name
         id: get_version_tag
@@ -48,6 +48,10 @@ jobs:
   close_autopr_on_tag:
     name: Close release PR on manual tag
     runs-on: ubuntu-24.04
+    permissions:
+      # Allow closing the release PR and deleting its branch
+      contents: write
+      pull-requests: write
     needs:
       - get_version_tag
 

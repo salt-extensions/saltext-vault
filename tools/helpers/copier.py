@@ -88,10 +88,21 @@ def discover_project_name():
     """
     Specifically discover project name. No dependency.
     """
-    for line in COPIER_ANSWERS.read_text().splitlines():
+    for line in COPIER_ANSWERS.read_text("utf8").splitlines():
         if line.startswith("project_name"):
             return line.split(":", maxsplit=1)[1].strip()
     raise RuntimeError("Failed discovering project name")
+
+
+@_needs_answers
+def discover_venv_python():
+    """
+    Specifically discover the configured venv Python version. No dependency.
+    """
+    for line in COPIER_ANSWERS.read_text("utf8").splitlines():
+        if line.startswith("venv_python"):
+            return line.split(":", maxsplit=1)[1].strip().strip("'\"")
+    return None
 
 
 def finish_task(msg, success, err_exit=False, extra=None):

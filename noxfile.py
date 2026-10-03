@@ -17,12 +17,22 @@ from nox.virtualenv import VirtualEnv
 nox.options.reuse_existing_virtualenvs = True
 #  Don't fail on missing interpreters
 nox.options.error_on_missing_interpreters = False
-# Speed up all sessions by using uv if possible
+# Support development against system-wide packages, e.g. for OS-specific
+# extensions whose dependencies are only available as system packages.
+# Note: When toggling this, remove existing session venvs (`make clean`).
+SYSTEM_SITE_PACKAGES = os.environ.get("VENV_SYSTEM_SITE_PACKAGES", "0") == "1"
+VENV_PARAMS = ("--system-site-packages",) if SYSTEM_SITE_PACKAGES else ()
 if tuple(map(int, metadata.version("nox").split("."))) >= (2024, 3):
-    nox.options.default_venv_backend = "uv|virtualenv"
+    if SYSTEM_SITE_PACKAGES:
+        # uv does not consider packages inherited via --system-site-packages
+        # during installs (astral-sh/uv#4466), so don't use it here.
+        nox.options.default_venv_backend = "virtualenv"
+    else:
+        # Speed up all sessions by using uv if possible
+        nox.options.default_venv_backend = "uv|virtualenv"
 
 # Python versions to test against
-PYTHON_VERSIONS = ("3", "3.10", "3.11", "3.12", "3.13", "3.14")
+PYTHON_VERSIONS = ("3", "3.11", "3.12", "3.13", "3.14")
 # Be verbose when running under a CI context
 CI_RUN = (
     os.environ.get("JENKINS_URL") or os.environ.get("CI") or os.environ.get("DRONE") is not None
@@ -31,7 +41,7 @@ PIP_INSTALL_SILENT = CI_RUN is False
 SKIP_REQUIREMENTS_INSTALL = os.environ.get("SKIP_REQUIREMENTS_INSTALL", "0") == "1"
 EXTRA_REQUIREMENTS_INSTALL = os.environ.get("EXTRA_REQUIREMENTS_INSTALL")
 
-COVERAGE_REQUIREMENT = os.environ.get("COVERAGE_REQUIREMENT") or "coverage==7.14.3"
+COVERAGE_REQUIREMENT = os.environ.get("COVERAGE_REQUIREMENT") or "coverage==7.16.2"
 SALT_REQUIREMENT = os.environ.get("SALT_REQUIREMENT") or "salt>=3006"
 if SALT_REQUIREMENT == "salt==master":
     SALT_REQUIREMENT = "git+https://github.com/saltstack/salt.git@master"
@@ -77,8 +87,8 @@ def _get_session_python_version_info(session):
 
 def _get_pydir(session):
     version_info = _get_session_python_version_info(session)
-    if version_info < (3, 10):
-        session.error("Only Python >= 3.10 is supported")
+    if version_info < (3, 11):
+        session.error("Only Python >= 3.11 is supported")
     return f"py{version_info[0]}.{version_info[1]}"
 
 
@@ -141,7 +151,7 @@ def _install_requirements(
             session.install(pkg, silent=PIP_INSTALL_SILENT)
 
 
-@nox.session(python=PYTHON_VERSIONS)
+@nox.session(python=PYTHON_VERSIONS, venv_params=VENV_PARAMS)
 def tests(session):
     _install_requirements(session, install_source=True)
 
@@ -167,6 +177,7 @@ def tests(session):
     }
 
     # Support running functional/integration tests under Podman rootless
+    # The user must have enabled the listening socket via systemctl --user start podman.socket
     if not CI_RUN:
         env["CONTAINER_HOST_REF"] = "host.docker.internal"
         if sys.platform.startswith("linux"):
@@ -365,7 +376,7 @@ def _lint_pre_commit(session, rcfile, flags, paths):
     _lint(session, rcfile, flags, paths, tee_output=False)
 
 
-@nox.session(python="3")
+@nox.session(python="3", venv_params=VENV_PARAMS)
 def lint(session):
     """
     Run PyLint against the code and the test suite. Set PYLINT_REPORT to a path to capture output.
@@ -374,7 +385,7 @@ def lint(session):
     session.notify(f"lint-tests-{session.python}")
 
 
-@nox.session(python="3", name="lint-code")
+@nox.session(python="3", name="lint-code", venv_params=VENV_PARAMS)
 def lint_code(session):
     """
     Run PyLint against the code. Set PYLINT_REPORT to a path to capture output.
@@ -387,7 +398,7 @@ def lint_code(session):
     _lint(session, ".pylintrc", flags, paths)
 
 
-@nox.session(python="3", name="lint-tests")
+@nox.session(python="3", name="lint-tests", venv_params=VENV_PARAMS)
 def lint_tests(session):
     """
     Run PyLint against the test suite. Set PYLINT_REPORT to a path to capture output.
@@ -452,7 +463,7 @@ def _get_docs_env(session):
     return env
 
 
-@nox.session(python="3")
+@nox.session(python="3", venv_params=VENV_PARAMS)
 def docs(session):
     """
     Build Docs
@@ -479,7 +490,7 @@ def docs(session):
     os.chdir(str(REPO_ROOT))
 
 
-@nox.session(name="docs-dev", python="3")
+@nox.session(name="docs-dev", python="3", venv_params=VENV_PARAMS)
 def docs_dev(session):
     """
     Build and serve the Sphinx HTML documentation, with live reloading on file changes, via sphinx-autobuild.
@@ -513,7 +524,7 @@ def docs_dev(session):
     session.run("sphinx-autobuild", *args, env=env)
 
 
-@nox.session(name="docs-crosslink-info", python="3")
+@nox.session(name="docs-crosslink-info", python="3", venv_params=VENV_PARAMS)
 def docs_crosslink_info(session):
     """
     Report intersphinx cross links information
