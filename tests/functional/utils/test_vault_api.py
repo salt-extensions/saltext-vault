@@ -48,7 +48,7 @@ def test_approle_api_write_and_read_approle(approle_api, fresh_auth_mount, temp_
     )
     res = approle_api.read_approle(temp_role, mount=fresh_auth_mount)
     assert res["token_ttl"] == 1200
-    assert res["token_policies"] == ["foo", "bar"]
+    assert set(res["token_policies"]) == {"foo", "bar"}
 
 
 def test_approle_api_delete_approle(approle_api, fresh_auth_mount, temp_role):
