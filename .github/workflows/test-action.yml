@@ -41,13 +41,13 @@ jobs:
             python-version: "3.14"
             container-image: vault
             # renovate: datasource=docker depName=hashicorp/vault
-            container-tag: "2.1.1"
+            container-tag: "2.2.1"
             internal-logic: false
           - salt-version: "3008.2"
             python-version: "3.14"
             container-image: vault
             # renovate: datasource=docker depName=hashicorp/vault
-            container-tag: "2.1.1"
+            container-tag: "2.2.1"
             internal-logic: true
 
     env:
