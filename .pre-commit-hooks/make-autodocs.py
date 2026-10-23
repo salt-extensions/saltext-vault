@@ -28,23 +28,20 @@ def _find_virtualname(path):
     return virtualname
 
 
-def write_module(rst_path, path, use_virtualname=True):
-    if use_virtualname:
-        virtualname = "``" + _find_virtualname(path) + "``"
-    else:
-        virtualname = make_import_path(path)
-    header_len = len(virtualname)
+def write_module(rst_path, header, paths):
+    header_len = len(header)
     # The check-merge-conflict pre-commit hook chokes here:
     # https://github.com/pre-commit/pre-commit-hooks/issues/100
     if header_len == 7:
         header_len += 1
+    automodules = "\n".join(f""".. automodule:: {make_import_path(path)}
+    :members:
+""" for path in paths)
     module_contents = f"""\
-{virtualname}
+{header}
 {'='*header_len}
 
-.. automodule:: {make_import_path(path)}
-    :members:
-"""
+{automodules}"""
     if not rst_path.exists() or rst_path.read_text() != module_contents:
         print(rst_path)
         rst_path.write_text(module_contents)
@@ -109,19 +106,54 @@ for path in (src_dir / "utils").rglob("*.py"):
         continue
     docs_by_kind.setdefault("utils", set()).add(path)
 
+
+def _group_by_virtualname(paths):
+    grouped = {}
+    for path in sorted(paths):
+        grouped.setdefault(_find_virtualname(path), []).append(path)
+    # Make the module whose file name matches the virtualname the
+    # canonical one, i.e. the first in the group and the one the
+    # rst file is named after.
+    for virtualname, group in grouped.items():
+        for path in group:
+            if path.stem in (virtualname, virtualname + "_mod"):
+                group.remove(path)
+                group.insert(0, path)
+                break
+    return grouped
+
+
 for kind in docs_by_kind:
     kind_path = doc_dir / "ref" / kind
     index_rst = kind_path / "index.rst"
     import_paths = []
-    for path in sorted(docs_by_kind[kind]):
-        import_path = make_import_path(path)
+    written_rst_paths = set()
+    if kind == "utils":
+        # Utils are documented under their import path, no grouping necessary
+        grouped = {make_import_path(path): [path] for path in sorted(docs_by_kind[kind])}
+    else:
+        grouped = {
+            f"``{virtualname}``": paths
+            for virtualname, paths in _group_by_virtualname(docs_by_kind[kind]).items()
+        }
+    for header, paths in grouped.items():
+        import_path = make_import_path(paths[0])
         import_paths.append(import_path)
         rst_path = kind_path / (import_path + ".rst")
         rst_path.parent.mkdir(parents=True, exist_ok=True)
-        change = write_module(rst_path, path, use_virtualname=kind != "utils")
+        written_rst_paths.add(rst_path)
+        change = write_module(rst_path, header, paths)
         changed_something = changed_something or change
 
-    write_index(index_rst, import_paths, kind)
+    # Remove stale generated rst files, e.g. after a module has been renamed/
+    # removed or merged into another one's docs by sharing its virtualname.
+    for rst_path in kind_path.glob(f"saltext.vault.{kind}.*.rst"):
+        if rst_path not in written_rst_paths:
+            print(f"Removing stale {rst_path}")
+            rst_path.unlink()
+            changed_something = True
+
+    changed_something |= write_index(index_rst, sorted(import_paths), kind)
 
 
 # Ensure pre-commit realizes we did something

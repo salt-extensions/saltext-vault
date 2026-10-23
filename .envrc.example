@@ -1,7 +1,17 @@
 layout_saltext() {
-    VIRTUAL_ENV="$(python3 tools/initialize.py --print-venv)"
+    # --skip-install only installs the project when the venv is freshly
+    # created. Run `make dev` to synchronize it after dependency changes.
+    VIRTUAL_ENV="$(python3 tools/initialize.py --skip-install --print-venv)"
     PATH_add "$VIRTUAL_ENV/bin"
     export VIRTUAL_ENV
 }
+
+# Uncomment to inherit system-wide packages in the development venvs,
+# e.g. when dependencies are only available as system packages:
+# export VENV_SYSTEM_SITE_PACKAGES=1
+
+# Uncomment on platforms without prebuilt actionlint/shellcheck binaries
+# (e.g. FreeBSD) to skip the hook locally. It still runs in CI.
+# export SKIP=actionlint
 
 layout_saltext

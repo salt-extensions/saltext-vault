@@ -39,7 +39,8 @@ except ImportError:  # pragma: no cover
     URLLIB3V1 = True
 
 if typing.TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing import Self
+
     from urllib3 import response as urllib3response
 
     from saltext.vault.utils._types import SaltLogger

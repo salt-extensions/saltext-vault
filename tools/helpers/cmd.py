@@ -40,6 +40,8 @@ class ProcessResult:
             expected = [0]
         elif not isinstance(retcode, (list, tuple)):
             expected = [retcode]
+        else:
+            expected = retcode
         if self.retcode not in expected:
             raise ProcessExecutionError(self.argv, self.retcode, self.stdout, self.stderr)
 
@@ -138,11 +140,11 @@ class Local:
         """
         prev = Path(os.getcwd())
         new = prev / path
-        os.cwd(new)
+        os.chdir(new)
         try:
             yield
         finally:
-            os.cwd(prev)
+            os.chdir(prev)
 
     @contextmanager
     def env(self, **kwargs):
@@ -238,7 +240,7 @@ class Command:
         """
         if not isinstance(arg_or_args, tuple):
             arg_or_args = (arg_or_args,)
-        return type(self)(self.exe, tuple(*self.args, *arg_or_args), _local=self._local)
+        return type(self)(self.exe, (*self.args, *arg_or_args))
 
     def __call__(self, *args, **kwargs):
         """
@@ -247,7 +249,7 @@ class Command:
         return self.run(*args, **kwargs).stdout
 
     def __str__(self):
-        return shlex.join([self.exe] + list(self.args))
+        return shlex.join([str(self.exe)] + list(self.args))
 
     def __repr__(self):
         return f"Command<{self.exe}, {self.args!r}>"
@@ -265,7 +267,7 @@ class Command:
             retcode=proc.returncode,
             stdout=proc.stdout,
             stderr=proc.stderr,
-            argv=argv,
+            argv=tuple(argv),
         )
         if check:
             ret.check()
@@ -283,6 +285,22 @@ class LocalCommand(Command):
     """
 
     _local: Local = field(kw_only=True, repr=False, default=local)
+
+    def __getitem__(self, arg_or_args):
+        """
+        Returns a subcommand with bound parameters.
+
+        Example:
+
+            git = Command("git")["-c", "commit.gpgsign=0"]
+            # ...
+            git("add", ".")
+            git("commit", "-m", "testcommit")
+
+        """
+        new = super().__getitem__(arg_or_args)
+        object.__setattr__(new, "_local", self._local)
+        return new
 
     def _which(self, exe):
         return shutil.which(exe, path=self._local._env.get("PATH", ""))

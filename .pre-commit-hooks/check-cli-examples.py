@@ -49,7 +49,7 @@ def check_cli_examples(files):
             if _check_cli_example_present(docstring) is False:
                 errors += 1
                 print(
-                    "The function {!r} on '{}' does not have a 'CLI Example:' in it's docstring".format(
+                    "The function {!r} on '{}' does not have a 'CLI Example:' in its docstring".format(
                         funcdef.name,
                         path.relative_to(CODE_ROOT),
                     ),

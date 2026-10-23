@@ -16,7 +16,7 @@ from saltext.vault.utils.vault.helpers import iso_to_timestamp
 from saltext.vault.utils.vault.helpers import timestring_map
 
 if typing.TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing import Self
 
     from saltext.vault.utils._types import SaltLogger
     from saltext.vault.utils.vault import cache as vcache

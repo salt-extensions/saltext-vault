@@ -124,7 +124,7 @@ def iso_to_timestamp(iso_time: str) -> int:
         tz_hour = int(tstr[tz_pos + 1 : tz_pos + 3])
         tz_minute = int(tstr[tz_pos + 4 : tz_pos + 6])
         if all(x == 0 for x in (tz_hour, tz_minute)):
-            tz = datetime.timezone.utc
+            tz = datetime.UTC
         else:
             tz_sign = -1 if tstr[tz_pos] == "-" else 1
             td = datetime.timedelta(hours=tz_hour, minutes=tz_minute)
