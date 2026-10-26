@@ -27,16 +27,10 @@ from saltext.vault.utils.vault.exceptions import VaultException
 from saltext.vault.utils.vault.helpers import deserialize_csl
 
 if TYPE_CHECKING:
-    from saltext.vault.utils._types import SaltContext
-    from saltext.vault.utils._types import SaltFunctions
-    from saltext.vault.utils._types import SaltGrains
     from saltext.vault.utils._types import SaltLogger
-    from saltext.vault.utils._types import SaltOpts
-
-    __opts__: SaltOpts
-    __context__: SaltContext
-    __salt__: SaltFunctions
-    __grains__: SaltGrains
+    from saltext.vault.utils._types import __context__  # noqa: TC004
+    from saltext.vault.utils._types import __opts__  # noqa: TC004
+    from saltext.vault.utils._types import __salt__  # noqa: TC004
 
 __virtualname__ = "vault_ssh"
 

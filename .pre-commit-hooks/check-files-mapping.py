@@ -254,6 +254,9 @@ def check_conftest_import_edges(cfm, tracked, test_files):
             if not (REPO_ROOT / imported).read_bytes().strip():
                 continue
             sel = selected(cfm, imported, test_files)
+            if sel is None:
+                # import does not have any tests itself, handled in check_all_sources_select
+                return
             if sel != FULL_RUN and not any(t in sel for t in subtree):
                 yield (
                     f"{imported} is used by {conftest}, "

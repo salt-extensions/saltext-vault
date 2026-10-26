@@ -20,16 +20,10 @@ from saltext.vault.utils.vault.helpers import timestring_map
 
 if typing.TYPE_CHECKING:
 
-    from saltext.vault.utils._types import SaltContext
-    from saltext.vault.utils._types import SaltFunctions
     from saltext.vault.utils._types import SaltLogger
-    from saltext.vault.utils._types import SaltOpts
-    from saltext.vault.utils._types import SaltStates
-
-    __opts__: SaltOpts
-    __context__: SaltContext
-    __salt__: SaltFunctions
-    __states__: SaltStates
+    from saltext.vault.utils._types import __opts__  # noqa: TC004
+    from saltext.vault.utils._types import __salt__  # noqa: TC004
+    from saltext.vault.utils._types import __states__  # noqa: TC004
 
 
 log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
@@ -590,7 +584,7 @@ def static_role_present(
     return ret
 
 
-def creds_cached(
+def creds_cached(  # pylint: disable=unused-argument
     name,
     static=False,
     cache=None,
@@ -599,7 +593,7 @@ def creds_cached(
     revoke_delay=None,
     meta=None,
     mount="database",
-    **kwargs,  # pylint: disable=unused-argument
+    **kwargs,
 ):
     """
     Ensure valid credentials are present in the minion's cache based on the named role.
@@ -752,9 +746,9 @@ def creds_cached(
     return ret
 
 
-def creds_uncached(
+def creds_uncached(  # pylint: disable=unused-argument
     name, static=False, cache=None, mount="database", **kwargs
-):  # pylint: disable=unused-argument
+):
     """
     Ensure credentials are absent in the minion's cache based on the named role.
     Supports ``mod_beacon``.

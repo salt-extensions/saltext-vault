@@ -542,7 +542,7 @@ def _gen_cert(
     not_after=None,
     ski_of=None,
 ):
-    now = datetime.datetime.now(tz=datetime.timezone.utc)
+    now = datetime.datetime.now(tz=datetime.UTC)
     builder = (
         x509.CertificateBuilder()
         .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, subject_cn)]))
@@ -577,7 +577,7 @@ def pki():
     int_key = ec.generate_private_key(ec.SECP256R1())
     leaf_key = ec.generate_private_key(ec.SECP256R1())
     forged_key = ec.generate_private_key(ec.SECP256R1())
-    now = datetime.datetime.now(tz=datetime.timezone.utc)
+    now = datetime.datetime.now(tz=datetime.UTC)
     return {
         "root_a": _gen_cert("Root A", root_a_key, "Root A", root_a_key),
         "root_b": _gen_cert("Root B", root_b_key, "Root B", root_b_key),

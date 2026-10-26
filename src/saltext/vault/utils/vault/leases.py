@@ -16,7 +16,7 @@ from saltext.vault.utils.vault.helpers import iso_to_timestamp
 from saltext.vault.utils.vault.helpers import timestring_map
 
 if typing.TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing import Self
 
     from saltext.vault.utils._types import SaltLogger
     from saltext.vault.utils.vault import cache as vcache
@@ -188,7 +188,7 @@ class BaseLease(DurationMixin, DropInitKwargsMixin):
     def __repr__(self) -> str:
         return repr(self.to_dict())
 
-    def __eq__(self, other: typing.Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, (BaseLease, dict)):
             return False
         try:
@@ -305,11 +305,11 @@ class VaultLease(BaseLease):
             blur=blur,
         )
 
-    def __eq__(self, other: typing.Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if super().__eq__(other):
             return True
         try:
-            data = other.to_dict()
+            data = other.to_dict()  # ty: ignore[unresolved-attribute]
         except AttributeError:
             try:
                 data = other.__dict__
@@ -594,7 +594,7 @@ class LeaseStore(typing.Generic[LeaseType]):
         def check_revoke(lease: LeaseType, min_valid: int, validity_override: int | None = None):
             if self.expire_events is not None:
                 event_data = {
-                    "valid_for_less": round(min_valid),
+                    "valid_for_less": min_valid,
                     "ttl": validity_override if validity_override is not None else lease.ttl_left,
                     "meta": lease.meta,
                 }
@@ -640,7 +640,7 @@ class LeaseStore(typing.Generic[LeaseType]):
                     return check_revoke(lease, effective_min_validity, 0)
             return lease
 
-        if not (lease.is_renewable and renew):
+        if not (lease.is_renewable() and renew):
             return check_revoke(lease, effective_min_validity)
         try:
             lease = self.renew(lease, increment=renew_increment, raise_all_errors=False)
@@ -813,7 +813,7 @@ class LeaseStore(typing.Generic[LeaseType]):
         if _store and isinstance(lease, VaultLease):
             # Do not overwrite data of renewed leases!
             ret.pop("data", None)
-            new_lease = lease.with_renewed(**ret)
+            new_lease: LeaseType = lease.with_renewed(**ret)  # ty: ignore[invalid-assignment]
             if str(new_lease) in self.lease_id_ckey_cache:
                 self.store(self.lease_id_ckey_cache[str(new_lease)], new_lease)
             return new_lease

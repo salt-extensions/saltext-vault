@@ -15,9 +15,7 @@ from salt.utils.versions import warn_until
 
 if TYPE_CHECKING:
 
-    from saltext.vault.utils._types import SaltStates
-
-    __states__: SaltStates
+    from saltext.vault.utils._types import __states__  # noqa: TC004
 
 
 def policy_present(name, rules):

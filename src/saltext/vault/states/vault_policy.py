@@ -13,16 +13,10 @@ from salt.exceptions import CommandExecutionError
 
 if TYPE_CHECKING:
 
-    from saltext.vault.utils._types import SaltContext
-    from saltext.vault.utils._types import SaltFunctions
     from saltext.vault.utils._types import SaltLogger
-    from saltext.vault.utils._types import SaltOpts
-    from saltext.vault.utils._types import SaltStates
+    from saltext.vault.utils._types import __opts__  # noqa: TC004
+    from saltext.vault.utils._types import __salt__  # noqa: TC004
 
-    __opts__: SaltOpts
-    __context__: SaltContext
-    __salt__: SaltFunctions
-    __states__: SaltStates
 
 log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 

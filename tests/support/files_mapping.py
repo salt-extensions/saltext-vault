@@ -7,6 +7,7 @@ CHANGED_FILES_MAP = (
             "noxfile.py",
             "pyproject.toml",
             "CHANGELOG.md",
+            f"{TESTS_DIR_REL}/_types.py",
             f"{TESTS_DIR_REL}/conftest.py",
             f"{TESTS_DIR_REL}/common/__init__.py",
             f"{TESTS_DIR_REL}/common/containers.py",

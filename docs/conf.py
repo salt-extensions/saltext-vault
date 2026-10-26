@@ -12,20 +12,10 @@ import datetime
 import email.policy
 import os
 import sys
+from importlib.metadata import distribution
 from pathlib import Path
 
-try:
-    from importlib_metadata import distribution
-except ImportError:
-    from importlib.metadata import distribution
-
-
-try:
-    docs_basepath = os.path.abspath(os.path.dirname(__file__))
-except NameError:
-    # sphinx-intl and six execute some code which will raise this NameError
-    # assume we're in the doc/ directory
-    docs_basepath = os.path.abspath(os.path.dirname("."))
+docs_basepath = os.path.abspath(os.path.dirname(__file__))
 
 PROJECT_ROOT_DIR = Path(docs_basepath).parent
 
@@ -41,7 +31,7 @@ dist = distribution("saltext.vault")
 
 
 # -- Project information -----------------------------------------------------
-this_year = datetime.datetime.today().year
+this_year = datetime.datetime.now(tz=datetime.UTC).year
 if this_year == 2023:
     copyright_year = "2023"
 else:
@@ -96,7 +86,6 @@ extensions = [
     "sphinx.ext.todo",
     "sphinx.ext.coverage",
     "sphinx_copybutton",
-    "sphinxcontrib.spelling",
     "saltdomain",
     "vault.policylexer",
     "vault.vaultdomain",
@@ -125,7 +114,6 @@ exclude_patterns = [
     ".vscode",
     ".venv",
     ".git",
-    ".gitlab-ci",
     ".gitignore",
     "sitevars.rst",
     "topics/includes",

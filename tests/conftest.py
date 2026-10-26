@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import copy
 import logging
 import os
 import shutil
+import typing
 from pathlib import Path
 
 import pytest
@@ -29,6 +32,14 @@ try:
 except ImportError:  # pragma: no cover
     import salt.utils.win_functions
 
+if typing.TYPE_CHECKING:
+    from saltfactories.daemons.master import SaltMaster
+    from saltfactories.daemons.minion import SaltMinion
+    from saltfactories.daemons.sshd import Sshd
+    from saltfactories.manager import FactoriesManager
+
+    from tests._types import Yielder
+
 # Reset the root logger to its default level(because salt changed it)
 logging.root.setLevel(logging.WARNING)
 
@@ -47,7 +58,7 @@ pytest_plugins = ("tests.support.pytest_hooks",)
 
 
 @pytest.fixture(scope="session")
-def salt_factories_config():  # pragma: no cover
+def salt_factories_config() -> dict[str, typing.Any]:  # pragma: no cover
     """
     Return a dictionary with the keyword arguments for FactoriesManager
     """
@@ -59,7 +70,7 @@ def salt_factories_config():  # pragma: no cover
 
 
 @pytest.fixture(scope="module")
-def master_config_defaults(vault_port):  # pragma: no cover
+def master_config_defaults(vault_port: int) -> dict[str, typing.Any]:  # pragma: no cover
     """
     This default configuration ensures the master issues authentication
     credentials with the correct policies. By default, it issues
@@ -101,7 +112,7 @@ def master_config_defaults(vault_port):  # pragma: no cover
 
 
 @pytest.fixture(scope="module")
-def master_config_overrides():  # pragma: no cover
+def master_config_overrides() -> dict[str, typing.Any]:  # pragma: no cover
     """
     You can override the default configuration per package by overriding this
     fixture in a conftest.py file.
@@ -110,7 +121,11 @@ def master_config_overrides():  # pragma: no cover
 
 
 @pytest.fixture(scope="module")
-def master(salt_factories, master_config_defaults, master_config_overrides):  # pragma: no cover
+def master(
+    salt_factories: FactoriesManager,
+    master_config_defaults: dict[str, typing.Any],
+    master_config_overrides: dict[str, typing.Any],
+) -> SaltMaster:  # pragma: no cover
     return salt_factories.salt_master_daemon(
         random_string("master-", uppercase=False),
         defaults=master_config_defaults,
@@ -119,7 +134,7 @@ def master(salt_factories, master_config_defaults, master_config_overrides):  # 
 
 
 @pytest.fixture(scope="module")
-def minion_config_defaults(vault_port):  # pragma: no cover
+def minion_config_defaults(vault_port: int) -> dict[str, typing.Any]:  # pragma: no cover
     """
     The default minion configuration ensures that the minion works in --local
     mode and that the ``sdbvault`` SDB configuration is present.
@@ -143,7 +158,7 @@ def minion_config_defaults(vault_port):  # pragma: no cover
 
 
 @pytest.fixture(scope="module")
-def minion_config_overrides():  # pragma: no cover
+def minion_config_overrides() -> dict[str, typing.Any]:  # pragma: no cover
     """
     You can override the default configuration per package by overriding this
     fixture in a conftest.py file.
@@ -152,7 +167,11 @@ def minion_config_overrides():  # pragma: no cover
 
 
 @pytest.fixture(scope="module")
-def minion(master, minion_config_defaults, minion_config_overrides):  # pragma: no cover
+def minion(
+    master: SaltMaster,
+    minion_config_defaults: dict[str, typing.Any],
+    minion_config_overrides: dict[str, typing.Any],
+) -> SaltMinion:  # pragma: no cover
     return master.salt_minion_daemon(
         random_string("minion-", uppercase=False),
         defaults=minion_config_defaults,
@@ -161,7 +180,7 @@ def minion(master, minion_config_defaults, minion_config_overrides):  # pragma: 
 
 
 @pytest.fixture(scope="session")
-def current_user():  # pragma: no cover
+def current_user() -> str:  # pragma: no cover
     """
     Get the user associated with the current process.
     """
@@ -171,7 +190,9 @@ def current_user():  # pragma: no cover
 
 
 @pytest.fixture(scope="module")
-def sshd_server(salt_factories, sshd_config_dir):  # pragma: no cover
+def sshd_server(
+    salt_factories: FactoriesManager, sshd_config_dir: Path
+) -> Yielder[Sshd]:  # pragma: no cover
     sshd_config_dict = {
         "Protocol": "2",
         # Turn strict modes off so that we can operate in /tmp
@@ -228,7 +249,9 @@ def sshd_server(salt_factories, sshd_config_dir):  # pragma: no cover
 
 
 @pytest.fixture(scope="module")
-def known_hosts_file(sshd_server, master, salt_factories):  # pragma: no cover
+def known_hosts_file(
+    sshd_server: Sshd, master: SaltMaster, salt_factories: FactoriesManager
+) -> Yielder[Path]:  # pragma: no cover
     with (
         pytest.helpers.temp_file(  # type: ignore
             "ssh-known-hosts",
@@ -246,8 +269,11 @@ def known_hosts_file(sshd_server, master, salt_factories):  # pragma: no cover
 
 @pytest.fixture(scope="module")
 def salt_ssh_roster_file(
-    sshd_server, master, known_hosts_file, current_user
-):  # pylint: disable=unused-argument; pragma: no cover
+    sshd_server: Sshd,
+    master: SaltMaster,
+    known_hosts_file: Path,  # pylint: disable=unused-argument
+    current_user: str,
+) -> Yielder[Path]:  # pragma: no cover
     roster_contents = f"""
     localhost:
       host: 127.0.0.1
@@ -257,12 +283,14 @@ def salt_ssh_roster_file(
     if salt.utils.platform.is_darwin():
         roster_contents += "  set_path: $PATH:/usr/local/bin/\n"
 
-    with pytest.helpers.temp_file("roster", roster_contents, master.config_dir) as roster_file:  # type: ignore
+    with pytest.helpers.temp_file(  # type: ignore
+        "roster", roster_contents, master.config_dir
+    ) as roster_file:
         yield roster_file
 
 
 @pytest.fixture(scope="session")
-def sshd_config_dir(salt_factories):  # pragma: no cover
+def sshd_config_dir(salt_factories: FactoriesManager) -> Yielder[Path]:  # pragma: no cover
     config_dir = salt_factories.get_root_dir_for_daemon("sshd")
     try:
         yield config_dir

@@ -9,6 +9,7 @@ import typing
 from collections.abc import Callable
 from collections.abc import Mapping
 from collections.abc import Sequence
+from contextlib import suppress
 from itertools import takewhile
 
 import requests
@@ -39,7 +40,8 @@ except ImportError:  # pragma: no cover
     URLLIB3V1 = True
 
 if typing.TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing import Self
+
     from urllib3 import response as urllib3response
 
     from saltext.vault.utils._types import SaltLogger
@@ -87,7 +89,7 @@ MAX_BACKOFF_JITTER = 5.0
 
 
 def _get_expected_creation_path(
-    secret_type: typing.Literal["token"] | typing.Literal["secret_id"] | typing.Literal["role_id"],
+    secret_type: typing.Literal["token", "secret_id", "role_id"],
     config: Mapping[str, typing.Any] | None = None,
 ) -> str:
     if secret_type == "token":
@@ -132,13 +134,13 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
         verify: str | bool | None = None,
         *,
         session: requests.Session | None = None,
-        connect_timeout: float | int = DEFAULT_CONNECT_TIMEOUT,
-        read_timeout: float | int = DEFAULT_READ_TIMEOUT,
+        connect_timeout: float = DEFAULT_CONNECT_TIMEOUT,
+        read_timeout: float = DEFAULT_READ_TIMEOUT,
         list_as_get: bool = DEFAULT_LIST_AS_GET,
         max_retries: int = DEFAULT_MAX_RETRIES,
-        backoff_factor: float | int = DEFAULT_BACKOFF_FACTOR,
-        backoff_max: float | int = DEFAULT_BACKOFF_MAX,
-        backoff_jitter: float | int = DEFAULT_BACKOFF_JITTER,
+        backoff_factor: float = DEFAULT_BACKOFF_FACTOR,
+        backoff_max: float = DEFAULT_BACKOFF_MAX,
+        backoff_jitter: float = DEFAULT_BACKOFF_JITTER,
         retry_post: bool = DEFAULT_RETRY_POST,
         respect_retry_after: bool = DEFAULT_RESPECT_RETRY_AFTER,
         retry_status: Sequence[int] | None = DEFAULT_RETRY_STATUS,
@@ -658,7 +660,10 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
             pass
 
         # Not thread-safe!
-        self._vault_adapter.max_retries.safe_to_retry = safe_to_retry
+        with suppress(AttributeError):
+            self._vault_adapter.max_retries.safe_to_retry = (  # ty: ignore[unresolved-attribute]
+                safe_to_retry
+            )
 
         try:
             res = self.session.request(
@@ -670,7 +675,10 @@ class VaultClient:  # pylint: disable=too-many-instance-attributes
                 **kwargs,
             )
         finally:
-            self._vault_adapter.max_retries.safe_to_retry = None
+            with suppress(AttributeError):
+                self._vault_adapter.max_retries.safe_to_retry = (  # ty: ignore[unresolved-attribute]
+                    None
+                )
 
         return res
 
@@ -871,9 +879,7 @@ class AuthenticatedVaultClient(VaultClient):
             return True
         try:
             res = self.token_lookup(raw=True)
-            if res.status_code != 200:
-                return False
-            return True
+            return res.status_code == 200
         except Exception as err:  # pylint: disable=broad-except
             raise salt.exceptions.CommandExecutionError(
                 "Error while looking up self token."
@@ -1170,14 +1176,14 @@ class VaultAPIAdapter(requests.adapters.HTTPAdapter):
           specify it in every request.
     """
 
-    max_retries: "VaultRetry"
+    max_retries: "VaultRetry | requests.adapters.Retry"
 
     def __init__(
         self,
         *args,
         verify: bool | str | None = None,
-        connect_timeout: float | int | None = None,
-        read_timeout: float | int | None = None,
+        connect_timeout: float | None = None,
+        read_timeout: float | None = None,
         **kwargs,
     ):
         ca_cert_data: str | None = None
@@ -1247,7 +1253,7 @@ class VaultRetry(requests.adapters.Retry):
     def __init__(
         self,
         *args,
-        backoff_jitter: float | int = 0.0,
+        backoff_jitter: float = 0.0,
         backoff_max: float = requests.adapters.Retry.DEFAULT_BACKOFF_MAX,
         retry_after_max: int | None = DEFAULT_RETRY_AFTER_MAX,
         **kwargs: typing.Any,

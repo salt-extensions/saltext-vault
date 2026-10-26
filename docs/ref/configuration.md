@@ -1,69 +1,90 @@
 # Configuration Reference
 
-This page provides a description of all supported configuration options.
-All values should be placed under the `vault` key in the Salt configuration.
+This page provides a description of all supported configuration
+options. All values should be placed under the `vault` key in the Salt
+configuration.
 
 ## General configuration
+
 :::{vconf} auth
 :::
+
 ### `auth`
+
 Contains authentication parameters for the local machine.
 
 :::{vconf} auth:approle_mount
 :::
+
 #### approle_mount
-The name of the AppRole authentication mount point. Defaults to `approle`.
+
+The name of the AppRole authentication mount point. Defaults to
+`approle`.
 
 :::{vconf} auth:approle_name
 :::
+
 #### approle_name
+
 The name of the AppRole. Defaults to `salt-master`.
 
 :::{note}
-Only relevant when a locally configured {vconf}`auth:role_id`/{vconf}`auth:secret_id` is set to the return
+Only relevant when a locally configured
+{vconf}`auth:role_id`/{vconf}`auth:secret_id` is set to the return
 payload of a wrapping request, so only in very specialized use cases.
 :::
 
 :::{vconf} auth:method
 :::
+
 #### method
+
 Currently only `token` and `approle` auth types are supported.
 Defaults to `token`.
 
 :::{hint}
-In addition to a plain string, the required authentication credentials can also
-be specified as a dictionary that includes `wrap_info`, i.e. the return payload
-of a wrapping request.
+In addition to a plain string, the required authentication credentials
+can also be specified as a dictionary that includes `wrap_info`, i.e.
+the return payload of a wrapping request.
 :::
 
 :::{vconf} auth:role_id
 :::
+
 #### role_id
-The role ID of the AppRole. Required if {vconf}`auth:method` == `approle`.
+
+The role ID of the AppRole. Required if {vconf}`auth:method` ==
+`approle`.
 
 :::{versionchanged} 1.4.0
-It's possible to specify this value using an `sdb://` URI, e.g. to pull it from
-environment variables.
+It's possible to specify this value using an `sdb://` URI, e.g. to
+pull it from environment variables.
 :::
 
 :::{vconf} auth:secret_id
 :::
+
 #### secret_id
-The SecretID of the AppRole. Only required if the configured AppRole requires it.
+
+The SecretID of the AppRole. Only required if the configured AppRole
+requires it.
 
 :::{versionchanged} 1.4.0
-It's possible to specify this value using an `sdb://` URI, e.g. to pull it from
-environment variables.
+It's possible to specify this value using an `sdb://` URI, e.g. to
+pull it from environment variables.
 :::
 
 :::{vconf} auth:token
 :::
+
 #### token
-Token to authenticate to Vault with. Required if {vconf}`auth:method` == `token`.
+
+Token to authenticate to Vault with. Required if {vconf}`auth:method`
+== `token`.
 
 :::{hint}
-It's possible to specify this value using an `sdb://` URI, e.g. to pull it from
-environment variables:
+It's possible to specify this value using an `sdb://` URI, e.g. to
+pull it from environment variables:
 
 ```yaml
 vault:
@@ -80,88 +101,109 @@ osenv:
 
 :::{vconf} auth:token_lifecycle
 :::
+
 #### token_lifecycle
+
 Token renewal settings.
 
 :::{note}
 This setting can be specified inside a minion's configuration as well
 and then overrides the master's default for the minion.
 
-Token lifecycle settings have significance for any authentication method,
-not just `token`.
+Token lifecycle settings have significance for any authentication
+method, not just `token`.
 :::
 
 :::{vconf} auth:token_lifecycle:minimum_ttl
 :::
-minimum_ttl
-    : Specifies the time (in seconds or as a time string like `24h`) an in-use
-      token should be valid for. If the current validity period is less than this
-      and the token is renewable, a renewal is attempted. If it is not renewable
-      or a renewal does not extend the ttl beyond the specified minimum, a new token
-      is generated.
 
-      :::{hint}
-      Since leases like database credentials are tied to a token, setting this to
-      a much higher value than the default can be necessary, depending on your
-      specific use case and configuration.
-      :::
+minimum_ttl
+
+: Specifies the time (in seconds or as a time string like `24h`) an
+  in-use token should be valid for. If the current validity period is
+  less than this and the token is renewable, a renewal is attempted.
+  If it is not renewable or a renewal does not extend the ttl beyond
+  the specified minimum, a new token is generated.
+
+  :::{hint}
+  Since leases like database credentials are tied to a token, setting
+  this to a much higher value than the default can be necessary,
+  depending on your specific use case and configuration.
+  :::
 
 :::{vconf} auth:token_lifecycle:renew_increment
 :::
-renew_increment
-    : Specifies the amount of time the token's validity should be requested to be
-      renewed for when renewing a token. When unset, extends the token's validity
-      by its default ttl. Set this to `false` to disable token renewals.
 
-      :::{note}
-      The Vault server is allowed to disregard this request.
-      :::
+renew_increment
+
+: Specifies the amount of time the token's validity should be
+  requested to be renewed for when renewing a token. When unset,
+  extends the token's validity by its default ttl. Set this to `false`
+  to disable token renewals.
+
+  :::{note}
+  The Vault server is allowed to disregard this request.
+  :::
 
 :::{vconf} cache
 :::
+
 ### `cache`
-Configures token/lease and metadata cache (for KV secrets) on all hosts as well as
-configuration cache on minions that receive issued credentials.
+
+Configures token/lease and metadata cache (for KV secrets) on all
+hosts as well as configuration cache on minions that receive issued
+credentials.
 
 :::{vconf} cache:backend
 :::
+
 #### backend
+
 The cache backend in use. Defaults to `session`, which stores the
 Vault configuration in memory only for that specific Salt run.
-`disk`/`file`/`localfs` force using the localfs driver, regardless
-of configured minion data cache.
-Setting this to anything else uses the default configured cache for
-minion data ({conf_master}`cache <cache>`), by default the local filesystem
-as well.
+`disk`/`file`/`localfs` force using the localfs driver, regardless of
+configured minion data cache. Setting this to anything else uses the
+default configured cache for minion data
+({conf_master}`cache <cache>`), by default the local filesystem as
+well.
 
 :::{vconf} cache:clear_attempt_revocation
 :::
+
 #### clear_attempt_revocation
-When flushing still valid cached tokens and leases, attempt to have them
-revoked after a (short) delay. Defaults to `60` (seconds).
-Set this to false to disable revocation (not recommended).
+
+When flushing still valid cached tokens and leases, attempt to have
+them revoked after a (short) delay. Defaults to `60` (seconds). Set
+this to false to disable revocation (not recommended).
 
 :::{vconf} cache:clear_on_unauthorized
 :::
+
 #### clear_on_unauthorized
-When encountering an `Unauthorized` response with an otherwise valid token,
-flush the cache and request new credentials. Defaults to true.
+
+When encountering an `Unauthorized` response with an otherwise valid
+token, flush the cache and request new credentials. Defaults to true.
 
 :::{tip}
-If your policies are relatively stable, disabling this prevents
-a lot of unnecessary overhead, with the tradeoff that once they change,
-you might have to clear the cache manually or wait for the token to expire.
+If your policies are relatively stable, disabling this prevents a lot
+of unnecessary overhead, with the tradeoff that once they change, you
+might have to clear the cache manually or wait for the token to
+expire.
 :::
 
 :::{vconf} cache:config
 :::
+
 #### config
+
 The time in seconds to cache queried configuration from the master.
-Defaults to `3600` (one hour). Set this to `null` to disable
-cache expiration. Changed {vconf}`server` configuration on the master
-is still recognized, but changes in {vconf}`auth` and {vconf}`cache` need
-a manual update using [vault.update_config](saltext.vault.modules.vault.update_config)
-or cache clearance using [vault.clear_cache](saltext.vault.modules.vault.clear_cache).
+Defaults to `3600` (one hour). Set this to `null` to disable cache
+expiration. Changed {vconf}`server` configuration on the master is
+still recognized, but changes in {vconf}`auth` and {vconf}`cache` need
+a manual update using
+[vault.update_config](saltext.vault.modules.vault.update_config) or
+cache clearance using
+[vault.clear_cache](saltext.vault.modules.vault.clear_cache).
 
 :::{note}
 Expiring the configuration also clears cached authentication
@@ -170,81 +212,101 @@ credentials and leases.
 
 :::{vconf} cache:expire_events
 :::
+
 #### expire_events
+
 Fire an event when the session cache containing leases is cleared
 (`vault/cache/<scope>/clear`) or cached leases have expired
-(`vault/lease/<cache_key>/expire`).
-A reactor can be employed to ensure fresh leases are issued.
-Defaults to false.
+(`vault/lease/<cache_key>/expire`). A reactor can be employed to
+ensure fresh leases are issued. Defaults to false.
 
 :::{vconf} cache:kv_metadata
 :::
+
 #### kv_metadata
+
 The time in seconds to cache the KV metadata that is used to determine
-whether a path uses KV version 1 or 2. Defaults to `connection`, which clears
-the metadata cache once a new configuration is requested from the
-master. Setting this to `null` keeps the information
-indefinitely until the cache is cleared manually using
-[vault.clear_cache](saltext.vault.modules.vault.clear_cache) with `connection=false`.
+whether a path uses KV version 1 or 2. Defaults to `connection`, which
+clears the metadata cache once a new configuration is requested from
+the master. Setting this to `null` keeps the information indefinitely
+until the cache is cleared manually using
+[vault.clear_cache](saltext.vault.modules.vault.clear_cache) with
+`connection=false`.
 
 :::{vconf} cache:secret
 :::
+
 #### secret
+
 The time in seconds to cache tokens/SecretIDs for. Defaults to `ttl`,
-which caches the secret for as long as it is valid, unless a new configuration
-is requested from the master.
+which caches the secret for as long as it is valid, unless a new
+configuration is requested from the master.
 
 :::{vconf} client
 :::
+
 ### `client`
+
 :::{versionadded} 1.1.0
 :::
 
-Configures Vault API client behavior. By default,
-the client retries requests with a backoff strategy;
-if the response includes a `Retry-After` header, that is respected instead.
-Connection errors as well as responses with the status codes
-`412`, `429`, `500`, `502`, `503`, `504` are retried.
+Configures Vault API client behavior. By default, the client retries
+requests with a backoff strategy; if the response includes a
+`Retry-After` header, that is respected instead. Connection errors as
+well as responses with the status codes `412`, `429`, `500`, `502`,
+`503`, `504` are retried.
 
 :::{vconf} client:connect_timeout
 :::
+
 #### connect_timeout
+
 :::{versionadded} 1.1.0
 :::
+
 The number of seconds to wait for a connection to be established.
 Defaults to `9.2`.
 
 :::{vconf} client:read_timeout
 :::
+
 #### read_timeout
+
 :::{versionadded} 1.1.0
 :::
+
 The number of seconds to wait between packets sent by the server.
 Defaults to `30`.
 
 :::{vconf} client:list_as_get
 :::
+
 #### list_as_get
+
 :::{versionadded} 1.9.0
 :::
-Whether high-level Vault list operations should use a standard `GET` request
-with the `list=true` query parameter instead of the non-standard `LIST` HTTP
-method. Defaults to `False`.
+
+Whether high-level Vault list operations should use a standard `GET`
+request with the `list=true` query parameter instead of the
+non-standard `LIST` HTTP method. Defaults to `False`.
 
 Enable this option for compatibility with proxies, load balancers, web
-application firewalls, or other HTTP intermediaries that reject non-standard
-methods, such as AWS CloudFront.
+application firewalls, or other HTTP intermediaries that reject
+non-standard methods, such as AWS CloudFront.
 
-This uses Vault's [documented alternative to `LIST`](https://developer.hashicorp.com/vault/api-docs#api-operations).
-The intermediary must forward the `list` query parameter and authentication
-headers to Vault. Disable response caching for the Vault API.
+This uses Vault's
+[documented alternative to `LIST`](https://developer.hashicorp.com/vault/api-docs#api-operations).
+The intermediary must forward the `list` query parameter and
+authentication headers to Vault. Disable response caching for the
+Vault API.
 
 This only affects high-level Vault list operations, i.e. the
-[api_list](saltext.vault.utils.vault.api_list) utility function and the client's
-[list](saltext.vault.utils.vault.client.VaultClient.list) method, which all
-module list operations are based on, including `LIST` queries via the
-[vault.query](saltext.vault.modules.vault.query) execution module function.
-Explicit low-level `LIST` requests through the
+[api_list](saltext.vault.utils.vault.api_list) utility function and
+the client's [list](saltext.vault.utils.vault.client.VaultClient.list)
+method, which all module list operations are based on, including
+`LIST` queries via the
+[vault.query](saltext.vault.modules.vault.query) execution module
+function. Explicit low-level `LIST` requests through the
 [query](saltext.vault.utils.vault.query)/[query_raw](saltext.vault.utils.vault.query_raw)
 utility functions or the client's
 [request](saltext.vault.utils.vault.client.VaultClient.request)/[request_raw](saltext.vault.utils.vault.client.VaultClient.request_raw)
@@ -252,62 +314,79 @@ methods continue to use the literal `LIST` method.
 
 :::{vconf} client:max_retries
 :::
+
 #### max_retries
+
 :::{versionadded} 1.1.0
 :::
-The maximum number of retries (not including the initial request) before
-raising an exception. Set this to `0` to disable retry behavior.
-Defaults to `5`. Maximum: `10`.
+
+The maximum number of retries (not including the initial request)
+before raising an exception. Set this to `0` to disable retry
+behavior. Defaults to `5`. Maximum: `10`.
 
 :::{vconf} client:backoff_factor
 :::
+
 #### backoff_factor
+
 :::{versionadded} 1.1.0
 :::
-A backoff factor (in seconds) to use between retry attempts when applying
-the backoff strategy (based on the Fibonacci sequence).
+
+A backoff factor (in seconds) to use between retry attempts when
+applying the backoff strategy (based on the Fibonacci sequence).
 Defaults to `0.1`. Maximum: `3.0`
 
 :::{hint}
 The effective sleep time before the nth retry is given by:
 
-  > {backoff_factor} * {Fibonacci(n+3)}
+> \{backoff_factor} * {Fibonacci(n+3)}
 
-The default values thus result in the following sleep times (in seconds),
-without accounting for {vconf}`backoff_jitter <client:backoff_jitter>`
-and only if the response did not include the `Retry-After` header:
+The default values thus result in the following sleep times (in
+seconds), without accounting for
+{vconf}`backoff_jitter <client:backoff_jitter>` and only if the
+response did not include the `Retry-After` header:
 
-  > [initial request] 0.2 [1st] 0.3 [2nd] 0.5 [3rd] 0.8 [4th] 1.3 [5th]
+> [initial request] 0.2 [1st] 0.3 [2nd] 0.5 [3rd] 0.8 [4th] 1.3 [5th]
 
-If we did not receive a response (connection/read error), the first retry
-is executed immediately, thus the following sleep times are in effect by default:
+If we did not receive a response (connection/read error), the first
+retry is executed immediately, thus the following sleep times are in
+effect by default:
 
-  > [initial request] 0 [1st] 0.2 [2nd] 0.3 [3rd] 0.5 [4th] 0.8 [5th]
-
+> [initial request] 0 [1st] 0.2 [2nd] 0.3 [3rd] 0.5 [4th] 0.8 [5th]
 :::
 
 :::{vconf} client:backoff_max
 :::
+
 #### backoff_max
+
 :::{versionadded} 1.1.0
 :::
-A cap for the effective sleep time between retries.
-Defaults to `10.0`. Maximum: `60.0`.
+
+A cap for the effective sleep time between retries. Defaults to
+`10.0`. Maximum: `60.0`.
 
 :::{vconf} client:backoff_jitter
 :::
+
 #### backoff_jitter
+
 :::{versionadded} 1.1.0
 :::
+
 A maximum number of seconds to randomize the effective sleep time
 between retries by. Defaults to `0.2`. Maximum: `5.0`
 
 :::{vconf} client:retry_post
 :::
+
 #### retry_post
+
 :::{versionadded} 1.1.0
 :::
-Whether to retry requests that are potentially non-idempotent (`POST`, `PATCH`, unless explicitly marked as idempotent during the call).
+
+Whether to retry requests that are potentially non-idempotent (`POST`,
+`PATCH`, unless explicitly marked as idempotent during the call).
 Defaults to `False`.
 
 :::{note}
@@ -316,242 +395,306 @@ HTTP 429 responses are always retried, regardless of HTTP verb.
 
 :::{vconf} client:retry_status
 :::
+
 #### retry_status
+
 :::{versionadded} 1.1.0
 :::
-A list of HTTP status codes which should be retried.
-Defaults to `[412, 500, 502, 503, 504]`.
+
+A list of HTTP status codes which should be retried. Defaults to
+`[412, 500, 502, 503, 504]`.
 
 :::{note}
-HTTP 429 is always retried, regardless of HTTP verb and whether it is present
-in this list. It is recommended to ensure the `Retry-After` header is sent by Vault to avoid wasting resources.
-See {vconf}`respect_retry_after <client:respect_retry_after>` for details.
+HTTP 429 is always retried, regardless of HTTP verb and whether it is
+present in this list. It is recommended to ensure the `Retry-After`
+header is sent by Vault to avoid wasting resources. See
+{vconf}`respect_retry_after <client:respect_retry_after>` for details.
 :::
 
 :::{vconf} client:respect_retry_after
 :::
+
 #### respect_retry_after
+
 :::{versionadded} 1.1.0
 :::
-Whether to respect the `Retry-After` header sent by Vault, usually when a
-rate limit has been hit. Defaults to `True`.
+
+Whether to respect the `Retry-After` header sent by Vault, usually
+when a rate limit has been hit. Defaults to `True`.
 
 :::{hint}
-This header is not sent by default and must be enabled explicitly
-via [enable_rate_limit_response_headers](https://developer.hashicorp.com/vault/api-docs/system/quotas-config#enable_rate_limit_response_headers).
+This header is not sent by default and must be enabled explicitly via
+[enable_rate_limit_response_headers](https://developer.hashicorp.com/vault/api-docs/system/quotas-config#enable_rate_limit_response_headers).
 :::
 
 :::{vconf} client:retry_after_max
 :::
+
 #### retry_after_max
+
 :::{versionadded} 1.1.0
 :::
-When {vconf}`respect_retry_after <client:respect_retry_after>` is True, limit
-the maximum amount of seconds the client sleeps before retrying. Defaults to `60`.
+
+When {vconf}`respect_retry_after <client:respect_retry_after>` is
+True, limit the maximum amount of seconds the client sleeps before
+retrying. Defaults to `60`.
 
 :::{vconf} server
 :::
+
 ### `server`
+
 Configures Vault server details.
 
 :::{vconf} server:url
 :::
+
 #### url
+
 URL of your Vault installation. Required.
 
 ::::{hint}
-This value can be set inside the minion configuration as well, from where it takes precedence.
-The new URL must be listed in the master's {vconf}`url_alts <server:url_alts>` to take effect.
+This value can be set inside the minion configuration as well, from
+where it takes precedence. The new URL must be listed in the master's
+{vconf}`url_alts <server:url_alts>` to take effect.
 
 :::{versionadded} 1.8.0
 :::
+
 ::::
 
 :::{important}
-OpenBao supports horizontal scaling, where standby nodes serve read requests.
-In versions before 2.6.2, response-wrapped requests were not forwarded to the
-active node and failed on standby nodes with `internal error` or
-`cannot write to readonly storage`. This extension relies on response wrapping
-during credential issuance by default ({vconf}`issue:wrap`), which makes such
-setups fail in seemingly random ways.
+OpenBao supports horizontal scaling, where standby nodes serve read
+requests. In versions before 2.6.2, response-wrapped requests were not
+forwarded to the active node and failed on standby nodes with
+`internal error` or `cannot write to readonly storage`. This extension
+relies on response wrapping during credential issuance by default
+({vconf}`issue:wrap`), which makes such setups fail in seemingly
+random ways.
 
-When running affected versions in a horizontally scaled cluster, ensure this
-URL points directly at the active (leader) node, not at a load balancer that
-routes requests to standby nodes.
-See [openbao#3026](https://github.com/openbao/openbao/issues/3026) for details.
+When running affected versions in a horizontally scaled cluster,
+ensure this URL points directly at the active (leader) node, not at a
+load balancer that routes requests to standby nodes. See
+[openbao#3026](https://github.com/openbao/openbao/issues/3026) for
+details.
 :::
 
 :::{vconf} server:url_alts
 :::
+
 #### url_alts
+
 :::{versionadded} 1.8.0
 :::
-A list of alternative URLs the Vault installation is reachable at, e.g. for minions that cannot
-use the default {vconf}`url <server:url>` because of network segmentation.
+
+A list of alternative URLs the Vault installation is reachable at,
+e.g. for minions that cannot use the default {vconf}`url <server:url>`
+because of network segmentation.
 
 Only relevant in the master configuration. Minions may override
-{vconf}`url <server:url>` in their local configuration, but only with one of
-the URLs in this list; other values are ignored and a warning is logged.
+{vconf}`url <server:url>` in their local configuration, but only with
+one of the URLs in this list; other values are ignored and a warning
+is logged.
 
-This restriction keeps the master configuration the single source of truth
-for the endpoints that Vault credentials issued by the master are presented to.
+This restriction keeps the master configuration the single source of
+truth for the endpoints that Vault credentials issued by the master
+are presented to.
 
 All listed URLs must therefore belong to the same Vault installation
 {vconf}`url <server:url>` points to.
 
 :::{important}
-This list is not (yet) used as a fallback when the selected {vconf}`url <server:url>` is unreachable.
+This list is not (yet) used as a fallback when the selected
+{vconf}`url <server:url>` is unreachable.
 :::
 
 :::{vconf} server:verify
 :::
-#### verify
-Configures certificate verification behavior when issuing requests to the
-Vault server. If unset, requests use the CA certificates bundled with `certifi`.
 
-For details, please see the `requests` documentation on [certificate verification][].
+#### verify
+
+Configures certificate verification behavior when issuing requests to
+the Vault server. If unset, requests use the CA certificates bundled
+with `certifi`.
+
+For details, please see the `requests` documentation on
+[certificate verification].
 
 :::{note}
-In addition, this value can be set to a concatenation of one or more PEM-encoded
-CA certificates to use as the trust anchor for certificate chain verification
-(i.e. certificate pinning).
+In addition, this value can be set to a concatenation of one or more
+PEM-encoded CA certificates to use as the trust anchor for certificate
+chain verification (i.e. certificate pinning).
 :::
 
 :::{hint}
-This value can be set inside the minion configuration as well, from where it
-takes precedence.
+This value can be set inside the minion configuration as well, from
+where it takes precedence.
 :::
 
 :::{vconf} server:namespace
 :::
+
 #### namespace
-Optional [Vault namespace][]. Used with Vault Enterprise.
+
+Optional [Vault namespace]. Used with Vault Enterprise.
 
 ## Master-only configuration
-In addition to the previously-mentioned {vconf}`server:url_alts`, the following
-configuration values only have an effect if specified in the master configuration:
+
+In addition to the previously-mentioned {vconf}`server:url_alts`, the
+following configuration values only have an effect if specified in the
+master configuration:
 
 :::{vconf} issue
 :::
+
 ### `issue`
+
 Configures authentication data issued by the master to minions.
 
 :::{vconf} issue:type
 :::
-#### type
-The type of authentication to issue to minions. Can be `token` or `approle`.
-Defaults to `token`.
 
-To issue AppRoles to minions, the master needs to be able to
-create new AppRoles on the configured auth mount.
-It is strongly encouraged to create a separate mount dedicated to minions.
+#### type
+
+The type of authentication to issue to minions. Can be `token` or
+`approle`. Defaults to `token`.
+
+To issue AppRoles to minions, the master needs to be able to create
+new AppRoles on the configured auth mount. It is strongly encouraged
+to create a separate mount dedicated to minions.
 
 :::{vconf} issue:approle
 :::
+
 #### approle
+
 Configuration regarding issued AppRoles.
 
 :::{vconf} issue:approle:mount
 :::
+
 mount
-    : Specifies the name of the auth mount the master manages. Defaults to
-      `salt-minions`. This mount should be exclusively dedicated
-      to the Salt master.
+: Specifies the name of the auth mount the master manages. Defaults to
+  `salt-minions`. This mount should be exclusively dedicated to the
+  Salt master.
 
 :::{vconf} issue:approle:params
 :::
+
 params
-    : Configures the AppRole the master creates for minions. See the
-      [Vault AppRole API docs][] for details. If you update these params, you can
-      update the minion AppRoles manually using the runner
-      [vault.sync_approles](saltext.vault.runners.vault.sync_approles),
-      but they are updated automatically during a request by a minion as well.
+: Configures the AppRole the master creates for minions. See the
+  [Vault AppRole API docs] for details. If you update these params,
+  you can update the minion AppRoles manually using the runner
+  [vault.sync_approles](saltext.vault.runners.vault.sync_approles),
+  but they are updated automatically during a request by a minion as
+  well.
 
 :::{vconf} issue:token
 :::
+
 #### token
+
 Configuration regarding issued tokens.
 
 :::{vconf} issue:token:role_name
 :::
+
 role_name
-    : Specifies the [Token Role][] name to use for creating minion tokens.
-      If omitted, minion tokens are created without any role, thus being able
-      to inherit any master token policy (including token creation capabilities).
+: Specifies the [Token Role] name to use for creating minion tokens.
+  If omitted, minion tokens are created without any role, thus being
+  able to inherit any master token policy (including token creation
+  capabilities).
 
 :::{vconf} issue:token:params
 :::
+
 params
-    : Configures the tokens the master issues to minions.
-      See the [Vault Token API docs][] for details. To make full use of multi-use tokens,
-      you should configure a {vconf}`cache <cache:backend>` that persists across sessions
-      (e.g. `disk`).
 
-      :::{important}
-      If unset, the master issues single-use tokens to minions, which can be quite expensive.
-      :::
+: Configures the tokens the master issues to minions. See the
+  [Vault Token API docs] for details. To make full use of multi-use
+  tokens, you should configure a {vconf}`cache <cache:backend>` that
+  persists across sessions (e.g. `disk`).
 
+  :::{important}
+  If unset, the master issues single-use tokens to minions, which can be
+  quite expensive.
+  :::
 
 :::{vconf} issue:allow_minion_override_params
 :::
+
 #### allow_minion_override_params
-Whether to allow minions to request to override parameters for issuing credentials.
-See {vconf}`issue_params`.
+
+Whether to allow minions to request to override parameters for issuing
+credentials. See {vconf}`issue_params`.
 
 :::{vconf} issue:block_minion_requests
 :::
+
 #### block_minion_requests
+
 :::{versionadded} 1.4.0
 :::
-Whether to block minions from requesting Vault credentials. Defaults to false.
-Enabling this means only the master itself is allowed to receive credentials
-on behalf of minions, e.g. during pillar compilation and when running
-via Salt-SSH using the wrapper modules.
+
+Whether to block minions from requesting Vault credentials. Defaults
+to false. Enabling this means only the master itself is allowed to
+receive credentials on behalf of minions, e.g. during pillar
+compilation and when running via Salt-SSH using the wrapper modules.
 
 Usually, you don't want to enable this.
 
 :::{vconf} issue:wrap
 :::
+
 #### wrap
+
 The time a minion has to unwrap a wrapped secret issued by the master.
-Set this to false to disable wrapping; otherwise a time string like `30s`
-can be used. Defaults to `30s`.
+Set this to false to disable wrapping; otherwise a time string like
+`30s` can be used. Defaults to `30s`.
 
 :::{vconf} keys
 :::
+
 ### `keys`
+
 List of keys to use to unseal the Vault server with the
 [vault.unseal](saltext.vault.runners.vault.unseal) runner.
 
 :::{vconf} metadata
 :::
+
 ### `metadata`
+
 Configures metadata for the issued entities/secrets. Values can be
 strings or [string templates](#vault-templating).
 
 :::{important}
-Vault allows string-valued metadata only, hence templates that resolve to lists
-are concatenated into a lexicographically sorted comma-separated list
-(Python `list.sort()`).
+Vault allows string-valued metadata only, hence templates that resolve
+to lists are concatenated into a lexicographically sorted
+comma-separated list (Python `list.sort()`).
 
-In addition, each list item is rendered into a distinct key of its own,
-determined by its parent key name and its list index. For example, if you
-are templating a metadata key named `roles` using a list, which in this example
-resolves to `[web, db]`, the single `roles` definition creates three
-separate metadata entries:
+In addition, each list item is rendered into a distinct key of its
+own, determined by its parent key name and its list index. For
+example, if you are templating a metadata key named `roles` using a
+list, which in this example resolves to `[web, db]`, the single
+`roles` definition creates three separate metadata entries:
 
 - `roles`: `db,web`
 - `roles__0`: `db`
 - `roles__1`: `web`
 
-For details on this, see the [templating guide](metadata-templating-target).
+For details on this, see the
+[templating guide](metadata-templating-target).
 :::
 
 :::{vconf} metadata:entity
 :::
+
 #### entity
+
 Configures custom metadata Vault associates with the minion entity,
-which can be referenced in [templated ACL policies](https://developer.hashicorp.com/vault/tutorials/policies/policy-templating).
+which can be referenced in
+[templated ACL policies](https://developer.hashicorp.com/vault/tutorials/policies/policy-templating).
 
 :::{important}
 Entities are only created when issuing AppRoles to minions.
@@ -559,109 +702,123 @@ Entities are only created when issuing AppRoles to minions.
 
 :::{vconf} metadata:secret
 :::
+
 #### secret
-Configures custom metadata associated with issued tokens/SecretIDs.
-It is logged in plaintext to the Vault audit log.
+
+Configures custom metadata associated with issued tokens/SecretIDs. It
+is logged in plaintext to the Vault audit log.
 
 :::{vconf} policies
 :::
+
 ### `policies`
 
 :::{vconf} policies:assign
 :::
+
 #### assign
-List of policies that are assigned to issued minion authentication data,
-either token or AppRole. They can be static strings or [string templates](#vault-templating).
+
+List of policies that are assigned to issued minion authentication
+data, either token or AppRole. They can be static strings or
+[string templates](#vault-templating).
 
 Defaults to `[saltstack/minions, saltstack/{minion}]`.
 
 :::{vconf} policies:cache_time
 :::
+
 #### cache_time
-Number of seconds compiled templated policies are cached on the master.
-This is important when using pillar values in templates, since compiling
-the pillar is an expensive operation.
+
+Number of seconds compiled templated policies are cached on the
+master. This is important when using pillar values in templates, since
+compiling the pillar is an expensive operation.
 
 :::{note}
-Only effective when issuing tokens to minions. Token policies
-need to be compiled every time a token is requested, while AppRole-associated
-policies are written to Vault configuration the first time authentication data
-is requested (they can be refreshed on demand by running the
-[vault.sync_approles](saltext.vault.runners.vault.sync_approles) runner).
+Only effective when issuing tokens to minions. Token policies need to
+be compiled every time a token is requested, while AppRole-associated
+policies are written to Vault configuration the first time
+authentication data is requested (they can be refreshed on demand by
+running the
+[vault.sync_approles](saltext.vault.runners.vault.sync_approles)
+runner).
 
-They are also refreshed in case other {vconf}`issuance parameters <issue:approle:params>` are changed, either on the master or the minion
-(if {vconf}`issue:allow_minion_override_params` is True).
+They are also refreshed in case other
+{vconf}`issuance parameters <issue:approle:params>` are changed,
+either on the master or the minion (if
+{vconf}`issue:allow_minion_override_params` is True).
 :::
 
 :::{vconf} policies:refresh_pillar
 :::
+
 #### refresh_pillar
+
 Whether to refresh the minion pillar when compiling templated policies
-that contain pillar variables.
-Only effective when issuing tokens to minions (see note on {vconf}`policies:cache_time`).
+that contain pillar variables. Only effective when issuing tokens to
+minions (see note on {vconf}`policies:cache_time`).
 
 Possible values:
 
 `null`
-    : (default) Only compile the pillar when no cached pillar is found.
+: (default) Only compile the pillar when no cached pillar is found.
 
 `false`
-    : Never compile the pillar. This means templated policies that
-      contain pillar values are skipped if no cached pillar is found.
+: Never compile the pillar. This means templated policies that contain
+  pillar values are skipped if no cached pillar is found.
 
 `true`
-    : Always compile the pillar. This can cause additional strain
-      on the master since the compilation is costly.
+: Always compile the pillar. This can cause additional strain on the
+  master since the compilation is costly.
 
 :::{note}
 Hardcoded to True when issuing AppRoles.
 
-Using cached pillar data only (refresh_pillar=False) might cause the policies
-to be out of sync. If there is no cached pillar data available for the minion,
-pillar templates fail to render at all.
+Using cached pillar data only (refresh_pillar=False) might cause the
+policies to be out of sync. If there is no cached pillar data
+available for the minion, pillar templates fail to render at all.
 
 If you use pillar values for templating policies and do not disable
 refreshing pillar data, make sure the relevant values are not sourced
-from Vault (ext_pillar, sdb) or from a pillar sls file that uses the vault
-execution/sdb module. Although this often works when cached pillar data is
-available, if the master needs to compile the pillar data during policy rendering,
-all Vault modules are disabled to prevent an infinite loop.
+from Vault (ext_pillar, sdb) or from a pillar sls file that uses the
+vault execution/sdb module. Although this often works when cached
+pillar data is available, if the master needs to compile the pillar
+data during policy rendering, all Vault modules are disabled to
+prevent an infinite loop.
 :::
 
 ## Minion-only configuration
 
 :::{note}
-In addition to the following minion-only values, {vconf}`auth:token_lifecycle`, {vconf}`server:verify`
-and {vconf}`client` can be set on the minion as well, even if it pulls its configuration from a master.
-With some restrictions (valid values are configured on the master via {vconf}`server:url_alts`),
-this also applies to {vconf}`server:url`.
+In addition to the following minion-only values,
+{vconf}`auth:token_lifecycle`, {vconf}`server:verify` and
+{vconf}`client` can be set on the minion as well, even if it pulls its
+configuration from a master. With some restrictions (valid values are
+configured on the master via {vconf}`server:url_alts`), this also
+applies to {vconf}`server:url`.
 :::
 
 :::{vconf} config_location
 :::
+
 ### `config_location`
-Override the source of the Vault configuration for the minion.
-By default, this extension tries to determine if it needs to request
-the connection details from the master or from the local config, depending
+
+Override the source of the Vault configuration for the minion. By
+default, this extension tries to determine if it needs to request the
+connection details from the master or from the local config, depending
 on the minion running in local or master-connected mode. This option
-forces the extension to use the connection details from the master or the
-local config, regardless of circumstances. Allowed values: `master`, `local`.
+forces the extension to use the connection details from the master or
+the local config, regardless of circumstances. Allowed values:
+`master`, `local`.
 
 :::{vconf} issue_params
 :::
+
 ### `issue_params`
+
 Request overrides for token/AppRole issuance. This needs to be allowed
-on the master by setting {vconf}`issue:allow_minion_override_params` to true.
-See the master configuration {vconf}`issue:token:params` or {vconf}`issue:approle:params`
-for reference.
-
-
-[Vault AppRole API docs]: https://developer.hashicorp.com/vault/api-docs/auth/approle#create-update-approle
-[Token Role]: https://developer.hashicorp.com/vault/api-docs/auth/token#create-update-token-role
-[Vault Token API docs]: https://developer.hashicorp.com/vault/api-docs/auth/token#create-token
-[certificate verification]: https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification
-[Vault namespace]: https://developer.hashicorp.com/vault/docs/enterprise/namespaces
-
+on the master by setting {vconf}`issue:allow_minion_override_params`
+to true. See the master configuration {vconf}`issue:token:params` or
+{vconf}`issue:approle:params` for reference.
 
 ## All configuration parameters with defaults
 
@@ -672,11 +829,11 @@ vault:
     approle_name: salt-master
     method: token
     role_id: <required if auth:method == approle>
-    secret_id: null
+    secret_id:
     token: <required if auth:method == token>
     token_lifecycle:
       minimum_ttl: 10
-      renew_increment: null
+      renew_increment:
   cache:
     backend: session
     clear_attempt_revocation: 60
@@ -716,19 +873,19 @@ vault:
         secret_id_ttl: 60
         token_explicit_max_ttl: 60
         token_num_uses: 10
-        secret_id_bound_cidrs: null
-        token_ttl: null
-        token_max_ttl: null
+        secret_id_bound_cidrs:
+        token_ttl:
+        token_max_ttl:
         token_no_default_policy: false
-        token_period: null
-        token_bound_cidrs: null
+        token_period:
+        token_bound_cidrs:
     token:
-      role_name: null
+      role_name:
       params:
-        explicit_max_ttl: null
+        explicit_max_ttl:
         num_uses: 1
-        ttl: null
-        period: null
+        ttl:
+        period:
         no_default_policy: false
         renewable: true
   issue_params: {}
@@ -745,10 +902,16 @@ vault:
       - saltstack/minions
       - saltstack/{minion}
     cache_time: 60
-    refresh_pillar: null
+    refresh_pillar:
   server:
     url: <required, e.g. https://vault.example.com:8200>
     url_alts: []
-    namespace: null
-    verify: null
+    namespace:
+    verify:
 ```
+
+[certificate verification]: https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification
+[token role]: https://developer.hashicorp.com/vault/api-docs/auth/token#create-update-token-role
+[vault approle api docs]: https://developer.hashicorp.com/vault/api-docs/auth/approle#create-update-approle
+[vault namespace]: https://developer.hashicorp.com/vault/docs/enterprise/namespaces
+[vault token api docs]: https://developer.hashicorp.com/vault/api-docs/auth/token#create-token

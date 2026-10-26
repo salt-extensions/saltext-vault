@@ -15,16 +15,9 @@ from salt.exceptions import SaltInvocationError
 
 if typing.TYPE_CHECKING:
 
-    from saltext.vault.utils._types import SaltContext
-    from saltext.vault.utils._types import SaltFunctions
     from saltext.vault.utils._types import SaltLogger
-    from saltext.vault.utils._types import SaltOpts
-    from saltext.vault.utils._types import SaltStates
-
-    __opts__: SaltOpts
-    __context__: SaltContext
-    __salt__: SaltFunctions
-    __states__: SaltStates
+    from saltext.vault.utils._types import __opts__  # noqa: TC004
+    from saltext.vault.utils._types import __salt__  # noqa: TC004
 
 
 log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
@@ -418,9 +411,8 @@ def version_pinned(name, plugin_type, version, now=False, now_globally=False):
         if not version:
             raise CommandExecutionError("Plugin version must be specified and not empty")
         curr = __salt__["vault_plugin.pinned_version"](plugin_type, name)
-        if curr:
-            if curr.lstrip("v") == version.lstrip("v"):
-                return ret
+        if curr and curr.lstrip("v") == version.lstrip("v"):
+            return ret
         ret["changes"] = {"old": curr, "new": version}
         if __opts__["test"]:
             ret["result"] = None

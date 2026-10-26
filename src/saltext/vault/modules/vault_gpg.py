@@ -21,16 +21,10 @@ from saltext.vault.utils import vault
 from saltext.vault.utils.vault import helpers
 
 if typing.TYPE_CHECKING:
-    from saltext.vault.utils._types import SaltContext
-    from saltext.vault.utils._types import SaltFunctions
-    from saltext.vault.utils._types import SaltGrains
     from saltext.vault.utils._types import SaltLogger
-    from saltext.vault.utils._types import SaltOpts
-
-    __opts__: SaltOpts
-    __context__: SaltContext
-    __salt__: SaltFunctions
-    __grains__: SaltGrains
+    from saltext.vault.utils._types import __context__  # noqa: TC004
+    from saltext.vault.utils._types import __opts__  # noqa: TC004
+    from saltext.vault.utils._types import __salt__  # noqa: TC004
 
 
 log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
@@ -783,7 +777,7 @@ def show_session_key(
 
 def _norm_format(
     data: bytes, blocktype: str
-) -> tuple[str, typing.Literal["ascii-armor"] | typing.Literal["base64"]]:
+) -> tuple[str, typing.Literal["ascii-armor", "base64"]]:
     """
     Pass some raw bytes. This function checks whether it's
       a) ASCII-armored and returns the string

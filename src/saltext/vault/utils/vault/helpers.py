@@ -34,13 +34,7 @@ SALT_RUNTYPE_MINION_REMOTE = 4
 
 def get_salt_run_type(
     opts: dict[str, typing.Any],
-) -> (
-    typing.Literal[0]
-    | typing.Literal[1]
-    | typing.Literal[2]
-    | typing.Literal[3]
-    | typing.Literal[4]
-):
+) -> typing.Literal[0, 1, 2, 3, 4]:
     """
     Determine the current operation's calling context from specific markers in ``__opts__``
     and the ``vault`` config. Possible contexts:
@@ -124,7 +118,7 @@ def iso_to_timestamp(iso_time: str) -> int:
         tz_hour = int(tstr[tz_pos + 1 : tz_pos + 3])
         tz_minute = int(tstr[tz_pos + 4 : tz_pos + 6])
         if all(x == 0 for x in (tz_hour, tz_minute)):
-            tz = datetime.timezone.utc
+            tz = datetime.UTC
         else:
             tz_sign = -1 if tstr[tz_pos] == "-" else 1
             td = datetime.timedelta(hours=tz_hour, minutes=tz_minute)
@@ -182,19 +176,19 @@ def expand_pattern_lists(pattern: str, **mappings) -> list[str]:
 
 
 @typing.overload
-def timestring_map(val: int | float | str, cast: type[int]) -> int: ...
+def timestring_map(val: float | str, cast: type[int]) -> int: ...
 @typing.overload
-def timestring_map(val: int | float | str, cast: type[float] = float) -> float: ...
+def timestring_map(val: float | str, cast: type[float] = float) -> float: ...
 @typing.overload
-def timestring_map(val: int | float | str) -> float: ...
+def timestring_map(val: float | str) -> float: ...
 @typing.overload
-def timestring_map(val: int | float | str | None, cast: type[int]) -> int | None: ...
+def timestring_map(val: float | str | None, cast: type[int]) -> int | None: ...
 @typing.overload
-def timestring_map(val: int | float | str | None) -> float | None: ...
+def timestring_map(val: float | str | None) -> float | None: ...
 @typing.overload
-def timestring_map(val: int | float | str | None, cast: type[float] = float) -> float | None: ...
+def timestring_map(val: float | str | None, cast: type[float] = float) -> float | None: ...
 def timestring_map(
-    val: int | float | str | None, cast: type[float] | type[int] = float
+    val: float | str | None, cast: type[float] | type[int] = float
 ) -> float | int | None:
     """
     Turn a time string (like ``60m``) into a float with seconds as a unit.
@@ -428,7 +422,7 @@ def try_base64(data: str | bytes) -> tuple[bytes, bool]:
         try:
             data = data.encode("ascii", "strict")
         except UnicodeEncodeError:
-            return data.encode("utf-8"), False  # type: ignore
+            return data.encode("utf-8"), False
     elif isinstance(data, bytes):
         pass
     else:  # pragma: no cover

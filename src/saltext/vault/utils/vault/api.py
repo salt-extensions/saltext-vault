@@ -76,9 +76,7 @@ class AppRoleApi:
         token_no_default_policy: bool | None = None,
         token_num_uses: int | None = None,
         token_period: int | str | None = None,
-        token_type: (
-            typing.Literal["service"] | typing.Literal["batch"] | typing.Literal["default"] | None
-        ) = None,
+        token_type: typing.Literal["service", "batch", "default"] | None = None,
         alias_metadata: Mapping[str, str] | None = None,
         token_strictly_bind_ip: bool | None = None,
         mount: str = "approle",
