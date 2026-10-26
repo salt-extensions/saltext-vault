@@ -621,7 +621,7 @@ def test_intermediate_issuer_managed_changes_with_issuer_name(
 
 
 def test_intermediate_issuer_managed_changes(
-    vault_pki, int_ca_args, existing_intermediate, testmode
+    vault_pki, int_ca_args, existing_intermediate, testmode, salt_version
 ):
     old_cert = load_cert(existing_intermediate["certificate"])
 
@@ -650,7 +650,7 @@ def test_intermediate_issuer_managed_changes(
     assert "basicConstraints" in ret.changes["cert"]["extensions"]["changed"]
     assert ret.changes["cert"]["extensions"]["changed"]["basicConstraints"]["value"]["pathlen"] == {
         "old": 0,
-        "new": 2 if "issuer_ref" in int_ca_args else None,
+        "new": 2 if "issuer_ref" in int_ca_args or salt_version[0] == 3006 else None,
     }
     assert f"CA certificate {'would have' if testmode else 'has'} been rotated" in ret.comment
 
@@ -663,7 +663,10 @@ def test_intermediate_issuer_managed_changes(
     assert _subject(new_cert) == "Rotated Intermediate CA"
     basic_constraints = new_cert.extensions.get_extension_for_class(cx509.BasicConstraints)
     # This will break soon. IIRC, issuing cert has a pathlen and x509_v2 not accounting for that was fixed
-    assert basic_constraints.value.path_length is (2 if "issuer_ref" in int_ca_args else None)
+    # The fix did not make it into 3008 yet somehow, presumably unintentionally dropped by the revert of the botched merge-forward
+    assert basic_constraints.value.path_length is (
+        2 if "issuer_ref" in int_ca_args or salt_version[0] == 3006 else None
+    )
     # The key should have been reused
     assert new_info["key_id"] == existing_intermediate["key_id"]
     assert new_cert.public_key().public_numbers() == old_cert.public_key().public_numbers()
