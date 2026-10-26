@@ -19,16 +19,9 @@ from saltext.vault.utils import vault
 from saltext.vault.utils.vault import helpers as hlp
 
 if typing.TYPE_CHECKING:
-    from saltext.vault.utils._types import SaltContext
-    from saltext.vault.utils._types import SaltFunctions
-    from saltext.vault.utils._types import SaltGrains
     from saltext.vault.utils._types import SaltLogger
-    from saltext.vault.utils._types import SaltOpts
-
-    __opts__: SaltOpts
-    __context__: SaltContext
-    __salt__: SaltFunctions
-    __grains__: SaltGrains
+    from saltext.vault.utils._types import __context__  # noqa: TC004
+    from saltext.vault.utils._types import __opts__  # noqa: TC004
 
 
 log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
@@ -114,7 +107,7 @@ def list_(plugin_type):
     # plugin type-specific lists, only in the full list. Workaround that bug ourselves.
     # Related: https://github.com/hashicorp/vault/issues/28936
     matches = _list_all_filtered(plugin_type)
-    return list(sorted({plugin["name"] for plugin in matches}))
+    return sorted({plugin["name"] for plugin in matches})
 
 
 def list_versions(plugin_type, name):
@@ -142,7 +135,7 @@ def list_versions(plugin_type, name):
         Name of the plugin to list versions of.
     """
     matches = _list_all_filtered(plugin_type, name)
-    return list(sorted({plugin["version"] for plugin in matches}))
+    return sorted({plugin["version"] for plugin in matches})
 
 
 def list_detailed(plugin_type=None, name=None, builtin=None, version=None, sha256=None):
@@ -752,7 +745,5 @@ def reload_mounts(mounts, globally=False):
     return ret["data"]["reload_id"]
 
 
-def _check_type(
-    plugin_type: str,
-) -> typing.Literal["auth"] | typing.Literal["database"] | typing.Literal["secret"]:
+def _check_type(plugin_type: str) -> typing.Literal["auth", "database", "secret"]:
     return hlp.in_vals(("auth", "database", "secret"), plugin_type=plugin_type)

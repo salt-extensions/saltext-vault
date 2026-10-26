@@ -1803,7 +1803,7 @@ def test_issue_non_impersonated_only(impersonated):
         ctx = contextlib.nullcontext()
     with ctx, patch("salt.crypt.verify_signature", autospec=True) as verify:
         vault._validate_signature("test-minion", "", impersonated)
-    assert bool(verify.call_count) is impersonated
+        assert bool(verify.call_count) is impersonated
 
 
 @pytest.fixture

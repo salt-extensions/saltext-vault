@@ -1,10 +1,9 @@
 # AppRole issuance
 
-This guide describes how to set up the Salt master to orchestrate minion
-authentication by issuing [AppRoles][]. For an overview and help with
-deciding on an authentication flavor, see the [Quickstart](vault-setup) guide.
-
-[AppRoles]: https://developer.hashicorp.com/vault/docs/auth/approle
+This guide describes how to set up the Salt master to orchestrate
+minion authentication by issuing [AppRoles]. For an overview and help
+with deciding on an authentication flavor, see the
+[Quickstart](vault-setup) guide.
 
 ## Prerequisites
 
@@ -14,8 +13,9 @@ deciding on an authentication flavor, see the [Quickstart](vault-setup) guide.
 A Vault server (cluster) is assumed to be available.
 
 ### Minion AppRole mount
-Issued AppRoles should be managed on a separate (unused) mount of the AppRole
-auth backend, called `salt-minions` by default:
+
+Issued AppRoles should be managed on a separate (unused) mount of the
+AppRole auth backend, called `salt-minions` by default:
 
 ```bash
 vault auth enable -path=salt-minions approle
@@ -25,7 +25,9 @@ vault read -format json sys/auth/salt-minions | jq '.data.accessor'
 ```
 
 ### Master policy
-The Salt master needs access to the AppRole and entity management endpoints:
+
+The Salt master needs access to the AppRole and entity management
+endpoints:
 
 ```vaultpolicy
 # This is the required Salt master policy for issuing AppRoles.
@@ -82,32 +84,39 @@ path "identity/entity-alias" {
 }
 ```
 
-You can write it to a file (e.g. `salt-master.hcl`) and create the policy like this:
+You can write it to a file (e.g. `salt-master.hcl`) and create the
+policy like this:
 
 ```bash
 vault policy write salt-master salt-master.hcl
 ```
 
 ### Master credentials
-The Salt master itself needs statically configured authentication credentials,
-which should be associated with the `salt-master` policy created above.
-Create them as described in the [Vault-side setup](local-vault-setup) section
-of the local configuration guide.
+
+The Salt master itself needs statically configured authentication
+credentials, which should be associated with the `salt-master` policy
+created above. Create them as described in the
+[Vault-side setup](local-vault-setup) section of the local
+configuration guide.
 
 ### Minion policies
+
 Create policies for minions as needed. Examples are shown in the
 [secrets setup](approle-secrets-setup) section below.
 
 ## Salt master configuration
 
 ### Authentication
-Configure the master's own authentication, server connection and a persistent
-cache as described in the [Node configuration](local-node-config) section
-of the local configuration guide.
+
+Configure the master's own authentication, server connection and a
+persistent cache as described in the
+[Node configuration](local-node-config) section of the local
+configuration guide.
 
 ### Credential orchestration
-To allow minions to pull configuration and credentials from the Salt master,
-add this segment to the master configuration:
+
+To allow minions to pull configuration and credentials from the Salt
+master, add this segment to the master configuration:
 
 ```{code-block} yaml
 :caption: /etc/salt/master.d/peer_run.conf
@@ -119,6 +128,7 @@ peer_run:
 ```
 
 ### Credential issuance
+
 Reference the AppRole mount created during the prerequisites:
 
 ```{code-block} yaml
@@ -132,18 +142,22 @@ vault:
 ```
 
 ### Credential validity
-The validity defaults for issued credentials are sane for light use; depending
-on how heavily you use Vault and whether you create dynamic leases such as database credentials,
-they might have to be customized.
+
+The validity defaults for issued credentials are sane for light use;
+depending on how heavily you use Vault and whether you create dynamic
+leases such as database credentials, they might have to be customized.
 See {vconf}`issue:approle:params` for details.
 
 :::{include} includes/issuance-policies.md
 :::
 
 ### Entity metadata
-You can customize the {vconf}`metadata <metadata:entity>` that is written to Vault
-when creating [Entities][]. [Templating](#vault-templating) is supported. This metadata can then
-be used in a templated Vault policy, reducing the need for boilerplate policies a lot:
+
+You can customize the {vconf}`metadata <metadata:entity>` that is
+written to Vault when creating [Entities].
+[Templating](#vault-templating) is supported. This metadata can then
+be used in a templated Vault policy, reducing the need for boilerplate
+policies a lot:
 
 ```yaml
 vault:
@@ -153,8 +167,9 @@ vault:
       roles: '{pillar[roles]}'
 ```
 
-List values are expanded into several indexed keys (e.g. `roles__0`); see
-[entity metadata templating](metadata-templating-target) for details.
+List values are expanded into several indexed keys (e.g. `roles__0`);
+see [entity metadata templating](metadata-templating-target) for
+details.
 
 This allows you to create a single policy like:
 
@@ -168,13 +183,12 @@ path "salt/data/roles/{{identity.entity.metadata.roles__0}}" {
 }
 ```
 
-[Entities]: https://developer.hashicorp.com/vault/docs/concepts/identity
-
 :::{note}
 AppRole policies and entity metadata are generally not updated
-automatically. After a change, you need to synchronize
-them by running [vault.sync_approles](saltext.vault.runners.vault.sync_approles)
-or [vault.sync_entities](saltext.vault.runners.vault.sync_entities) respectively.
+automatically. After a change, you need to synchronize them by running
+[vault.sync_approles](saltext.vault.runners.vault.sync_approles) or
+[vault.sync_entities](saltext.vault.runners.vault.sync_entities)
+respectively.
 :::
 
 ### Complete example
@@ -206,11 +220,13 @@ vault:
 ```
 
 (approle-secrets-setup)=
+
 :::{include} includes/secrets-setup.md
 :::
 
-When issuing AppRoles, you can take advantage of minion metadata for templated Vault policies.
-This means a single policy should cover most minions and roles:
+When issuing AppRoles, you can take advantage of minion metadata for
+templated Vault policies. This means a single policy should cover most
+minions and roles:
 
 ```bash
 vault policy write salt_minion - <<'EOF'
@@ -241,17 +257,22 @@ EOF
 ```
 
 :::{hint}
-See [entity metadata templating](metadata-templating-target) for details, especially
-to understand why the `roles` mapping is repeated multiple times.
+See [entity metadata templating](metadata-templating-target) for
+details, especially to understand why the `roles` mapping is repeated
+multiple times.
 :::
 
 :::{include} includes/test-access.md
 :::
 
-If it still fails, manually sync AppRoles and entities,
-clear the minion's cached data and try again:
+If it still fails, manually sync AppRoles and entities, clear the
+minion's cached data and try again:
+
 ```bash
 salt-run vault.sync_approles
 salt-run vault.sync_entities
 salt elliott vault.clear_cache
 ```
+
+[approles]: https://developer.hashicorp.com/vault/docs/auth/approle
+[entities]: https://developer.hashicorp.com/vault/docs/concepts/identity

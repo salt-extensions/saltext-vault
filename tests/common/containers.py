@@ -34,7 +34,7 @@ try:
     from docker.errors import APIError
 except ImportError:
     # This file is also imported from the root conftest, so don't hard-require docker.
-    APIError = Exception  # type: ignore
+    APIError = Exception
 
 log = logging.getLogger(__name__)
 
@@ -518,7 +518,7 @@ class VaultContainer(Container):
             }
 
         check_ports = [self.port] if self.port is not None else None
-        container: "SFContainer" = salt_factories.get_container(
+        container: SFContainer = salt_factories.get_container(
             self.container_id,
             str(self.image),
             check_ports=check_ports,

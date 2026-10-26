@@ -19,16 +19,9 @@ from saltext.vault.utils.vault.helpers import timestring_map
 
 if TYPE_CHECKING:
 
-    from saltext.vault.utils._types import SaltContext
-    from saltext.vault.utils._types import SaltFunctions
     from saltext.vault.utils._types import SaltLogger
-    from saltext.vault.utils._types import SaltOpts
-    from saltext.vault.utils._types import SaltStates
-
-    __opts__: SaltOpts
-    __context__: SaltContext
-    __salt__: SaltFunctions
-    __states__: SaltStates
+    from saltext.vault.utils._types import __opts__  # noqa: TC004
+    from saltext.vault.utils._types import __salt__  # noqa: TC004
 
 log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
@@ -183,8 +176,8 @@ def present(
                     new_set := set(deserialize_csl(wanted))
                 ):
                     changes[param] = {
-                        "added": list(sorted(new_set.difference(old_set))),
-                        "removed": list(sorted(old_set.difference(new_set))),
+                        "added": sorted(new_set.difference(old_set)),
+                        "removed": sorted(old_set.difference(new_set)),
                     }
             for param, wanted in (
                 ("secret_id_ttl", secret_id_ttl),

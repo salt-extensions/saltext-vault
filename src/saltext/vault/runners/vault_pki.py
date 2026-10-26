@@ -72,11 +72,8 @@ from saltext.vault.modules.vault_pki import write_urls
 from saltext.vault.utils.functools import namespaced_function
 
 if typing.TYPE_CHECKING:
-    from saltext.vault.utils._types import SaltContext
-    from saltext.vault.utils._types import SaltOpts
-
-    __opts__: SaltOpts
-    __context__: SaltContext
+    from saltext.vault.utils._types import __context__  # noqa: TC004
+    from saltext.vault.utils._types import __opts__  # noqa: TC004
 
 globals_dict = globals()
 

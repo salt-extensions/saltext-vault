@@ -26,16 +26,9 @@ from saltext.vault.utils.vault.helpers import timestring_map
 
 if TYPE_CHECKING:
 
-    from saltext.vault.utils._types import SaltContext
-    from saltext.vault.utils._types import SaltFunctions
     from saltext.vault.utils._types import SaltLogger
-    from saltext.vault.utils._types import SaltOpts
-    from saltext.vault.utils._types import SaltStates
-
-    __opts__: SaltOpts
-    __context__: SaltContext
-    __salt__: SaltFunctions
-    __states__: SaltStates
+    from saltext.vault.utils._types import __opts__  # noqa: TC004
+    from saltext.vault.utils._types import __salt__  # noqa: TC004
 
 log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
 
@@ -268,7 +261,7 @@ def _diff_role_params(curr, wanted):
             added = wanted_param - curr_param
             removed = curr_param - wanted_param
             if added or removed:
-                diff[param] = {"added": list(sorted(added)), "removed": list(sorted(removed))}
+                diff[param] = {"added": sorted(added), "removed": sorted(removed)}
             continue
         if param in MAP_ROLE_PARAMS:
             val = val or {}

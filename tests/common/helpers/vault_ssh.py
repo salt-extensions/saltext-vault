@@ -55,9 +55,9 @@ def get_cert(
     if not typ:
         return ret
     if typ == "user":
-        assert ret.type == SSHCertificateType.USER
+        assert ret.type == SSHCertificateType.USER  # ty: ignore[unresolved-attribute]
     elif typ == "host":
-        assert ret.type == SSHCertificateType.HOST
+        assert ret.type == SSHCertificateType.HOST  # ty: ignore[unresolved-attribute]
     else:
         raise ValueError(f"Unknown cert typ: {typ}")
     return ret
@@ -97,7 +97,7 @@ def belongs_to(cert_or_pubkey: SSHCertificate | SSHPublicKeyTypes, privkey: Priv
     Check whether an SSH certificate or public key is a pair with a private key
     """
     if isinstance(cert_or_pubkey, SSHCertificate):
-        cert_or_pubkey = cert_or_pubkey.public_key()
+        cert_or_pubkey = cert_or_pubkey.public_key()  # ty: ignore[unresolved-attribute]
     return x509util.is_pair(cert_or_pubkey, get_privkey(privkey))
 
 

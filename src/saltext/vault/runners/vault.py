@@ -36,14 +36,10 @@ from saltext.vault.utils.vault.helpers import timestring_map
 from saltext.vault.utils.versions import warn_until
 
 if typing.TYPE_CHECKING:
-    from saltext.vault.utils._types import SaltContext
     from saltext.vault.utils._types import SaltLogger
-    from saltext.vault.utils._types import SaltOpts
-    from saltext.vault.utils._types import SaltRunners
-
-    __opts__: SaltOpts
-    __context__: SaltContext
-    __salt__: SaltRunners
+    from saltext.vault.utils._types import __context__  # noqa: TC004
+    from saltext.vault.utils._types import __opts__  # noqa: TC004
+    from saltext.vault.utils._types import __salt__  # noqa: TC004
 
 
 log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
@@ -563,7 +559,7 @@ def generate_new_token(minion_id, signature, impersonated_by_master=False, issue
 
         return ret
     except Exception as err:  # pylint: disable=broad-except
-        return {"error": f"{type(err).__name__}: {str(err)}"}
+        return {"error": f"{type(err).__name__}: {err}"}
 
 
 def _generate_token(minion_id, issue_params, wrap):
@@ -668,7 +664,7 @@ def get_config(
 
         return minion_config
     except Exception as err:  # pylint: disable=broad-except
-        return {"error": f"{type(err).__name__}: {str(err)}"}
+        return {"error": f"{type(err).__name__}: {err}"}
 
 
 def get_role_id(minion_id, signature, impersonated_by_master=False, issue_params=None):
@@ -719,7 +715,7 @@ def get_role_id(minion_id, signature, impersonated_by_master=False, issue_params
             ret["data"]["role_id"] = role_id
         return ret
     except Exception as err:  # pylint: disable=broad-except
-        return {"error": f"{type(err).__name__}: {str(err)}"}
+        return {"error": f"{type(err).__name__}: {err}"}
 
 
 def _get_role_id(minion_id, issue_params, wrap):
@@ -846,10 +842,10 @@ def generate_secret_id(minion_id, signature, impersonated_by_master=False, issue
         # new configuration details to generate one
         return {
             "expire_cache": True,
-            "error": f"{type(err).__name__}: {str(err)}",
+            "error": f"{type(err).__name__}: {err}",
         }
     except Exception as err:  # pylint: disable=broad-except
-        return {"error": f"{type(err).__name__}: {str(err)}"}
+        return {"error": f"{type(err).__name__}: {err}"}
 
 
 def _config(key=None, default=vault.VaultException):
@@ -1381,4 +1377,4 @@ def generate_token(
 
         return ret
     except Exception as err:  # pylint: disable=broad-except
-        return {"error": f"{type(err).__name__}: {str(err)}"}
+        return {"error": f"{type(err).__name__}: {err}"}

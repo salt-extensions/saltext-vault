@@ -1,11 +1,13 @@
 import os
+from pathlib import Path
+from typing import Any
 
 import pytest
 import salt.config
 
 
 @pytest.fixture
-def minion_opts(tmp_path):  # pragma: no cover
+def minion_opts(tmp_path: Path) -> dict[str, Any]:  # pragma: no cover
     """
     Default minion configuration with relative temporary paths to not
     require root permissions.
@@ -24,7 +26,7 @@ def minion_opts(tmp_path):  # pragma: no cover
 
 
 @pytest.fixture
-def master_opts(tmp_path):  # pragma: no cover
+def master_opts(tmp_path: Path) -> dict[str, Any]:  # pragma: no cover
     """
     Default master configuration with relative temporary paths to not
     require root permissions.
@@ -43,7 +45,7 @@ def master_opts(tmp_path):  # pragma: no cover
 
 
 @pytest.fixture
-def syndic_opts(tmp_path):  # pragma: no cover
+def syndic_opts(tmp_path: Path) -> dict[str, Any]:  # pragma: no cover
     """
     Default master configuration with relative temporary paths to not
     require root permissions.

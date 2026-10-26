@@ -72,15 +72,7 @@ from saltext.vault.modules.vault_pki import write_urls
 from saltext.vault.utils.functools import namespaced_function
 
 if typing.TYPE_CHECKING:
-    from saltext.vault.utils._types import SaltContext
-    from saltext.vault.utils._types import SaltFunctions
-    from saltext.vault.utils._types import SaltGrains
-    from saltext.vault.utils._types import SaltOpts
-
-    __opts__: SaltOpts
-    __context__: SaltContext
-    __salt__: SaltFunctions
-    __grains__: SaltGrains
+    from saltext.vault.utils._types import __salt__  # noqa: TC004
 
 globals_dict = globals()
 

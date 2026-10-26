@@ -17,10 +17,12 @@ elliott:
     minion_foo: quux
 ```
 
-Also verify that minions without authorization to access these secrets can't.
+Also verify that minions without authorization to access these secrets
+can't.
 
-If reading fails, clear the minion's cached Vault data, which forces new
-credentials to be requested, and try again:
+If reading fails, clear the minion's cached Vault data, which forces
+new credentials to be requested, and try again:
+
 ```bash
 salt elliott vault.clear_cache
 ```

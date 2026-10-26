@@ -50,23 +50,18 @@ Pubkey: typing.TypeAlias = (
     ec.EllipticCurvePublicKey | ed448.Ed448PublicKey | ed25519.Ed25519PublicKey | rsa.RSAPublicKey
 )
 
-Encoding: typing.TypeAlias = (
-    typing.Literal["pem"]
-    | typing.Literal["pkcs7_pem"]
-    | typing.Literal["der"]
-    | typing.Literal["pkcs7_der"]
-)
+Encoding: typing.TypeAlias = typing.Literal["pem", "pkcs7_pem", "der", "pkcs7_der"]
 
-ExtensionChange: typing.TypeAlias = (
-    typing.Literal["added"] | typing.Literal["changed"] | typing.Literal["removed"]
-)
-ExtensionListChange: typing.TypeAlias = typing.Literal["added"] | typing.Literal["removed"]
+ExtensionChange: typing.TypeAlias = typing.Literal["added", "changed", "removed"]
+ExtensionListChange: typing.TypeAlias = typing.Literal["added", "removed"]
 
 URLConfigs: typing.TypeAlias = Mapping[
-    typing.Literal["issuing_certificates"]
-    | typing.Literal["crl_distribution_points"]
-    | typing.Literal["delta_crl_distribution_points"]
-    | typing.Literal["ocsp_servers"],
+    typing.Literal[
+        "issuing_certificates",
+        "crl_distribution_points",
+        "delta_crl_distribution_points",
+        "ocsp_servers",
+    ],
     list[str],
 ]
 

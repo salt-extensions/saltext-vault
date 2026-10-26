@@ -123,12 +123,8 @@ from saltext.vault.utils import vault
 from saltext.vault.utils.vault.helpers import timestring_map
 
 if TYPE_CHECKING:
-    from saltext.vault.utils._types import SaltContext
     from saltext.vault.utils._types import SaltLogger
-    from saltext.vault.utils._types import SaltOpts
-
-    __opts__: SaltOpts
-    __context__: SaltContext
+    from saltext.vault.utils._types import __opts__  # noqa: TC004
 
 
 log: "SaltLogger" = logging.getLogger(__name__)  # type: ignore
