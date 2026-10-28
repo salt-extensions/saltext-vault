@@ -45,7 +45,7 @@ jobs:
             python-version: "3.11"
             container-image: openbao
             # renovate: datasource=docker depName=openbao/openbao
-            container-tag: "2.7.1"
+            container-tag: "2.7.2"
             internal-logic: false
           - salt-version: "3008.4"
             python-version: "3.14"
